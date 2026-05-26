@@ -18,15 +18,15 @@ export interface KinematicState {
   name: string;
 }
 
-// Fixed-length loop timeline definition (600.0 units per loop)
+// Fixed-length loop timeline definition (500.0 units per loop)
 export function getKinematicState(z: number): KinematicState {
   // If we reach the endless fall of the last Loop 3, we stay in it forever
-  if (z >= 2270.0) {
+  if (z >= 1890.0) {
     return {
       loop: 3,
       sector: 666,
       part: 2,
-      localZ: z - 2270.0,
+      localZ: z - 1890.0,
       secLen: 1000000.0,
       isFall: true,
       isCrystal: false,
@@ -34,8 +34,8 @@ export function getKinematicState(z: number): KinematicState {
     };
   }
 
-  const loop = Math.floor(z / 600.0);
-  const lz = z % 600.0;
+  const loop = Math.floor(z / 500.0);
+  const lz = z % 500.0;
 
   if (lz < 60.0) {
     return {
@@ -70,7 +70,7 @@ export function getKinematicState(z: number): KinematicState {
       secLen: 80.0,
       isFall: false,
       isCrystal: false,
-      name: "SECTOR 3: CHASM TUBE"
+      name: "SECTOR 3: CRYSTAL CAVE"
     };
   }
   if (lz < 280.0) {
@@ -82,74 +82,232 @@ export function getKinematicState(z: number): KinematicState {
       secLen: 70.0,
       isFall: false,
       isCrystal: false,
-      name: "SECTOR 4: CRUMBLING BRIDGE"
+      name: "SECTOR 4: IRON HYDRAULICS"
     };
   }
-  if (lz < 430.0) {
+  if (lz < 360.0) {
     return {
       loop,
       sector: 5,
       part: 0,
       localZ: lz - 280.0,
-      secLen: 150.0,
+      secLen: 80.0,
       isFall: false,
       isCrystal: false,
-      name: "SECTOR 5: ASCENSION"
+      name: "SECTOR 5: VOID LABYRINTH"
     };
   }
 
-  // Sector 6 / 666 transition zone (lz from 430.0 to 600.0, length 170)
-  const local666 = lz - 430.0;
+  // Sector 6 / 666 transition zone (lz from 360.0 to 500.0, length 140)
+  const local666 = lz - 360.0;
   if (loop === 0) {
     return {
       loop: 0,
       sector: 6,
       part: 0,
       localZ: local666,
-      secLen: 170.0,
+      secLen: 140.0,
       isFall: false,
       isCrystal: false,
-      name: "SECTOR 6: TRANSITION CORRIDOR"
+      name: "SECTOR 6: TRANSITION"
     };
   }
 
-  // Decayed 666 loops
+  // Decayed 666 loops: Custom multi-layered schizophrenic hellscape sequence
+  if (loop === 1) {
+    if (local666 < 60.0) {
+      return {
+        loop,
+        sector: 666,
+        part: 1, // Layer 1
+        localZ: local666,
+        secLen: 60.0,
+        isFall: true,
+        isCrystal: false,
+        name: "SECTOR 666 - LAYER 1: TWIGS SLIDE"
+      };
+    }
+    if (local666 < 120.0) {
+      return {
+        loop,
+        sector: 666,
+        part: 2, // Layer 2
+        localZ: local666 - 60.0,
+        secLen: 60.0,
+        isFall: false,
+        isCrystal: false,
+        name: "SECTOR 666 - LAYER 2: SHADOW TUNDRA"
+      };
+    }
+    return {
+      loop,
+      sector: 666,
+      part: 8, // Recovery
+      localZ: local666 - 120.0,
+      secLen: 20.0,
+      isFall: false,
+      isCrystal: false,
+      name: "SECTOR 666: COLLAPSE RECOVERY"
+    };
+  }
+
+  if (loop === 2) {
+    if (local666 < 30.0) {
+      return {
+        loop,
+        sector: 666,
+        part: 1, // Layer 1
+        localZ: local666,
+        secLen: 30.0,
+        isFall: true,
+        isCrystal: false,
+        name: "SECTOR 666 - LAYER 1: TWIGS & BARBED WIRE"
+      };
+    }
+    if (local666 < 60.0) {
+      return {
+        loop,
+        sector: 666,
+        part: 2, // Layer 2
+        localZ: local666 - 30.0,
+        secLen: 30.0,
+        isFall: false,
+        isCrystal: false,
+        name: "SECTOR 666 - LAYER 2: TUNDRA LANDSCAPE"
+      };
+    }
+    if (local666 < 90.0) {
+      return {
+        loop,
+        sector: 666,
+        part: 3, // Layer 3
+        localZ: local666 - 60.0,
+        secLen: 30.0,
+        isFall: false,
+        isCrystal: false,
+        name: "SECTOR 666 - LAYER 3: THROBBING WOMB"
+      };
+    }
+    if (local666 < 120.0) {
+      return {
+        loop,
+        sector: 666,
+        part: 4, // Layer 4
+        localZ: local666 - 90.0,
+        secLen: 30.0,
+        isFall: false,
+        isCrystal: false,
+        name: "SECTOR 666 - LAYER 4: CITADEL GRAVITY CRAWL"
+      };
+    }
+    return {
+      loop,
+      sector: 666,
+      part: 8, // Escape sequence
+      localZ: local666 - 120.0,
+      secLen: 20.0,
+      isFall: false,
+      isCrystal: false,
+      name: "SECTOR 666: ESCAPE SEQUENCE"
+    };
+  }
+
+  // Loop 3 (or above, contains all 7 layers)
+  if (local666 < 20.0) {
+    return {
+      loop,
+      sector: 666,
+      part: 1, // Layer 1
+      localZ: local666,
+      secLen: 20.0,
+      isFall: true,
+      isCrystal: false,
+      name: "SECTOR 666 - LAYER 1: TWIG SLIDE"
+    };
+  }
   if (local666 < 40.0) {
     return {
       loop,
       sector: 666,
-      part: 1,
-      localZ: local666,
-      secLen: 40.0,
+      part: 2, // Layer 2
+      localZ: local666 - 20.0,
+      secLen: 20.0,
       isFall: false,
       isCrystal: false,
-      name: "SECTOR 666: THE WEAKENING WALLS"
+      name: "SECTOR 666 - LAYER 2: SHADOW TUNDRA"
     };
   }
-  if (local666 < 130.0) {
-    // 90 units long fall: at speed 7.5, takes exactly 12 seconds!
+  if (local666 < 60.0) {
     return {
       loop,
       sector: 666,
-      part: 2,
+      part: 3, // Layer 3
       localZ: local666 - 40.0,
-      secLen: 90.0,
+      secLen: 20.0,
+      isFall: false,
+      isCrystal: false,
+      name: "SECTOR 666 - LAYER 3: THROBBING WOMB"
+    };
+  }
+  if (local666 < 80.0) {
+    return {
+      loop,
+      sector: 666,
+      part: 4, // Layer 4
+      localZ: local666 - 60.0,
+      secLen: 20.0,
+      isFall: false,
+      isCrystal: false,
+      name: "SECTOR 666 - LAYER 4: CITADEL GRAVITY CRAWL"
+    };
+  }
+  if (local666 < 100.0) {
+    return {
+      loop,
+      sector: 666,
+      part: 5, // Layer 5
+      localZ: local666 - 80.0,
+      secLen: 20.0,
+      isFall: false,
+      isCrystal: false,
+      name: "SECTOR 666 - LAYER 5: THE MEAT GRINDER"
+    };
+  }
+  if (local666 < 120.0) {
+    return {
+      loop,
+      sector: 666,
+      part: 6, // Layer 6
+      localZ: local666 - 100.0,
+      secLen: 20.0,
+      isFall: false,
+      isCrystal: false,
+      name: "SECTOR 666 - LAYER 6: THE SPIRAL BRIDGE"
+    };
+  }
+  if (local666 < 140.0) {
+    return {
+      loop,
+      sector: 666,
+      part: 7, // Layer 7
+      localZ: local666 - 120.0,
+      secLen: 20.0,
       isFall: true,
-      isCrystal: loop === 1,
-      name: "SECTOR 666: CRYSTAL VACUUM"
+      isCrystal: false,
+      name: "SECTOR 666 - LAYER 7: SIGNAL ENTROPY"
     };
   }
 
-  // Part 3: Ground impact sideways fall & recovery
+  // Endless fall into signal decay
   return {
     loop,
     sector: 666,
-    part: 3,
-    localZ: local666 - 130.0,
-    secLen: 40.0,
-    isFall: false,
+    part: 9, // Endless
+    localZ: z - 1890.0,
+    secLen: 1000000.0,
+    isFall: true,
     isCrystal: false,
-    name: "SECTOR 666: COLLAPSE RECOVERY"
+    name: "VOID: SIGNAL DECAY"
   };
 }
 
@@ -167,7 +325,8 @@ export function getCamX(z: number): number {
     return s * Math.sin(z * 0.4) * 1.5;
   }
   if (state.sector === 4) {
-    return Math.sin(z * 0.08) * 1.8;
+    const s = smoothstep(0.0, 10.0, state.localZ) * (1.0 - smoothstep(60.0, 70.0, state.localZ));
+    return s * Math.sin(z * 0.08) * 1.8;
   }
   if (state.sector === 5) {
     // Elegant winding stair sway
@@ -176,10 +335,17 @@ export function getCamX(z: number): number {
   }
   if (state.sector === 6) return 0.0;
   if (state.sector === 666) {
-    if (state.isFall) {
-      return Math.sin(state.localZ * 0.15) * 1.5;
+    if (state.part === 1) { // Layer 1 (Crawl/Slide)
+      // intense winding snake-like slide sway
+      return Math.sin(z * 0.15) * 1.8;
     }
-    return Math.sin(z * 0.08) * 2.5;
+    if (state.part === 6) { // Spiral Bridge
+      // spiral concentric movement
+      const t = state.localZ / state.secLen;
+      const angle = t * Math.PI * 2.5;
+      return Math.sin(angle) * 4.5;
+    }
+    return 0.0;
   }
   return 0.0;
 }
@@ -188,22 +354,44 @@ export function getCamX(z: number): number {
 export function getCamOffset(z: number): number {
   const state = getKinematicState(z);
 
-  if (state.sector === 2 && state.localZ >= 5.0 && state.localZ < 65.0) {
-    return 0.95; // slide alignment
+  if (state.sector === 2) {
+    if (state.localZ < 10.0) {
+      return mix(1.8, 0.95, smoothstep(0.0, 10.0, state.localZ));
+    } else if (state.localZ < 60.0) {
+      return 0.95;
+    } else {
+      return mix(0.95, 1.0, smoothstep(60.0, 70.0, state.localZ));
+    }
   }
   if (state.sector === 3) {
-    return 1.0;
+    return mix(1.0, 1.8, smoothstep(70.0, 80.0, state.localZ));
   }
-  if (state.sector === 666 && state.part === 3) {
-    // Ground impact and recovery height animation
-    if (state.localZ < 20.0) {
-      // Tumble down to floor: 1.8 down to 0.25
-      const t = state.localZ / 20.0;
-      return mix(1.8, 0.25, smoothstep(0.0, 1.0, t));
-    } else {
-      // Pick up stand again: 0.25 up to 1.8
-      const t = (state.localZ - 20.0) / 20.0;
-      return mix(0.25, 1.8, smoothstep(0.0, 1.0, t));
+  if (state.sector === 666) {
+    if (state.part === 1) { // Layer 1 (Crawl Slide)
+      return 0.45; // very low crawling slide height
+    }
+    if (state.part === 2) { // Layer 2 (Tundra)
+      return 1.8; // standard standing
+    }
+    if (state.part === 3) { // Layer 3 (Throbbing womb)
+      return 1.6; // slightly crouched walking
+    }
+    if (state.part === 4) { // Layer 4 (Citadel gravity crawl)
+      return 0.42; // intense crawling on stomach from heavy gravity
+    }
+    if (state.part === 5) { // Layer 5 (Meat grinder)
+      return 1.35; // ducking / crouching
+    }
+    if (state.part === 6) { // Layer 6 (Spiral bridge)
+      return 1.75;
+    }
+    if (state.part === 7) { // Layer 7 (Entropy)
+      return 1.8;
+    }
+    if (state.part === 8) { // Collapse recovery
+      const t = Math.max(0.0, Math.min(1.0, state.localZ / state.secLen));
+      const dip = Math.sin(t * Math.PI);
+      return mix(1.8, 0.3, dip);
     }
   }
   return 1.8;
@@ -228,35 +416,57 @@ export function getFloorY(z: number): number {
     return -125.0 + bridgeArc;
   }
   if (state.sector === 5) {
-    if (state.localZ < 75.0) {
-      // Colossal stairs scaling from -125.0 to 0.0 smoothly
-      const stepSize = 4.3;
+    if (state.localZ < 52.0) {
+      const stepSize = 3.25;
       const s = state.localZ / stepSize;
       const smoothStair = Math.floor(s) + smoothstep(0.6, 1.0, s - Math.floor(s));
-      return -125.0 + smoothStair * 3.75;
+      return -125.0 + smoothStair * 3.44;
+    } else if (state.localZ < 72.0) {
+      const tFall = (state.localZ - 52.0) / 20.0;
+      return mix(-70.0, -180.0, tFall * tFall);
     } else {
-      // Halfway collapse: long fall to open water (ends around localZ = 120.0)
-      const tFall = (state.localZ - 75.0) / 75.0;
-      if (tFall < 0.6) {
-        const nt = tFall / 0.6;
-        return mix(-61.25, -180.0, nt * nt); // Plunge down
-      } else {
-        return -180.0; // Wade in open water
-      }
+      return -180.0;
     }
   }
-  if (state.sector === 6) return -180.0;
+  if (state.sector === 6) {
+    const t = Math.max(0.0, Math.min(1.0, state.localZ / state.secLen));
+    return mix(-180.0, 0.0, smoothstep(0.0, 1.0, t));
+  }
   if (state.sector === 666) {
-    if (state.isFall) {
-      // Fall down from wet corridor to pit
+    if (state.part === 1) { // Layer 1 (twigs slide)
       const t = state.localZ / state.secLen;
-      return mix(-180.0, -350.0, t * t);
+      return mix(0.0, -20.0, t);
     }
-    // Ground level in Part 3 recovery sits flat at -350.0
-    if (state.part === 3) {
-      return -350.0;
+    if (state.part === 2) { // Layer 2 (Tundra plain)
+      return -20.0;
     }
-    return -180.0 + Math.sin(state.localZ * 0.12) * 2.0;
+    if (state.part === 3) { // Layer 3 (Throbbing womb)
+      const t = state.localZ / state.secLen;
+      return mix(-20.0, -40.0, t);
+    }
+    if (state.part === 4) { // Layer 4 (Citadel gravity crawl)
+      return -40.0;
+    }
+    if (state.part === 5) { // Layer 5 (Meat grinder)
+      return -40.0;
+    }
+    if (state.part === 6) { // Layer 6 (Spiral bridge)
+      const t = state.localZ / state.secLen;
+      return mix(-40.0, -150.0, t);
+    }
+    if (state.part === 7) { // Layer 7 (Entropy)
+      const t = state.localZ / state.secLen;
+      return mix(-150.0, -350.0, t * t);
+    }
+    if (state.part === 8) { // Collapse Recovery
+      const t = Math.max(0.0, Math.min(1.0, state.localZ / state.secLen));
+      const endElevation = (state.loop === 1) ? -20.0 : -40.0;
+      return mix(endElevation, 0.0, smoothstep(0.0, 1.0, t));
+    }
+    if (state.part === 9) { // Endless glitch fall
+      const t = Math.min(1.0, state.localZ / 100.0);
+      return mix(-350.0, -1200.0, t);
+    }
   }
   return 0.0;
 }
@@ -271,30 +481,57 @@ export function getWalkSpeed(z: number): number {
 
   // Sector 5 Gravity Lab climbing: Super atmospheric crawling ascent, then collapse fall, then wading
   if (state.sector === 5) {
-    if (state.localZ < 75.0) {
+    if (state.localZ < 52.0) {
       return 1.6; // Slow crawl climbing
+    } else if (state.localZ < 72.0) {
+      return 18.0; // Rapid vertical fall velocity
     } else {
-      const tFall = (state.localZ - 75.0) / 75.0;
-      if (tFall < 0.6) {
-        return 16.0; // Rapid vertical fall velocity
+      return 3.5; // Slow water splashing wade
+    }
+  }
+
+  if (state.sector === 666) {
+    const lz = z % 500.0;
+    const local666 = lz - 360.0;
+
+    if (state.loop === 1) {
+      if (state.part === 1) return 8.5;  // Sliding fast
+      if (state.part === 2) return 5.5;  // Snowy tundra resisting walking
+      if (state.part === 8) return 1.8;  // Crawl impact recovery
+    }
+
+    if (state.loop === 2) {
+      if (state.part === 1) return 8.5;
+      if (state.part === 2) return 5.5;
+      if (state.part === 3) return 8.2;
+      if (state.part === 4) {
+        // Slowing down after layer 3
+        const t = state.localZ / state.secLen;
+        return mix(8.2, 1.4, t);
+      }
+      if (state.part === 8) return 1.8;
+    }
+
+    if (state.loop >= 3) {
+      if (state.part === 9) { // Endless Glitch Fall
+        return 22.0;
+      }
+      if (local666 < 60.0) {
+        if (state.part === 1) return 8.5;
+        if (state.part === 2) return 5.5;
+        return 8.2; // Layer 3
       } else {
-        return 4.5; // Slow water splashing wade
+        // Constantly slowing down after layer 3 (local666 > 60.0) all the way to layer 7
+        const t = Math.max(0.0, Math.min(1.0, (local666 - 60.0) / 80.0));
+        return mix(8.2, 0.45, t); // Agonizing crawl down to 0.45
       }
     }
   }
 
-  // Active elevator shaft/tube plunging speed (takes exactly 12s for the 90 units)
+  // Active general vertical fall/sliding
   if (state.isFall) {
-    if (state.loop === 3) {
-      return 22.0; // Endless final decay hyper-fall!
-    }
-    return 7.5; // Exactly 12 seconds downward plunge!
+    return 8.5;
   }
 
-  // Crawl speeds during impact recovery
-  if (state.sector === 666 && state.part === 3) {
-    return 2.0; // very slow cinematic impact struggle
-  }
-
-  return 8.2; // standard cruising speed
+  return 8.2; // standard speed
 }

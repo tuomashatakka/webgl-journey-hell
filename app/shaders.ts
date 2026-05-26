@@ -12,6 +12,7 @@ export const fsScene = `
     uniform float uIteration;
     uniform vec2 uPointer;
     uniform float uPlayerZ;
+    uniform float uHeavy;
 
     #define MAX_STEPS 120
     #define MAX_DIST 150.0
@@ -26,6 +27,10 @@ export const fsScene = `
     // Random noise generator
     float hash1d(float x) {
         return fract(sin(x * 12.9898) * 43758.5453123);
+    }
+
+    float hash(vec2 p) {
+        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
     }
 
     // Procedural glowing crevices
@@ -53,19 +58,19 @@ export const fsScene = `
 
     // Core analytical segment lookup generator in 100% sync with TS kinematics
     void getSegmentData(float z, out float loop, out float sector, out float part, out float localZ, out float secLen, out float isFall, out float isCrystal) {
-        if (z >= 2270.0) { // Endless fall at the end of Loop 3
+        if (z >= 1890.0) { // Endless fall at the end of Loop 3
             loop = 3.0;
             sector = 666.0;
-            part = 2.0;
-            localZ = z - 2270.0;
+            part = 9.0;
+            localZ = z - 1890.0;
             secLen = 1000000.0;
             isFall = 1.0;
             isCrystal = 0.0;
             return;
         }
 
-        loop = floor(z / 600.0);
-        float lz = mod(z, 600.0);
+        loop = floor(z / 500.0);
+        float lz = mod(z, 500.0);
         part = 0.0;
         isFall = 0.0;
         isCrystal = 0.0;
@@ -78,26 +83,59 @@ export const fsScene = `
             sector = 3.0; localZ = lz - 130.0; secLen = 80.0;
         } else if (lz < 280.0) {
             sector = 4.0; localZ = lz - 210.0; secLen = 70.0;
-        } else if (lz < 430.0) {
-            sector = 5.0; localZ = lz - 280.0; secLen = 150.0;
+        } else if (lz < 360.0) {
+            sector = 5.0; localZ = lz - 280.0; secLen = 80.0;
         } else {
             // Sector 6 / 666 Transition
-            localZ = lz - 430.0;
-            secLen = 170.0;
+            localZ = lz - 360.0;
+            secLen = 140.0;
             if (loop == 0.0) {
                 sector = 6.0;
             } else {
                 sector = 666.0;
-                if (localZ < 40.0) {
-                    part = 1.0;
-                } else if (localZ < 130.0) {
-                    part = 2.0;
-                    isFall = 1.0;
-                    if (loop == 1.0) {
-                        isCrystal = 1.0;
+                // Layer logic based on loop
+                if (loop == 1.0) {
+                    if (localZ < 60.0) {
+                        part = 1.0; // Layer 1
+                        isFall = 1.0;
+                    } else if (localZ < 120.0) {
+                        part = 2.0; // Layer 2
+                    } else {
+                        part = 8.0; // Collapse recovery
                     }
-                } else {
-                    part = 3.0;
+                } else if (loop == 2.0) {
+                    if (localZ < 30.0) {
+                        part = 1.0; // Layer 1
+                        isFall = 1.0;
+                    } else if (localZ < 60.0) {
+                        part = 2.0; // Layer 2
+                    } else if (localZ < 90.0) {
+                        part = 3.0; // Layer 3
+                    } else if (localZ < 120.0) {
+                        part = 4.0; // Layer 4
+                    } else {
+                        part = 8.0; // Collapse recovery (escape)
+                    }
+                } else { // loop >= 3.0
+                    if (localZ < 20.0) {
+                        part = 1.0; // Layer 1
+                        isFall = 1.0;
+                    } else if (localZ < 40.0) {
+                        part = 2.0; // Layer 2
+                    } else if (localZ < 60.0) {
+                        part = 3.0; // Layer 3
+                    } else if (localZ < 80.0) {
+                        part = 4.0; // Layer 4
+                    } else if (localZ < 100.0) {
+                        part = 5.0; // Layer 5
+                    } else if (localZ < 120.0) {
+                        part = 6.0; // Layer 6
+                    } else if (localZ < 140.0) {
+                        part = 7.0; // Layer 7
+                        isFall = 1.0;
+                    } else {
+                        part = 9.0; // Endless glitch void fallback
+                    }
                 }
             }
         }
@@ -118,7 +156,8 @@ export const fsScene = `
             return s * sin(z * 0.4) * 1.5;
         }
         if (sector == 4.0) {
-            return sin(z * 0.08) * 1.8;
+            float s = smoothstep_custom(0.0, 10.0, localZ) * (1.0 - smoothstep_custom(60.0, 70.0, localZ));
+            return s * sin(z * 0.08) * 1.8;
         }
         if (sector == 5.0) {
             float t5 = localZ / secLen;
@@ -126,8 +165,14 @@ export const fsScene = `
         }
         if (sector == 6.0) return 0.0;
         if (sector == 666.0) {
-            if (isFall > 0.5) return sin(localZ * 0.15) * 1.5;
-            return sin(z * 0.08) * 2.5;
+            if (part == 1.0) {
+                float s = smoothstep_custom(0.0, 10.0, localZ) * (1.0 - smoothstep_custom(30.0, 40.0, localZ));
+                return s * sin(z * 0.08) * 2.5;
+            }
+            if (isFall > 0.5) {
+                return 0.0;
+            }
+            return 0.0;
         }
         return 0.0;
     }
@@ -137,20 +182,22 @@ export const fsScene = `
         float loop, sector, part, localZ, secLen, isFall, isCrystal;
         getSegmentData(z, loop, sector, part, localZ, secLen, isFall, isCrystal);
 
-        if (sector == 2.0 && localZ >= 5.0 && localZ < 65.0) {
-            return 0.95;
+        if (sector == 2.0) {
+            if (localZ < 10.0) {
+                return mix(1.8, 0.95, smoothstep_custom(0.0, 10.0, localZ));
+            } else if (localZ < 60.0) {
+                return 0.95;
+            } else {
+                return mix(0.95, 1.0, smoothstep_custom(60.0, 70.0, localZ));
+            }
         }
         if (sector == 3.0) {
-            return 1.0;
+            return mix(1.0, 1.8, smoothstep_custom(70.0, 80.0, localZ));
         }
         if (sector == 666.0 && part == 3.0) {
-            if (localZ < 20.0) {
-                float t = localZ / 20.0;
-                return mix(1.8, 0.25, smoothstep_custom(0.0, 1.0, t));
-            } else {
-                float t = (localZ - 20.0) / 20.0;
-                return mix(0.25, 1.8, smoothstep_custom(0.0, 1.0, t));
-            }
+            float t = clamp(localZ / secLen, 0.0, 1.0);
+            float dip = sin(t * 3.14159265);
+            return mix(1.8, 0.25, dip);
         }
         return 1.8;
     }
@@ -175,31 +222,33 @@ export const fsScene = `
             return -125.0 + bridgeArc;
         }
         if (sector == 5.0) {
-            if (localZ < 75.0) {
-                float stepSize = 4.3;
+            if (localZ < 52.0) {
+                float stepSize = 3.25;
                 float s = localZ / stepSize;
                 float smoothStair = floor(s) + smoothstep_custom(0.6, 1.0, fract(s));
-                return -125.0 + smoothStair * 3.75;
+                return -125.0 + smoothStair * 3.44;
+            } else if (localZ < 72.0) {
+                float tFall = (localZ - 52.0) / 20.0;
+                return mix(-70.0, -180.0, tFall * tFall);
             } else {
-                float tFall = (localZ - 75.0) / 75.0;
-                if (tFall < 0.6) {
-                    float nt = tFall / 0.6;
-                    return mix(-61.25, -180.0, nt * nt);
-                } else {
-                    return -180.0;
-                }
+                return -180.0;
             }
         }
-        if (sector == 6.0) return -180.0;
+        if (sector == 6.0) {
+            float t = clamp(localZ / secLen, 0.0, 1.0);
+            return mix(-180.0, 0.0, smoothstep_custom(0.0, 1.0, t));
+        }
         if (sector == 666.0) {
             if (isFall > 0.5) {
                 float t = localZ / secLen;
                 return mix(-180.0, -350.0, t * t);
             }
             if (part == 3.0) {
-                return -350.0;
+                float t = clamp(localZ / secLen, 0.0, 1.0);
+                return mix(-350.0, 0.0, smoothstep_custom(0.0, 1.0, t));
             }
-            return -180.0 + sin(localZ * 0.12) * 2.0;
+            float bounce = sin(localZ * 0.12) * 2.0 * (1.0 - smoothstep_custom(30.0, 40.0, localZ));
+            return -180.0 + bounce;
         }
         return 0.0;
     }
@@ -223,6 +272,11 @@ export const fsScene = `
     vec3 rotZ(vec3 p, float a) {
         float c = cos(a), s = sin(a);
         return vec3(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
+    }
+
+    float sdBox(vec3 p, vec3 b) {
+        vec3 q = abs(p) - b;
+        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
     }
 
     // Narrow staircase SDF for M.C. Escher gravity labyrinth
@@ -287,22 +341,21 @@ export const fsScene = `
         float loop, sector, part, localZ, secLen, isFall, isCrystal;
         getSegmentData(p.z, loop, sector, part, localZ, secLen, isFall, isCrystal);
 
+        float currentZ = mod(p.z, 500.0);
         float fY = getFloorY(p.z);
-        float decayFactor = clamp(loop * 0.15, 0.0, 0.95);
         
-        // Squeezing/bending corridors on higher decay iterations
-        float cFactor = 1.0 - clamp(loop * 0.14, 0.0, 0.72);
-        float twist = sin(p.z * 0.065 + iTime * 2.0) * (loop * 0.35);
-        p.x += twist * (1.0 - cFactor);
+        float smoothLoop = loop;
+        if (sector == 6.0 && currentZ > 400.0) {
+            smoothLoop = loop + smoothstep_custom(400.0, 500.0, currentZ);
+        }
 
-        // Infinite falling 3D decaying blocks/shards
-        if (sector == 666.0 && loop >= 3.0 && isFall > 0.5) {
-            vec3 shardCell = floor(p * 0.95);
-            vec3 shardFract = fract(p * 0.95) - 0.5;
-            float shardDecay = clamp((localZ - 40.0) * 0.012, 0.0, 1.0);
-            p.x += sin(shardCell.y * 33.1) * shardDecay * 3.5;
-            p.y += cos(shardCell.x * 24.5) * shardDecay * 3.5;
-            p.z += sin(shardCell.z * 12.8) * shardDecay * 3.5;
+        float decayFactor = clamp(smoothLoop * 0.15, 0.0, 0.95);
+        float cFactor = 1.0 - clamp(smoothLoop * 0.14, 0.0, 0.72);
+
+        // Squeezing/bending corridors on higher decay iterations
+        if (sector < 666.0) {
+            float twist = sin(p.z * 0.065 + iTime * 2.0) * (smoothLoop * 0.35);
+            p.x += twist * (1.0 - cFactor);
         }
 
         if (decayFactor > 0.01) {
@@ -313,272 +366,351 @@ export const fsScene = `
             p.y += warpY + warpHigh;
         }
 
-        float dCamSafety = length(p.xy - vec2(getCamX(p.z), getCamY(p.z) + getCamOffset(p.z))) - 2.5;
+        float cX = getCamX(p.z);
+        float cY = fY + getCamOffset(p.z);
+        float dCamSafety = length(p.xy - vec2(cX, cY)) - 2.0;
 
-        // Core room dimensions
-        float width = 12.0;
-        float ceilH = 7.0;
+        vec2 res = vec2(1000.0, MAT_MATTE);
 
-        if (sector == 1.0) { width = 12.0; ceilH = 7.0; }
-        else if (sector == 2.0) { width = mix(12.0, 35.0, localZ/secLen); ceilH = mix(7.0, 40.0, localZ/secLen); }
-        else if (sector == 3.0) { width = mix(35.0, 50.0, localZ/secLen); ceilH = mix(40.0, 100.0, localZ/secLen); }
-        else if (sector == 4.0) { width = 150.0; ceilH = 300.0; } 
-        else if (sector == 5.0) { width = 50.0; ceilH = 150.0; }
-        else if (sector == 6.0) { width = 12.0; ceilH = 7.0; }
-        else if (sector == 666.0) {
-            if (isCrystal > 0.5) { width = 8.0; ceilH = 8.0; }
-            else { width = 12.0; ceilH = 7.0; }
-        }
-
-        width *= cFactor;
-        ceilH *= mix(1.0, 0.45, (1.0 - cFactor));
-
-        float dFloor = p.y - fY;
-        float dCeil  = (fY + ceilH) - p.y;
-        float dWalls = width - abs(p.x);
-        
-        float dRoom = min(dFloor, min(dCeil, dWalls));
-
-        if (sector == 4.0) {
-            dRoom = 1000.0; // Emptiness void
-        }
-
-        vec2 res = vec2(dRoom, MAT_MATTE);
-
-        // SECTOR 666 RENDER ENGINE
+        // SECTOR 666 RENDER ENGINE (Endlessly Mutating 7-Layer Hellscape)
         if (sector == 666.0) {
-            if (isCrystal > 0.5) {
-                // Crystal falling tube
-                vec2 tCenter = vec2(getCamX(p.z), getCamY(p.z));
-                float lTube = length(p.xy - tCenter) - 4.5 + sin(p.z * 0.4)*0.15;
-                res = opU(res, vec2(lTube, MAT_GLASS));
+            if (part == 1.0) {
+                // --- LAYER 1: BURNING TWIGS & BARBED WIRE CRAWL SLIDE ---
+                vec2 tun = p.xy - vec2(getCamX(p.z), fY + 0.3);
+                float cave = 1.35 - length(tun);
+                
+                // Twisting barbed wire lines inside
+                vec3 cp = p;
+                float angle = cp.z * 1.5 + iTime * 2.5;
+                cp.xy = vec2(cp.x * cos(angle) - cp.y * sin(angle), cp.x * sin(angle) + cp.y * cos(angle));
+                float wire = length(abs(cp.xy) - vec2(0.85, 0.85)) - 0.035;
+                wire += sin(cp.z * 18.0) * 0.02 * cos(cp.z * 6.0);
+                
+                // Gnarled fiery twigs/branches SDF
+                float twig = length(cp.xy) - 1.25 + 0.28 * sin(cp.z * 7.0) * cos(cp.z * 4.5);
+                
+                float dSlide = min(min(cave, wire), twig);
+                res = vec2(dSlide, MAT_FLESH);
+                if (wire < cave && wire < twig) {
+                    res.y = MAT_MATTE; // metal barbed wire
+                }
+                res.x *= 0.45;
+                return res;
+            }
+            else if (part == 2.0) {
+                // --- LAYER 2: COLD ENDLESS TUNDRA LANDSCAPE & SHADOW CREATURES ---
+                float dTundraPlain = p.y - (fY - 2.5);
+                float hills = sin(p.x * 0.04) * cos(p.z * 0.04) * 3.5;
+                dTundraPlain -= hills;
+                
+                // Shadow creatures lurking and morphing in peripheral fields
+                vec3 sp = p;
+                sp.z = mod(sp.z + 18.0, 36.0) - 18.0;
+                sp.x = abs(sp.x) - 13.0;
+                float dCreature = length(sp - vec3(0.0, fY + 1.0 + sin(iTime * 2.5) * 0.4, 0.0)) - (0.95 + 0.45 * sin(iTime * 14.0) * cos(p.y * 3.0));
+                
+                float dBase = min(dTundraPlain, dCreature);
+                res = vec2(dBase, MAT_MATTE);
+                if (dCreature < dTundraPlain) {
+                    res.y = MAT_GLASS; // give shadow creatures a dark glazed glitch material
+                }
                 res.x *= 0.5;
                 return res;
             }
-
-            // Giant screaming skull centered along the corridor
-            vec3 skullP = p - vec3(getCamX(p.z), -45.0, p.z - localZ + 25.0);
-            float dSkull = length(skullP) - 9.5;
-            float dSkullEyeR = length(skullP - vec3(3.2, 5.0, -7.5)) - 2.6;
-            float dSkullEyeL = length(skullP - vec3(-3.2, 5.0, -7.5)) - 2.6;
-            dSkull = max(dSkull, -dSkullEyeR);
-            dSkull = max(dSkull, -dSkullEyeL);
-            float dSkullMouth = length(skullP - vec3(0.0, -3.5, -8.0)) - 5.0;
-            float dSkullNose = length(skullP - vec3(0.0, 1.5, -9.0)) - 1.5;
-            dSkull = max(max(dSkull, -dSkullMouth), -dSkullNose);
-
-            float dEyeballR = length(skullP - vec3(3.2, 5.0, -6.0)) - 1.5;
-            float dEyeballL = length(skullP - vec3(-3.2, 5.0, -6.0)) - 1.5;
-            float dEyeballs = min(dEyeballR, dEyeballL);
-
-            res = opU(res, vec2(dSkull, MAT_FLESH));
-            res = opU(res, vec2(dEyeballs, MAT_FLESH));
-
-            // Spikes along walls
-            vec3 qSpikes = p;
-            qSpikes.x = abs(qSpikes.x) - (width - 1.0);
-            qSpikes.z = mod(p.z + 10.0, 20.0) - 10.0;
-            float dFleshSpikes = length(qSpikes.xz) - 1.8 + sin(p.y * 1.5 + iTime * 3.0) * 0.4;
-            dFleshSpikes = max(dFleshSpikes, -dCamSafety);
-            res = opU(res, vec2(dFleshSpikes, MAT_FLESH));
-
-            res.x *= 0.5;
-            return res;
-        }
-
-        // Sector 1 columns
-        if (sector == 1.0) {
-            vec3 q1 = p;
-            q1.z = mod(p.z + 3.0, 6.0) - 3.0;
-            q1.x = abs(q1.x) - 4.5 * cFactor;
-            float dPillar1 = length(max(abs(vec2(q1.x, q1.z)) - 0.4, 0.0)) - 0.05;
-            dPillar1 = max(dPillar1, -dCamSafety);
-            res = opU(res, vec2(dPillar1, MAT_MATTE));
-        }
-
-        // Sector 2 columns
-        if (sector == 2.0) {
-            vec3 q2 = p;
-            q2.z = mod(p.z + 15.0, 30.0) - 15.0;
-            q2.x = abs(q2.x) - 16.0 * cFactor;
-            float dPillar2 = length(q2.xz) - 3.0;
-            dPillar2 = max(dPillar2, -dCamSafety);
-            res = opU(res, vec2(dPillar2, MAT_MATTE));
-        }
-
-        // Sector 2 waterslide slope
-        if (sector == 2.0) {
-            float slide_x = getCamX(p.z);
-            float slide_y = getFloorY(p.z) + 1.2;
-            vec2 dSlideProfile = vec2(p.x - slide_x, p.y - slide_y);
-            float distSBody = abs(length(dSlideProfile) - 1.8) - 0.1;
-            float dSlideHull = max(distSBody, dSlideProfile.y - 0.2);
-            dSlideHull = max(dSlideHull, max(0.0 - localZ, localZ - secLen));
-            res = opU(res, vec2(dSlideHull, MAT_GLASS));
-
-            float dSlideWater = max(length(dSlideProfile) - 1.75, dSlideProfile.y + 0.3);
-            dSlideWater = max(dSlideWater, max(0.0 - localZ, localZ - secLen));
-            res = opU(res, vec2(dSlideWater, MAT_WATER));
-        }
-
-        // Sector 3 organic plants entry
-        if (sector == 3.0) {
-            if (localZ < 15.0) {
-                vec2 mouthCenter = vec2(getCamX(p.z), getFloorY(p.z) + 1.2);
-                float distToMouthCenter = length(p.xy - mouthCenter);
-                float pAngle = atan(p.y - mouthCenter.y, p.x - mouthCenter.x);
-                float teethAmp = 1.6 + sin(iTime * 4.0) * 0.25;
-                float mouthTeeth = sin(pAngle * 10.0) * teethAmp * smoothstep_custom(0.0, 1.0, 1.0 - abs(localZ - 5.0) * 0.28);
-                float dMouthLip = distToMouthCenter - (5.2 - mouthTeeth);
-                float dPlantMaw = max(abs(localZ - 5.0) - 1.6, dMouthLip);
-                dPlantMaw = max(dPlantMaw, -dCamSafety);
-                res = opU(res, vec2(dPlantMaw, MAT_FLESH));
+            else if (part == 3.0) {
+                // --- LAYER 3: THE THROBBING WOMB (Visceral Pulsating Cave) ---
+                vec2 tun = p.xy - vec2(getCamX(p.z), fY + 1.8);
+                float rCorridor = 3.6 + sin(p.z * 0.28 + iTime * 4.2) * 0.48;
+                float womb = rCorridor - length(tun);
+                
+                // organic veiny nodes bulging outward
+                float nodes = sin(p.x * 2.2) * sin(p.y * 2.2) * cos(p.z * 2.2) * 0.48;
+                womb -= nodes;
+                
+                res = vec2(womb, MAT_FLESH);
+                res.x *= 0.45;
+                return res;
             }
-
-            vec2 tubeCenter = vec2(getCamX(p.z), getFloorY(p.z) + 1.2);
-            float distToTubeCenter = length(p.xy - tubeCenter);
-            float dTubeWall = abs(distToTubeCenter - 4.5) - 0.2; 
-            float fleshWeight = smoothstep_custom(25.0, 55.0, localZ);
-            float fleshNoise = sin(p.x * 2.5) * sin(p.y * 2.5) * sin(p.z * 2.5) * 0.45;
-            fleshNoise += sin(p.x * 6.5 + p.z * 6.5) * cos(p.y * 6.5) * 0.15;
-            float thorns = pow(abs(sin(p.x * 5.0) * sin(p.y * 5.0) * sin(p.z * 5.0)), 3.0) * 1.8;
-            float dFleshTube = dTubeWall + fleshWeight * (fleshNoise - thorns);
-            dFleshTube = max(dFleshTube, -dCamSafety);
-            res = opU(res, vec2(dFleshTube, (localZ >= 25.0) ? MAT_FLESH : MAT_MATTE));
+            else if (part == 4.0) {
+                // --- LAYER 4: CITADEL GRAVITY CRAWL (Squeezing concrete grids) ---
+                float dFloor = p.y - fY;
+                float dCeil = (fY + 1.35 + sin(p.z * 0.08) * 0.35) - p.y;
+                
+                // Crushing pillars on sides
+                vec3 rpCol = p;
+                rpCol.z = mod(p.z + 5.0, 10.0) - 5.0;
+                float dCol = length(abs(rpCol.xz) - vec2(3.2, 0.0)) - 0.75;
+                
+                float dCitadel = min(min(dFloor, dCeil), dCol);
+                res = vec2(dCitadel, MAT_MATTE);
+                res.x *= 0.5;
+                return res;
+            }
+            else if (part == 5.0) {
+                // --- LAYER 5: THE MEAT GRINDER (Buzzsaws & Pistons) ---
+                float dFloorLab = p.y - fY;
+                float dCeilLab = (fY + 7.0) - p.y;
+                float dWallsLab = 6.0 - abs(p.x);
+                float dGrinder = min(dFloorLab, min(dCeilLab, dWallsLab));
+                
+                // Ceil pistons pounding down
+                vec3 rpPiston = p;
+                rpPiston.z = mod(p.z + 10.0, 20.0) - 10.0;
+                float pistonCycle = abs(sin(iTime * 3.8 + p.z * 0.18)) * 3.6;
+                float dPiston = sdBox(rpPiston - vec3(0.0, fY + 6.0 - pistonCycle, 0.0), vec3(1.6, 2.8, 1.6));
+                
+                // Rotating big saw blades
+                vec3 rpSaw = p;
+                rpSaw.z = mod(rpSaw.z + 8.0, 16.0) - 8.0;
+                rpSaw.x = abs(rpSaw.x) - 4.0;
+                float sAngle = iTime * 22.0;
+                vec2 rotatedCoord = vec2(rpSaw.y * cos(sAngle) - rpSaw.z * sin(sAngle), rpSaw.y * sin(sAngle) + rpSaw.z * cos(sAngle));
+                float dSaw = sdBox(vec3(rpSaw.x, rotatedCoord.x, rotatedCoord.y), vec3(0.1, 2.4, 2.4));
+                
+                float dTotal = min(dGrinder, min(dPiston, dSaw));
+                res = vec2(dTotal, MAT_MATTE);
+                if (dPiston < dGrinder && dPiston < dSaw) {
+                    res.y = MAT_FLESH; // visceral bio-pistons
+                }
+                res.x *= 0.45;
+                return res;
+            }
+            else if (part == 6.0) {
+                // --- LAYER 6: THE SPIRAL STONE BRIDGE DOWNWARDS ---
+                float shaftRad = 9.5;
+                float dShaft = shaftRad - length(p.xz);
+                
+                // Procedural floating spiral stepping blocks
+                float pAng = atan(p.z, p.x);
+                float pStep = (p.y - (-40.0)) / -5.0;
+                float pCell = floor(pStep);
+                float stepAngle = pCell * 0.45;
+                float stepRad = 5.2;
+                vec3 platformPos = vec3(stepRad * cos(stepAngle), -40.0 - pCell * 5.0, stepRad * sin(stepAngle));
+                
+                float dPlatform = sdBox(p - platformPos, vec3(1.6, 0.35, 1.95));
+                
+                float dSpiral = min(dShaft, dPlatform);
+                res = vec2(dSpiral, MAT_MATTE);
+                res.x *= 0.5;
+                return res;
+            }
+            else if (part == 7.0) {
+                // --- LAYER 7: ENTROPY & LIGHT LEAKS (Disintegrating cave geometry) ---
+                float dFloorCorr = p.y - fY;
+                float hills = sin(p.x * 0.2) * cos(p.z * 0.2) * 1.5;
+                dFloorCorr -= hills;
+                
+                // high-frequency spatial distortion spikes representing digital signal breakdown
+                float glitches = sin(p.x * 24.0 + iTime * 32.0) * sin(p.y * 36.0) * sin(p.z * 16.0) * 0.35;
+                dFloorCorr += glitches;
+                
+                vec3 qBox = p;
+                qBox.xz = mod(p.xz + 6.0, 12.0) - 6.0;
+                float dSpikes = length(qBox - vec3(0.0, fY + 3.0, 0.0)) - (1.0 + 1.2 * sin(iTime * 12.0));
+                
+                float dEntropy = min(dFloorCorr, dSpikes);
+                res = vec2(dEntropy, MAT_GLASS);
+                res.x *= 0.5;
+                return res;
+            }
+            else if (part == 8.0) {
+                // --- PART 8: THE COLLAPSE RECOVERY CHAMBER ---
+                float dFloorChamber = p.y - fY;
+                float dCeilChamber = (fY + 8.5) - p.y;
+                float dWallsChamber = 10.0 - abs(p.x);
+                float dRecoveryChamber = min(dFloorChamber, min(dCeilChamber, dWallsChamber));
+                
+                // monolith arches
+                vec3 rCh = p;
+                rCh.z = mod(p.z + 8.0, 16.0) - 8.0;
+                float arches = length(vec2(abs(rCh.x) - 10.0, p.y - fY - 4.2)) - 1.5;
+                dRecoveryChamber = min(dRecoveryChamber, arches);
+                
+                // Pulsating core lens
+                vec3 bioP = p - vec3(0.0, fY + 3.0, p.z - localZ + 16.0);
+                float dCore = length(bioP) - 3.0 + sin(iTime * 3.5) * 0.22;
+                
+                float dFinal = min(dRecoveryChamber, dCore);
+                res = vec2(dFinal, MAT_MATTE);
+                if (dCore < dRecoveryChamber) {
+                    res.y = MAT_FLESH;
+                }
+                res.x *= 0.5;
+                return res;
+            }
+            else { // part == 9.0
+                // --- PART 9: ENDLESS PROCEDURAL GLITCH FALL VOID ---
+                vec3 qVoid = p;
+                qVoid.xz = mod(p.xz + 18.0, 36.0) - 18.0;
+                qVoid.y = mod(p.y + 8.0, 16.0) - 8.0;
+                float dPlate = sdBox(qVoid, vec3(7.5, 0.3, 7.5)) + sin(p.x * 2.2 + iTime * 6.0) * 0.45;
+                
+                // high frequency scanning pixel spike boxes
+                float dSpikes = length(mod(p, 5.0) - 2.5) - 0.15 - 2.2 * step(0.9, sin(iTime * 16.0 + p.y * 1.5));
+                float dVoidDecay = min(dPlate, dSpikes);
+                
+                res = vec2(dVoidDecay, MAT_GLASS);
+                res.x *= 0.45;
+                return res;
+            }
         }
 
-        // Sector 4 crumbling bridge span
-        if (sector == 4.0) {
-            float bridgeY = getFloorY(p.z);
-            float dBridgeDeck = max(abs(p.x) - 2.5, abs(p.y - bridgeY) - 0.5);
-            float erosion = sin(p.z * 1.5) * cos(p.y * 4.0) * 0.25;
-            dBridgeDeck += erosion;
-            
-            float pz_tile = floor(p.z / 9.0);
-            float seed = fract(sin(pz_tile * 12.9898) * 43758.5453);
-            float t_fall = fract(iTime * 0.12 + seed);
-            float dropOffset = 120.0 * exp(-t_fall * 6.0); 
-            float pX = (fract(seed * 4.0) - 0.5) * 6.0; 
-            
-            vec3 piecePos = p;
-            piecePos.x -= pX;
-            piecePos.y -= (bridgeY + dropOffset);
-            piecePos.z = mod(p.z, 9.0) - 4.5;
-            float dPiece = length(max(abs(piecePos) - vec3(1.0, 0.4, 1.0), 0.0)) - 0.05;
-            
-            dBridgeDeck = max(dBridgeDeck, -dCamSafety);
-            dPiece = max(dPiece, -dCamSafety);
-            res = opU(res, vec2(dBridgeDeck, MAT_MATTE));
-            res = opU(res, vec2(dPiece, MAT_MATTE));
+        // --- SECTORS 1 & 2 (0 to 130) ---
+        // Interpolate width and height
+        float r_t = clamp((currentZ - 60.0) / 70.0, 0.0, 1.0);
+        if (currentZ < 60.0) r_t = 0.0;
+        float r_width = mix(12.0, 35.0, r_t) * cFactor;
+        float r_ceilH = mix(7.0, 40.0, r_t) * mix(1.0, 0.45, 1.0 - cFactor);
+        
+        float dFloor = p.y - fY;
+        float dCeil = (fY + r_ceilH) - p.y;
+        float dWalls = r_width - abs(p.x);
+        float dRoom12 = min(dFloor, min(dCeil, dWalls));
+
+        vec3 q1 = p; q1.z = mod(q1.z + 3.0, 6.0) - 3.0; q1.x = abs(q1.x) - 4.5 * cFactor;
+        float dCol1 = length(max(abs(vec2(q1.x, q1.z)) - 0.4, 0.0)) - 0.05;
+        
+        vec3 q2 = p; q2.z = mod(q2.z + 15.0, 30.0) - 15.0; q2.x = abs(q2.x) - 16.0 * cFactor;
+        float dCol2 = length(q2.xz) - 3.0;
+        
+        float dSec1 = min(dRoom12, dCol1);
+        float dSec2 = min(dRoom12, dCol2);
+        
+        float dBase = mix(dSec1, dSec2, smoothstep_custom(50.0, 70.0, currentZ));
+
+        // Add glass slide for Sec 2
+        float dSlideHull = 1000.0;
+        if (currentZ > 60.0 && currentZ < 130.0) {
+            float slide_x = cX;
+            float slide_y = fY + 1.2;
+            vec2 dSlideQ = vec2(p.x - slide_x, p.y - slide_y);
+            dSlideHull = max(abs(length(dSlideQ) - 1.8) - 0.1, dSlideQ.y - 0.2);
+            dBase = min(dBase, dSlideHull); 
         }
 
-        // Sector 5 Gravity stairs structures: Rebuilt to match layout perfectly and tilt/collapse dynamically
-        if (sector == 5.0) {
-            float baseZ = p.z - localZ;
-            float dMainStep = 1000.0;
+        // --- SECTOR 3: CRYSTAL CAVE (130 to 210) ---
+        vec3 q3 = p; q3.x -= cX; q3.y -= cY;
+        float cave = 6.0 - length(q3.xy - vec2(sin(q3.z * 0.1) * 3.0, cos(q3.z * 0.15) * 2.0));
+        cave += sin(q3.x * 2.0) * sin(q3.y * 1.5) * sin(q3.z * 1.0) * 0.5;
+        vec3 cp = q3; cp.x += sin(iTime * 0.5 + p.z) * 1.0; cp.y += cos(iTime * 0.4 + p.z) * 1.0;
+        cp.xz = mod(cp.xz + 6.0, 12.0) - 6.0; cp.y = mod(cp.y + 4.0, 8.0) - 4.0;
+        float crystal = (abs(cp.x) + abs(cp.y) + abs(cp.z)) - 0.8;
+        float dSec3 = min(cave, crystal) * 0.6; // We use MAT_MATTE for cave, crystal handled below
 
-            vec3 mainStairP = p;
-            if (decayFactor > 0.05) {
-                float amt = decayFactor * 0.16;
-                mainStairP = rotX(mainStairP, amt * sin(p.z * 0.12));
-                mainStairP = rotY(mainStairP, amt * cos(p.y * 0.08));
-                mainStairP.y += sin(p.z * 0.2) * amt * 3.0;
-            }
+        dBase = mix(dBase, dSec3, smoothstep_custom(115.0, 145.0, currentZ));
 
-            if (localZ < 75.0) {
-                // Main walk path staircase (matching kinematics perfectly)
-                float stepW = 4.3;
-                float s = mainStairP.z / stepW;
-                float smoothStair = floor(s) + smoothstep_custom(0.6, 1.0, fract(s));
-                float stepY = -125.0 + smoothStair * 3.75;
-                dMainStep = max(abs(mainStairP.x) - 2.2 * cFactor, abs(mainStairP.y - stepY) - 0.45);
-            } else {
-                // Collapsing debris of the main path:
-                // Small rotating pieces falling down
-                float cellZ = floor(mainStairP.z / 6.0);
-                float seed = hash1d(cellZ * 123.45);
-                vec3 debrisP = mainStairP;
-                float fallProgress = localZ - 75.0;
-                float fallY = 40.0 * fallProgress * 0.05 * (1.1 + seed);
-                debrisP.y += fallY;
-                debrisP = rotX(debrisP, iTime * (1.5 + seed * 2.0));
-                debrisP = rotY(debrisP, iTime * (1.0 + seed * 1.5));
-                dMainStep = length(max(abs(debrisP) - 1.4, 0.0)) - 0.15;
-            }
+        // --- SECTOR 4: COGS & PNEUMATICS (210 to 280) ---
+        vec3 q4 = p; q4.x -= cX; q4.y -= cY;
+        vec3 q4m = q4; q4m.xz = mod(q4m.xz + 10.0, 20.0) - 10.0;
+        
+        float vCols = max(abs(q4m.x) - 1.8, max(abs(q4m.y) - 50.0, abs(q4m.z) - 1.8));
+        float hB1 = max(abs(q4m.x) - 8.0, max(abs(q4m.y) - 0.3, abs(q4m.z + 8.0) - 0.3));
+        float hB2 = max(abs(q4m.x) - 8.0, max(abs(q4m.y) - 0.3, abs(q4m.z - 8.0) - 0.3));
+        float allCols = min(vCols, min(hB1, hB2));
+        
+        vec3 gA = q4m - vec3(0.0, 5.0, 0.0); gA.xy *= mat2(cos(iTime*1.2), -sin(iTime*1.2), sin(iTime*1.2), cos(iTime*1.2));
+        float dGa = max(length(gA.xy) - (2.6 + sin(atan(gA.y, gA.x) * 16.0) * 0.3), abs(q4m.z) - 0.5);
+        vec3 gB = q4m - vec3(-4.6, 5.0, 0.0); float tB = -iTime*1.95 + 0.1; gB.xy *= mat2(cos(tB), -sin(tB), sin(tB), cos(tB));
+        float dGb = max(length(gB.xy) - (1.6 + sin(atan(gB.y, gB.x) * 10.0) * 0.2), abs(q4m.z) - 0.4);
+        vec3 gC = q4m - vec3(4.6, 5.0, 0.0); gC.xy *= mat2(cos(tB), -sin(tB), sin(tB), cos(tB));
+        float dGc = max(length(gC.xy) - (1.6 + sin(atan(gC.y, gC.x) * 10.0) * 0.2), abs(q4m.z) - 0.4);
+        float gears = min(dGa, min(dGb, dGc));
+        
+        vec3 pA = q4m - vec3(sin(iTime*4.0)*3.5, -2.5, -2.0); float cA = max(abs(pA.x)-3.0, max(abs(pA.y)-0.4, abs(pA.z)-0.4));
+        vec3 sB_= q4m - vec3(-4.0, 0.0, 2.0); float csB = max(abs(sB_.x)-0.6, max(abs(sB_.y)-2.2, abs(sB_.z)-0.6));
+        vec3 rB_= q4m - vec3(-4.0, sin(iTime*3.0)*2.0, 2.0); float crB = max(abs(rB_.x)-0.35, max(abs(rB_.y)-2.0, abs(rB_.z)-0.35));
+        vec3 sC_= q4m - vec3(4.0, 0.0, 2.0); float csC = max(abs(sC_.x)-0.6, max(abs(sC_.y)-2.2, abs(sC_.z)-0.6));
+        vec3 rC_= q4m - vec3(4.0, cos(iTime*3.0)*2.0, 2.0); float crC = max(abs(rC_.x)-0.35, max(abs(rC_.y)-2.0, abs(rC_.z)-0.35));
+        float pneumatics = min(cA, min(min(csB, crB), min(csC, crC)));
+        
+        float dSec4 = min(p.y - (fY - 1.0), min(allCols, min(gears, pneumatics)) * 0.4);
+        dBase = mix(dBase, dSec4, smoothstep_custom(200.0, 220.0, currentZ));
 
-            // --- MULTI-AXIAL M.C. ESCHER STAIRS FLOATING IN THE CHASM ---
-            // Rotate around all axes to create a mind-bending labyrinth
-            float dFloatingStairs = 1000.0;
-            
-            // Staircase 1: Climbing vertically on the left wall (rotated)
-            vec3 q1 = p - vec3(-18.0, -100.0, baseZ + 40.0);
-            q1 = rotY(rotX(rotZ(q1, 0.4), 1.2), 1.57);
-            dFloatingStairs = min(dFloatingStairs, sdNarrowStaircase(q1));
+        // --- SECTOR 5: VOID BASIS LABYRINTH (280 to 430) ---
+        vec3 q5 = p; q5.x -= cX;
+        float dMainStair = max(abs(q5.x) - 2.5 * cFactor, abs(q5.y - fY) - 0.45);
+        
+        vec3 lq = q5;
+        lq.yz = mat2(cos(sin(q5.x*0.015)*0.5), -sin(sin(q5.x*0.015)*0.5), sin(sin(q5.x*0.015)*0.5), cos(sin(q5.x*0.015)*0.5)) * lq.yz;
+        lq.zx = mat2(cos(cos(q5.y*0.015)*0.5), -sin(cos(q5.y*0.015)*0.5), sin(cos(q5.y*0.015)*0.5), cos(cos(q5.y*0.015)*0.5)) * lq.zx;
+        lq = mod(lq + 10.0, 20.0) - 10.0;
+        
+        float block = max(max(abs(lq.x)-10.0, abs(lq.y)-10.0), abs(lq.z)-10.0);
+        float inner = max(max(abs(lq.x)-9.0, abs(lq.y)-9.0), abs(lq.z)-9.0);
+        block = max(block, -inner);
+        float doorX = max(max(abs(lq.x)-11.0, abs(lq.y)-5.0), abs(lq.z)-5.0);
+        float doorY = max(max(abs(lq.x)-5.0, abs(lq.y)-11.0), abs(lq.z)-5.0);
+        float doorZ = max(max(abs(lq.x)-5.0, abs(lq.y)-5.0), abs(lq.z)-11.0);
+        block = max(block, -min(doorX, min(doorY, doorZ)));
+        
+        vec3 sq_ = lq; sq_.y -= floor(sq_.z / 0.5) * 0.5; sq_.z = mod(sq_.z, 0.5) - 0.25;
+        float stair_ = max(abs(lq.x)-2.5, max(abs(lq.y)-8.5, abs(lq.z)-8.5));
+        stair_ = max(stair_, max(abs(sq_.x)-2.5, max(abs(sq_.y)-0.125, abs(sq_.z)-0.125)));
+        
+        vec3 sq3_ = vec3(lq.y, lq.z, lq.x); sq3_.y -= floor(sq3_.z / 0.5) * 0.5; sq3_.z = mod(sq3_.z, 0.5) - 0.25;
+        float stair3_ = max(abs(sq3_.x)-2.5, max(abs(sq3_.y)-0.125, abs(sq3_.z)-0.125));
+        stair3_ = max(stair3_, max(abs(lq.y)-2.5, max(abs(lq.z)-8.5, abs(lq.x)-8.5)));
+        
+        float dSec5 = min(dMainStair, min(block, min(stair_, stair3_)) * 0.4);
+        dBase = mix(dBase, dSec5, smoothstep_custom(270.0, 290.0, currentZ));
 
-            // Staircase 2: Suspended diagonally on the right wall
-            vec3 q2 = p - vec3(16.0, -60.0, baseZ + 80.0);
-            q2 = rotX(rotY(rotZ(q2, -0.6), 2.1), -0.78);
-            dFloatingStairs = min(dFloatingStairs, sdNarrowStaircase(q2));
+        // --- SECTOR 6: HALLWAY EXIT (360 to 500) ---
+        float dFloor6 = p.y - fY;
+        float dCeil6 = (fY + 7.0 * mix(1.0, 0.45, 1.0 - cFactor)) - p.y;
+        float dWalls6 = 12.0 * cFactor - abs(p.x);
+        float dSec6 = min(dFloor6, min(dCeil6, dWalls6));
+        dSec6 = min(dSec6, mix(100.0, dCol1, smoothstep_custom(450.0, 500.0, currentZ)));
+        dBase = mix(dBase, dSec6, smoothstep_custom(340.0, 370.0, currentZ));
+        
+        dBase = max(dBase, -dCamSafety);
+        res = opU(res, vec2(dBase, MAT_MATTE));
 
-            // Staircase 3: High above, upside down!
-            vec3 q3 = p - vec3(2.0, -20.0, baseZ + 50.0);
-            q3 = rotZ(rotX(rotY(q3, 0.78), 3.1415), -0.4);
-            dFloatingStairs = min(dFloatingStairs, sdNarrowStaircase(q3));
-
-            // Staircase 4: Sideways cross staircase
-            vec3 q4 = p - vec3(-4.0, -90.0, baseZ + 110.0);
-            q4 = rotX(rotY(rotZ(q4, 1.57), 0.5), 1.1);
-            dFloatingStairs = min(dFloatingStairs, sdNarrowStaircase(q4));
-
-            float dAllEscher = min(dMainStep, dFloatingStairs);
-
-            // Columns crumbling
-            vec3 colP = p;
-            colP.z = mod(p.z + 10.0, 20.0) - 10.0;
-            colP.x = abs(p.x) - 14.8 * cFactor;
-            float dCol = length(colP.xz) - 0.92;
-            if (localZ >= 75.0) {
-                // make columns tilt stage by stage
-                colP = rotZ(colP, (localZ - 75.0) * 0.005 * sign(p.x));
-                dCol = length(colP.xz) - 0.92;
-            }
-
-            dAllEscher = min(dAllEscher, dCol);
-            dAllEscher = max(dAllEscher, -dCamSafety);
-            res = opU(res, vec2(dAllEscher, MAT_MATTE));
+        // Resolve Material details (Crystal vs Matte vs Glass Tube)
+        if (dBase == dSlideHull && currentZ > 60.0 && currentZ < 130.0) {
+            res.y = MAT_GLASS;
+        }
+        if (currentZ > 120.0 && currentZ < 220.0 && crystal < cave) {
+            res.y = MAT_GLASS;
         }
 
         // Fluids
-        float waterY = -1000.0;
-        float wRise = loop * 0.6;
-        if (sector == 1.0) {
-            waterY = 0.3 + wRise;
-        } else if (sector == 2.0) {
-            float t = clamp(localZ / secLen, 0.0, 1.0);
-            waterY = mix(0.3 + wRise, -22.0 + wRise * 0.3, pow(t, 0.7));
-        } else if (sector == 5.0 && localZ >= 75.0) {
-            waterY = -180.0;
+        float dSlideWater = 1000.0;
+        if (currentZ > 60.0 && currentZ < 130.0) {
+            float slide_x = cX;
+            float slide_y = fY + 1.2;
+            vec2 dSlideQ = vec2(p.x - slide_x, p.y - slide_y);
+            // Dynamic rushing water inside waterslide tube
+            dSlideWater = max(length(dSlideQ) - 1.72, dSlideQ.y - 0.0);
+            vec3 pWaterWave = p;
+            pWaterWave.y += sin(p.z * 1.5 - iTime * 15.0) * 0.1;
+            dSlideWater = max(dSlideWater, pWaterWave.y - (fY + 0.5));
         }
 
+        float waterY = -9000.0;
+        float wRise = smoothLoop * 0.6;
+        if (currentZ < 65.0) {
+            waterY = 0.3 + wRise;
+        } else if (currentZ < 135.0) {
+            waterY = mix(0.3 + wRise, -9000.0, smoothstep_custom(65.0, 85.0, currentZ));
+        } else if (currentZ > 351.0) {
+            waterY = fY + 0.3 + wRise; // Elevates dynamically with fY back to 0.3 at lz=500!
+        }
+        
         if (waterY > -900.0 && ignoreWater < 0.5) {
-            float ripple = sin(p.x * 2.5 + iTime * 2.0) * cos(p.z * 2.5 + iTime * 2.5) * 0.03;
-            float dWater = p.y - (waterY + ripple);
+            float dWater = p.y - (waterY + sin(p.x * 2.5 + iTime * 2.0) * cos(p.z * 2.5 + iTime * 2.5) * 0.03);
             res = opU(res, vec2(dWater, MAT_WATER));
         }
+        if (dSlideWater < 900.0 && ignoreWater < 0.5) {
+            res = opU(res, vec2(dSlideWater, MAT_WATER));
+        }
 
-        // Void holes
         if (loop >= 1.0 && res.y == MAT_MATTE) {
             float vNoise = sin(p.x * 0.38) * cos(p.y * 0.38) * sin(p.z * 0.14) + sin(p.z * 0.5) * 0.25;
-            float voidThreshold = 0.95 - clamp(loop * 0.15, 0.0, 0.7);
-            if (vNoise > voidThreshold) {
-                res.x = max(res.x, 3.8);
-            }
+            if (vNoise > (0.95 - clamp(smoothLoop * 0.15, 0.0, 0.7))) res.x = max(res.x, 3.8);
         }
 
-        if (res.y == MAT_MATTE) {
-            float crackDisp = getFloorCrack(p, localZ, loop) * 0.25;
-            res.x -= crackDisp;
-        }
+        if (res.y == MAT_MATTE) res.x -= getFloorCrack(p, localZ, smoothLoop) * 0.25;
 
         res.x *= 0.55;
         return res;
@@ -650,7 +782,7 @@ export const fsScene = `
             camZ + 15.0
         );
 
-        ta.xy += vec2(uPointer.x * 2.5, uPointer.y * 2.0);
+        ta.xy += vec2(uPointer.x * 6.8, uPointer.y * 5.5);
 
         vec3 cw = normalize(ta - ro);
         vec3 cp = vec3(0.0, 1.0, 0.0);
@@ -659,7 +791,7 @@ export const fsScene = `
         if (isFall > 0.5) {
             ta = ro + vec3(0.0, -1.0, 0.005);
             cw = normalize(ta - ro);
-            cp = normalize(vec3(sin(iTime * 1.5), 0.0, cos(iTime * 1.5))); // vertigo camera spin!
+            cp = vec3(0.0, 0.0, -1.0);
         }
 
         vec3 cu = normalize(cross(cw, cp));
@@ -704,11 +836,45 @@ export const fsScene = `
         float godRayAccum = 0.0;
         float decayFactor = clamp(loop * 0.15, 0.0, 0.9);
 
+        float crystalGlow = 0.0;
+        float fogTension = 0.0;
+        float voidGlow = 0.0;
+
         for (int i = 0; i < MAX_STEPS; i++) {
+            if (uHeavy < 0.5 && i >= 50) break;
             vec3 p = ro + rd * t;
             vec2 res = map(p, 0.0);
 
-            if (decayFactor > 0.05) {
+            // Accumulate volumetric glows during sector 666 falls only when heavy effects are enabled
+            if (uHeavy > 0.5) {
+                float l_g, s_g, pa_g, lZ_g, sLen_g, iF_g, iC_g;
+                getSegmentData(p.z, l_g, s_g, pa_g, lZ_g, sLen_g, iF_g, iC_g);
+                if (s_g == 666.0 && iF_g > 0.5) {
+                    if (l_g < 3.0) {
+                        // Crystal fall glow
+                        vec3 cp = p;
+                        cp.x -= sin(p.y * 0.12 + iTime * 1.2) * 1.5;
+                        cp.z -= cos(p.y * 0.15 - iTime * 0.8) * 1.5;
+                        cp.y = mod(p.y + 3.0, 6.0) - 3.0;
+                        float distToCrystal = (abs(cp.x) + abs(cp.y) + abs(cp.z)) - 0.75;
+                        if (distToCrystal < 0.8) {
+                            crystalGlow += 0.01 / (0.01 + distToCrystal * distToCrystal);
+                        }
+                        fogTension += max(0.0, 0.012 - res.x);
+                    } else {
+                        // Volumetric void glow near rings (Loop 3 Endless Fall in vertical shaft)
+                        float shaftRad = 8.0;
+                        vec3 qy = p;
+                        qy.y = mod(p.y + 5.0, 10.0) - 5.0;
+                        float ringDist = abs(qy.y);
+                        if (ringDist < 0.6 && length(p.xz) < (shaftRad + 1.0) && length(p.xz) > (shaftRad - 0.5)) {
+                            voidGlow += 0.012 / (0.012 + res.x * res.x);
+                        }
+                    }
+                }
+            }
+
+            if (uHeavy > 0.5 && decayFactor > 0.05) {
                 float l, s, pa, lZ, sLen, iF, iC;
                 getSegmentData(p.z, l, s, pa, lZ, sLen, iF, iC);
                 float fY_p = getFloorY(p.z);
@@ -735,7 +901,75 @@ export const fsScene = `
             float l_p, s_p, pa_p, lZ_p, sLen_p, iF_p, iC_p;
             getSegmentData(p.z, l_p, s_p, pa_p, lZ_p, sLen_p, iF_p, iC_p);
 
-            if (matID == MAT_WATER) {
+            if (s_p == 666.0) {
+                // Unified Sector 666 shader color generator
+                vec3 albedo = vec3(0.12, 0.12, 0.12);
+                float emissive = 0.0;
+                vec3 emissiveColor = vec3(0.0);
+                
+                float ao = max(calcAO(p, n, 0.0), 0.35);
+                float dif = max(dot(n, sunDir), 0.0);
+
+                if (pa_p == 1.0) { // Layer 1: Twigs slide (Hot burning embers)
+                    albedo = vec3(0.15, 0.06, 0.02);
+                    // Add animated burning pulses along twig walls
+                    float pulse = abs(sin(p.z * 1.5 - iTime * 4.0));
+                    emissive = pulse * 1.5;
+                    emissiveColor = vec3(1.0, 0.22, 0.0) * emissive;
+                }
+                else if (pa_p == 2.0) { // Layer 2: Cold Tundra & creatures
+                    if (matID == MAT_GLASS) { // shadow creatures
+                        albedo = vec3(0.002, 0.002, 0.003); // extreme black
+                        // Glowing red eyes
+                        float eyeGlow = step(0.96, sin(p.y * 12.0)) * step(0.96, cos(p.z * 8.0));
+                        emissiveColor = vec3(1.2, 0.02, 0.05) * eyeGlow;
+                    } else {
+                        albedo = vec3(0.08, 0.11, 0.14); // cold tundra snow terrain
+                    }
+                }
+                else if (pa_p == 3.0) { // Layer 3: Throbbing womb
+                    albedo = vec3(0.35, 0.01, 0.05);
+                    // Pulsating organic glow
+                    float pulse = sin(p.z * 0.4 - iTime * 3.5) * 0.5 + 0.5;
+                    emissiveColor = vec3(0.8, 0.01, 0.05) * pulse * 0.45;
+                }
+                else if (pa_p == 4.0) { // Layer 4: Citadel crawl
+                    albedo = vec3(0.09, 0.09, 0.11); // cold crushing concrete grey
+                }
+                else if (pa_p == 5.0) { // Layer 5: Meat grinder
+                    if (matID == MAT_FLESH) {
+                        albedo = vec3(0.42, 0.015, 0.03); // bloody machinery
+                    } else {
+                        albedo = vec3(0.15, 0.15, 0.18); // raw steel
+                    }
+                    float grindPulse = abs(sin(p.z * 0.8 + iTime * 10.0));
+                    emissiveColor = vec3(1.0, 0.02, 0.0) * grindPulse * 0.35;
+                }
+                else if (pa_p == 6.0) { // Layer 6: Spiral stone bridge
+                    albedo = vec3(0.08, 0.08, 0.09) * mix(0.5, 1.0, step(0.08, fract(p.y * 2.0))); // dark stone treads
+                }
+                else if (pa_p == 7.0) { // Layer 7: Glitched static & light leaks
+                    albedo = vec3(0.05, 0.4, 0.8) * abs(sin(p.x * 20.0 + iTime * 20.0)); // flashing blue light leaks
+                    emissiveColor = vec3(0.08, 0.75, 1.0) * 1.5;
+                }
+                else if (pa_p == 8.0) { // Part 8: Recovery chamber (Concrete monoliths & Core)
+                    if (matID == MAT_FLESH) { // comforting core sphere
+                        albedo = vec3(0.12, 0.75, 1.0); // warm teal blue
+                        emissiveColor = vec3(0.15, 0.85, 1.0) * (1.2 + 0.4 * sin(iTime * 4.0));
+                    } else {
+                        albedo = vec3(0.38, 0.38, 0.36); // warm raw concrete
+                    }
+                }
+                else { // Part 9 / Loop 3 endless fall
+                    albedo = vec3(0.1, 0.1, 0.1);
+                    // digital static color leaks
+                    float staticH = hash(vec2(p.x, p.y + iTime));
+                    emissiveColor = vec3(0.45, 0.95, 1.0) * staticH * step(0.92, staticH);
+                }
+
+                col = albedo * (dif * 0.55 + 0.15) * ao;
+                col += emissiveColor;
+            } else if (matID == MAT_WATER) {
                 float flow = iTime * 3.0;
                 if (s_p == 2.0) flow = iTime * 12.0;
 
@@ -821,9 +1055,9 @@ export const fsScene = `
                 if (matID == MAT_GLASS) {
                     if (isCrystal > 0.5) {
                         // High-tech self-luminous holographic crystal tube simulation
-                        vec3 crystalGlow = vec3(0.01, 0.65, 0.98) * (0.65 + 0.35 * sin(p.z * 0.9 + iTime * 6.0));
-                        crystalGlow += vec3(0.12, 0.32, 0.55) * step(0.85, sin(p.z * 1.5 - iTime * 4.0));
-                        col = crystalGlow;
+                        vec3 crystalGlowVal = vec3(0.01, 0.65, 0.98) * (0.65 + 0.35 * sin(p.z * 0.9 + iTime * 6.0));
+                        crystalGlowVal += vec3(0.12, 0.32, 0.55) * step(0.85, sin(p.z * 1.5 - iTime * 4.0));
+                        col = crystalGlowVal;
                     } else {
                         vec3 refDir = reflect(rd, n);
                         float rt = 0.05;
@@ -853,7 +1087,15 @@ export const fsScene = `
                 }
             }
         } else {
-            col = fogColor;
+            if (is666 && isFall > 0.5) {
+                if (loop < 3.0) {
+                    col = vec3(0.01, 0.05, 0.1);
+                } else {
+                    col = vec3(0.01, 0.0, 0.02);
+                }
+            } else {
+                col = fogColor;
+            }
         }
 
         float fogFactor = 1.0 - exp(-0.012 * t);
@@ -863,6 +1105,16 @@ export const fsScene = `
 
         col = mix(col, fogColor, fogFactor);
         col += vec3(1.3, 0.05, 0.01) * godRayAccum;
+
+        // Apply accumulated atmospheric volumetric glows
+        if (is666 && isFall > 0.5) {
+            if (loop < 3.0) {
+                col += vec3(0.0, 0.5, 0.8) * crystalGlow * 0.025;
+                col += vec3(0.6, 0.2, 0.8) * fogTension * 0.04;
+            } else {
+                col += vec3(0.8, 0.1, 0.0) * voidGlow * 0.035;
+            }
+        }
 
         gl_FragColor = vec4(col, t);
     }
@@ -876,6 +1128,7 @@ export const fsPost = `
     uniform vec2 uPointer;
     uniform float uIteration;
     uniform float uPlayerZ;
+    uniform float uBrightness;
 
     float hash(vec2 p) {
         return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
@@ -895,26 +1148,26 @@ export const fsPost = `
     }
 
     void getSegmentDataPost(float z, out float sector, out float isFall) {
-        if (z >= 2270.0) {
+        if (z >= 1890.0) {
             sector = 666.0;
             isFall = 1.0;
             return;
         }
-        float loop = floor(z / 600.0);
-        float lz = mod(z, 600.0);
+        float loop = floor(z / 500.0);
+        float lz = mod(z, 500.0);
         isFall = 0.0;
         if (lz < 60.0)       { sector = 1.0; }
         else if (lz < 130.0) { sector = 2.0; }
         else if (lz < 210.0) { sector = 3.0; }
         else if (lz < 280.0) { sector = 4.0; }
-        else if (lz < 430.0) { sector = 5.0; }
+        else if (lz < 360.0) { sector = 5.0; }
         else {
             if (loop == 0.0) {
                 sector = 6.0;
             } else {
                 sector = 666.0;
-                float local666 = lz - 430.0;
-                if (local666 >= 40.0 && local666 < 130.0) {
+                float local666 = lz - 360.0;
+                if (local666 >= 30.0 && local666 < 120.0) {
                     isFall = 1.0;
                 }
             }
@@ -935,7 +1188,7 @@ export const fsPost = `
         float sector, isFall;
         getSegmentDataPost(uPlayerZ, sector, isFall);
 
-        float loopVal = floor(uPlayerZ / 600.0);
+        float loopVal = floor(uPlayerZ / 500.0);
         float decayFactor = clamp(loopVal * 0.15, 0.0, 0.9);
 
         bool is666 = (sector == 666.0);
@@ -1005,7 +1258,7 @@ export const fsPost = `
         }
 
         // --- 6. PENTAGRAM LIGHT LEAK (LAST 666 ENDLESS FALL) ---
-        if (uPlayerZ > 2270.0) {
+        if (uPlayerZ > 1890.0) {
             vec2 starP = dist;
             float angle = iTime * 0.22;
             float cStar = cos(angle), sStar = sin(angle);
@@ -1018,23 +1271,23 @@ export const fsPost = `
             float circleOutline = smoothstep(0.06, 0.0, dCircle - 0.005);
             
             float pentaLeak = max(starOutline, circleOutline);
-            float pentaIntensity = clamp((uPlayerZ - 2270.0) * 0.005, 0.0, 0.88);
+            float pentaIntensity = clamp((uPlayerZ - 1890.0) * 0.005, 0.0, 0.88);
             col += vec3(1.0, 0.12, 0.06) * pentaLeak * pentaIntensity * (1.2 + 0.8 * sin(iTime * 18.0));
         }
 
         // --- 7. TRANSITION FADE TO BLACK & SMOOTH LOOP RE-ENTRY ---
-        float lzPost = mod(uPlayerZ, 600.0);
+        float lzPost = mod(uPlayerZ, 500.0);
         float fade = 1.0;
-        if (uPlayerZ < 2270.0) {
-            if (lzPost > 560.0) {
-                // Fade out over the last 40 units (560 to 600)
-                fade = clamp(1.0 - (lzPost - 560.0) / 40.0, 0.0, 1.0);
+        if (uPlayerZ < 1890.0) {
+            if (lzPost > 460.0) {
+                // Fade out over the last 40 units (460 to 500)
+                fade = clamp(1.0 - (lzPost - 460.0) / 40.0, 0.0, 1.0);
             } else if (lzPost < 15.0) {
                 // Fade in over the first 15 units (0 to 15)
                 fade = clamp(lzPost / 15.0, 0.0, 1.0);
             }
         }
-        col *= fade;
+        col *= fade * uBrightness;
 
         gl_FragColor = vec4(col, 1.0);
     }
