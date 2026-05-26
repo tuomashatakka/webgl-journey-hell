@@ -2,268 +2,17 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { vsQuad, fsScene, fsPost } from './shaders';
-import { getKinematicState, getWalkSpeed } from './kinematics';
-import { loadSettings, saveSettings, GraphicsSettings } from './settingsState';
-import { Settings as SettingsIcon } from 'lucide-react';
-import SettingsView from './SettingsView';
-
-class CyberLiminalAudioEngine {
-  private ctx: AudioContext | null = null;
-  private isMuted: boolean = true;
-  private lowpassLFO: OscillatorNode | null = null;
-  private waterInterval: any = null;
-  private glitchInterval: any = null;
-  
-  private droneOscL: OscillatorNode | null = null;
-  private droneOscR: OscillatorNode | null = null;
-  private mainVolume: GainNode | null = null;
-  private noiseVolume: GainNode | null = null;
-  private waterVolume: GainNode | null = null;
-  private glitchVolume: GainNode | null = null;
-
-  constructor() {}
-
-  public toggleMute(): boolean {
-    if (!this.ctx) {
-      this.initContext();
-    }
-    this.isMuted = !this.isMuted;
-    if (this.mainVolume && this.ctx) {
-      this.mainVolume.gain.setValueAtTime(this.isMuted ? 0.0 : 0.8, this.ctx.currentTime);
-    }
-    return this.isMuted;
-  }
-
-  public getMutedState(): boolean {
-    return this.isMuted;
-  }
-
-  private initContext() {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      this.ctx = new AudioCtx();
-      
-      this.mainVolume = this.ctx.createGain();
-      this.mainVolume.gain.setValueAtTime(0.0, this.ctx.currentTime);
-      this.mainVolume.connect(this.ctx.destination);
-
-      const bufferSize = 2 * this.ctx.sampleRate;
-      const noiseBuffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-      const output = noiseBuffer.getChannelData(0);
-      let lastOut = 0.0;
-      for (let i = 0; i < bufferSize; i++) {
-        const white = Math.random() * 2.0 - 1.0;
-        output[i] = (lastOut + (0.02 * white)) / 1.02;
-        lastOut = output[i];
-        output[i] *= 3.5;
-      }
-
-      const noiseSource = this.ctx.createBufferSource();
-      noiseSource.buffer = noiseBuffer;
-      noiseSource.loop = true;
-
-      const filter = this.ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(140.0, this.ctx.currentTime);
-      filter.Q.setValueAtTime(2.5, this.ctx.currentTime);
-
-      this.lowpassLFO = this.ctx.createOscillator();
-      this.lowpassLFO.frequency.setValueAtTime(0.08, this.ctx.currentTime);
-      const lfoGain = this.ctx.createGain();
-      lfoGain.gain.setValueAtTime(110.0, this.ctx.currentTime);
-      
-      this.lowpassLFO.connect(lfoGain);
-      lfoGain.connect(filter.frequency);
-      this.lowpassLFO.start();
-
-      this.noiseVolume = this.ctx.createGain();
-      this.noiseVolume.gain.setValueAtTime(0.25, this.ctx.currentTime);
-
-      noiseSource.connect(filter);
-      filter.connect(this.noiseVolume);
-      this.noiseVolume.connect(this.mainVolume);
-      noiseSource.start();
-
-      this.droneOscL = this.ctx.createOscillator();
-      this.droneOscR = this.ctx.createOscillator();
-      this.droneOscL.type = 'sine';
-      this.droneOscR.type = 'triangle';
-      
-      this.droneOscL.frequency.setValueAtTime(54.4, this.ctx.currentTime);
-      this.droneOscR.frequency.setValueAtTime(55.2, this.ctx.currentTime);
-
-      const droneGain = this.ctx.createGain();
-      droneGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
-
-      const droneFilter = this.ctx.createBiquadFilter();
-      droneFilter.type = 'lowpass';
-      droneFilter.frequency.setValueAtTime(80.0, this.ctx.currentTime);
-
-      this.droneOscL.connect(droneFilter);
-      this.droneOscR.connect(droneFilter);
-      droneFilter.connect(droneGain);
-      droneGain.connect(this.mainVolume);
-
-      this.droneOscL.start();
-      this.droneOscR.start();
-
-      this.waterVolume = this.ctx.createGain();
-      this.waterVolume.gain.setValueAtTime(0.48, this.ctx.currentTime);
-      this.waterVolume.connect(this.mainVolume);
-
-      this.startWaterDripper();
-
-      this.glitchVolume = this.ctx.createGain();
-      this.glitchVolume.gain.setValueAtTime(0.35, this.ctx.currentTime);
-      this.glitchVolume.connect(this.mainVolume);
-
-      this.startGlitchEngine();
-    } catch (e) {
-      console.error("Audio Context initialization failed:", e);
-    }
-  }
-
-  private startWaterDripper() {
-    const playDrip = () => {
-      if (!this.ctx || this.isMuted) return;
-
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
-
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(1100 + Math.random() * 400, this.ctx.currentTime);
-      filter.Q.setValueAtTime(6.0, this.ctx.currentTime);
-
-      osc.type = 'sine';
-      const startFreq = 1600.0 + Math.random() * 800.0;
-      const endFreq = 400.0 + Math.random() * 200.0;
-      osc.frequency.setValueAtTime(startFreq, this.ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(endFreq, this.ctx.currentTime + 0.08);
-
-      gain.gain.setValueAtTime(0.0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.35 + Math.random() * 0.4, this.ctx.currentTime + 0.005);
-      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.12);
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.waterVolume!);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.15);
-    };
-
-    const scheduleNextDrip = () => {
-      playDrip();
-      const delay = 400 + Math.random() * 1200;
-      this.waterInterval = setTimeout(scheduleNextDrip, delay);
-    };
-
-    scheduleNextDrip();
-  }
-
-  private startGlitchEngine() {
-    const playGlitchClick = () => {
-      if (!this.ctx || this.isMuted) return;
-
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-
-      osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(10000.0 * Math.random(), this.ctx.currentTime);
-      
-      gain.gain.setValueAtTime(0.0, this.ctx.currentTime);
-      gain.gain.linearRampToValueAtTime(0.18, this.ctx.currentTime + 0.001);
-      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.015);
-
-      osc.connect(gain);
-      gain.connect(this.glitchVolume!);
-      osc.start();
-      osc.stop(this.ctx.currentTime + 0.02);
-    };
-
-    const runGlitch = () => {
-      if (!this.isMuted && Math.random() < 0.28) {
-        const ticks = Math.floor(1 + Math.random() * 4);
-        for (let i = 0; i < ticks; i++) {
-          setTimeout(playGlitchClick, i * 45);
-        }
-      }
-      this.glitchInterval = setTimeout(runGlitch, 150 + Math.random() * 3000);
-    };
-
-    runGlitch();
-  }
-
-  public updateState(z: number) {
-    if (!this.ctx || this.isMuted) return;
-
-    const loopVal = Math.floor(z / 500.0);
-    const lz = z % 500.0;
-    
-    let isWaterSegment = false;
-    let isGlitchSegment = false;
-    let isHeavyOrganicSegment = false;
-
-    if (lz >= 60.0 && lz < 130.0) {
-      isWaterSegment = true;
-    }
-    if (lz >= 280.0 && lz < 360.0) {
-      isWaterSegment = true;
-    }
-
-    if (lz >= 360.0) {
-      if (loopVal > 0) {
-        isGlitchSegment = true;
-        const local666 = lz - 360.0;
-        
-        if (loopVal === 1) {
-          if (local666 < 60.0) isHeavyOrganicSegment = true;
-          else isWaterSegment = true;
-        } else if (loopVal === 2) {
-          if (local666 >= 60.0 && local666 < 90.0) isHeavyOrganicSegment = true;
-        } else {
-          if (local666 >= 40.0 && local666 < 60.0) isHeavyOrganicSegment = true;
-          if (local666 >= 100.0) isGlitchSegment = true;
-        }
-      }
-    }
-
-    if (z >= 1890.0) {
-      isGlitchSegment = true;
-    }
-
-    const time = this.ctx.currentTime;
-    
-    if (this.waterVolume) {
-      const targetWaterGain = isWaterSegment ? 0.72 : 0.08;
-      this.waterVolume.gain.setTargetAtTime(targetWaterGain, time, 0.5);
-    }
-
-    if (this.glitchVolume) {
-      const targetGlitchGain = isGlitchSegment ? 0.58 : 0.05;
-      this.glitchVolume.gain.setTargetAtTime(targetGlitchGain, time, 0.3);
-    }
-
-    if (this.droneOscL && this.droneOscR) {
-      const targetFreqL = isHeavyOrganicSegment ? 44.0 : 54.4;
-      const targetFreqR = isHeavyOrganicSegment ? 44.6 : 55.2;
-      this.droneOscL.frequency.setTargetAtTime(targetFreqL, time, 1.0);
-      this.droneOscR.frequency.setTargetAtTime(targetFreqR, time, 1.0);
-    }
-  }
-
-  public destroy() {
-    if (this.ctx) {
-      this.ctx.close();
-    }
-    if (this.waterInterval) {
-      clearTimeout(this.waterInterval);
-    }
-    if (this.glitchInterval) {
-      clearTimeout(this.glitchInterval);
-    }
-  }
-}
+import {
+  getSectorScale,
+  getWarpedMZ,
+  getWarpedZ,
+  getCamX,
+  getCamOffset,
+  getCamY,
+  getFloorY,
+  smoothstep,
+  mix
+} from './kinematics';
 
 export default function LiminalJourney() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -271,46 +20,6 @@ export default function LiminalJourney() {
 
   const [sectorName, setSectorName] = useState("AWAITING TELEMETRY");
   const [glitchKey, setGlitchKey] = useState(0);
-  const [fps, setFps] = useState(60);
-  const [isMuted, setIsMuted] = useState(true);
-
-  const [settings, setSettings] = useState<GraphicsSettings>(() => loadSettings());
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-
-  const audioEngineRef = useRef<CyberLiminalAudioEngine | null>(null);
-
-  const handleAudioToggle = () => {
-    if (!audioEngineRef.current) {
-      audioEngineRef.current = new CyberLiminalAudioEngine();
-    }
-    const currentMuted = audioEngineRef.current.toggleMute();
-    setIsMuted(currentMuted);
-  };
-
-  // Synchronize React state developments with the WebGL animation render thread references
-  const settingsRef = useRef<GraphicsSettings>(settings);
-  useEffect(() => {
-    settingsRef.current = settings;
-    saveSettings(settings);
-  }, [settings]);
-
-  // Handle resolution variations reactively without resetting the whole GPU context
-  const resizeRef = useRef<() => void>(() => {});
-  useEffect(() => {
-    if (resizeRef.current) {
-      resizeRef.current();
-    }
-  }, [settings.resolution]);
-
-  const handleFullscreenToggle = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        console.error("Error attempting to enable fullscreen:", err);
-      });
-    } else {
-      document.exitFullscreen();
-    }
-  };
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -372,9 +81,10 @@ export default function LiminalJourney() {
     const tex = gl.createTexture();
 
     const resize = () => {
-        const userScale = settingsRef.current.resolution;
-        canvas.width = window.innerWidth * userScale;
-        canvas.height = window.innerHeight * userScale;
+        const dpr = window.devicePixelRatio || 1;
+        const resolutionScale = Math.min(dpr, 1.25); 
+        canvas.width = window.innerWidth * resolutionScale;
+        canvas.height = window.innerHeight * resolutionScale;
         
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -388,90 +98,91 @@ export default function LiminalJourney() {
     };
 
     window.addEventListener('resize', resize);
-    resizeRef.current = resize;
     resize();
 
     const sceneResLoc = gl.getUniformLocation(sceneProg, "iResolution");
     const sceneTimeLoc = gl.getUniformLocation(sceneProg, "iTime");
     const sceneIterLoc = gl.getUniformLocation(sceneProg, "uIteration");
     const scenePointerLoc = gl.getUniformLocation(sceneProg, "uPointer");
-    const scenePlayerZLoc = gl.getUniformLocation(sceneProg, "uPlayerZ");
-    const sceneHeavyLoc = gl.getUniformLocation(sceneProg, "uHeavy");
 
     const postResLoc = gl.getUniformLocation(postProg, "iResolution");
     const postTimeLoc = gl.getUniformLocation(postProg, "iTime");
     const postTexLoc = gl.getUniformLocation(postProg, "uTexture");
     const postPointerLoc = gl.getUniformLocation(postProg, "uPointer");
     const postIterLoc = gl.getUniformLocation(postProg, "uIteration");
-    const postPlayerZLoc = gl.getUniformLocation(postProg, "uPlayerZ");
-    const postBrightnessLoc = gl.getUniformLocation(postProg, "uBrightness");
 
     let animationId: number;
     let lastSector = "";
-    let currentZ = 0.0;
-    let lastTime = 0.0;
-    let accumulatedTime = 0.0;
-
-    let frameCount = 0;
-    let fpsLastTime = performance.now();
 
     const render = (time: number) => {
-        if (lastTime === 0.0) {
-            lastTime = time;
-        }
-        const dt = Math.min((time - lastTime) * 0.001, 0.1);
-        lastTime = time;
-
-        const currentSettings = settingsRef.current;
-        const speedMultiplier = currentSettings.speed;
-
-        // Count frames to evaluate FPS
-        frameCount++;
-        const now = performance.now();
-        if (now - fpsLastTime >= 1000) {
-            setFps(Math.round((frameCount * 1000) / (now - fpsLastTime)));
-            frameCount = 0;
-            fpsLastTime = now;
-        }
-
-        // Apply scaled dt for speed settings, adapting velocity in a frequency-safe manner
-        const scaledDt = dt * speedMultiplier;
-
-        // Accumulate player Z based on frame-rate independent walk speed
-        const speed = getWalkSpeed(currentZ);
-        currentZ += speed * scaledDt;
-
-        if (audioEngineRef.current) {
-          audioEngineRef.current.updateState(currentZ);
-        }
-
-        const state = getKinematicState(currentZ);
-        const currentIteration = state.loop;
+        const iTime = time * 0.001;
         
-        // Transitions the decay update smoothly centered around 500-unit loop boundaries
+        const SPEED = 5.0; 
+        const currentZ = iTime * SPEED;
+        const mz = currentZ % 300.0;
+        const currentIteration = Math.floor(currentZ / 300.0);
+        
+        // Transitions the decay update smoothly centered around loop boundary
         let smoothIteration = currentIteration;
-        const distFromBoundary = currentZ % 500.0;
-        if (distFromBoundary >= 480.0) {
-            const t = (distFromBoundary - 480.0) / 40.0;
+        if (mz > 280.0) {
+            const t = (mz - 280.0) / 40.0;
             const ease = 3.0 * t * t - 2.0 * t * t * t;
             smoothIteration = currentIteration + ease;
-        } else if (distFromBoundary < 20.0) {
-            const t = (distFromBoundary + 20.0) / 40.0;
+        } else if (mz < 20.0) {
+            const t = (mz + 20.0) / 40.0;
             const ease = 3.0 * t * t - 2.0 * t * t * t;
             smoothIteration = (currentIteration - 1) + ease;
+            if (smoothIteration < 0.0) smoothIteration = 0.0;
         }
         
-        const sector = state.name;
+        // Calculate dynamic warped boundaries in JS
+        const s1 = getSectorScale(1, smoothIteration);
+        const s2 = getSectorScale(2, smoothIteration);
+        const s3 = getSectorScale(3, smoothIteration);
+        const s4 = getSectorScale(4, smoothIteration);
+        const s5 = getSectorScale(5, smoothIteration);
+        const s6 = getSectorScale(6, smoothIteration);
+        
+        const w1 = 30.0 * s1;
+        const w2 = 40.0 * s2;
+        const w3 = 50.0 * s3;
+        const w4 = 70.0 * s4;
+        const w5 = 80.0 * s5;
+        
+        const sum = w1 + w2 + w3 + w4 + w5 + (30.0 * s6);
+        const wb1 = 300.0 * (w1 / sum);
+        const wb2 = wb1 + 300.0 * (w2 / sum);
+        const wb3 = wb2 + 300.0 * (w3 / sum);
+        const wb4 = wb3 + 300.0 * (w4 / sum);
+        const wb5 = wb4 + 300.0 * (w5 / sum);
+        
+        let sector = "UNKNOWN";
+        const is666Now = (Math.floor(smoothIteration) === 2);
+
+        if (is666Now) {
+            // Horror naming convention for Sector 666
+            if (mz < wb1) sector = "SECTOR 666: THE WEAKENING WALLS";
+            else if (mz < wb2) sector = "SECTOR 666: THE BLOOD WATER FALL";
+            else if (mz < wb3) sector = "SECTOR 666: SACRIFICIAL PIT";
+            else if (mz < wb4) sector = "SECTOR 666: FLOATING BRINK";
+            else if (mz < wb5) sector = "SECTOR 666: VOID PARANOIA";
+            else sector = "SECTOR 666: THE ABYSS";
+        } else {
+            // Normal Names
+            if (mz < wb1) sector = "SECTOR 1: POOLROOMS";
+            else if (mz < wb2) sector = "SECTOR 2: THE DESCENT";
+            else if (mz < wb3) sector = "SECTOR 3: CHASM TUBE";
+            else if (mz < wb4) sector = "SECTOR 4: CRUMBLING BRIDGE";
+            else if (mz < wb5) sector = "SECTOR 5: GRAVITY LABYRINTH";
+            else sector = "SECTOR 6: TRANSITION CORRIDOR";
+        }
+        
         if (sector !== lastSector) {
             lastSector = sector;
             setSectorName(sector);
             setGlitchKey(prev => prev + 1);
         }
         
-        // Accumulate dynamic waves and light shader speed securely
-        accumulatedTime += scaledDt;
-        const iTime = accumulatedTime;
-
         // --- PASS 1: Raymarch to FBO ---
         gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
         gl.viewport(0, 0, canvas.width, canvas.height);
@@ -486,8 +197,6 @@ export default function LiminalJourney() {
         gl.uniform1f(sceneTimeLoc, iTime);
         gl.uniform1f(sceneIterLoc, smoothIteration);
         gl.uniform2f(scenePointerLoc, pointerRef.current.x, pointerRef.current.y);
-        gl.uniform1f(scenePlayerZLoc, currentZ);
-        gl.uniform1f(sceneHeavyLoc, currentSettings.heavyEffects ? 1.0 : 0.0);
         
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         
@@ -509,10 +218,6 @@ export default function LiminalJourney() {
         gl.uniform1f(postTimeLoc, iTime);
         gl.uniform2f(postPointerLoc, pointerRef.current.x, pointerRef.current.y);
         gl.uniform1f(postIterLoc, smoothIteration);
-        gl.uniform1f(postPlayerZLoc, currentZ);
-        if (postBrightnessLoc) {
-            gl.uniform1f(postBrightnessLoc, currentSettings.brightness);
-        }
         
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         
@@ -526,11 +231,6 @@ export default function LiminalJourney() {
        window.removeEventListener('pointermove', handlePointerMove);
        cancelAnimationFrame(animationId);
        
-       if (audioEngineRef.current) {
-         audioEngineRef.current.destroy();
-         audioEngineRef.current = null;
-       }
-       
        gl.deleteBuffer(quadBuffer);
        gl.deleteTexture(tex);
        gl.deleteFramebuffer(fbo);
@@ -539,26 +239,136 @@ export default function LiminalJourney() {
     };
   }, []);
 
-  return <main id="app-container">
-    <canvas id="gl-canvas" ref={canvasRef} />
-    <section id="crt-overlay" />
-    <header key={glitchKey} id="sector-title" data-text={sectorName}>
-      {sectorName}
-    </header>
-    <button id="fullscreen-btn" onClick={handleFullscreenToggle}>FULLSCREEN</button>
-    <button id="audio-btn" onClick={handleAudioToggle}>
-      {isMuted ? "UNMUTE AUDIO" : "MUTE AUDIO"}
-    </button>
-    <button id="settings-btn" onClick={() => setIsSettingsOpen(true)} title="Settings" aria-label="Open graphics settings">
-      <SettingsIcon size={16} />
-    </button>
-    <aside id="fps-display">{fps} FPS</aside>
-
-    <SettingsView
-      isOpen={isSettingsOpen}
-      onClose={() => setIsSettingsOpen(false)}
-      settings={settings}
-      onChange={setSettings}
-    />
-  </main>
+  return (
+    <>
+      <style dangerouslySetInnerHTML={{ __html: `
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        #app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+            overflow: hidden;
+            font-family: monospace;
+            user-select: none;
+        }
+        #gl-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            display: block;
+        }
+        #crt-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 3px 100%;
+        }
+        #sector-title {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            font-family: Georgia, serif;
+            font-size: 15px;
+            letter-spacing: 8px;
+            text-transform: uppercase;
+            text-align: center;
+            pointer-events: none;
+            z-index: 20;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.6);
+            animation: fadeGlitch 4.5s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        }
+        #sector-title::before, #sector-title::after {
+            content: attr(data-text);
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.01);
+        }
+        #sector-title::before {
+            left: 3px;
+            text-shadow: -3px 0 #ff0055;
+            animation: glitchAnim1 0.8s infinite linear alternate-reverse;
+        }
+        #sector-title::after {
+            left: -3px;
+            text-shadow: -2px 0 #00ffff, 0 3px #ffff00;
+            animation: glitchAnim2 0.7s infinite linear alternate-reverse;
+        }
+        @keyframes fadeGlitch {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.85) skewX(20deg);
+                filter: hue-rotate(180deg) brightness(2);
+            }
+            8% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.05) skewX(-15deg);
+                filter: none;
+            }
+            14% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1) skewX(0);
+            }
+            82% {
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1) skewX(0);
+            }
+            100% {
+                opacity: 0.15;
+                transform: translate(-50%, -50%) scale(0.98);
+            }
+        }
+        @keyframes glitchAnim1 {
+          0% { clip-path: inset(10% 0 85% 0); }
+          10% { clip-path: inset(80% 0 5% 0); }
+          20% { clip-path: inset(5% 0 90% 0); }
+          30% { clip-path: inset(45% 0 45% 0); }
+          40% { clip-path: inset(92% 0 1% 0); }
+          50% { clip-path: inset(15% 0 80% 0); }
+          60% { clip-path: inset(80% 0 5% 0); }
+          70% { clip-path: inset(3% 0 92% 0); }
+          80% { clip-path: inset(50% 0 43% 0); }
+          90% { clip-path: inset(10% 0 82% 0); }
+          100% { clip-path: inset(25% 0 70% 0); }
+        }
+        @keyframes glitchAnim2 {
+          0% { clip-path: inset(75% 0 15% 0); }
+          10% { clip-path: inset(15% 0 80% 0); }
+          20% { clip-path: inset(3% 0 92% 0); }
+          30% { clip-path: inset(80% 0 5% 0); }
+          40% { clip-path: inset(40% 0 55% 0); }
+          50% { clip-path: inset(92% 0 2% 0); }
+          60% { clip-path: inset(55% 0 40% 0); }
+          70% { clip-path: inset(5% 0 85% 0); }
+          80% { clip-path: inset(85% 0 10% 0); }
+          90% { clip-path: inset(20% 0 75% 0); }
+          100% { clip-path: inset(45% 0 50% 0); }
+        }
+      `}} />
+      <main id="app-container">
+        <canvas id="gl-canvas" ref={canvasRef} />
+        <section id="crt-overlay" />
+        <header key={glitchKey} id="sector-title" data-text={sectorName}>
+          {sectorName}
+        </header>
+      </main>
+    </>
+  );
 }

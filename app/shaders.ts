@@ -11,8 +11,6 @@ export const fsScene = `
     uniform float iTime;
     uniform float uIteration;
     uniform vec2 uPointer;
-    uniform float uPlayerZ;
-    uniform float uHeavy;
 
     #define MAX_STEPS 120
     #define MAX_DIST 150.0
@@ -24,28 +22,130 @@ export const fsScene = `
     #define MAT_GLASS 3.0
     #define MAT_FLESH 4.0
 
-    // Random noise generator
+    // Hash function for random scaling
     float hash1d(float x) {
         return fract(sin(x * 12.9898) * 43758.5453123);
     }
 
-    float hash(vec2 p) {
-        return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
+    // Dynamic sector scaling factors based on decay transition
+    float getSectorScale(int sec, float it) {
+        float seed = float(sec) * 11.37 + floor(it) * 17.81;
+        float scaleCurrent = mix(0.67, 2.0, hash1d(seed));
+        float scaleNext = mix(0.67, 2.0, hash1d(seed + 17.81));
+        float f = fract(it);
+        return mix(scaleCurrent, scaleNext, f);
     }
 
-    // Procedural glowing crevices
-    float getFloorCrack(vec3 p, float local_z, float it) {
-        float decayFactor = clamp(it * 0.15, 0.0, 0.95);
+    // Space warped modulo computation returning nominal mz positioning
+    float getWarpedMZ(float mz, float s1, float s2, float s3, float s4, float s5, float s6) {
+        float w1 = 30.0 * s1;
+        float w2 = 40.0 * s2;
+        float w3 = 50.0 * s3;
+        float w4 = 70.0 * s4;
+        float w5 = 80.0 * s5;
+        float w6 = 30.0 * s6;
+        float sum = w1 + w2 + w3 + w4 + w5 + w6;
+        
+        float wb1 = 300.0 * (w1 / sum);
+        float wb2 = wb1 + 300.0 * (w2 / sum);
+        float wb3 = wb2 + 300.0 * (w3 / sum);
+        float wb4 = wb3 + 300.0 * (w4 / sum);
+        float wb5 = wb4 + 300.0 * (w5 / sum);
+        
+        if (mz < wb1) {
+            return (mz / wb1) * 30.0;
+        } else if (mz < wb2) {
+            return 30.0 + ((mz - wb1) / (wb2 - wb1)) * 40.0;
+        } else if (mz < wb3) {
+            return 70.0 + ((mz - wb2) / (wb3 - wb2)) * 50.0;
+        } else if (mz < wb4) {
+            return 120.0 + ((mz - wb3) / (wb4 - wb3)) * 70.0;
+        } else if (mz < wb5) {
+            return 190.0 + ((mz - wb4) / (wb5 - wb4)) * 80.0;
+        } else {
+            return 270.0 + ((mz - wb5) / (300.0 - wb5)) * 30.0;
+        }
+    }
+
+    float getWarpedZ(float z) {
+        float mz = mod(z, 300.0);
+        float s1 = getSectorScale(1, uIteration);
+        float s2 = getSectorScale(2, uIteration);
+        float s3 = getSectorScale(3, uIteration);
+        float s4 = getSectorScale(4, uIteration);
+        float s5 = getSectorScale(5, uIteration);
+        float s6 = getSectorScale(6, uIteration);
+        float wmz = getWarpedMZ(mz, s1, s2, s3, s4, s5, s6);
+        return floor(z / 300.0) * 300.0 + wmz;
+    }
+
+    // Procedural glowing crevice/crack generator on decaying surfaces
+    float getFloorCrack(vec3 p, float warped_mz, float it) {
+        float decayFactor = clamp(it * 0.15, 0.0, 0.9);
         if (decayFactor < 0.05) return 0.0;
         float cNoise = sin(p.x * 3.5 + cos(p.z * 4.5)) * cos(p.z * 3.1 + sin(p.y * 4.0));
         float crackLine = abs(cNoise);
-        float crackWidth = mix(0.005, 0.12, decayFactor);
+        float crackWidth = mix(0.005, 0.11, decayFactor);
         float crackEdge = smoothstep(crackWidth, 0.0, crackLine);
         float crackMask = smoothstep(0.1, 0.5, sin(p.x * 0.35) * cos(p.z * 0.45) * sin(p.y * 0.25) + decayFactor * 0.35);
         return crackEdge * crackMask * decayFactor;
     }
 
-    // Smoothstep helper
+    // Calculates horizontal shift
+    float getCamX(float z) {
+        float wz = getWarpedZ(z);
+        float mz = mod(wz, 300.0);
+        
+        bool is666 = (floor(uIteration) == 2.0);
+        if (is666) {
+            return sin(wz * 0.06) * 3.5; 
+        }
+
+        if (mz < 30.0) return 0.0;
+        if (mz < 70.0) {
+            float s = smoothstep(30.0, 33.0, mz) * (1.0 - smoothstep(67.0, 70.0, mz));
+            return s * sin(wz * 0.15) * 4.0;
+        }
+        if (mz < 120.0) {
+            float s = smoothstep(70.0, 75.0, mz) * (1.0 - smoothstep(115.0, 120.0, mz));
+            return s * sin(wz * 0.4) * 1.5;
+        }
+        if (mz < 190.0) {
+            return sin(wz * 0.08) * 2.0;
+        }
+        if (mz < 270.0) {
+            // Sector 5 stairs collapse detour
+            if (mz >= 230.0) {
+                float t_det = (mz - 230.0) / 40.0;
+                return sin(t_det * 3.14159 * 2.5) * 6.5 + sin(wz * 0.1) * 2.0; // Detour path swing
+            }
+            float t5 = (mz - 190.0) / 80.0;
+            return sin(t5 * 3.14159265 * 3.0) * 4.0;
+        }
+        return 0.0;
+    }
+
+    // Camera height offsets
+    float getCamOffset(float z) {
+        float wz = getWarpedZ(z);
+        float mz = mod(wz, 300.0);
+        
+        bool is666 = (floor(uIteration) == 2.0);
+        if (is666) {
+            return 1.8;
+        }
+
+        if (mz >= 30.0 && mz < 70.0) {
+            float s = smoothstep(30.0, 35.0, mz) * (1.0 - smoothstep(65.0, 70.0, mz));
+            return mix(1.8, 1.0, s); // Sit inside waterslide
+        }
+        if (mz >= 70.0 && mz < 120.0) {
+            return 1.0; 
+        }
+        return 1.8;
+    }
+
+    // Smoothstep interpolation helper
     float smoothstep_custom(float edge0, float edge1, float x) {
         float t = clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
         return t * t * (3.0 - 2.0 * t);
@@ -56,205 +156,123 @@ export const fsScene = `
         return t * t * (3.0 - 2.0 * t);
     }
 
-    // Core analytical segment lookup generator in 100% sync with TS kinematics
-    void getSegmentData(float z, out float loop, out float sector, out float part, out float localZ, out float secLen, out float isFall, out float isCrystal) {
-        if (z >= 1890.0) { // Endless fall at the end of Loop 3
-            loop = 3.0;
-            sector = 666.0;
-            part = 9.0;
-            localZ = z - 1890.0;
-            secLen = 1000000.0;
-            isFall = 1.0;
-            isCrystal = 0.0;
-            return;
-        }
-
-        loop = floor(z / 500.0);
-        float lz = mod(z, 500.0);
-        part = 0.0;
-        isFall = 0.0;
-        isCrystal = 0.0;
-
-        if (lz < 60.0) {
-            sector = 1.0; localZ = lz; secLen = 60.0;
-        } else if (lz < 130.0) {
-            sector = 2.0; localZ = lz - 60.0; secLen = 70.0;
-        } else if (lz < 210.0) {
-            sector = 3.0; localZ = lz - 130.0; secLen = 80.0;
-        } else if (lz < 280.0) {
-            sector = 4.0; localZ = lz - 210.0; secLen = 70.0;
-        } else if (lz < 360.0) {
-            sector = 5.0; localZ = lz - 280.0; secLen = 80.0;
-        } else {
-            // Sector 6 / 666 Transition
-            localZ = lz - 360.0;
-            secLen = 140.0;
-            if (loop == 0.0) {
-                sector = 6.0;
-            } else {
-                sector = 666.0;
-                // Layer logic based on loop
-                if (loop == 1.0) {
-                    if (localZ < 60.0) {
-                        part = 1.0; // Layer 1
-                        isFall = 1.0;
-                    } else if (localZ < 120.0) {
-                        part = 2.0; // Layer 2
-                    } else {
-                        part = 8.0; // Collapse recovery
-                    }
-                } else if (loop == 2.0) {
-                    if (localZ < 30.0) {
-                        part = 1.0; // Layer 1
-                        isFall = 1.0;
-                    } else if (localZ < 60.0) {
-                        part = 2.0; // Layer 2
-                    } else if (localZ < 90.0) {
-                        part = 3.0; // Layer 3
-                    } else if (localZ < 120.0) {
-                        part = 4.0; // Layer 4
-                    } else {
-                        part = 8.0; // Collapse recovery (escape)
-                    }
-                } else { // loop >= 3.0
-                    if (localZ < 20.0) {
-                        part = 1.0; // Layer 1
-                        isFall = 1.0;
-                    } else if (localZ < 40.0) {
-                        part = 2.0; // Layer 2
-                    } else if (localZ < 60.0) {
-                        part = 3.0; // Layer 3
-                    } else if (localZ < 80.0) {
-                        part = 4.0; // Layer 4
-                    } else if (localZ < 100.0) {
-                        part = 5.0; // Layer 5
-                    } else if (localZ < 120.0) {
-                        part = 6.0; // Layer 6
-                    } else if (localZ < 140.0) {
-                        part = 7.0; // Layer 7
-                        isFall = 1.0;
-                    } else {
-                        part = 9.0; // Endless glitch void fallback
-                    }
-                }
-            }
-        }
-    }
-
-    // Calculates camera horizontal shift
-    float getCamX(float z) {
-        float loop, sector, part, localZ, secLen, isFall, isCrystal;
-        getSegmentData(z, loop, sector, part, localZ, secLen, isFall, isCrystal);
-
-        if (sector == 1.0) return 0.0;
-        if (sector == 2.0) {
-            float s = smoothstep_custom(5.0, 15.0, localZ) * (1.0 - smoothstep_custom(55.0, 65.0, localZ));
-            return s * sin(z * 0.15) * 4.0;
-        }
-        if (sector == 3.0) {
-            float s = smoothstep_custom(0.0, 5.0, localZ) * (1.0 - smoothstep_custom(75.0, 80.0, localZ));
-            return s * sin(z * 0.4) * 1.5;
-        }
-        if (sector == 4.0) {
-            float s = smoothstep_custom(0.0, 10.0, localZ) * (1.0 - smoothstep_custom(60.0, 70.0, localZ));
-            return s * sin(z * 0.08) * 1.8;
-        }
-        if (sector == 5.0) {
-            float t5 = localZ / secLen;
-            return sin(t5 * 3.14159265 * 3.0) * 3.5;
-        }
-        if (sector == 6.0) return 0.0;
-        if (sector == 666.0) {
-            if (part == 1.0) {
-                float s = smoothstep_custom(0.0, 10.0, localZ) * (1.0 - smoothstep_custom(30.0, 40.0, localZ));
-                return s * sin(z * 0.08) * 2.5;
-            }
-            if (isFall > 0.5) {
-                return 0.0;
-            }
-            return 0.0;
-        }
-        return 0.0;
-    }
-
-    // Camera height offsets
-    float getCamOffset(float z) {
-        float loop, sector, part, localZ, secLen, isFall, isCrystal;
-        getSegmentData(z, loop, sector, part, localZ, secLen, isFall, isCrystal);
-
-        if (sector == 2.0) {
-            if (localZ < 10.0) {
-                return mix(1.8, 0.95, smoothstep_custom(0.0, 10.0, localZ));
-            } else if (localZ < 60.0) {
-                return 0.95;
-            } else {
-                return mix(0.95, 1.0, smoothstep_custom(60.0, 70.0, localZ));
-            }
-        }
-        if (sector == 3.0) {
-            return mix(1.0, 1.8, smoothstep_custom(70.0, 80.0, localZ));
-        }
-        if (sector == 666.0 && part == 3.0) {
-            float t = clamp(localZ / secLen, 0.0, 1.0);
-            float dip = sin(t * 3.14159265);
-            return mix(1.8, 0.25, dip);
-        }
-        return 1.8;
-    }
-
-    // Absolute floor elevation
+    // Absolute floor elevation 
     float getFloorY(float z) {
-        float loop, sector, part, localZ, secLen, isFall, isCrystal;
-        getSegmentData(z, loop, sector, part, localZ, secLen, isFall, isCrystal);
+        float wz = getWarpedZ(z);
+        float mz = mod(wz, 300.0);
+        
+        bool is666 = (floor(uIteration) == 2.0);
+        if (is666) {
+            // Continuous spooky blood corridor floor with periodic bumps
+            return -60.0 + sin(wz * 0.08) * 4.0;
+        }
 
-        if (sector == 1.0) return 0.0;
-        if (sector == 2.0) {
-            float t = localZ / secLen;
+        // Zone 1 (0-30): Pools (Flat)
+        if(mz < 30.0) return 0.0;
+        
+        // Zone 2 (30-70): waterslide descent
+        if(mz < 70.0) {
+            float t = (mz - 30.0) / 40.0;
             return mix(0.0, -25.0, t * t * (3.0 - 2.0 * t));
         }
-        if (sector == 3.0) {
-            float t = localZ / secLen;
+        
+        // Zone 3 (70-120): Red flesh tunnel
+        if(mz < 120.0) {
+            float t = (mz - 70.0) / 50.0;
             return mix(-25.0, -125.0, t * t * (3.0 - 2.0 * t));
         }
-        if (sector == 4.0) {
-            float t = localZ / secLen;
-            float bridgeArc = sin(t * 3.14159265) * 7.5;
+        
+        // Zone 4 (120-190): bridge
+        if(mz < 190.0) {
+            float t_bridge = (mz - 120.0) / 70.0;
+            float bridgeArc = sin(t_bridge * 3.14159265) * 8.0;
             return -125.0 + bridgeArc;
         }
-        if (sector == 5.0) {
-            if (localZ < 52.0) {
-                float stepSize = 3.25;
-                float s = localZ / stepSize;
-                float smoothStair = floor(s) + smoothstep_custom(0.6, 1.0, fract(s));
-                return -125.0 + smoothStair * 3.44;
-            } else if (localZ < 72.0) {
-                float tFall = (localZ - 52.0) / 20.0;
-                return mix(-70.0, -180.0, tFall * tFall);
-            } else {
-                return -180.0;
+        
+        // Zone 5 (190-270): Escher Stairs collapse mechanics
+        if(mz < 270.0) {
+            // Halfway is around 230
+            if (mz >= 230.0) {
+                // Stairs collapse down rapidly
+                float drop = smoothstep_custom(230.0, 234.0, mz);
+                float startY = -125.0 + ((230.0 - 190.0) / 1.6) * 2.5; // Y around -62.5
+                float collapsedBaseY = -120.0;
+                
+                // Detour path Y rise back to 0.0 over mz range [234.0, 270.0]
+                if (mz >= 234.0) {
+                    float t_det = mz - 234.0;
+                    float s_det = t_det / 1.25;
+                    float smoothDet = floor(s_det) + smoothstep_custom(0.5, 0.9, fract(s_det));
+                    float detYRise = smoothDet * 4.1667; // climbs back to exactly 0 at mz = 270
+                    return collapsedBaseY + detYRise;
+                }
+                return mix(startY, collapsedBaseY, drop);
             }
+            float t = mz - 190.0;
+            float stepSize = 1.6; 
+            float s = t / stepSize;
+            float smoothStair = floor(s) + smoothstep_custom(0.6, 1.0, fract(s));
+            return -125.0 + smoothStair * 2.5;
         }
-        if (sector == 6.0) {
-            float t = clamp(localZ / secLen, 0.0, 1.0);
-            return mix(-180.0, 0.0, smoothstep_custom(0.0, 1.0, t));
-        }
-        if (sector == 666.0) {
-            if (isFall > 0.5) {
-                float t = localZ / secLen;
-                return mix(-180.0, -350.0, t * t);
-            }
-            if (part == 3.0) {
-                float t = clamp(localZ / secLen, 0.0, 1.0);
-                return mix(-350.0, 0.0, smoothstep_custom(0.0, 1.0, t));
-            }
-            float bounce = sin(localZ * 0.12) * 2.0 * (1.0 - smoothstep_custom(30.0, 40.0, localZ));
-            return -180.0 + bounce;
+        
+        // Zone 6 (270-300): Transition Hallway
+        // Every second time (e.g. uIteration % 2.0 is around 1.0), free fall to crimson oblivion!
+        float iterFloor = floor(uIteration + 0.1);
+        bool isChaosLoop = (mod(iterFloor, 2.0) == 1.0);
+        if (isChaosLoop) {
+            float dropAmount = smoothstep_custom(270.0, 300.0, mz);
+            return mix(0.0, -320.0, dropAmount * dropAmount); // exponential free fall plunge!
         }
         return 0.0;
     }
 
     float getCamY(float z) {
-        return getFloorY(z);
+        float wz = getWarpedZ(z);
+        float mz = mod(wz, 300.0);
+        
+        bool is666 = (floor(uIteration) == 2.0);
+        if (is666) {
+            return -60.0 + sin(wz * 0.08) * 4.0;
+        }
+
+        if(mz < 30.0) return 0.0;
+        if(mz < 70.0) {
+            float t = (mz - 30.0) / 40.0;
+            return mix(0.0, -25.0, t * t * (3.0 - 2.0 * t));
+        }
+        if(mz < 120.0) {
+            float t = (mz - 70.0) / 50.0;
+            return mix(-25.0, -125.0, t * t * (3.0 - 2.0 * t));
+        }
+        if(mz < 190.0) {
+            float t_bridge = (mz - 120.0) / 70.0;
+            float bridgeArc = sin(t_bridge * 3.14159265) * 8.0;
+            return -125.0 + bridgeArc;
+        }
+        if(mz < 270.0) {
+            if (mz >= 230.0) {
+                float drop = smoothstep_custom(230.0, 234.0, mz);
+                float startY = -125.0 + ((230.0 - 190.0) / 80.0) * 125.0; // stable gaze rise
+                float collapsedBaseY = -120.0;
+                
+                if (mz >= 234.0) {
+                    float t_det = mz - 234.0;
+                    return collapsedBaseY + (t_det / 36.0) * 120.0; // smooth stable detour ascent
+                }
+                return mix(startY, collapsedBaseY, drop);
+            }
+            float t = mz - 190.0;
+            return -125.0 + (t / 80.0) * 125.0; 
+        }
+        
+        // Plunge camera Y down on Chaos free fall Sector 6
+        float iterFloor = floor(uIteration + 0.1);
+        bool isChaosLoop = (mod(iterFloor, 2.0) == 1.0);
+        if (isChaosLoop) {
+            float dropAmount = smoothstep_custom(270.0, 300.0, mz);
+            return mix(0.0, -320.0, dropAmount * dropAmount);
+        }
+        return 0.0;
     }
 
     vec2 opU(vec2 d1, vec2 d2) {
@@ -274,44 +292,28 @@ export const fsScene = `
         return vec3(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
     }
 
-    float sdBox(vec3 p, vec3 b) {
-        vec3 q = abs(p) - b;
-        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
+    float sdStairs(vec3 p) {
+        float stepW = 0.55; 
+        float s = p.z / stepW;
+        float smoothStair = floor(s) + smoothstep_custom(0.5, 0.9, fract(s));
+        float dStep = max(abs(p.x) - 1.2, abs(p.y - smoothStair * 0.26) - 0.15);
+        return dStep;
     }
 
-    // Narrow staircase SDF for M.C. Escher gravity labyrinth
-    float sdNarrowStaircase(vec3 p) {
-        float stepH = 0.35;
-        float stepD = 0.45;
-        float stepW = 1.1; // narrow track
-        
-        // Simple step repeating along Z and climbing along Y
-        float stepIdx = floor(p.z / stepD + 0.5);
-        vec3 stepCenter = vec3(0.0, stepIdx * stepH, stepIdx * stepD);
-        vec3 dStepBox = abs(p - stepCenter) - vec3(stepW, stepH * 0.52, stepD * 0.52);
-        float dSteps = length(max(dStepBox, 0.0)) + min(max(dStepBox.x, max(dStepBox.y, dStepBox.z)), 0.0);
-        
-        // Slanted backing support beam
-        vec3 rP = rotX(p, -0.66); // approx slant angle matching stepH/stepD
-        vec3 dBeamBox = abs(rP - vec3(0.0, -0.28, 0.0)) - vec3(stepW * 0.85, 0.18, 50.0);
-        float dBeam = length(max(dBeamBox, 0.0)) + min(max(dBeamBox.x, max(dBeamBox.y, dBeamBox.z)), 0.0);
-        
-        return min(dSteps, dBeam);
+    float sdNarrowStairs(vec3 p) {
+        float stepW = 0.38;
+        float s = p.z / stepW;
+        float smoothStair = floor(s) + smoothstep_custom(0.5, 0.9, fract(s));
+        float dStep = max(abs(p.x) - 0.45, abs(p.y - smoothStair * 0.18) - 0.08);
+        return dStep;
     }
 
     // Biome Color Logic
     vec3 getBiomeColor(float z) {
-        float loop, sector, part, localZ, secLen, isFall, isCrystal;
-        getSegmentData(z, loop, sector, part, localZ, secLen, isFall, isCrystal);
+        float mz = mod(z, 300.0);
         
-        if (sector == 666.0) {
-            if (loop >= 3.0) {
-                // Indigo/cobalt abyss during the final endless fall loop
-                return vec3(0.01, 0.04, 0.42) + vec3(0.0, 0.01, 0.22) * abs(sin(z * 0.04 + iTime * 2.5));
-            }
-            if (isCrystal > 0.5) {
-                return vec3(0.00, 0.15, 0.32) + vec3(0.08, 0.0, 0.22) * abs(sin(z * 0.15 + iTime * 4.0));
-            }
+        bool is666 = (floor(uIteration) == 2.0);
+        if (is666) {
             return vec3(0.08, 0.0, 0.01) + vec3(0.35, 0.01, 0.02) * abs(sin(z * 0.1 + iTime * 3.0));
         }
 
@@ -321,398 +323,318 @@ export const fsScene = `
         vec3 c4 = vec3(0.05, 0.22, 0.14); // Emerald Reservoir
         vec3 c5 = vec3(0.85, 0.50, 0.10); // Hogwarts Twilight Orange
         vec3 c6 = vec3(0.85, 0.90, 0.95); // Gray Corridor
-
-        vec3 baseCol = c1;
-        if (sector == 1.0) baseCol = c1;
-        else if (sector == 2.0) baseCol = mix(c1, c2, localZ / secLen);
-        else if (sector == 3.0) baseCol = mix(c2, c3, localZ / secLen);
-        else if (sector == 4.0) baseCol = mix(c3, c4, localZ / secLen);
-        else if (sector == 5.0) baseCol = mix(c4, c5, localZ / secLen);
-        else if (sector == 6.0) baseCol = mix(c5, c6, localZ / secLen);
+        
+        // Smooth transitions between biom boundaries
+        float w1 = 1.0 - smoothstep(12.0, 38.0, mz); w1 += smoothstep(288.0, 300.0, mz);
+        float w2 = smoothstep(12.0, 38.0, mz) * (1.0 - smoothstep(52.0, 88.0, mz));
+        float w3 = smoothstep(52.0, 88.0, mz) * (1.0 - smoothstep(102.0, 138.0, mz));
+        float w4 = smoothstep(102.0, 138.0, mz) * (1.0 - smoothstep(172.0, 208.0, mz));
+        float w5 = smoothstep(172.0, 208.0, mz) * (1.0 - smoothstep(252.0, 288.0, mz));
+        float w6 = smoothstep(252.0, 288.0, mz) * (1.0 - smoothstep(288.0, 300.0, mz));
+        
+        vec3 baseCol = c1*w1 + c2*w2 + c3*w3 + c4*w4 + c5*w5 + c6*w6;
         
         // Environmental decay multiplier
-        float decayWeight = clamp(loop * 0.18, 0.0, 0.9);
+        float decayWeight = clamp(uIteration * 0.18, 0.0, 0.85);
         vec3 hellBase = vec3(0.35, 0.01, 0.02);
         return mix(baseCol, hellBase, decayWeight);
     }
 
     // Signed Distance Field Map
     vec2 map(vec3 p, float ignoreWater) {
-        float loop, sector, part, localZ, secLen, isFall, isCrystal;
-        getSegmentData(p.z, loop, sector, part, localZ, secLen, isFall, isCrystal);
-
-        float currentZ = mod(p.z, 500.0);
+        float wz = getWarpedZ(p.z);
+        float mz = mod(wz, 300.0);
         float fY = getFloorY(p.z);
         
-        float smoothLoop = loop;
-        if (sector == 6.0 && currentZ > 400.0) {
-            smoothLoop = loop + smoothstep_custom(400.0, 500.0, currentZ);
-        }
+        float decayFactor = clamp(uIteration * 0.15, 0.0, 0.9);
+        
+        // Claustrophobic walls bending/twisting and narrowing closer and closer
+        // 5. Claustrophobia factor based on uIteration:
+        float cFactor = 1.0 - clamp(uIteration * 0.14, 0.0, 0.72);
+        
+        float twist = sin(wz * 0.065 + iTime * 2.0) * (uIteration * 0.35);
+        p.x += twist * (1.0 - cFactor); // Wall twist gets hyper distorted on higher iterations!
 
-        float decayFactor = clamp(smoothLoop * 0.15, 0.0, 0.95);
-        float cFactor = 1.0 - clamp(smoothLoop * 0.14, 0.0, 0.72);
-
-        // Squeezing/bending corridors on higher decay iterations
-        if (sector < 666.0) {
-            float twist = sin(p.z * 0.065 + iTime * 2.0) * (smoothLoop * 0.35);
-            p.x += twist * (1.0 - cFactor);
-        }
-
+        // Space bending based on decay
         if (decayFactor > 0.01) {
-            float warpX = sin(p.z * 1.8 + iTime * 2.0) * cos(p.y * 1.5) * 0.55 * decayFactor;
-            float warpY = cos(p.x * 1.6 + iTime * 1.5) * sin(p.z * 1.2) * 0.45 * decayFactor;
-            float warpHigh = sin(p.z * 8.0) * cos(p.y * 8.0) * sin(p.x * 8.0) * 0.08 * decayFactor;
+            float warpX = sin(wz * 1.8 + iTime * 2.0) * cos(p.y * 1.5) * 0.55 * decayFactor;
+            float warpY = cos(p.x * 1.6 + iTime * 1.5) * sin(wz * 1.2) * 0.45 * decayFactor;
+            float warpHigh = sin(wz * 8.0) * cos(p.y * 8.0) * sin(p.x * 8.0) * 0.08 * decayFactor;
             p.x += warpX + warpHigh;
             p.y += warpY + warpHigh;
         }
 
-        float cX = getCamX(p.z);
-        float cY = fY + getCamOffset(p.z);
-        float dCamSafety = length(p.xy - vec2(cX, cY)) - 2.0;
+        // Biome isolation weights
+        float w1 = 1.0 - smoothstep_custom(15.0, 45.0, mz); w1 += smoothstep_custom(285.0, 300.0, mz);
+        float w2 = smoothstep_custom(15.0, 45.0, mz) * (1.0 - smoothstep_custom(55.0, 85.0, mz));
+        float w3 = smoothstep_custom(55.0, 85.0, mz) * (1.0 - smoothstep_custom(105.0, 135.0, mz));
+        float w4 = smoothstep_custom(105.0, 135.0, mz) * (1.0 - smoothstep_custom(175.0, 205.0, mz));
+        float w5 = smoothstep_custom(175.0, 205.0, mz) * (1.0 - smoothstep_custom(255.0, 285.0, mz));
+        float w6 = smoothstep_custom(255.0, 285.0, mz) * (1.0 - smoothstep_custom(285.0, 300.0, mz));
 
-        vec2 res = vec2(1000.0, MAT_MATTE);
+        // Core Architecture dimensions
+        float width = w1 * 12.0 + w2 * 35.0 + w3 * 50.0 + w4 * 150.0 + w5 * 50.0 + w6 * 12.0;
+        float ceilH = w1 * 7.0  + w2 * 40.0 + w3 * 100.0 + w4 * 300.0 + w5 * 150.0 + w6 * 7.0;
 
-        // SECTOR 666 RENDER ENGINE (Endlessly Mutating 7-Layer Hellscape)
-        if (sector == 666.0) {
-            if (part == 1.0) {
-                // --- LAYER 1: BURNING TWIGS & BARBED WIRE CRAWL SLIDE ---
-                vec2 tun = p.xy - vec2(getCamX(p.z), fY + 0.3);
-                float cave = 1.35 - length(tun);
-                
-                // Twisting barbed wire lines inside
-                vec3 cp = p;
-                float angle = cp.z * 1.5 + iTime * 2.5;
-                cp.xy = vec2(cp.x * cos(angle) - cp.y * sin(angle), cp.x * sin(angle) + cp.y * cos(angle));
-                float wire = length(abs(cp.xy) - vec2(0.85, 0.85)) - 0.035;
-                wire += sin(cp.z * 18.0) * 0.02 * cos(cp.z * 6.0);
-                
-                // Gnarled fiery twigs/branches SDF
-                float twig = length(cp.xy) - 1.25 + 0.28 * sin(cp.z * 7.0) * cos(cp.z * 4.5);
-                
-                float dSlide = min(min(cave, wire), twig);
-                res = vec2(dSlide, MAT_FLESH);
-                if (wire < cave && wire < twig) {
-                    res.y = MAT_MATTE; // metal barbed wire
-                }
-                res.x *= 0.45;
-                return res;
-            }
-            else if (part == 2.0) {
-                // --- LAYER 2: COLD ENDLESS TUNDRA LANDSCAPE & SHADOW CREATURES ---
-                float dTundraPlain = p.y - (fY - 2.5);
-                float hills = sin(p.x * 0.04) * cos(p.z * 0.04) * 3.5;
-                dTundraPlain -= hills;
-                
-                // Shadow creatures lurking and morphing in peripheral fields
-                vec3 sp = p;
-                sp.z = mod(sp.z + 18.0, 36.0) - 18.0;
-                sp.x = abs(sp.x) - 13.0;
-                float dCreature = length(sp - vec3(0.0, fY + 1.0 + sin(iTime * 2.5) * 0.4, 0.0)) - (0.95 + 0.45 * sin(iTime * 14.0) * cos(p.y * 3.0));
-                
-                float dBase = min(dTundraPlain, dCreature);
-                res = vec2(dBase, MAT_MATTE);
-                if (dCreature < dTundraPlain) {
-                    res.y = MAT_GLASS; // give shadow creatures a dark glazed glitch material
-                }
-                res.x *= 0.5;
-                return res;
-            }
-            else if (part == 3.0) {
-                // --- LAYER 3: THE THROBBING WOMB (Visceral Pulsating Cave) ---
-                vec2 tun = p.xy - vec2(getCamX(p.z), fY + 1.8);
-                float rCorridor = 3.6 + sin(p.z * 0.28 + iTime * 4.2) * 0.48;
-                float womb = rCorridor - length(tun);
-                
-                // organic veiny nodes bulging outward
-                float nodes = sin(p.x * 2.2) * sin(p.y * 2.2) * cos(p.z * 2.2) * 0.48;
-                womb -= nodes;
-                
-                res = vec2(womb, MAT_FLESH);
-                res.x *= 0.45;
-                return res;
-            }
-            else if (part == 4.0) {
-                // --- LAYER 4: CITADEL GRAVITY CRAWL (Squeezing concrete grids) ---
-                float dFloor = p.y - fY;
-                float dCeil = (fY + 1.35 + sin(p.z * 0.08) * 0.35) - p.y;
-                
-                // Crushing pillars on sides
-                vec3 rpCol = p;
-                rpCol.z = mod(p.z + 5.0, 10.0) - 5.0;
-                float dCol = length(abs(rpCol.xz) - vec2(3.2, 0.0)) - 0.75;
-                
-                float dCitadel = min(min(dFloor, dCeil), dCol);
-                res = vec2(dCitadel, MAT_MATTE);
-                res.x *= 0.5;
-                return res;
-            }
-            else if (part == 5.0) {
-                // --- LAYER 5: THE MEAT GRINDER (Buzzsaws & Pistons) ---
-                float dFloorLab = p.y - fY;
-                float dCeilLab = (fY + 7.0) - p.y;
-                float dWallsLab = 6.0 - abs(p.x);
-                float dGrinder = min(dFloorLab, min(dCeilLab, dWallsLab));
-                
-                // Ceil pistons pounding down
-                vec3 rpPiston = p;
-                rpPiston.z = mod(p.z + 10.0, 20.0) - 10.0;
-                float pistonCycle = abs(sin(iTime * 3.8 + p.z * 0.18)) * 3.6;
-                float dPiston = sdBox(rpPiston - vec3(0.0, fY + 6.0 - pistonCycle, 0.0), vec3(1.6, 2.8, 1.6));
-                
-                // Rotating big saw blades
-                vec3 rpSaw = p;
-                rpSaw.z = mod(rpSaw.z + 8.0, 16.0) - 8.0;
-                rpSaw.x = abs(rpSaw.x) - 4.0;
-                float sAngle = iTime * 22.0;
-                vec2 rotatedCoord = vec2(rpSaw.y * cos(sAngle) - rpSaw.z * sin(sAngle), rpSaw.y * sin(sAngle) + rpSaw.z * cos(sAngle));
-                float dSaw = sdBox(vec3(rpSaw.x, rotatedCoord.x, rotatedCoord.y), vec3(0.1, 2.4, 2.4));
-                
-                float dTotal = min(dGrinder, min(dPiston, dSaw));
-                res = vec2(dTotal, MAT_MATTE);
-                if (dPiston < dGrinder && dPiston < dSaw) {
-                    res.y = MAT_FLESH; // visceral bio-pistons
-                }
-                res.x *= 0.45;
-                return res;
-            }
-            else if (part == 6.0) {
-                // --- LAYER 6: THE SPIRAL STONE BRIDGE DOWNWARDS ---
-                float shaftRad = 9.5;
-                float dShaft = shaftRad - length(p.xz);
-                
-                // Procedural floating spiral stepping blocks
-                float pAng = atan(p.z, p.x);
-                float pStep = (p.y - (-40.0)) / -5.0;
-                float pCell = floor(pStep);
-                float stepAngle = pCell * 0.45;
-                float stepRad = 5.2;
-                vec3 platformPos = vec3(stepRad * cos(stepAngle), -40.0 - pCell * 5.0, stepRad * sin(stepAngle));
-                
-                float dPlatform = sdBox(p - platformPos, vec3(1.6, 0.35, 1.95));
-                
-                float dSpiral = min(dShaft, dPlatform);
-                res = vec2(dSpiral, MAT_MATTE);
-                res.x *= 0.5;
-                return res;
-            }
-            else if (part == 7.0) {
-                // --- LAYER 7: ENTROPY & LIGHT LEAKS (Disintegrating cave geometry) ---
-                float dFloorCorr = p.y - fY;
-                float hills = sin(p.x * 0.2) * cos(p.z * 0.2) * 1.5;
-                dFloorCorr -= hills;
-                
-                // high-frequency spatial distortion spikes representing digital signal breakdown
-                float glitches = sin(p.x * 24.0 + iTime * 32.0) * sin(p.y * 36.0) * sin(p.z * 16.0) * 0.35;
-                dFloorCorr += glitches;
-                
-                vec3 qBox = p;
-                qBox.xz = mod(p.xz + 6.0, 12.0) - 6.0;
-                float dSpikes = length(qBox - vec3(0.0, fY + 3.0, 0.0)) - (1.0 + 1.2 * sin(iTime * 12.0));
-                
-                float dEntropy = min(dFloorCorr, dSpikes);
-                res = vec2(dEntropy, MAT_GLASS);
-                res.x *= 0.5;
-                return res;
-            }
-            else if (part == 8.0) {
-                // --- PART 8: THE COLLAPSE RECOVERY CHAMBER ---
-                float dFloorChamber = p.y - fY;
-                float dCeilChamber = (fY + 8.5) - p.y;
-                float dWallsChamber = 10.0 - abs(p.x);
-                float dRecoveryChamber = min(dFloorChamber, min(dCeilChamber, dWallsChamber));
-                
-                // monolith arches
-                vec3 rCh = p;
-                rCh.z = mod(p.z + 8.0, 16.0) - 8.0;
-                float arches = length(vec2(abs(rCh.x) - 10.0, p.y - fY - 4.2)) - 1.5;
-                dRecoveryChamber = min(dRecoveryChamber, arches);
-                
-                // Pulsating core lens
-                vec3 bioP = p - vec3(0.0, fY + 3.0, p.z - localZ + 16.0);
-                float dCore = length(bioP) - 3.0 + sin(iTime * 3.5) * 0.22;
-                
-                float dFinal = min(dRecoveryChamber, dCore);
-                res = vec2(dFinal, MAT_MATTE);
-                if (dCore < dRecoveryChamber) {
-                    res.y = MAT_FLESH;
-                }
-                res.x *= 0.5;
-                return res;
-            }
-            else { // part == 9.0
-                // --- PART 9: ENDLESS PROCEDURAL GLITCH FALL VOID ---
-                vec3 qVoid = p;
-                qVoid.xz = mod(p.xz + 18.0, 36.0) - 18.0;
-                qVoid.y = mod(p.y + 8.0, 16.0) - 8.0;
-                float dPlate = sdBox(qVoid, vec3(7.5, 0.3, 7.5)) + sin(p.x * 2.2 + iTime * 6.0) * 0.45;
-                
-                // high frequency scanning pixel spike boxes
-                float dSpikes = length(mod(p, 5.0) - 2.5) - 0.15 - 2.2 * step(0.9, sin(iTime * 16.0 + p.y * 1.5));
-                float dVoidDecay = min(dPlate, dSpikes);
-                
-                res = vec2(dVoidDecay, MAT_GLASS);
-                res.x *= 0.45;
-                return res;
-            }
-        }
+        // Apply claustrophobia narrowing
+        width *= cFactor;
+        ceilH *= mix(1.0, 0.45, (1.0 - cFactor));
 
-        // --- SECTORS 1 & 2 (0 to 130) ---
-        // Interpolate width and height
-        float r_t = clamp((currentZ - 60.0) / 70.0, 0.0, 1.0);
-        if (currentZ < 60.0) r_t = 0.0;
-        float r_width = mix(12.0, 35.0, r_t) * cFactor;
-        float r_ceilH = mix(7.0, 40.0, r_t) * mix(1.0, 0.45, 1.0 - cFactor);
-        
+        // Basic Corridor volume
         float dFloor = p.y - fY;
-        float dCeil = (fY + r_ceilH) - p.y;
-        float dWalls = r_width - abs(p.x);
-        float dRoom12 = min(dFloor, min(dCeil, dWalls));
+        float dCeil  = (fY + ceilH) - p.y;
+        float dWalls = width - abs(p.x);
+        
+        float dRoom = min(dFloor, min(dCeil, dWalls));
+        vec2 res = vec2(dRoom, MAT_MATTE);
 
-        vec3 q1 = p; q1.z = mod(q1.z + 3.0, 6.0) - 3.0; q1.x = abs(q1.x) - 4.5 * cFactor;
-        float dCol1 = length(max(abs(vec2(q1.x, q1.z)) - 0.4, 0.0)) - 0.05;
-        
-        vec3 q2 = p; q2.z = mod(q2.z + 15.0, 30.0) - 15.0; q2.x = abs(q2.x) - 16.0 * cFactor;
-        float dCol2 = length(q2.xz) - 3.0;
-        
-        float dSec1 = min(dRoom12, dCol1);
-        float dSec2 = min(dRoom12, dCol2);
-        
-        float dBase = mix(dSec1, dSec2, smoothstep_custom(50.0, 70.0, currentZ));
+        // Camera clipping safeguard
+        float dCamSafety = length(p.xy - vec2(getCamX(p.z), getCamY(p.z) + getCamOffset(p.z))) - 2.5;
 
-        // Add glass slide for Sec 2
-        float dSlideHull = 1000.0;
-        if (currentZ > 60.0 && currentZ < 130.0) {
-            float slide_x = cX;
-            float slide_y = fY + 1.2;
-            vec2 dSlideQ = vec2(p.x - slide_x, p.y - slide_y);
-            dSlideHull = max(abs(length(dSlideQ) - 1.8) - 0.1, dSlideQ.y - 0.2);
-            dBase = min(dBase, dSlideHull); 
+        // Is this Sector 666?
+        bool is666 = (floor(uIteration) == 2.0);
+        if (is666) {
+            // Sector 666 has bleeding flesh tendrils and a giant screaming static horror skull in the way!
+            // Screaming Skull centered at z = 150.0
+            vec3 skullP = p - vec3(getCamX(150.0), -45.0, 150.0);
+            
+            // Giant skull sphere
+            float dSkull = length(skullP) - 9.5;
+            
+            // Eye hollows with red emitting eyeballs inside
+            float dSkullEyeR = length(skullP - vec3(3.2, 5.0, -7.5)) - 2.6;
+            float dSkullEyeL = length(skullP - vec3(-3.2, 5.0, -7.5)) - 2.6;
+            
+            dSkull = max(dSkull, -dSkullEyeR);
+            dSkull = max(dSkull, -dSkullEyeL);
+            
+            // Jaw / gaping mouth
+            float dSkullMouth = length(skullP - vec3(0.0, -3.5, -8.0)) - 5.0;
+            // Scary nose cavity
+            float dSkullNose = length(skullP - vec3(0.0, 1.5, -9.0)) - 1.5;
+            dSkull = max(dSkull, -dSkullMouth);
+            dSkull = max(dSkull, -dSkullNose);
+
+            // Emissive eyeballs
+            float eyeballFloat = sin(iTime * 15.0) * 0.15;
+            float dEyeballR = length(skullP - vec3(3.2, 5.0 + eyeballFloat, -6.0)) - 1.5;
+            float dEyeballL = length(skullP - vec3(-3.2, 5.0 - eyeballFloat, -6.0)) - 1.5;
+            float dEyeballs = min(dEyeballR, dEyeballL);
+
+            res = opU(res, vec2(dSkull, MAT_FLESH));
+            res = opU(res, vec2(dEyeballs, MAT_FLESH));
+            
+            // Fleshy spikes along Sector 666
+            vec3 qSpikes = p;
+            qSpikes.x = abs(qSpikes.x) - (width - 1.0);
+            qSpikes.z = mod(wz + 10.0, 20.0) - 10.0;
+            float dFleshSpikes = length(qSpikes.xz) - 1.8 + sin(p.y*1.5 + iTime*3.0)*0.4;
+            dFleshSpikes = max(dFleshSpikes, -dCamSafety);
+            res = opU(res, vec2(dFleshSpikes, MAT_FLESH));
+            
+            res.x *= 0.5;
+            return res;
         }
 
-        // --- SECTOR 3: CRYSTAL CAVE (130 to 210) ---
-        vec3 q3 = p; q3.x -= cX; q3.y -= cY;
-        float cave = 6.0 - length(q3.xy - vec2(sin(q3.z * 0.1) * 3.0, cos(q3.z * 0.15) * 2.0));
-        cave += sin(q3.x * 2.0) * sin(q3.y * 1.5) * sin(q3.z * 1.0) * 0.5;
-        vec3 cp = q3; cp.x += sin(iTime * 0.5 + p.z) * 1.0; cp.y += cos(iTime * 0.4 + p.z) * 1.0;
-        cp.xz = mod(cp.xz + 6.0, 12.0) - 6.0; cp.y = mod(cp.y + 4.0, 8.0) - 4.0;
-        float crystal = (abs(cp.x) + abs(cp.y) + abs(cp.z)) - 0.8;
-        float dSec3 = min(cave, crystal) * 0.6; // We use MAT_MATTE for cave, crystal handled below
+        // --- ZONE 1 pillars ---
+        vec3 q1 = p;
+        q1.z = mod(wz + 3.0, 6.0) - 3.0;
+        q1.x = abs(q1.x) - 4.5 * cFactor;
+        float dPillar1 = length(max(abs(vec2(q1.x, q1.z)) - 0.4, 0.0)) - 0.05;
+        dPillar1 = max(dPillar1, max(-mz - 5.0, mz - 28.0));
+        dPillar1 = max(dPillar1, -dCamSafety);
+        res = opU(res, vec2(dPillar1, MAT_MATTE));
 
-        dBase = mix(dBase, dSec3, smoothstep_custom(115.0, 145.0, currentZ));
+        // --- ZONE 2 pillars ---
+        vec3 q2 = p;
+        q2.z = mod(wz + 15.0, 30.0) - 15.0;
+        q2.x = abs(q2.x) - 16.0 * cFactor;
+        float dPillar2 = length(q2.xz) - 3.0;
+        dPillar2 = max(dPillar2, max(32.0 - mz, mz - 68.0));
+        dPillar2 = max(dPillar2, -dCamSafety);
+        res = opU(res, vec2(dPillar2, MAT_MATTE));
 
-        // --- SECTOR 4: COGS & PNEUMATICS (210 to 280) ---
-        vec3 q4 = p; q4.x -= cX; q4.y -= cY;
-        vec3 q4m = q4; q4m.xz = mod(q4m.xz + 10.0, 20.0) - 10.0;
-        
-        float vCols = max(abs(q4m.x) - 1.8, max(abs(q4m.y) - 50.0, abs(q4m.z) - 1.8));
-        float hB1 = max(abs(q4m.x) - 8.0, max(abs(q4m.y) - 0.3, abs(q4m.z + 8.0) - 0.3));
-        float hB2 = max(abs(q4m.x) - 8.0, max(abs(q4m.y) - 0.3, abs(q4m.z - 8.0) - 0.3));
-        float allCols = min(vCols, min(hB1, hB2));
-        
-        vec3 gA = q4m - vec3(0.0, 5.0, 0.0); gA.xy *= mat2(cos(iTime*1.2), -sin(iTime*1.2), sin(iTime*1.2), cos(iTime*1.2));
-        float dGa = max(length(gA.xy) - (2.6 + sin(atan(gA.y, gA.x) * 16.0) * 0.3), abs(q4m.z) - 0.5);
-        vec3 gB = q4m - vec3(-4.6, 5.0, 0.0); float tB = -iTime*1.95 + 0.1; gB.xy *= mat2(cos(tB), -sin(tB), sin(tB), cos(tB));
-        float dGb = max(length(gB.xy) - (1.6 + sin(atan(gB.y, gB.x) * 10.0) * 0.2), abs(q4m.z) - 0.4);
-        vec3 gC = q4m - vec3(4.6, 5.0, 0.0); gC.xy *= mat2(cos(tB), -sin(tB), sin(tB), cos(tB));
-        float dGc = max(length(gC.xy) - (1.6 + sin(atan(gC.y, gC.x) * 10.0) * 0.2), abs(q4m.z) - 0.4);
-        float gears = min(dGa, min(dGb, dGc));
-        
-        vec3 pA = q4m - vec3(sin(iTime*4.0)*3.5, -2.5, -2.0); float cA = max(abs(pA.x)-3.0, max(abs(pA.y)-0.4, abs(pA.z)-0.4));
-        vec3 sB_= q4m - vec3(-4.0, 0.0, 2.0); float csB = max(abs(sB_.x)-0.6, max(abs(sB_.y)-2.2, abs(sB_.z)-0.6));
-        vec3 rB_= q4m - vec3(-4.0, sin(iTime*3.0)*2.0, 2.0); float crB = max(abs(rB_.x)-0.35, max(abs(rB_.y)-2.0, abs(rB_.z)-0.35));
-        vec3 sC_= q4m - vec3(4.0, 0.0, 2.0); float csC = max(abs(sC_.x)-0.6, max(abs(sC_.y)-2.2, abs(sC_.z)-0.6));
-        vec3 rC_= q4m - vec3(4.0, cos(iTime*3.0)*2.0, 2.0); float crC = max(abs(rC_.x)-0.35, max(abs(rC_.y)-2.0, abs(rC_.z)-0.35));
-        float pneumatics = min(cA, min(min(csB, crB), min(csC, crC)));
-        
-        float dSec4 = min(p.y - (fY - 1.0), min(allCols, min(gears, pneumatics)) * 0.4);
-        dBase = mix(dBase, dSec4, smoothstep_custom(200.0, 220.0, currentZ));
+        // --- ZONE 2 ANOMALIES: Waterslide ---
+        float slide_x = getCamX(p.z);
+        float slide_y = getFloorY(p.z) + 1.2;
+        vec2 dSlideProfile = vec2(p.x - slide_x, p.y - slide_y);
+        float distSBody = abs(length(dSlideProfile) - 1.8) - 0.1;
+        float dSlideHull = max(distSBody, dSlideProfile.y - 0.2);
+        dSlideHull = max(dSlideHull, max(29.0 - mz, mz - 71.0));
+        res = opU(res, vec2(dSlideHull, MAT_GLASS));
 
-        // --- SECTOR 5: VOID BASIS LABYRINTH (280 to 430) ---
-        vec3 q5 = p; q5.x -= cX;
-        float dMainStair = max(abs(q5.x) - 2.5 * cFactor, abs(q5.y - fY) - 0.45);
-        
-        vec3 lq = q5;
-        lq.yz = mat2(cos(sin(q5.x*0.015)*0.5), -sin(sin(q5.x*0.015)*0.5), sin(sin(q5.x*0.015)*0.5), cos(sin(q5.x*0.015)*0.5)) * lq.yz;
-        lq.zx = mat2(cos(cos(q5.y*0.015)*0.5), -sin(cos(q5.y*0.015)*0.5), sin(cos(q5.y*0.015)*0.5), cos(cos(q5.y*0.015)*0.5)) * lq.zx;
-        lq = mod(lq + 10.0, 20.0) - 10.0;
-        
-        float block = max(max(abs(lq.x)-10.0, abs(lq.y)-10.0), abs(lq.z)-10.0);
-        float inner = max(max(abs(lq.x)-9.0, abs(lq.y)-9.0), abs(lq.z)-9.0);
-        block = max(block, -inner);
-        float doorX = max(max(abs(lq.x)-11.0, abs(lq.y)-5.0), abs(lq.z)-5.0);
-        float doorY = max(max(abs(lq.x)-5.0, abs(lq.y)-11.0), abs(lq.z)-5.0);
-        float doorZ = max(max(abs(lq.x)-5.0, abs(lq.y)-5.0), abs(lq.z)-11.0);
-        block = max(block, -min(doorX, min(doorY, doorZ)));
-        
-        vec3 sq_ = lq; sq_.y -= floor(sq_.z / 0.5) * 0.5; sq_.z = mod(sq_.z, 0.5) - 0.25;
-        float stair_ = max(abs(lq.x)-2.5, max(abs(lq.y)-8.5, abs(lq.z)-8.5));
-        stair_ = max(stair_, max(abs(sq_.x)-2.5, max(abs(sq_.y)-0.125, abs(sq_.z)-0.125)));
-        
-        vec3 sq3_ = vec3(lq.y, lq.z, lq.x); sq3_.y -= floor(sq3_.z / 0.5) * 0.5; sq3_.z = mod(sq3_.z, 0.5) - 0.25;
-        float stair3_ = max(abs(sq3_.x)-2.5, max(abs(sq3_.y)-0.125, abs(sq3_.z)-0.125));
-        stair3_ = max(stair3_, max(abs(lq.y)-2.5, max(abs(lq.z)-8.5, abs(lq.x)-8.5)));
-        
-        float dSec5 = min(dMainStair, min(block, min(stair_, stair3_)) * 0.4);
-        dBase = mix(dBase, dSec5, smoothstep_custom(270.0, 290.0, currentZ));
+        float dSlideWater = max(length(dSlideProfile) - 1.75, dSlideProfile.y + 0.3);
+        dSlideWater = max(dSlideWater, max(29.5 - mz, mz - 70.5));
+        res = opU(res, vec2(dSlideWater, MAT_WATER));
 
-        // --- SECTOR 6: HALLWAY EXIT (360 to 500) ---
-        float dFloor6 = p.y - fY;
-        float dCeil6 = (fY + 7.0 * mix(1.0, 0.45, 1.0 - cFactor)) - p.y;
-        float dWalls6 = 12.0 * cFactor - abs(p.x);
-        float dSec6 = min(dFloor6, min(dCeil6, dWalls6));
-        dSec6 = min(dSec6, mix(100.0, dCol1, smoothstep_custom(450.0, 500.0, currentZ)));
-        dBase = mix(dBase, dSec6, smoothstep_custom(340.0, 370.0, currentZ));
-        
-        dBase = max(dBase, -dCamSafety);
-        res = opU(res, vec2(dBase, MAT_MATTE));
-
-        // Resolve Material details (Crystal vs Matte vs Glass Tube)
-        if (dBase == dSlideHull && currentZ > 60.0 && currentZ < 130.0) {
-            res.y = MAT_GLASS;
-        }
-        if (currentZ > 120.0 && currentZ < 220.0 && crystal < cave) {
-            res.y = MAT_GLASS;
+        // --- ZONE 3 FLESH-EATING PLANT MAW ENTRY (mz around 70) ---
+        // 6. Teeth and organic predator lips lining the mouth to Sector 3 Chasm Tube
+        if (mz >= 60.5 && mz < 78.5) {
+            vec2 mouthCenter = vec2(getCamX(p.z), getFloorY(p.z) + 1.2);
+            float distToMouthCenter = length(p.xy - mouthCenter);
+            float pAngle = atan(p.y - mouthCenter.y, p.x - mouthCenter.x);
+            
+            // Splattered organic mouth opening with 10 creeping teeth
+            float teethAmp = 1.6 + sin(iTime * 4.0) * 0.25;
+            float mouthTeeth = sin(pAngle * 10.0) * teethAmp * smoothstep_custom(0.0, 1.0, 1.0 - abs(p.z - 70.0) * 0.28);
+            float dMouthLip = distToMouthCenter - (5.2 - mouthTeeth);
+            
+            float dPlantMaw = max(abs(p.z - 70.0) - 1.6, dMouthLip);
+            dPlantMaw = max(dPlantMaw, -dCamSafety);
+            res = opU(res, vec2(dPlantMaw, MAT_FLESH));
         }
 
-        // Fluids
-        float dSlideWater = 1000.0;
-        if (currentZ > 60.0 && currentZ < 130.0) {
-            float slide_x = cX;
-            float slide_y = fY + 1.2;
-            vec2 dSlideQ = vec2(p.x - slide_x, p.y - slide_y);
-            // Dynamic rushing water inside waterslide tube
-            dSlideWater = max(length(dSlideQ) - 1.72, dSlideQ.y - 0.0);
-            vec3 pWaterWave = p;
-            pWaterWave.y += sin(p.z * 1.5 - iTime * 15.0) * 0.1;
-            dSlideWater = max(dSlideWater, pWaterWave.y - (fY + 0.5));
-        }
+        // --- ZONE 3 Free Fall Flesh/Thorns Tube ---
+        vec2 tubeCenter = vec2(getCamX(p.z), getFloorY(p.z) + 1.2);
+        float distToTubeCenter = length(p.xy - tubeCenter);
+        float dTubeWall = abs(distToTubeCenter - 4.5) - 0.2; 
 
-        float waterY = -9000.0;
-        float wRise = smoothLoop * 0.6;
-        if (currentZ < 65.0) {
-            waterY = 0.3 + wRise;
-        } else if (currentZ < 135.0) {
-            waterY = mix(0.3 + wRise, -9000.0, smoothstep_custom(65.0, 85.0, currentZ));
-        } else if (currentZ > 351.0) {
-            waterY = fY + 0.3 + wRise; // Elevates dynamically with fY back to 0.3 at lz=500!
+        float fleshWeight = smoothstep_custom(95.0, 118.0, mz);
+        float fleshNoise = sin(p.x * 2.5) * sin(p.y * 2.5) * sin(wz * 2.5) * 0.45;
+        fleshNoise += sin(p.x * 6.5 + wz * 6.5) * cos(p.y * 6.5) * 0.15;
+        
+        float thorns = pow(abs(sin(p.x * 5.0) * sin(p.y * 5.0) * sin(wz * 5.0)), 3.0) * 1.8;
+        float finalDisplacement = fleshWeight * (fleshNoise - thorns);
+        float dFleshTube = dTubeWall + finalDisplacement;
+        dFleshTube = max(dFleshTube, max(69.0 - mz, mz - 121.0));
+        dFleshTube = max(dFleshTube, -dCamSafety);
+        res = opU(res, vec2(dFleshTube, (mz >= 95.0) ? MAT_FLESH : MAT_MATTE));
+
+        // --- ZONE 4 Submerged Crumbling Bridge & Falling Blocks ---
+        float bridgeY = getFloorY(p.z);
+        float dBridgeDeck = max(abs(p.x) - 2.5, abs(p.y - bridgeY) - 0.5);
+        float erosion = sin(wz * 1.5) * cos(p.y * 4.0) * 0.25;
+        dBridgeDeck += erosion;
+        
+        float pz_tile = floor(wz / 9.0);
+        float seed = fract(sin(pz_tile * 12.9898) * 43758.5453);
+        float t_fall = fract(iTime * 0.12 + seed);
+        float dropOffset = 120.0 * exp(-t_fall * 6.0); 
+        float pX = (fract(seed * 4.0) - 0.5) * 6.0; 
+        
+        vec3 piecePos = p;
+        piecePos.x -= pX;
+        piecePos.y -= (bridgeY + dropOffset);
+        piecePos.z = mod(wz, 9.0) - 4.5;
+        float dPiece = length(max(abs(piecePos) - vec3(1.0, 0.4, 1.0), 0.0)) - 0.05;
+        
+        dBridgeDeck = max(dBridgeDeck, max(119.0 - mz, mz - 191.0));
+        dPiece = max(dPiece, max(119.5 - mz, mz - 190.5));
+        
+        dBridgeDeck = max(dBridgeDeck, -dCamSafety);
+        dPiece = max(dPiece, -dCamSafety);
+        res = opU(res, vec2(dBridgeDeck, MAT_MATTE));
+        res = opU(res, vec2(dPiece, MAT_MATTE));
+
+        // --- ZONE 5 Escher Gravity Defying Staircases + Collapsing narrow stairs detour ---
+        float pzLocal = mod(wz + 15.0, 30.0) - 15.0;
+        
+        // Base structures of stairs (Only visible if not collapsed totally)
+        float dS1 = 1000.0;
+        if (mz < 230.0) {
+            // Stair 1: Climbing stairs
+            vec3 t1 = vec3(p.x - 2.0, p.y - (bridgeY + 6.0), pzLocal);
+            dS1 = sdStairs(t1);
+        } else {
+            // 1. Collapsed down stairs ruins in the SDF
+            vec3 t1Break = vec3(p.x - 2.0, p.y - (bridgeY - 10.0), pzLocal);
+            // tilt them over as they break down!
+            t1Break = rotX(t1Break, 0.45);
+            dS1 = sdStairs(t1Break);
         }
         
-        if (waterY > -900.0 && ignoreWater < 0.5) {
-            float dWater = p.y - (waterY + sin(p.x * 2.5 + iTime * 2.0) * cos(p.z * 2.5 + iTime * 2.5) * 0.03);
-            res = opU(res, vec2(dWater, MAT_WATER));
-        }
-        if (dSlideWater < 900.0 && ignoreWater < 0.5) {
-            res = opU(res, vec2(dSlideWater, MAT_WATER));
+        // Stair 2: Right wall vertical steps (Rotated X & Y)
+        vec3 t2 = rotX(rotY(vec3(p.x - 14.0 * cFactor, p.y - (bridgeY + 15.0), pzLocal - 4.0), 0.785), 1.5708);
+        float dS2 = sdStairs(t2);
+        
+        // Stair 3: Left wall steps (Rotated Z & X)
+        vec3 t3 = rotZ(rotX(vec3(p.x + 14.0 * cFactor, p.y - (bridgeY + 10.0), pzLocal + 8.0), 0.5), 1.5708);
+        float dS3 = sdStairs(t3);
+        
+        // Stair 4: Inverted steps on ceiling
+        vec3 t4 = rotZ(vec3(p.x, p.y - (bridgeY + 30.0), pzLocal - 10.0), 3.14159);
+        float dS4 = sdStairs(t4);
+        
+        // Stair 5: Diagonal cross-stairs
+        vec3 t5 = rotY(rotX(vec3(p.x + 4.0, p.y - (bridgeY + 20.0), pzLocal + 1.2), 0.6), 1.5708);
+        float dS5 = sdStairs(t5);
+        
+        // Stair 6: Steep staircase
+        vec3 t6 = rotY(rotZ(vec3(p.x - 8.0, p.y - (bridgeY + 2.0), pzLocal - 5.0), -0.785), 0.8);
+        float dS6 = sdStairs(t6);
+        
+        float dAllEscher = min(dS1, min(dS2, min(dS3, min(dS4, min(dS5, dS6)))));
+
+        // 1. DETOUR NARROW STAIRCASES AT 90/135 DEGREE ANGLES
+        if (mz >= 230.0) {
+            // Narrow stair 1 at 90 degrees (rotated sideways)
+            vec3 d1 = rotZ(vec3(p.x - 3.5, p.y - (bridgeY + 8.0), pzLocal + 2.0), 1.5708);
+            float dDetour1 = sdNarrowStairs(d1);
+            
+            // Narrow stair 2 at 135 degrees (slanted angle)
+            vec3 d2 = rotZ(rotY(vec3(p.x + 4.5, p.y - (bridgeY + 18.0), pzLocal - 8.0), 0.78), 2.3562);
+            float dDetour2 = sdNarrowStairs(d2);
+            
+            // Narrow stair 3 at 90 degrees upside down
+            vec3 d3 = rotZ(vec3(p.x - 1.0, p.y - (bridgeY + 28.0), pzLocal + 12.0), -1.5708);
+            float dDetour3 = sdNarrowStairs(d3);
+
+            // Narrow stair 4 completely upside down (180 degrees)
+            vec3 d4 = rotZ(vec3(p.x + 3.0, p.y - (bridgeY + 38.0), pzLocal - 2.0), 3.14159);
+            float dDetour4 = sdNarrowStairs(d4);
+            
+            dAllEscher = min(dAllEscher, min(dDetour1, min(dDetour2, min(dDetour3, dDetour4))));
         }
 
-        if (loop >= 1.0 && res.y == MAT_MATTE) {
-            float vNoise = sin(p.x * 0.38) * cos(p.y * 0.38) * sin(p.z * 0.14) + sin(p.z * 0.5) * 0.25;
-            if (vNoise > (0.95 - clamp(smoothLoop * 0.15, 0.0, 0.7))) res.x = max(res.x, 3.8);
+        dAllEscher = max(dAllEscher, max(189.0 - mz, mz - 271.0));
+        dAllEscher = max(dAllEscher, -dCamSafety);
+        res = opU(res, vec2(dAllEscher, MAT_MATTE));
+
+        // --- THE RISING FLUIDS OR CRIMSON OBLIVION LIQUID ---
+        float waterY = -1000.0; 
+        float wRise = uIteration * 0.6;
+        
+        float iterFloor = floor(uIteration + 0.1);
+        bool isChaosLoop = (mod(iterFloor, 2.0) == 1.0);
+
+        if(mz < 30.0) {
+            waterY = 0.3 + wRise; 
+        } else if(mz < 70.0) {
+            float t2 = clamp((mz - 30.0) / 40.0, 0.0, 1.0);
+            waterY = mix(0.3 + wRise, -22.0 + wRise * 0.3, pow(t2, 0.7)); 
+        } else if(mz >= 120.0 && mz < 190.0) {
+            waterY = -123.5 + wRise; 
+        } else if(isChaosLoop && mz >= 270.0) {
+            // Crimson oblivion pool waiting in free fall Sector 6
+            waterY = -290.0; 
+        }
+        
+        float ripple = sin(p.x * 2.5 + iTime * 2.0) * cos(wz * 2.5 + iTime * 2.5) * 0.03;
+        float dWater = p.y - (waterY + ripple);
+        
+        // Disable water in other sectors except when chaos free fall is active in Sector 6
+        if (((mz >= 70.0 && mz < 120.0) || mz >= 190.0 || ignoreWater > 0.5) && !(isChaosLoop && mz >= 270.0)) {
+            dWater = 1000.0;
+        }
+        res = opU(res, vec2(dWater, MAT_WATER));
+
+        // 5. COLLAPSED PARTS INTO NOTHINGNESS
+        // Subtract pockets of physical void/nothingness on high iterations
+        if (uIteration >= 1.0 && res.y == MAT_MATTE) {
+            float vNoise = sin(p.x * 0.38) * cos(p.y * 0.38) * sin(wz * 0.14) + sin(p.z * 0.5)*0.25;
+            float voidThreshold = 0.95 - clamp(uIteration * 0.15, 0.0, 0.7);
+            if (vNoise > voidThreshold) {
+                // Return high distance to create missing geometries/nothingness void holes!
+                res.x = max(res.x, 3.8); 
+            }
         }
 
-        if (res.y == MAT_MATTE) res.x -= getFloorCrack(p, localZ, smoothLoop) * 0.25;
+        if (res.y == MAT_MATTE) {
+            float crackDisp = getFloorCrack(p, mz, uIteration) * 0.25;
+            res.x -= crackDisp;
+        }
 
-        res.x *= 0.55;
+        res.x *= 0.55; 
         return res;
     }
 
@@ -727,7 +649,7 @@ export const fsScene = `
         );
     }
 
-    // Ambient Occlusion
+    // Directional Ambient Occlusion
     float calcAO(vec3 p, vec3 n, float ignoreWater) {
         float occ = 0.0;
         float sca = 1.0;
@@ -743,18 +665,19 @@ export const fsScene = `
     void main() {
         vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
 
-        // Synchronize camera track
-        float camZ = uPlayerZ;
-
+        // --- CAMERA KINEMATICS ---
+        float SPEED = 5.0; 
+        float camZ = iTime * SPEED;
+        
         float walkBob = abs(sin(iTime * 4.0)) * 0.18 - 0.09;
         float walkSway = cos(iTime * 2.0) * 0.1;
-
-        float loop, sector, part, localZ, secLen, isFall, isCrystal;
-        getSegmentData(camZ, loop, sector, part, localZ, secLen, isFall, isCrystal);
-
-        bool is666 = (sector == 666.0);
-        if (is666 && isFall < 0.5) {
-            // Intense scary rumbling screenshakes during the walls sequence
+        
+        // 3. Jumpscare shaking effect in Sector 666 (around z = 155)
+        bool is666 = (floor(uIteration) == 2.0);
+        float wz_cam = getWarpedZ(camZ);
+        float mz = mod(wz_cam, 300.0);
+        if (is666 && mz >= 148.0 && mz <= 156.0) {
+            // Loud high freq screen rumble shaking!
             walkBob += sin(iTime * 85.0) * 0.35;
             walkSway += cos(iTime * 75.0) * 0.35;
         }
@@ -763,358 +686,217 @@ export const fsScene = `
         float minCamY = getFloorY(camZ) + getCamOffset(camZ);
         float currentWaterY = -1000.0;
 
-        if (sector == 1.0) {
-            currentWaterY = 0.3 + loop * 0.6;
-        } else if (sector == 2.0) {
-            float t = clamp(localZ / secLen, 0.0, 1.0);
-            currentWaterY = mix(0.3 + loop * 0.6, -22.0 + loop * 0.6 * 0.3, pow(t, 0.7));
+        if (is666) {
+            currentWaterY = -1000.0;
+        } else {
+            if(mz < 30.0) {
+                currentWaterY = 0.3 + uIteration * 0.6;
+            } else if(mz < 70.0) {
+                float t2 = clamp((mz - 30.0) / 40.0, 0.0, 1.0);
+                currentWaterY = mix(0.3 + uIteration * 0.6, -22.0 + uIteration * 0.6 * 0.3, pow(t2, 0.7));
+            } else if(mz >= 120.0 && mz < 190.0) {
+                currentWaterY = -123.5 + uIteration * 0.6;
+            }
         }
-
+        
         float camY = getCamY(camZ) + getCamOffset(camZ) + walkBob;
         camY = max(camY, minCamY + 0.05);
-        camY = max(camY, currentWaterY + 1.15);
+        camY = max(camY, currentWaterY + 1.15); 
 
         vec3 ro = vec3(camX, camY, camZ);
-
+        
+        // LookAt target panning
         vec3 ta = vec3(
             getCamX(camZ + 15.0),
-            getCamY(camZ + 15.0) + getCamOffset(camZ + 15.0),
+            getCamY(camZ + 15.0) + getCamOffset(camZ + 15.0), 
             camZ + 15.0
         );
-
-        ta.xy += vec2(uPointer.x * 6.8, uPointer.y * 5.5);
-
+        
+        ta.xy += vec2(uPointer.x * 2.5, uPointer.y * 2.0);
+        
         vec3 cw = normalize(ta - ro);
         vec3 cp = vec3(0.0, 1.0, 0.0);
-
-        // Face straight down during elevator vacuum shaft plunging
-        if (isFall > 0.5) {
-            ta = ro + vec3(0.0, -1.0, 0.005);
-            cw = normalize(ta - ro);
-            cp = vec3(0.0, 0.0, -1.0);
-        }
-
         vec3 cu = normalize(cross(cw, cp));
         vec3 cv = cross(cu, cw);
-
-        // Camera impact roll rotation/struggling
-        float tiltAngle = 0.0;
-        if (sector == 666.0 && part == 3.0) {
-            if (localZ < 20.0) {
-                float t_tilt = localZ / 20.0;
-                tiltAngle = mix(0.0, 1.35, smoothstep_custom(0.0, 1.0, t_tilt));
-            } else {
-                float t_tilt = (localZ - 20.0) / 20.0;
-                tiltAngle = mix(1.35, 0.0, smoothstep_custom(0.0, 1.0, t_tilt));
-            }
-        }
-
-        if (tiltAngle > 0.01) {
-            float cT = cos(tiltAngle), sT = sin(tiltAngle);
-            vec3 original_cu = cu;
-            cu = original_cu * cT - cv * sT;
-            cv = original_cu * sT + cv * cT;
-        }
-
-        float focalLength = mix(1.0, 0.52, clamp(loop * 0.15, 0.0, 0.75));
-        if (is666) {
-            float progress = localZ / secLen;
-            if (loop >= 3.0) {
-                // Shrink focal length to 1mm focal width (0.05) eventually
-                float endFactor = clamp(localZ / 180.0, 0.0, 1.0);
-                focalLength = mix(1.0, 0.05, endFactor);
-            } else {
-                focalLength = mix(1.0, 0.22, progress);
-            }
-        }
-
+        
+        float focalLength = mix(1.0, 0.52, clamp(uIteration * 0.15, 0.0, 0.75));
         vec3 rd = normalize(uv.x * cu + uv.y * cv + focalLength * cw);
 
         // --- PRIMARY RAYMARCH ---
         float t = 0.0;
         float matID = 0.0;
         float godRayAccum = 0.0;
-        float decayFactor = clamp(loop * 0.15, 0.0, 0.9);
-
-        float crystalGlow = 0.0;
-        float fogTension = 0.0;
-        float voidGlow = 0.0;
-
-        for (int i = 0; i < MAX_STEPS; i++) {
-            if (uHeavy < 0.5 && i >= 50) break;
+        float decayFactor = clamp(uIteration * 0.15, 0.0, 0.9);
+        for(int i = 0; i < MAX_STEPS; i++) {
             vec3 p = ro + rd * t;
             vec2 res = map(p, 0.0);
-
-            // Accumulate volumetric glows during sector 666 falls only when heavy effects are enabled
-            if (uHeavy > 0.5) {
-                float l_g, s_g, pa_g, lZ_g, sLen_g, iF_g, iC_g;
-                getSegmentData(p.z, l_g, s_g, pa_g, lZ_g, sLen_g, iF_g, iC_g);
-                if (s_g == 666.0 && iF_g > 0.5) {
-                    if (l_g < 3.0) {
-                        // Crystal fall glow
-                        vec3 cp = p;
-                        cp.x -= sin(p.y * 0.12 + iTime * 1.2) * 1.5;
-                        cp.z -= cos(p.y * 0.15 - iTime * 0.8) * 1.5;
-                        cp.y = mod(p.y + 3.0, 6.0) - 3.0;
-                        float distToCrystal = (abs(cp.x) + abs(cp.y) + abs(cp.z)) - 0.75;
-                        if (distToCrystal < 0.8) {
-                            crystalGlow += 0.01 / (0.01 + distToCrystal * distToCrystal);
-                        }
-                        fogTension += max(0.0, 0.012 - res.x);
-                    } else {
-                        // Volumetric void glow near rings (Loop 3 Endless Fall in vertical shaft)
-                        float shaftRad = 8.0;
-                        vec3 qy = p;
-                        qy.y = mod(p.y + 5.0, 10.0) - 5.0;
-                        float ringDist = abs(qy.y);
-                        if (ringDist < 0.6 && length(p.xz) < (shaftRad + 1.0) && length(p.xz) > (shaftRad - 0.5)) {
-                            voidGlow += 0.012 / (0.012 + res.x * res.x);
-                        }
-                    }
-                }
-            }
-
-            if (uHeavy > 0.5 && decayFactor > 0.05) {
-                float l, s, pa, lZ, sLen, iF, iC;
-                getSegmentData(p.z, l, s, pa, lZ, sLen, iF, iC);
+            
+            // Volumetric god ray calculations
+            if (decayFactor > 0.05) {
+                float wz_p = getWarpedZ(p.z);
+                float mz_p = mod(wz_p, 300.0);
                 float fY_p = getFloorY(p.z);
                 float heightAboveFloor = p.y - fY_p;
                 if (heightAboveFloor > 0.0 && heightAboveFloor < 15.0) {
-                    float fCrack = getFloorCrack(p, lZ, loop);
+                    float fCrack = getFloorCrack(p, mz_p, uIteration);
                     godRayAccum += fCrack * exp(-heightAboveFloor * 0.28) * 0.02 * (1.0 + 3.0 * decayFactor);
                 }
             }
-
-            if (res.x < SURF_DIST) { matID = res.y; break; }
-            if (t > MAX_DIST) break;
+            
+            if(res.x < SURF_DIST) { matID = res.y; break; }
+            if(t > MAX_DIST) break;
             t += res.x;
         }
 
         vec3 col = vec3(0.0);
-        vec3 fogColor = getBiomeColor(ro.z + 30.0);
+        vec3 fogColor = getBiomeColor(ro.z + 30.0); 
+
+        // Set fog color to deep crimson during free fall in Sector 6 chaos
+        float iterFloor = floor(uIteration + 0.1);
+        bool isChaosLoop = (mod(iterFloor, 2.0) == 1.0);
+        if (isChaosLoop && mz >= 270.0) {
+            float trans = smoothstep_custom(270.0, 280.0, mz);
+            fogColor = mix(fogColor, vec3(0.12, 0.0, 0.005), trans);
+        }
+
         vec3 sunDir = normalize(vec3(0.3, 0.8, 0.1));
 
-        if (t < MAX_DIST) {
+        if(t < MAX_DIST) {
             vec3 p = ro + rd * t;
             vec3 n = calcNormal(p, 0.0);
-
-            float l_p, s_p, pa_p, lZ_p, sLen_p, iF_p, iC_p;
-            getSegmentData(p.z, l_p, s_p, pa_p, lZ_p, sLen_p, iF_p, iC_p);
-
-            if (s_p == 666.0) {
-                // Unified Sector 666 shader color generator
-                vec3 albedo = vec3(0.12, 0.12, 0.12);
-                float emissive = 0.0;
-                vec3 emissiveColor = vec3(0.0);
-                
-                float ao = max(calcAO(p, n, 0.0), 0.35);
-                float dif = max(dot(n, sunDir), 0.0);
-
-                if (pa_p == 1.0) { // Layer 1: Twigs slide (Hot burning embers)
-                    albedo = vec3(0.15, 0.06, 0.02);
-                    // Add animated burning pulses along twig walls
-                    float pulse = abs(sin(p.z * 1.5 - iTime * 4.0));
-                    emissive = pulse * 1.5;
-                    emissiveColor = vec3(1.0, 0.22, 0.0) * emissive;
-                }
-                else if (pa_p == 2.0) { // Layer 2: Cold Tundra & creatures
-                    if (matID == MAT_GLASS) { // shadow creatures
-                        albedo = vec3(0.002, 0.002, 0.003); // extreme black
-                        // Glowing red eyes
-                        float eyeGlow = step(0.96, sin(p.y * 12.0)) * step(0.96, cos(p.z * 8.0));
-                        emissiveColor = vec3(1.2, 0.02, 0.05) * eyeGlow;
-                    } else {
-                        albedo = vec3(0.08, 0.11, 0.14); // cold tundra snow terrain
-                    }
-                }
-                else if (pa_p == 3.0) { // Layer 3: Throbbing womb
-                    albedo = vec3(0.35, 0.01, 0.05);
-                    // Pulsating organic glow
-                    float pulse = sin(p.z * 0.4 - iTime * 3.5) * 0.5 + 0.5;
-                    emissiveColor = vec3(0.8, 0.01, 0.05) * pulse * 0.45;
-                }
-                else if (pa_p == 4.0) { // Layer 4: Citadel crawl
-                    albedo = vec3(0.09, 0.09, 0.11); // cold crushing concrete grey
-                }
-                else if (pa_p == 5.0) { // Layer 5: Meat grinder
-                    if (matID == MAT_FLESH) {
-                        albedo = vec3(0.42, 0.015, 0.03); // bloody machinery
-                    } else {
-                        albedo = vec3(0.15, 0.15, 0.18); // raw steel
-                    }
-                    float grindPulse = abs(sin(p.z * 0.8 + iTime * 10.0));
-                    emissiveColor = vec3(1.0, 0.02, 0.0) * grindPulse * 0.35;
-                }
-                else if (pa_p == 6.0) { // Layer 6: Spiral stone bridge
-                    albedo = vec3(0.08, 0.08, 0.09) * mix(0.5, 1.0, step(0.08, fract(p.y * 2.0))); // dark stone treads
-                }
-                else if (pa_p == 7.0) { // Layer 7: Glitched static & light leaks
-                    albedo = vec3(0.05, 0.4, 0.8) * abs(sin(p.x * 20.0 + iTime * 20.0)); // flashing blue light leaks
-                    emissiveColor = vec3(0.08, 0.75, 1.0) * 1.5;
-                }
-                else if (pa_p == 8.0) { // Part 8: Recovery chamber (Concrete monoliths & Core)
-                    if (matID == MAT_FLESH) { // comforting core sphere
-                        albedo = vec3(0.12, 0.75, 1.0); // warm teal blue
-                        emissiveColor = vec3(0.15, 0.85, 1.0) * (1.2 + 0.4 * sin(iTime * 4.0));
-                    } else {
-                        albedo = vec3(0.38, 0.38, 0.36); // warm raw concrete
-                    }
-                }
-                else { // Part 9 / Loop 3 endless fall
-                    albedo = vec3(0.1, 0.1, 0.1);
-                    // digital static color leaks
-                    float staticH = hash(vec2(p.x, p.y + iTime));
-                    emissiveColor = vec3(0.45, 0.95, 1.0) * staticH * step(0.92, staticH);
-                }
-
-                col = albedo * (dif * 0.55 + 0.15) * ao;
-                col += emissiveColor;
-            } else if (matID == MAT_WATER) {
+            
+            float wz_p = getWarpedZ(p.z);
+            float mz_p = mod(wz_p, 300.0);
+            
+            // Perturb water normals heavily for current and flow
+            if(matID == MAT_WATER) {
                 float flow = iTime * 3.0;
-                if (s_p == 2.0) flow = iTime * 12.0;
-
+                float mz_water = mz_p;
+                if(mz_water >= 29.0 && mz_water < 71.0) {
+                    flow = iTime * 12.0; // Rapid waterslide action
+                }
+                
                 vec3 waterNormal = n;
                 waterNormal.x += sin(p.x * 6.0 + flow) * 0.06;
-                waterNormal.z += cos(p.z * 6.0 + flow * 1.5) * 0.06;
+                waterNormal.z += cos(wz_p * 6.0 + flow * 1.5) * 0.06;
                 waterNormal = normalize(waterNormal);
-
+                
                 float fresnel = pow(1.0 - max(dot(waterNormal, -rd), 0.0), 5.0);
+                float refYOffset = 0.05;
                 vec3 waterReflDir = reflect(rd, waterNormal);
                 float wt = 0.1;
-
-                for (int i = 0; i < 40; i++) {
+                
+                for(int i = 0; i < 40; i++) {
                     vec3 wp = p + waterReflDir * wt;
-                    vec2 wres = map(wp, 1.0);
-                    if (wres.x < SURF_DIST) break;
-                    if (wt > 40.0) break;
+                    vec2 wres = map(wp, 1.0); // Ignore transparent water surface in secondary pass
+                    if(wres.x < SURF_DIST) break;
+                    if(wt > 40.0) break;
                     wt += wres.x;
                 }
-
+                
                 vec3 reflCol = fogColor;
-                if (wt < 40.0) {
+                if(wt < 40.0) {
                     vec3 wp = p + waterReflDir * wt;
                     vec3 wn = calcNormal(wp, 1.0);
                     float rDif = max(dot(wn, sunDir), 0.0);
                     vec3 rAlbedo = getBiomeColor(wp.z);
                     reflCol = rAlbedo * (rDif * 0.6 + 0.4) * calcAO(wp, wn, 1.0);
                 }
-
-                vec3 refrCol = (s_p == 666.0) ? vec3(0.3, 0.01, 0.02) : vec3(0.01, 0.12, 0.16);
+                
+                // Color refracted water interior
+                vec3 refrCol = (isChaosLoop && mz_p >= 270.0) ? vec3(0.3, 0.0, 0.0) : vec3(0.01, 0.12, 0.16); 
                 refrCol = getBiomeColor(p.z) * 0.2 + refrCol * 0.8;
-
+                
                 col = mix(refrCol, reflCol, mix(0.12, 0.88, fresnel));
             } else {
+                // OPAQUE SURFACES PASS
                 float dif = max(dot(n, sunDir), 0.0);
-                float ao = max(calcAO(p, n, 0.0), 0.35);
-
+                float ao = calcAO(p, n, 0.0);
+                
                 vec3 albedo = getBiomeColor(p.z);
-
-                if (matID == MAT_MATTE) {
-                    if (s_p == 1.0 || s_p == 5.0 || s_p == 6.0) {
+                
+                if(matID == MAT_MATTE) {
+                    float mz_matte = mz_p;
+                    if(mz_matte < 35.0 || (mz_matte >= 185.0 && mz_matte < 275.0) || mz_matte > 295.0) {
                         vec3 grid = smoothstep_custom(0.0, 0.05, abs(fract(p * 2.0) - 0.5));
                         float lines = grid.x * grid.y * grid.z;
                         albedo *= mix(0.6, 1.0, lines);
                     }
-
-                    // BLOOD DECALS: Large, non-uniform biological projections
-                    if (decayFactor > 0.01) {
-                        float splatter = sin(p.x * 0.22 + cos(p.z * 0.15)) * cos(p.y * 0.28) * sin(p.z * 0.14 + sin(p.x * 0.08));
-                        splatter += sin(p.x * 12.0) * cos(p.z * 15.0) * 0.04;
-                        
-                        // Grows in size and fades in seamlessly depending on decayFactor
-                        float bloodThresh = mix(0.95, 0.12, decayFactor);
-                        float sharpSplatter = smoothstep_custom(0.0, 0.08, splatter - bloodThresh);
-                        
-                        vec3 bloodSpill = vec3(0.35, 0.002, 0.005) * (0.15 + 0.85 * smoothstep_custom(-0.2, 0.2, sin(p.y * 8.0)));
-                        albedo = mix(albedo, bloodSpill, sharpSplatter * 0.96);
+    
+                    float decayAmount = clamp(uIteration * 0.15, 0.0, 1.0);
+                    if (decayAmount > 0.01) {
+                        float splatter = sin(p.x * 3.5) * cos(p.y * 3.1) * sin(wz_p * 2.8);
+                        splatter += sin(p.x * 12.0) * cos(wz_p * 15.0) * 0.25;
+                        float sharpSplatter = smoothstep_custom(0.1, 0.13, splatter - (1.0 - decayAmount) * 0.35);
+                        vec3 bloodSpill = vec3(0.3, 0.005, 0.008) * (0.2 + 0.8 * smoothstep_custom(-0.2, 0.2, sin(p.y * 12.0)));
+                        albedo = mix(albedo, bloodSpill, sharpSplatter * 0.95);
                     }
-
-                    float fCrack = getFloorCrack(p, lZ_p, loop);
+                    
+                    float fCrack = getFloorCrack(p, mz_p, uIteration);
                     if (fCrack > 0.01) {
                         vec3 crackCol = vec3(1.5, 0.02, 0.01) * (1.0 + 8.0 * decayFactor);
                         albedo = mix(albedo, crackCol, fCrack);
                     }
                 }
-
-                if (matID == MAT_FLESH) {
+    
+                if(matID == MAT_FLESH) {
                     float vein = sin(p.x * 12.0) * cos(p.y * 12.0) * sin(p.z * 12.0);
                     vec3 fleshBase = vec3(0.55, 0.02, 0.04);
-                    vec3 veinCol = vec3(0.18, 0.0, 0.12);
-                    if (vein > 0.5) fleshBase = mix(fleshBase, veinCol, 0.6);
+                    vec3 veinCol = vec3(0.18, 0.0, 0.12); 
+                    if(vein > 0.5) fleshBase = mix(fleshBase, veinCol, 0.6);
                     albedo = fleshBase;
                 }
-
+                
                 col = albedo * (dif * 0.6 + 0.4) * ao;
-
-                if (matID == MAT_FLESH) {
+    
+                if(matID == MAT_FLESH) {
                     vec3 refDir = reflect(rd, n);
                     float spec = pow(max(dot(refDir, sunDir), 0.0), 12.0) * 0.4;
                     col += vec3(0.9, 0.15, 0.25) * spec;
                 }
-
-                if (matID == MAT_GLASS) {
-                    if (isCrystal > 0.5) {
-                        // High-tech self-luminous holographic crystal tube simulation
-                        vec3 crystalGlowVal = vec3(0.01, 0.65, 0.98) * (0.65 + 0.35 * sin(p.z * 0.9 + iTime * 6.0));
-                        crystalGlowVal += vec3(0.12, 0.32, 0.55) * step(0.85, sin(p.z * 1.5 - iTime * 4.0));
-                        col = crystalGlowVal;
-                    } else {
-                        vec3 refDir = reflect(rd, n);
-                        float rt = 0.05;
-                        for (int i = 0; i < 40; i++) {
-                            vec3 rp = p + refDir * rt;
-                            vec2 rres = map(rp, 0.0);
-                            if (rres.x < SURF_DIST) break;
-                            if (rt > 50.0) break;
-                            rt += rres.x;
-                        }
-
-                        vec3 refCol = fogColor;
-                        if (rt < 50.0) {
-                            vec3 rp = p + refDir * rt;
-                            vec3 wn = calcNormal(rp, 0.0);
-                            float rDif = max(dot(wn, sunDir), 0.0);
-                            vec3 rAlbedo = getBiomeColor(rp.z);
-                            refCol = rAlbedo * (rDif * 0.6 + 0.4) * max(calcAO(rp, wn, 0.0), 0.35);
-                            float rFog = 1.0 - exp(-0.02 * rt);
-                            refCol = mix(refCol, getBiomeColor(rp.z + 30.0), rFog);
-                        }
-
-                        float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 5.0);
-                        float refAmount = mix(0.15, 0.85, fresnel);
-                        col = mix(col, refCol, refAmount);
+    
+                if(matID == MAT_GLASS) {
+                    vec3 refDir = reflect(rd, n);
+                    float rt = 0.05; 
+                    for(int i = 0; i < 40; i++) {
+                        vec3 rp = p + refDir * rt;
+                        vec2 rres = map(rp, 0.0);
+                        if(rres.x < SURF_DIST) break;
+                        if(rt > 50.0) break;
+                        rt += rres.x;
                     }
+                    
+                    vec3 refCol = fogColor;
+                    if(rt < 50.0) {
+                        vec3 rp = p + refDir * rt;
+                        vec3 rn = calcNormal(rp, 0.0);
+                        float rDif = max(dot(rn, sunDir), 0.0);
+                        vec3 rAlbedo = getBiomeColor(rp.z);
+                        refCol = rAlbedo * (rDif * 0.6 + 0.4) * calcAO(rp, rn, 0.0);
+                        
+                        float rFog = 1.0 - exp(-0.02 * rt);
+                        refCol = mix(refCol, getBiomeColor(rp.z + 30.0), rFog);
+                    }
+                    
+                    float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 5.0);
+                    float refAmount = mix(0.15, 0.85, fresnel);
+                    col = mix(col, refCol, refAmount);
                 }
             }
         } else {
-            if (is666 && isFall > 0.5) {
-                if (loop < 3.0) {
-                    col = vec3(0.01, 0.05, 0.1);
-                } else {
-                    col = vec3(0.01, 0.0, 0.02);
-                }
-            } else {
-                col = fogColor;
-            }
+            col = fogColor;
         }
 
+        // Distance Fog composider
         float fogFactor = 1.0 - exp(-0.012 * t);
+        
+        // Deepen fog distance in Sector 666 for scary feel
         if (is666) {
             fogFactor = 1.0 - exp(-0.025 * t);
         }
 
         col = mix(col, fogColor, fogFactor);
         col += vec3(1.3, 0.05, 0.01) * godRayAccum;
-
-        // Apply accumulated atmospheric volumetric glows
-        if (is666 && isFall > 0.5) {
-            if (loop < 3.0) {
-                col += vec3(0.0, 0.5, 0.8) * crystalGlow * 0.025;
-                col += vec3(0.6, 0.2, 0.8) * fogTension * 0.04;
-            } else {
-                col += vec3(0.8, 0.1, 0.0) * voidGlow * 0.035;
-            }
-        }
 
         gl_FragColor = vec4(col, t);
     }
@@ -1127,167 +909,174 @@ export const fsPost = `
     uniform float iTime;
     uniform vec2 uPointer;
     uniform float uIteration;
-    uniform float uPlayerZ;
-    uniform float uBrightness;
 
     float hash(vec2 p) {
         return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
-    }
-
-    float sdStar5(vec2 p, float r, float rf) {
-        const vec2 k1 = vec2(0.80901699, -0.58778525);
-        const vec2 k2 = vec2(-0.80901699, 0.30901699);
-        p.x = abs(p.x);
-        p -= 2.0 * max(dot(k1, p), 0.0) * k1;
-        p -= 2.0 * max(dot(k2, p), 0.0) * k2;
-        p.x = abs(p.x);
-        p.y -= r;
-        vec2 ba = rf * vec2(-k1.y, k1.x) - vec2(0, 1) * r;
-        float h = clamp(dot(p, ba) / dot(ba, ba), 0.0, 1.0);
-        return length(p - ba * h) * sign(p.y - ba.y * h);
-    }
-
-    void getSegmentDataPost(float z, out float sector, out float isFall) {
-        if (z >= 1890.0) {
-            sector = 666.0;
-            isFall = 1.0;
-            return;
-        }
-        float loop = floor(z / 500.0);
-        float lz = mod(z, 500.0);
-        isFall = 0.0;
-        if (lz < 60.0)       { sector = 1.0; }
-        else if (lz < 130.0) { sector = 2.0; }
-        else if (lz < 210.0) { sector = 3.0; }
-        else if (lz < 280.0) { sector = 4.0; }
-        else if (lz < 360.0) { sector = 5.0; }
-        else {
-            if (loop == 0.0) {
-                sector = 6.0;
-            } else {
-                sector = 666.0;
-                float local666 = lz - 360.0;
-                if (local666 >= 30.0 && local666 < 120.0) {
-                    isFall = 1.0;
-                }
-            }
-        }
     }
 
     void main() {
         vec2 uv = gl_FragCoord.xy / iResolution.xy;
         vec2 dist = uv - 0.5;
 
-        // --- 1. FISHEYE CRT LENS EFFECTS (INTENSE FISHEYE) ---
-        float r2 = dot(dist, dist);
-        vec2 uvDistorted = uv + dist * r2 * 0.42; // Highly intense barrel distortion
+        // Space warped modulo calculation matched with JS/Scene path
+        float SPEED = 5.0; 
+        float camZ = iTime * SPEED;
 
-        // --- 2. REDUCED CHROMATIC ABERRATION AT EDGES ---
-        vec2 chromAbOffset = dist * (r2 + 0.02) * 0.12; 
+        // Matched sector boundaries for shatter effect
+        // 1. Sector scale computing
+        float s1 = mix(0.67, 2.0, hash(vec2(11.37 + floor(uIteration) * 17.81, 0.5)));
+        float s2 = mix(0.67, 2.0, hash(vec2(22.74 + floor(uIteration) * 17.81, 0.5)));
+        float s3 = mix(0.67, 2.0, hash(vec2(34.11 + floor(uIteration) * 17.81, 0.5)));
+        float s4 = mix(0.67, 2.0, hash(vec2(45.48 + floor(uIteration) * 17.81, 0.5)));
+        float s5 = mix(0.67, 2.0, hash(vec2(56.85 + floor(uIteration) * 17.81, 0.5)));
+        float s6 = mix(0.67, 2.0, hash(vec2(68.22 + floor(uIteration) * 17.81, 0.5)));
 
-        float sector, isFall;
-        getSegmentDataPost(uPlayerZ, sector, isFall);
+        float w1 = 30.0 * s1; float w2 = 40.0 * s2; float w3 = 50.0 * s3;
+        float w4 = 70.0 * s4; float w5 = 80.0 * s5; float w6 = 30.0 * s6;
+        float sum = w1 + w2 + w3 + w4 + w5 + w6;
+        float wb5 = 300.0 * ((w1 + w2 + w3 + w4 + w5) / sum);
 
-        float loopVal = floor(uPlayerZ / 500.0);
-        float decayFactor = clamp(loopVal * 0.15, 0.0, 0.9);
-
-        bool is666 = (sector == 666.0);
-        if (is666 && isFall < 0.5) {
-            float tG = iTime * 65.0;
-            vec2 glitchOff = vec2(
-                sin(tG * 1.5) * 0.012 * step(0.72, sin(tG)),
-                cos(tG * 0.9) * 0.008 * step(0.82, cos(tG * 1.1))
-            );
-            uvDistorted += glitchOff;
-            chromAbOffset *= 2.2; // Spectrum fringing boost
+        float mz_raw = mod(camZ, 300.0);
+        float mz = 0.0;
+        if (mz_raw < wb5) {
+            // we are in sectors 1-5
+            mz = 100.0; // dummy
+        } else {
+            mz = 270.0 + ((mz_raw - wb5) / (300.0 - wb5)) * 30.0;
         }
 
+        // 2. GLASS SHATTERING EFFECT ON TRANSITION CORRIDOR IN THE CHAOS LOOP
+        float iterFloor = floor(uIteration + 0.1);
+        bool isChaosLoop = (mod(iterFloor, 2.0) == 1.0);
+        
+        // Shatter progresses over Sector 6 from 272 to 298
+        float shatterProg = 0.0;
+        if (isChaosLoop && mz >= 272.0) {
+            shatterProg = clamp((mz - 272.0) / 24.0, 0.0, 1.0);
+        }
+
+        // Subliminal static flashes inside chaos corridor 
+        float chaosFlashes = 0.0;
+        if (isChaosLoop && mz >= 270.0) {
+            chaosFlashes = step(0.94, hash(vec2(iTime * 15.0, 0.0))) * sin(iTime * 50.0) * 0.15;
+        }
+
+        // Apply glass shattering coordinate fracture
+        if (shatterProg > 0.005) {
+            vec2 center = vec2(0.5, 0.5);
+            vec2 toCenter = uv - center;
+            float angle = atan(toCenter.y, toCenter.x);
+            float dCenter = length(toCenter);
+            
+            // Generate 12 distinct shard wedges radiating
+            float wedge = floor(angle * 1.90985 + sin(dCenter * 14.0) * 0.5); // 12 shards = 2*pi / 12 = 0.5236. radians factor: 12 / (2 * pi) = 1.90985
+            float shardSeed = fract(sin(wedge * 452.12 + 89.23) * 9876.54);
+            
+            // Push shards outwards
+            vec2 shardDir = vec2(cos(angle), sin(angle)) * (shatterProg * 0.42 + shardSeed * 0.12);
+            vec2 shardUV = uv + shardDir;
+            
+            // Rotate each shard
+            float shardRot = shatterProg * (shardSeed - 0.5) * 1.0;
+            float cS = cos(shardRot), sS = sin(shardRot);
+            shardUV = mat2(cS, -sS, sS, cS) * (shardUV - center) + center;
+            
+            uv = mix(uv, shardUV, shatterProg);
+        }
+
+        // Pointer-based focus depth
+        vec2 focusUV = clamp(uPointer * 0.5 + 0.5, 0.0, 1.0);
+        float focusDepth = texture2D(uTexture, focusUV).a;
+        if (focusDepth >= 149.0) {
+            focusDepth = 20.0; 
+        }
+        
+        float currentDepth = texture2D(uTexture, uv).a;
+        float depthDiff = abs(currentDepth - focusDepth);
+        float blurSize = clamp(depthDiff * 0.005, 0.0, 1.0);
+        
+        // Chromatic aberration offset
+        vec2 chromAbOffset = dist * dot(dist, dist) * 0.08;
+
+        // Screen static shaking / glitch offset under Sector 666 jumpscare
+        bool is666 = (floor(uIteration) == 2.0);
+        float currentMZ = mod(camZ, 300.0); // raw approx is fine
+        if (is666 && currentMZ >= 148.0 && currentMZ <= 156.0) {
+            // Jumpscare video artifacting / static coordinate shift!
+            float tG = iTime * 60.0;
+            vec2 glitchOff = vec2(sin(tG * 1.5) * 0.02 * step(0.7, sin(tG)), cos(tG * 0.8) * 0.012 * step(0.8, cos(tG * 1.1)));
+            uv += glitchOff;
+            chromAbOffset *= 4.5; // blast color fringing!
+        }
+        
         vec3 col = vec3(0.0);
-        col.r += texture2D(uTexture, uvDistorted - chromAbOffset).r;
-        col.g += texture2D(uTexture, uvDistorted).g;
-        col.b += texture2D(uTexture, uvDistorted + chromAbOffset).b;
-
-        // --- 3. HORIZONTAL ANAMORPHIC FLARES & SUPER LONG-RADIUS BLOOM ---
-        float flarePower = decayFactor * 0.35 + (is666 ? 0.45 : 0.0);
-        vec3 flare = vec3(0.0);
-        for (int i = 1; i <= 6; i++) {
-            float flOffset = float(i) * 0.022; // super long sweep
-            vec3 tapL = texture2D(uTexture, uvDistorted - vec2(flOffset, 0.0)).rgb;
-            vec3 tapR = texture2D(uTexture, uvDistorted + vec2(flOffset, 0.0)).rgb;
-            flare += max(tapL - 0.28, 0.0);
-            flare += max(tapR - 0.28, 0.0);
+        float totalWeight = 0.0;
+        
+        col.r += texture2D(uTexture, uv - chromAbOffset).r * 2.0;
+        col.g += texture2D(uTexture, uv).g * 2.0;
+        col.b += texture2D(uTexture, uv + chromAbOffset).b * 2.0;
+        totalWeight += 2.0;
+        
+        float rBlurOffset = blurSize * 0.012;
+        for (int i = 0; i < 6; i++) {
+            float angle = float(i) * 1.04719755; 
+            vec2 off = vec2(cos(angle), sin(angle)) * rBlurOffset;
+            vec2 tapUV = uv + off;
+            
+            col.r += texture2D(uTexture, tapUV - chromAbOffset).r;
+            col.g += texture2D(uTexture, tapUV).g;
+            col.b += texture2D(uTexture, tapUV + chromAbOffset).b;
+            totalWeight += 1.0;
         }
-        col += flare * flarePower * vec3(0.12, 0.42, 1.0); // Anamorphic blue flare streak!
-
-        vec3 bloom = vec3(0.0);
-        float bloomPower = decayFactor * 0.55;
-        for (int i = 1; i <= 4; i++) {
-            float bOff = float(i) * 0.018;
-            bloom += texture2D(uTexture, uvDistorted + vec2(bOff, bOff)).rgb;
-            bloom += texture2D(uTexture, uvDistorted + vec2(-bOff, bOff)).rgb;
-            bloom += texture2D(uTexture, uvDistorted + vec2(bOff, -bOff)).rgb;
-            bloom += texture2D(uTexture, uvDistorted + vec2(-bOff, -bOff)).rgb;
-        }
-        col += (bloom / 16.0) * bloomPower;
-
-        // --- 4. DIGITAL INTERFERENCE GLITCHES ---
-        float glitchStrength = decayFactor * 0.22 + (is666 ? 0.45 : 0.0);
-        if (glitchStrength > 0.05) {
-            float bandY = floor(uvDistorted.y * 28.0 + iTime * 35.0);
-            float hashVal = hash(vec2(bandY, 91.0));
-            if (hashVal < glitchStrength * 0.25) {
-                uvDistorted.x += (hash(vec2(bandY, 15.0)) - 0.5) * glitchStrength * 0.07;
-            }
-            if (hash(vec2(floor(iTime * 18.0), 3.0)) < glitchStrength * 0.18) {
-                col += vec3(0.18, 0.01, 0.02) * glitchStrength * sin(uvDistorted.y * 30.0);
-            }
-        }
-
-        // --- 5. ENCLOSING SHADOWS / VIGNETTE ---
-        float vignette = smoothstep(0.95, 0.38, length(dist));
-        col *= mix(0.18, 1.0, vignette);
-
-        // Thin TV scanlines
-        float scanline = sin(uvDistorted.y * iResolution.y * 1.5 + iTime * 12.0) * 0.06;
-        col -= vec3(scanline);
-
-        // Color modulation
+        col /= totalWeight;
+        
+        // Cinematic Red Light Bloom & Lens Flare under decay
+        float decayFactor = clamp(uIteration * 0.15, 0.0, 0.9);
         if (decayFactor > 0.05) {
-            vec3 decayTone = vec3(col.r * 1.15, col.g * 0.72, col.b * 0.65);
-            col = mix(col, decayTone, decayFactor * 0.75);
+            vec2 flareSource = vec2(0.5, 0.15 + sin(iTime * 0.5) * 0.02);
+            vec2 toLight = flareSource - uv;
+            float distToLight = length(toLight);
+            
+            float bloom = exp(-distToLight * 12.0) * 0.45 * decayFactor;
+            float streak = exp(-abs(toLight.y) * 110.0) * exp(-abs(toLight.x) * 4.0) * 0.35 * decayFactor;
+            
+            vec2 pointerOffset = uPointer * 0.12;
+            vec2 ghostVec1 = toLight * -0.65 + pointerOffset;
+            float ghost1 = exp(-length(uv - (flareSource + ghostVec1)) * 9.0) * 0.1 * decayFactor;
+            
+            vec2 ghostVec2 = toLight * 1.35 - pointerOffset;
+            float ghost2 = exp(-length(uv - (flareSource + ghostVec2)) * 14.0) * 0.07 * decayFactor;
+            
+            float ghostRing = smoothstep(0.42, 0.45, length(uv - flareSource - pointerOffset * 0.5)) * 
+                              smoothstep(0.48, 0.45, length(uv - flareSource - pointerOffset * 0.5)) * 0.06 * decayFactor;
+            
+            vec3 flareColor = vec3(1.35, 0.03, 0.008) * (bloom + streak + ghost1 + ghost2) + vec3(0.9, 0.15, 0.02) * ghostRing;
+            col += flareColor;
         }
 
-        // --- 6. PENTAGRAM LIGHT LEAK (LAST 666 ENDLESS FALL) ---
-        if (uPlayerZ > 1890.0) {
-            vec2 starP = dist;
-            float angle = iTime * 0.22;
-            float cStar = cos(angle), sStar = sin(angle);
-            starP = vec2(starP.x * cStar - starP.y * sStar, starP.x * sStar + starP.y * cStar);
-            
-            float dStar = sdStar5(starP, 0.26, 0.38);
-            float starOutline = smoothstep(0.06, 0.0, abs(dStar) - 0.005);
-            
-            float dCircle = abs(length(starP) - 0.26);
-            float circleOutline = smoothstep(0.06, 0.0, dCircle - 0.005);
-            
-            float pentaLeak = max(starOutline, circleOutline);
-            float pentaIntensity = clamp((uPlayerZ - 1890.0) * 0.005, 0.0, 0.88);
-            col += vec3(1.0, 0.12, 0.06) * pentaLeak * pentaIntensity * (1.2 + 0.8 * sin(iTime * 18.0));
+        // Crimson color washing during oblivion free fall
+        if (isChaosLoop && mz >= 270.0) {
+            float redWash = smoothstep(270.0, 300.0, mz);
+            col = mix(col, vec3(0.12, 0.0, 0.005), redWash * 0.85);
         }
 
-        // --- 7. TRANSITION FADE TO BLACK & SMOOTH LOOP RE-ENTRY ---
-        float lzPost = mod(uPlayerZ, 500.0);
-        float fade = 1.0;
-        if (uPlayerZ < 1890.0) {
-            if (lzPost > 460.0) {
-                // Fade out over the last 40 units (460 to 500)
-                fade = clamp(1.0 - (lzPost - 460.0) / 40.0, 0.0, 1.0);
-            } else if (lzPost < 15.0) {
-                // Fade in over the first 15 units (0 to 15)
-                fade = clamp(lzPost / 15.0, 0.0, 1.0);
-            }
-        }
-        col *= fade * uBrightness;
+        // Subliminal static scary noise flashes
+        col += vec3(chaosFlashes * 3.5, 0.0, 0.0);
+
+        // High-ISO Film Grain
+        float grain = hash(uv + fract(iTime));
+        col -= grain * 0.06;
+        
+        // Claustrophobic Vignetting
+        float vig = length(dist);
+        col *= smoothstep(0.85, 0.3, vig);
+        
+        // Gamma Correction
+        col = pow(max(col, 0.0), vec3(0.4545));
+        
+        // CRT Scanline emulation
+        float scanline = sin(uv.y * iResolution.y * 1.5) * 0.04;
+        col -= scanline;
 
         gl_FragColor = vec4(col, 1.0);
     }
