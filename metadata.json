@@ -1,0 +1,6 @@
+{
+  "name": "Liminal Space Journey",
+  "description": "An immersive, procedural WebGL raymarching experience through shifting liminal spaces featuring analog telemetry and post-processing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
