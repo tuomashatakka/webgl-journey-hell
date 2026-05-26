@@ -1,20 +1,15 @@
 <div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
+<img alt="GHBanner" src="./lib/Screenshot 2026-05-26 at 7.10.55.png" />
 </div>
 
-# Run and deploy your AI Studio app
+𖤐𖤐𖤐𖤐𖤐
 
-This contains everything you need to run your app locally.
+# [∳void ∂t]₂ ∩ [hell]ˣ ∉ [⦰∞]
 
-View your app in AI Studio: https://ai.studio/apps/3508cc3a-a27b-405a-bace-4bfe8ed86fa7
+to face death for the first time at the very moment it's come knoking on your door,
+how i've come to believe it would feel. this shader, a journey to simulating that horror.
 
-## Run Locally
+__watch 3 iterations and you'll see.__
 
-**Prerequisites:**  Node.js
-
-
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+<img width="1200" height="475" alt="GHBanner" src="./lib/Screenshot 2026-05-26 at 15.24.31.png" />
+<img width="1200" height="475" alt="GHBanner" src="./lib/Screenshot 2026-05-26 at 15.24.43.png" />
