@@ -34,7 +34,7 @@ export default function LiminalJourney() {
     const handlePointerMove = (e: PointerEvent) => {
       const nx = (e.clientX / window.innerWidth) * 2.0 - 1.0;
       const ny = (e.clientY / window.innerHeight) * 2.0 - 1.0;
-      pointerRef.current = { x: nx, y: -ny };
+      pointerRef.current = { x: -nx, y: -ny };
     };
     window.addEventListener('pointermove', handlePointerMove);
 
