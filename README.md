@@ -1,5 +1,5 @@
 <div align="center">
-<img alt="GHBanner" src="./lib/Screenshot 2026-05-26 at 7.10.55.png" />
+<img alt="GHBanner" src="./liminal.jpg" />
 </div>
 
 𖤐𖤐𖤐𖤐𖤐
