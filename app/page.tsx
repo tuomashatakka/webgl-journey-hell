@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import JourneyGrid from '@/components/JourneyGrid';
+import SettingsButton from '@/components/SettingsButton';
 
 export const metadata: Metadata = {
   title: 'webgl-journey-hell — index',
@@ -9,6 +10,7 @@ export const metadata: Metadata = {
 export default function IndexPage() {
   return (
     <main className="index-page">
+      <SettingsButton />
       <header className="index-header">
         <p className="index-sigil" aria-hidden>
           𖤐𖤐𖤐𖤐𖤐

@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css'; // Global styles
+import { SettingsProvider } from '@/components/SettingsProvider';
 
 export const metadata: Metadata = {
   title: 'webgl-journey-hell',
@@ -9,7 +10,10 @@ export const metadata: Metadata = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en">
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {/* App-wide graphics settings + shared frame loop (see components/SettingsProvider). */}
+        <SettingsProvider>{children}</SettingsProvider>
+      </body>
     </html>
   );
 }

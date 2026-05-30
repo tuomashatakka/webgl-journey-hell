@@ -3,10 +3,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { vsQuad, fsScene, fsPost } from './shaders';
 import { getKinematicState, getWalkSpeed } from './kinematics';
-import { loadSettings, saveSettings, GraphicsSettings } from '@/app/settingsState';
+import { GraphicsSettings } from '@/lib/settings';
+import { useSettings } from '@/components/SettingsProvider';
 import { Settings as SettingsIcon } from 'lucide-react';
 import Link from 'next/link';
-import SettingsView from '@/app/SettingsView';
+import SettingsView from '@/components/SettingsView';
 
 class CyberLiminalAudioEngine {
   private ctx: AudioContext | null = null;
@@ -273,9 +274,11 @@ export default function LiminalJourney() {
   const [sectorName, setSectorName] = useState("AWAITING TELEMETRY");
   const [glitchKey, setGlitchKey] = useState(0);
   const [fps, setFps] = useState(60);
+  const [renderRes, setRenderRes] = useState({ w: 0, h: 0 });
   const [isMuted, setIsMuted] = useState(true);
 
-  const [settings, setSettings] = useState<GraphicsSettings>(() => loadSettings());
+  // Settings come from the global provider (single source of truth, persisted there).
+  const { settings, setSettings } = useSettings();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const audioEngineRef = useRef<CyberLiminalAudioEngine | null>(null);
@@ -292,7 +295,8 @@ export default function LiminalJourney() {
   const settingsRef = useRef<GraphicsSettings>(settings);
   useEffect(() => {
     settingsRef.current = settings;
-    saveSettings(settings);
+    // Contrast via CSS filter (brightness stays in-shader through uBrightness).
+    if (canvasRef.current) canvasRef.current.style.filter = `contrast(${settings.contrast})`;
   }, [settings]);
 
   // Handle resolution variations reactively without resetting the whole GPU context
@@ -376,6 +380,7 @@ export default function LiminalJourney() {
         const userScale = settingsRef.current.resolution;
         canvas.width = window.innerWidth * userScale;
         canvas.height = window.innerHeight * userScale;
+        setRenderRes({ w: canvas.width, h: canvas.height });
         
         gl.bindTexture(gl.TEXTURE_2D, tex);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -412,11 +417,23 @@ export default function LiminalJourney() {
     let currentZ = 0.0;
     let lastTime = 0.0;
     let accumulatedTime = 0.0;
+    let lastDrawTime = 0.0;
 
     let frameCount = 0;
     let fpsLastTime = performance.now();
 
     const render = (time: number) => {
+        animationId = requestAnimationFrame(render);
+
+        // Honor the global MAX FRAME RATE cap (0 = uncapped). Skip the frame's
+        // work without advancing lastTime, so motion stays frame-rate independent.
+        const maxFps = settingsRef.current.maxFrameRate;
+        const msPerFrame = maxFps > 0 ? 1000.0 / maxFps : 0.0;
+        if (msPerFrame > 0.0 && time - lastDrawTime < msPerFrame) {
+            return;
+        }
+        lastDrawTime = time;
+
         if (lastTime === 0.0) {
             lastTime = time;
         }
@@ -517,7 +534,6 @@ export default function LiminalJourney() {
         
         gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         
-        animationId = requestAnimationFrame(render);
     };
  
     animationId = requestAnimationFrame(render);
@@ -554,7 +570,7 @@ export default function LiminalJourney() {
     <button id="settings-btn" onClick={() => setIsSettingsOpen(true)} title="Settings" aria-label="Open graphics settings">
       <SettingsIcon size={16} />
     </button>
-    <aside id="fps-display">{fps} FPS</aside>
+    <aside id="fps-display">{renderRes.w}×{renderRes.h} · {fps} FPS</aside>
 
     <SettingsView
       isOpen={isSettingsOpen}
