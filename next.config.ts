@@ -1,6 +1,7 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
+  basePath: '/webgl-journey-hell',
   output: 'export',
   reactStrictMode: true,
   eslint: {
