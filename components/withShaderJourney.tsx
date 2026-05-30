@@ -35,6 +35,10 @@ const MAX_DPR = 2;
 interface ShaderJourneyOptions {
   /** Optional accent color, exposed as the `--accent` CSS var on the container. */
   accent?: string;
+  /** Optional timeline label, evaluated from the same accumulated shader time as iTime. */
+  getSectionName?: (time: number) => string;
+  /** Optional class for journey-specific section-title typography. */
+  sectionTitleClassName?: string;
 }
 
 export function withShaderJourney(fragmentShader: string, options: ShaderJourneyOptions = {}) {
@@ -44,11 +48,16 @@ export function withShaderJourney(fragmentShader: string, options: ShaderJourney
     // Bottom-right HUD: render resolution (backing-store px) + measured FPS.
     const [fps, setFps] = useState(0);
     const [res, setRes] = useState({ w: 0, h: 0 });
+    const [sectionName, setSectionName] = useState(
+      () => options.getSectionName?.(0) ?? '',
+    );
+    const [sectionGlitchKey, setSectionGlitchKey] = useState(0);
 
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const quadRef = useRef<ShaderQuad | null>(null);
     const pointerRef = useRef({ x: 0, y: 0 });
     const iTimeRef = useRef(0);
+    const sectionNameRef = useRef(sectionName);
     const fpsFrameCountRef = useRef(0);
     const fpsLastTimeRef = useRef(0);
 
@@ -129,6 +138,15 @@ export function withShaderJourney(fragmentShader: string, options: ShaderJourney
       iTimeRef.current += manager.deltaTime * settingsRef.current.speed;
       quad.draw({ time: iTimeRef.current, pointer: pointerRef.current });
 
+      if (options.getSectionName) {
+        const nextSectionName = options.getSectionName(iTimeRef.current);
+        if (nextSectionName !== sectionNameRef.current) {
+          sectionNameRef.current = nextSectionName;
+          setSectionName(nextSectionName);
+          setSectionGlitchKey((value) => value + 1);
+        }
+      }
+
       // FPS sampling — count frames and publish once per second.
       fpsFrameCountRef.current += 1;
       const now = performance.now();
@@ -153,6 +171,16 @@ export function withShaderJourney(fragmentShader: string, options: ShaderJourney
         <Link id="back-btn" href="/">
           ← INDEX
         </Link>
+        {sectionName && (
+          <header
+            key={sectionGlitchKey}
+            id="sector-title"
+            className={options.sectionTitleClassName}
+            data-text={sectionName}
+          >
+            {sectionName}
+          </header>
+        )}
         <button
           id="fullscreen-btn"
           onClick={() => {

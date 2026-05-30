@@ -68,6 +68,22 @@
     text-shadow: -2px 0 #00ffff, 0 3px #ffff00;
     animation: glitchAnim2 0.7s infinite linear alternate-reverse;
 }
+.skybridges-sector-title {
+    font-family: "Arial", "Helvetica Neue", "Roboto Condensed", "Inter Tight", system-ui, sans-serif;
+    font-size: clamp(12px, 1.7vw, 22px);
+    font-weight: 700;
+    letter-spacing: clamp(4px, 0.75vw, 12px);
+    color: rgba(232, 248, 255, 0.92);
+    text-shadow:
+        0 0 14px rgba(159, 216, 255, 0.68),
+        0 0 42px rgba(159, 216, 255, 0.22);
+}
+.skybridges-sector-title::before {
+    text-shadow: -2px 0 rgba(54, 198, 255, 0.9);
+}
+.skybridges-sector-title::after {
+    text-shadow: 2px 0 rgba(255, 255, 255, 0.75), 0 2px rgba(128, 206, 255, 0.55);
+}
 #fullscreen-btn {
     position: absolute;
     bottom: 20px;
