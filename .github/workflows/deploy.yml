@@ -36,6 +36,10 @@ jobs:
 
   deploy:
     needs: build
+    # The github-pages environment only permits `main`; gate the deploy job so
+    # feature-branch pushes (e.g. `shit`) still build as CI without a rejected
+    # deployment. Only main publishes to Pages.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
