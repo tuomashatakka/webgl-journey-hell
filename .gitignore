@@ -7,4 +7,7 @@ coverage/
 !.env.example
 .playwright-mcp/
 public/*
+# but DO track shipped journey assets (e.g. the skybridges HDRI env map),
+# which the static export needs at build time.
+!public/journeys
 out/*

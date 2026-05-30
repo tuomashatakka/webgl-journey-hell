@@ -39,6 +39,8 @@ interface ShaderJourneyOptions {
   getSectionName?: (time: number) => string;
   /** Optional class for journey-specific section-title typography. */
   sectionTitleClassName?: string;
+  /** Optional equirectangular environment map URL (sampled as `uEnv` for IBL/refraction). */
+  envMapUrl?: string;
 }
 
 export function withShaderJourney(fragmentShader: string, options: ShaderJourneyOptions = {}) {
@@ -81,7 +83,7 @@ export function withShaderJourney(fragmentShader: string, options: ShaderJourney
         return;
       }
 
-      const quad = createShaderQuad(gl, fragmentShader);
+      const quad = createShaderQuad(gl, fragmentShader, { envUrl: options.envMapUrl });
       quadRef.current = quad;
       if (!quad) return; // compile/link failed — leave the canvas blank
 
@@ -136,7 +138,11 @@ export function withShaderJourney(fragmentShader: string, options: ShaderJourney
       const quad = quadRef.current;
       if (!quad) return;
       iTimeRef.current += manager.deltaTime * settingsRef.current.speed;
-      quad.draw({ time: iTimeRef.current, pointer: pointerRef.current });
+      quad.draw({
+        time: iTimeRef.current,
+        pointer: pointerRef.current,
+        heavy: settingsRef.current.heavyEffects ? 1 : 0,
+      });
 
       if (options.getSectionName) {
         const nextSectionName = options.getSectionName(iTimeRef.current);
