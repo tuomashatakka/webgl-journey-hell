@@ -39,7 +39,14 @@ function compileShader(
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    console.error('[shaderQuad] compile error:', gl.getShaderInfoLog(shader));
+    // A null/empty info log on a failed compile almost always means the GL
+    // context was lost or exhausted (e.g. a reused canvas whose context was
+    // previously released) rather than a genuine source error.
+    const log = gl.getShaderInfoLog(shader);
+    const reason = gl.isContextLost()
+      ? 'context lost — cannot compile'
+      : log || 'no info log (context likely lost or unavailable)';
+    console.error('[shaderQuad] compile error:', reason);
     gl.deleteShader(shader);
     return null;
   }

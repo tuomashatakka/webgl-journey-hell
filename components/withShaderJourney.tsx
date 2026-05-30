@@ -101,7 +101,12 @@ export function withShaderJourney(fragmentShader: string, options: ShaderJourney
         window.removeEventListener('pointermove', onPointer);
         quad.dispose();
         quadRef.current = null;
-        gl.getExtension('WEBGL_lose_context')?.loseContext();
+        // NOTE: do NOT call WEBGL_lose_context.loseContext() here. A canvas
+        // hands back the same context on every getContext() call, so losing it
+        // would poison the next mount (StrictMode/HMR reuse the same canvas
+        // node) — the re-acquired context is already lost and every shader
+        // compile fails with a null info log. The context is freed when the
+        // canvas node is removed on real unmount.
       };
     }, []);
 
