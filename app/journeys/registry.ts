@@ -1,6 +1,5 @@
 // Single source of truth for the landing grid and the journey routes.
 // Adding a journey = append one entry here + create app/journeys/<slug>/page.tsx.
-import { signalBloomFrag } from './signal-bloom/shader';
 import { skybridgesPreviewFrag } from './skybridges/shader';
 
 export interface Journey {
@@ -49,6 +48,44 @@ const liminalPreviewFrag = `
   }
 `;
 
+// Stairwell hover preview: a cheap, loop-free fake-perspective descent — grey
+// concrete treads receding into a narrowing shaft with a warm corner light.
+// Stands in for the full two-pass raymarch so the shared-context grid stays smooth.
+const stairwellPreviewFrag = `
+  precision highp float;
+  uniform vec2 iResolution;
+  uniform float iTime;
+  uniform vec2 uPointer;
+
+  void main() {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    uv += uPointer * 0.08;
+
+    float horizon = 0.32;
+    float d = horizon - uv.y;          // > 0 below the horizon (the stairs)
+    vec3 col;
+    if (d < 0.02) {
+      // Upper wall + faint skylight wash.
+      col = vec3(0.18, 0.20, 0.24) + vec3(0.5, 0.45, 0.35) * pow(max(0.0, uv.y), 1.5) * 0.3;
+    } else {
+      float depth = 0.18 / d;          // crude perspective distance
+      float tread = fract(depth * 0.6 + iTime * 1.1);
+      float stepHi = smoothstep(0.0, 0.08, tread) * (1.0 - smoothstep(0.5, 0.58, tread));
+      float halfW = clamp(0.6 / depth, 0.04, 2.0);
+      float inShaft = smoothstep(halfW, halfW - 0.04, abs(uv.x));
+      float shade = clamp(1.2 / depth, 0.06, 1.0);
+      col = vec3(0.34, 0.35, 0.38) * shade;
+      col += stepHi * 0.10 * shade;
+      col *= mix(0.35, 1.0, inShaft);
+    }
+
+    float light = pow(max(0.0, 0.55 - length(uv - vec2(-0.22, 0.28))), 2.0);
+    col += vec3(0.95, 0.82, 0.6) * light * 0.7;       // warm shaft from upper-left
+    col *= smoothstep(1.05, 0.3, length(uv));         // vignette
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
 export const JOURNEYS: Journey[] = [
   {
     slug: 'liminal',
@@ -62,13 +99,13 @@ export const JOURNEYS: Journey[] = [
     status: 'live',
   },
   {
-    slug: 'signal-bloom',
-    title: 'SIGNAL BLOOM',
-    tagline: 'Iridescent domain-warped plasma blooming out of static.',
-    tags: ['plasma', 'iridescent', '2D'],
-    accent: '#ff3da6',
-    gradient: ['#1a0420', '#04101a'],
-    previewShader: signalBloomFrag,
+    slug: 'stairwell',
+    title: 'THE STAIRWELL',
+    tagline: 'An impossible concrete descent where the stairs forget which way is down.',
+    tags: ['raymarch', 'brutalist', 'escher', 'audio'],
+    accent: '#aeb9c4',
+    gradient: ['#3a4048', '#181b1f'],
+    previewShader: stairwellPreviewFrag,
     status: 'live',
   },
   {
