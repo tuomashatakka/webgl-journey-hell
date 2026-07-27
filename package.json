@@ -16,6 +16,7 @@
     "react-dom": "^19.2.1"
   },
   "devDependencies": {
+    "@tuomashatakka/eslint-config": "^4.0.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

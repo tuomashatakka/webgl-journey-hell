@@ -13,8 +13,8 @@ class CyberLiminalAudioEngine {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = true;
   private lowpassLFO: OscillatorNode | null = null;
-  private waterInterval: any = null;
-  private glitchInterval: any = null;
+  private waterInterval: ReturnType<typeof setInterval> | null = null;
+  private glitchInterval: ReturnType<typeof setInterval> | null = null;
   
   private droneOscL: OscillatorNode | null = null;
   private droneOscR: OscillatorNode | null = null;
@@ -42,7 +42,7 @@ class CyberLiminalAudioEngine {
 
   private initContext() {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx();
       
       this.mainVolume = this.ctx.createGain();

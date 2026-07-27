@@ -16,8 +16,8 @@ class StairwellAudioEngine {
   private ctx: AudioContext | null = null;
   private isMuted: boolean = true;
   private windLFO: OscillatorNode | null = null;
-  private dripInterval: any = null;
-  private clangInterval: any = null;
+  private dripInterval: ReturnType<typeof setInterval> | null = null;
+  private clangInterval: ReturnType<typeof setInterval> | null = null;
 
   private droneOscL: OscillatorNode | null = null;
   private droneOscR: OscillatorNode | null = null;
@@ -45,7 +45,7 @@ class StairwellAudioEngine {
 
   private initContext() {
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      const AudioCtx = window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioCtx();
 
       this.mainVolume = this.ctx.createGain();
