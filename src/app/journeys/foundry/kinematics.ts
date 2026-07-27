@@ -13,7 +13,9 @@ import {
   PHASE_BRAKING,
   PHASE_BUFFER,
   PHASE_FREEFALL,
-  PHASE_HOIST
+  PHASE_WALK,
+  SECTION_COUNT,
+  SECTION_LEN
 
 } from './physics'
 import type { FoundryState } from './physics'
@@ -25,30 +27,51 @@ export interface FoundrySection {
   name: string
 }
 
+// Seven 200 m bands, each a distinct machine environment. The shader keys its
+// geometry, shaft width, rib/lamp cadence and palette off the same indices —
+// SECTION_LEN is the single source of truth for where each one starts.
 export const FOUNDRY_SECTIONS: FoundrySection[] = [
   { id: 1, name: 'SECTION 1: LOADING BAY' },
   { id: 2, name: 'SECTION 2: PISTON GALLERY' },
   { id: 3, name: 'SECTION 3: THE LONG RUN' },
-  { id: 4, name: 'SECTION 4: THE CABLE PARTS' },
-  { id: 5, name: 'SECTION 5: EMERGENCY SHOES' },
-  { id: 6, name: 'SECTION 6: HYDRAULIC FLOOR' },
-  { id: 7, name: 'SECTION 7: THE HAUL BACK' },
+  { id: 4, name: 'SECTION 4: COOLANT TIER' },
+  { id: 5, name: 'SECTION 5: GEARWORKS' },
+  { id: 6, name: 'SECTION 6: BRAKE RUN' },
+  { id: 7, name: 'SECTION 7: FURNACE FLOOR' },
 ]
 
+/** Shown instead of the band name while the cage is doing something drastic. */
+const PHASE_LABELS: Record<number, string> = {
+  [PHASE_FREEFALL]: 'THE CABLE PARTS',
+  [PHASE_BRAKING]:  'EMERGENCY SHOES',
+  [PHASE_BUFFER]:   'HYDRAULIC FLOOR',
+  [PHASE_WALK]:     'THE FOLDING PATH',
+}
+
 export function sectionFor (state: FoundryState): FoundrySection {
-  if (state.phase === PHASE_HOIST)
-    return FOUNDRY_SECTIONS[6]
-  if (state.phase === PHASE_BUFFER)
-    return FOUNDRY_SECTIONS[5]
-  if (state.phase === PHASE_BRAKING)
-    return FOUNDRY_SECTIONS[4]
-  if (state.phase === PHASE_FREEFALL)
-    return FOUNDRY_SECTIONS[3]
-  if (state.y > -22)
-    return FOUNDRY_SECTIONS[0]
-  if (state.y > -50)
-    return FOUNDRY_SECTIONS[1]
-  return FOUNDRY_SECTIONS[2]
+  const band = Math.min(
+    SECTION_COUNT - 1,
+    Math.max(0, Math.floor(-state.y / SECTION_LEN)),
+  )
+  return FOUNDRY_SECTIONS[band]
+}
+
+/**
+ * The HUD label. Depth picks the section; a dramatic phase overrides the name
+ * but keeps the section number, so you always know both where you are and what
+ * is happening to you.
+ */
+export function labelFor (state: FoundryState): string {
+  // The walk leaves the shaft entirely, so it gets its own section number
+  // rather than borrowing the band the cage happens to be parked in.
+  if (state.phase === PHASE_WALK)
+    return `SECTION ${SECTION_COUNT + 1}: ${PHASE_LABELS[PHASE_WALK]}`
+
+  const section  = sectionFor(state)
+  const override = PHASE_LABELS[state.phase]
+  return override
+    ? `SECTION ${section.id}: ${override}`
+    : section.name
 }
 
 /**
@@ -63,6 +86,8 @@ export function createFoundrySimulation (): JourneySimulation {
   // Scratch buffers — packed in place every frame, never reallocated.
   const debris  = new Array<number>(24).fill(0)
   const debrisQ = new Array<number>(24).fill(0)
+  const fold0   = new Array<number>(4).fill(0)
+  const fold1   = new Array<number>(4).fill(0)
 
   return {
     step (dt: number) {
@@ -82,8 +107,22 @@ export function createFoundrySimulation (): JourneySimulation {
         debrisQ[o + 2] = b.qz
         debrisQ[o + 3] = b.qw
       }
+      for (let i = 0; i < 4; i++) {
+        fold0[i] = state.fold[i]
+        fold1[i] = state.fold[i + 4]
+      }
+
+      // Cross-fade into the walk over the first few metres, so stepping out of
+      // the cage dissolves the shaft rather than cutting to it.
+      const walkBlend = state.phase === PHASE_WALK
+        ? Math.min(1, state.walkZ / 4)
+        : 0
+
       return {
         uCage:    [ state.y, state.v, state.a, state.phase ],
+        uWalk:    [ state.walkZ, state.cubeBase, walkBlend, state.walkV ],
+        uFold0:   fold0,
+        uFold1:   fold1,
         uSim:     [ state.shakeX, state.shakeY, state.spark, state.cableIntact ? 1 : 0 ],
         uMech:    [ state.crank, pistonExtension(state.crank), state.hook, state.crankOmega ],
         uDebris:  debris,
@@ -92,7 +131,7 @@ export function createFoundrySimulation (): JourneySimulation {
     },
 
     label () {
-      return sectionFor(state).name
+      return labelFor(state)
     },
   }
 }

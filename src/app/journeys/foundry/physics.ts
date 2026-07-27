@@ -32,9 +32,19 @@ const DEBRIS_COUNT = 6
 
 // --- shaft geometry (mirrored by the shader) -------------------------------
 export const SHAFT_TOP = 0
-export const SHAFT_SNAP_Y = -74 // cable parts here
-export const SHAFT_BRAKE_Y = -168 // emergency shoes bite here
-export const SHAFT_FLOOR_Y = -232 // hydraulic buffers sit here
+
+/** Section length, metres. Seven bands of this length make up the shaft. */
+export const SECTION_LEN = 200
+export const SECTION_COUNT = 7
+
+/** Cable parts entering the gearworks (start of section 5). */
+export const SHAFT_SNAP_Y = -SECTION_LEN * 4
+
+/** Emergency shoes bite entering the brake run (start of section 6). */
+export const SHAFT_BRAKE_Y = -SECTION_LEN * 5
+
+/** Hydraulic buffers at the bottom of the furnace floor. */
+export const SHAFT_FLOOR_Y = -SECTION_LEN * SECTION_COUNT
 export const CAGE_HALF = 1.5 // cage interior half-width
 export const CAGE_HEIGHT = 2.6
 
@@ -42,17 +52,32 @@ export const PHASE_DESCENT = 0
 export const PHASE_FREEFALL = 1
 export const PHASE_BRAKING = 2
 export const PHASE_BUFFER = 3
-export const PHASE_HOIST = 4
 
-const CAGE_MASS    = 900 // kg, cage + occupant
-const CAGE_DRAG    = 1.15 // ½ρCdA, quadratic drag coefficient
-const CABLE_K      = 42000 // N/m
-const CABLE_C      = 5200 // N·s/m
-const PAYOUT_SPEED = 6.2 // winch pay-out rate during the controlled descent
-const HOIST_FORCE  = 15800 // N, winch motor hauling the cage back up
-const BUFFER_K     = 260000 // N/m, hydraulic buffer stiffness
-const BUFFER_C     = 34000 // N·s/m
-const BUFFER_POWER = 1.6 // >1 = progressively stiffer as it compresses
+/** On foot, forward, over the infinite fall. */
+export const PHASE_WALK = 4
+
+const CAGE_MASS       = 900 // kg, cage + occupant
+const CAGE_DRAG       = 1.15 // ½ρCdA, quadratic drag coefficient
+const CABLE_K         = 42000 // N/m
+const CABLE_C         = 5200 // N·s/m
+const PAYOUT_SPEED    = 23 // winch pay-out rate during the controlled descent
+const CREEP_SPEED     = 15 // m/s, governed lowering rate once the shoes hold
+const CREEP_MAX_FORCE = 60000 // N ceiling on the lowering servo
+const BUFFER_K        = 260000 // N/m, hydraulic buffer stiffness
+const BUFFER_C        = 34000 // N·s/m
+const BUFFER_POWER    = 1.6 // >1 = progressively stiffer as it compresses
+
+// --- the walk (mirrored by the shader) -------------------------------------
+export const PATH_CUBES = 8 // live cubes in the sliding window
+export const CUBE_SPACING = 4.0 // metres between cube centres
+export const CUBE_HALF = 1.2 // cube half-size; faces are 2 x CUBE_HALF square
+export const WALK_LENGTH = 150 // metres of path before the cycle restarts
+
+const WALK_SPEED  = 3.1 // m/s, walking pace
+const UNFOLD_LEAD = 15 // metres of warning before you reach a cube
+const REFOLD_LAG  = 5 // metres behind you before it closes again
+const HINGE_K     = 46 // hinge stiffness — higher snaps the panels open
+const HINGE_C     = 7.5 // hinge damping — lower leaves them ringing
 
 export interface DebrisBody {
 
@@ -112,6 +137,20 @@ export interface FoundryState {
   shakeX:    number
   shakeY:    number
   debris:    DebrisBody[]
+
+  /** True once the brake shoes have stalled the cage and slipped to a creep. */
+  creeping: boolean
+
+  /** Forward position and speed during PHASE_WALK, metres and m/s. */
+  walkZ: number
+  walkV: number
+
+  /** World index of the first cube in the live window. */
+  cubeBase: number
+
+  /** Per-cube fold coordinate (0 = closed cube, 1 = fully unfolded). */
+  fold:      number[]
+  foldOmega: number[]
 }
 
 // --- deterministic RNG ------------------------------------------------------
@@ -177,6 +216,12 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
     shakeX:      0,
     shakeY:      0,
     debris:      spawnDebris(rand, SHAFT_TOP),
+    creeping:    false,
+    walkZ:       0,
+    walkV:       0,
+    cubeBase:    0,
+    fold:        new Array<number>(PATH_CUBES).fill(0),
+    foldOmega:   new Array<number>(PATH_CUBES).fill(0),
   }
 }
 
@@ -204,7 +249,7 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
 export function brakeForce (speed: number, engaged: number): number {
   // Wedge seating: normal force climbs over ~0.35 s to full clamp.
   const seat   = Math.min(1, engaged / 0.35)
-  const normal = 26000 * seat
+  const normal = 34000 * seat
   // Sliding friction falls off with speed (Stribeck-ish), so the cage grabs
   // harder as it slows — this is what produces the final juddering stop.
   const mu = 0.52 + 0.30 / (1 + speed * 0.22)
@@ -302,9 +347,11 @@ function collideWithCage (b: DebrisBody, cageY: number, cageV: number): number {
 // because it is pure integrator bookkeeping rather than renderable state.
 let brakeEngaged = 0
 
-function step (s: FoundryState, dt: number): void {
-  const prevV = s.v
-
+/**
+ * Sum the vertical forces on the cage for this step and advance its phase.
+ * Returns the net force in newtons; the caller integrates it.
+ */
+function cageForce (s: FoundryState, dt: number): number {
   // ---- cage: sum forces, then semi-implicit Euler ----
   let force = -CAGE_MASS * G
   const speed = Math.abs(s.v)
@@ -331,16 +378,43 @@ function step (s: FoundryState, dt: number): void {
   if (s.phase === PHASE_BRAKING) {
     brakeEngaged += dt
 
-    const f = brakeForce(speed, brakeEngaged)
-    // Friction can arrest motion but never reverse it: clamp the impulse to
-    // exactly what is needed to bring this step's velocity to zero.
-    const maxStop = Math.abs(s.v) * CAGE_MASS / dt + force * Math.sign(s.v) * -1
-    force += Math.sign(s.v) * -Math.min(f, Math.max(0, maxStop))
-    s.spark = Math.min(1, f * speed / 260000) // friction power -> sparks
-    if (s.y <= SHAFT_FLOOR_Y)
-      s.phase = PHASE_BUFFER
-    if (speed < 0.05 && s.y > SHAFT_FLOOR_Y)
-      s.settleTime += dt
+    // The impulse the shoes would have to supply to zero the velocity this
+    // step, after every other force is accounted for. Friction can deliver up
+    // to `f` of this and no more — and because it is signed by `needed` rather
+    // than by velocity, it also holds the cage statically once stopped instead
+    // of leaving a residual crawl.
+    const needed = -CAGE_MASS * s.v / dt - force
+
+    if (s.creeping) {
+      // Held on the shoes and lowered under control: a velocity servo running
+      // the cage down the last of the shaft at a fixed rate.
+      const servo = CAGE_MASS * (-CREEP_SPEED - s.v) / dt - force
+      force += Math.max(0, Math.min(servo, CREEP_MAX_FORCE))
+      s.spark = Math.min(1, 0.22 + speed / CREEP_SPEED * 0.25)
+    }
+    else {
+      const f = brakeForce(speed, brakeEngaged)
+      force += Math.sign(needed) * Math.min(f, Math.abs(needed))
+      s.spark = Math.min(1, f * speed / 620000) // friction power -> sparks
+
+      // If the shoes bring it to a stand short of the floor, they slip to the
+      // governed lowering above. Without this exit the cage sits stopped with
+      // no force able to move it — a dead state the phase machine never leaves.
+      if (speed < 0.08) {
+        s.settleTime += dt
+        if (s.settleTime > 1.5) {
+          s.creeping   = true
+          s.settleTime = 0
+        }
+      }
+      else
+        s.settleTime = 0
+    }
+
+    if (s.y <= SHAFT_FLOOR_Y) {
+      s.phase      = PHASE_BUFFER
+      s.settleTime = 0
+    }
   }
   else
     s.spark *= Math.exp(-dt * 3.5)
@@ -355,34 +429,93 @@ function step (s: FoundryState, dt: number): void {
     }
     if (Math.abs(s.v) < 0.12 && compress > -0.02)
       s.settleTime += dt
-    if (s.settleTime > 2.8) {
-      s.phase      = PHASE_HOIST
+    if (s.settleTime > 2.4) {
+      // The gate opens and you step out of the cage onto the folding path.
+      s.phase      = PHASE_WALK
       s.settleTime = 0
     }
   }
 
-  if (s.phase === PHASE_HOIST) {
-    force += HOIST_FORCE
-    if (s.y >= SHAFT_TOP) {
-      // Cycle closes: re-reeve the cable and reset the shaft.
-      s.y           = SHAFT_TOP
-      s.v           = 0
-      s.phase       = PHASE_DESCENT
-      s.cableIntact = true
-      s.cableRest   = SHAFT_TOP
-      s.settleTime  = 0
-      brakeEngaged = 0
-
-      const rand = mulberry32((Math.floor(performance.now()) ^ 0x9e3779b9) >>> 0)
-      s.debris   = spawnDebris(rand, SHAFT_TOP)
-    }
+  if (s.phase === PHASE_WALK) {
+    // The cage is parked; the walker is on foot from here, so the vertical
+    // solver is done and stepWalk() takes over.
+    force = 0
+    s.v   = 0
   }
 
-  const accel = force / CAGE_MASS
-  s.v += accel * dt
-  s.y += s.v * dt
-  s.a = (s.v - prevV) / dt
+  return force
+}
 
+/** Restart the cycle at the top of the shaft with a fresh scatter of debris. */
+function resetCycle (s: FoundryState): void {
+  s.y           = SHAFT_TOP
+  s.v           = 0
+  s.a           = 0
+  s.phase       = PHASE_DESCENT
+  s.cableIntact = true
+  s.cableRest   = SHAFT_TOP
+  s.settleTime  = 0
+  s.creeping    = false
+  s.walkZ       = 0
+  s.walkV       = 0
+  s.cubeBase    = 0
+  brakeEngaged = 0
+  for (let i = 0; i < PATH_CUBES; i++) {
+    s.fold[i]      = 0
+    s.foldOmega[i] = 0
+  }
+
+  const rand = mulberry32((Math.floor(performance.now()) ^ 0x9e3779b9) >>> 0)
+  s.debris   = spawnDebris(rand, SHAFT_TOP)
+}
+
+/**
+ * The walk: forward motion over an infinite fall, on a path that only exists
+ * because the cubes ahead are unfolding into it.
+ *
+ * Each cube is a hinged mechanism, not an animation. Its six faces share one
+ * fold coordinate integrated as a damped second-order hinge driven toward an
+ * open or closed target — so the panels *overshoot and settle* when they slam
+ * open, and the path visibly springs into place a moment before it is needed.
+ */
+function stepWalk (s: FoundryState, dt: number): void {
+  if (s.phase !== PHASE_WALK)
+    return
+
+  // Gait: accelerate to walking pace and hold it.
+  s.walkV += (WALK_SPEED - s.walkV) * Math.min(1, dt * 1.6)
+  s.walkZ += s.walkV * dt
+
+  // Slide the window of live cubes forward, recycling the one left behind.
+  const wanted = Math.max(0, Math.floor(s.walkZ / CUBE_SPACING) - 2)
+  while (s.cubeBase < wanted) {
+    s.fold.shift()
+    s.foldOmega.shift()
+    s.fold.push(0)
+    s.foldOmega.push(0)
+    s.cubeBase++
+  }
+
+  for (let i = 0; i < PATH_CUBES; i++) {
+    const cubeZ = (s.cubeBase + i) * CUBE_SPACING
+    const ahead = cubeZ - s.walkZ
+    // Unfold well before you arrive, refold once you are safely past.
+    const target = ahead < UNFOLD_LEAD && ahead > -REFOLD_LAG ? 1 : 0
+    const acc    = HINGE_K * (target - s.fold[i]) - HINGE_C * s.foldOmega[i]
+    s.foldOmega[i] += acc * dt
+    s.fold[i] += s.foldOmega[i] * dt
+  }
+
+  // The path runs out; the shaft claims you again and the cycle restarts.
+  if (s.walkZ > WALK_LENGTH)
+    resetCycle(s)
+}
+
+/**
+ * Advance the six free bodies and resolve their contacts with the moving cage.
+ * Returns the summed impact speed, which feeds the camera shake.
+ */
+function stepDebris (s: FoundryState, dt: number): number {
   // ---- debris: free bodies in world space, colliding with the moving cage ----
   let impactSum = 0
   for (let i = 0; i < s.debris.length; i++) {
@@ -408,6 +541,15 @@ function step (s: FoundryState, dt: number): void {
     integrateQuat(b, dt)
   }
 
+  return impactSum
+}
+
+/**
+ * Bounding-sphere contacts between debris bodies. Returns the summed closing
+ * speed so these impacts shake the camera too.
+ */
+function stepBodyContacts (s: FoundryState): number {
+  let impactSum = 0
   // ---- body-body contacts ----
   // Bounding-sphere pairs only (15 for 6 bodies). Full box-box manifolds would
   // be far more code for a contact that is on screen for a second at a time;
@@ -465,6 +607,11 @@ function step (s: FoundryState, dt: number): void {
       impactSum += -rvn * 0.5
     }
 
+  return impactSum
+}
+
+/** Flywheel and hook — two scalar ODEs, integrated alongside the bodies. */
+function stepMechanisms (s: FoundryState, dt: number): void {
   // ---- flywheel driving the wall pistons ----
   // I·dω/dt = motor torque − load torque(θ) − viscous damping.
   const inertia = 46
@@ -479,6 +626,23 @@ function step (s: FoundryState, dt: number): void {
     -(G + s.a) / hookLen * Math.sin(s.hook) - 0.9 * s.hookOmega
   s.hookOmega += hookAcc * dt
   s.hook += s.hookOmega * dt
+}
+
+function step (s: FoundryState, dt: number): void {
+  const prevV = s.v
+
+  // Semi-implicit Euler: integrate velocity from the summed forces, then
+  // position from the *new* velocity — stable under the stiff buffer spring in
+  // a way that explicit Euler is not.
+  const accel = cageForce(s, dt) / CAGE_MASS
+  s.v += accel * dt
+  s.y += s.v * dt
+  s.a = (s.v - prevV) / dt
+
+  // Bodies move after the cage, so their contacts see this step's cage state.
+  const impactSum = stepDebris(s, dt) + stepBodyContacts(s)
+  stepMechanisms(s, dt)
+  stepWalk(s, dt)
 
   // ---- camera shake, derived from real jerk and real impacts ----
   const shakeMag = Math.min(1, Math.abs(s.a) / 55 + impactSum * 0.05 + s.spark * 0.25)

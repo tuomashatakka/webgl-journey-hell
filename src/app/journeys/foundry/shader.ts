@@ -15,6 +15,15 @@
 //   uMech    = (crankAngle, pistonExtension, hookAngle, flywheelOmega)
 //   uDebris  = 6 x (worldX, worldY, worldZ, halfExtentScale)
 //   uDebrisQ = 6 x orientation quaternion (x, y, z, w)
+//   uWalk    = (walkZ, cubeBaseIndex, walkBlend, walkSpeed)
+//   uFold0/1 = fold coordinate of the 8 live path cubes
+//
+// The journey is in two movements. The shaft is seven 200 m bands, each its own
+// machine environment (loading bay, piston gallery, long run, coolant tier,
+// gearworks, brake run, furnace floor) with its own width, rib and lamp cadence
+// and lamp colour. Then the cage lands, the gate opens, and the second movement
+// is a walk forward over an infinite fall on a path of cubes that unfold their
+// faces about hinge edges to lay the floor a moment before it is stood on.
 
 const COMMON = `
   precision highp float;
@@ -28,16 +37,65 @@ const COMMON = `
   uniform vec4 uMech;          // crank, pistonExtension, hookAngle, flywheelOmega
   uniform vec4 uDebris[6];     // xyz = world position, w = half-extent scale
   uniform vec4 uDebrisQ[6];    // orientation quaternion
+  uniform vec4 uWalk;          // walkZ, cubeBase, walkBlend, walkSpeed
+  uniform vec4 uFold0;         // fold coordinate of live cubes 0..3
+  uniform vec4 uFold1;         // fold coordinate of live cubes 4..7
 
   const float PI = 3.14159265359;
-  const float SHAFT_R = 4.6;     // shaft half-width (square section)
   const float CAGE_R = 1.5;      // cage interior half-width — mirrors physics.ts
   const float CAGE_H = 2.6;
   const float EYE = 1.62;        // eye height above the cage floor
-  const float RIB_SP = 3.0;      // structural rib spacing
-  const float LAMP_SP = 6.0;     // caged wall lamp spacing
-  const float PIST_SP = 24.0;    // piston station spacing
-  const float FLOOR_Y = -232.0;  // hydraulic buffer floor — mirrors physics.ts
+  const float SEC_LEN = 200.0;   // section length — mirrors physics.ts
+  const float FLOOR_Y = -1400.0; // hydraulic buffer floor — mirrors physics.ts
+
+  // The shaft is seven 200 m bands, each a different machine environment:
+  //   0 LOADING BAY  1 PISTON GALLERY  2 THE LONG RUN  3 COOLANT TIER
+  //   4 GEARWORKS    5 BRAKE RUN       6 FURNACE FLOOR
+  // Geometry is keyed off the *sample point's* band, so a ray only ever
+  // evaluates the one or two bands it actually passes through — never all seven.
+  float secIndex(float y) { return clamp(floor(-y / SEC_LEN), 0.0, 6.0); }
+
+  // Per-band shaft half-width. The shaft breathes: tight at the top, cavernous
+  // through the long run, choked down again for the brake run.
+  float secRadius(float i) {
+    if (i < 0.5) return 4.6;   // loading bay   — tight, riveted
+    if (i < 1.5) return 5.6;   // piston gallery
+    if (i < 2.5) return 11.0;  // long run      — cavernous, vertiginous
+    if (i < 3.5) return 5.0;   // coolant tier  — choked with pipework
+    if (i < 4.5) return 7.2;   // gearworks
+    if (i < 5.5) return 3.9;   // brake run     — narrowest, walls close in
+    return 8.0;                // furnace floor — opens into the melt
+  }
+
+  // Continuous radius: blend across the last fifth of each band so the seams
+  // are a funnel rather than a step.
+  float shaftR(float y) {
+    float f = clamp(-y / SEC_LEN, 0.0, 6.999);
+    float i = floor(f);
+    float t = fract(f);
+    return mix(secRadius(i), secRadius(min(i + 1.0, 6.0)), smoothstep(0.78, 1.0, t));
+  }
+
+  // Per-band rib and lamp cadence. Sparse lamps in the long run are what make
+  // it feel empty; dense ones in the brake run make the speed legible.
+  float secRibSpacing(float i) {
+    if (i < 0.5) return 3.0;
+    if (i < 1.5) return 6.0;
+    if (i < 2.5) return 16.0;
+    if (i < 3.5) return 4.0;
+    if (i < 4.5) return 12.0;
+    if (i < 5.5) return 2.0;
+    return 9.0;
+  }
+  float secLampSpacing(float i) {
+    if (i < 0.5) return 6.0;
+    if (i < 1.5) return 8.0;
+    if (i < 2.5) return 20.0;  // long run: sparse, but not featureless
+    if (i < 3.5) return 7.0;
+    if (i < 4.5) return 11.0;
+    if (i < 5.5) return 4.0;   // brake run: strobing past
+    return 16.0;
+  }
 
   // Material/look state written by the SDF at the nearest hit.
   float gMat;      // 0 shaft steel, 1 cage frame, 2 debris, 3 chrome, 4 lamp, 5 rail
@@ -96,14 +154,17 @@ const COMMON = `
 
   // ============================ GEOMETRY ===================================
 
-  // Shaft: a square steel well, ribbed every RIB_SP, with two guide rails the
-  // brake shoes clamp. Positive inside.
+  // Shaft: a square steel well whose width, rib cadence and rail treatment all
+  // come from the sample's band. Positive inside.
   float mapShaft(vec3 p, out float mat, out float wear) {
     mat = 0.0;
-    float d = SHAFT_R - max(abs(p.x), abs(p.z));
+    float sec = secIndex(p.y);
+    float R = shaftR(p.y);
+    float d = R - max(abs(p.x), abs(p.z));
 
-    // Inward-protruding structural ribs.
-    float ry = abs(mod(p.y + RIB_SP * 0.5, RIB_SP) - RIB_SP * 0.5);
+    // Inward-protruding structural ribs at the band's cadence.
+    float rsp = secRibSpacing(sec);
+    float ry = abs(mod(p.y + rsp * 0.5, rsp) - rsp * 0.5);
     d -= smoothstep(0.30, 0.0, ry) * 0.26;
 
     // Rivet dimples along each rib — pure surface detail, so only bias the
@@ -113,20 +174,23 @@ const COMMON = `
 
     wear = fbm(vec2(p.x * 1.3 + p.z * 2.1, p.y * 0.55));
 
-    // Guide rails: T-section runners on the +x/-x walls at z = 0.
-    vec3 rp = vec3(abs(p.x) - (SHAFT_R - 0.34), p.y, p.z);
-    float rail = sdBox(vec3(rp.x, 0.0, rp.z), vec3(0.30, 1.0, 0.13));
+    // Guide rails: T-section runners on the +x/-x walls at z = 0. They fatten
+    // through the brake run, where they are the thing doing the stopping.
+    float railW = sec > 4.5 && sec < 5.5 ? 0.52 : 0.30;
+    vec3 rp = vec3(abs(p.x) - (R - railW - 0.04), p.y, p.z);
+    float rail = sdBox(vec3(rp.x, 0.0, rp.z), vec3(railW, 1.0, 0.13));
     if (rail < d) { d = rail; mat = 5.0; wear = 0.15; }
 
     return d;
   }
 
-  // Caged wall lamps every LAMP_SP, staggered left/right.
+  // Caged wall lamps, staggered left/right at the band's cadence.
   float mapLamps(vec3 p, out float glow) {
-    float band = floor(p.y / LAMP_SP);
-    float ly = p.y - (band + 0.5) * LAMP_SP;
+    float sp = secLampSpacing(secIndex(p.y));
+    float band = floor(p.y / sp);
+    float ly = p.y - (band + 0.5) * sp;
     float side = mod(band, 2.0) * 2.0 - 1.0;
-    vec3 lp = vec3(p.x - side * (SHAFT_R - 0.25), ly, p.z - 0.0);
+    vec3 lp = vec3(p.x - side * (shaftR(p.y) - 0.25), ly, p.z);
     float bulb = sdCylX(lp, 0.17, 0.14);
     // Cage bars over the bulb, so the light throws a striped shadow pattern.
     float bars = abs(mod(atan(lp.z, lp.y) * 3.0 / PI + 0.5, 1.0) - 0.5) - 0.16;
@@ -134,19 +198,34 @@ const COMMON = `
     return bulb;
   }
 
-  // Piston stations: a flywheel on the wall driving a horizontal ram whose
-  // extension is the exact slider-crank displacement computed on the CPU.
+  // --- band 0: LOADING BAY -------------------------------------------------
+  // Recessed landing doors every 40 m, light spilling from the ones left open.
+  float mapLandings(vec3 p, out float mat) {
+    mat = 5.0;
+    float R = shaftR(p.y);
+    float bay = floor(p.y / 40.0);
+    float by = p.y - (bay + 0.5) * 40.0;
+    float side = hash11(bay) > 0.5 ? 1.0 : -1.0;
+    vec3 lp = vec3((p.x - side * R) * -side, by, p.z);
+    // Door frame: a rectangular lintel + threshold set into the wall.
+    float frame = sdBox(lp - vec3(-0.10, 0.0, 0.0), vec3(0.22, 1.5, 2.0));
+    float hole = sdBox(lp - vec3(-0.40, -0.1, 0.0), vec3(0.60, 1.3, 1.7));
+    return max(frame, -hole);
+  }
+
+  // --- band 1: PISTON GALLERY ---------------------------------------------
+  // Slider-crank rams driven by the CPU's exact closed-form displacement.
   float mapPistons(vec3 p, out float mat) {
     mat = 3.0;
-    float station = floor(p.y / PIST_SP);
-    float py = p.y - (station + 0.5) * PIST_SP;
+    float R = shaftR(p.y);
+    float station = floor(p.y / 12.0);
+    float py = p.y - (station + 0.5) * 12.0;
     float side = mod(station, 2.0) * 2.0 - 1.0;
-    float wallX = side * SHAFT_R;
 
     // Phase-offset each station so the gallery pulses as a wave, not in unison.
     float ext = uMech.y + 0.18 * sin(uMech.x + station * 1.7);
 
-    vec3 lp = vec3((p.x - wallX) * -side, py, p.z);
+    vec3 lp = vec3((p.x - side * R) * -side, py, p.z);
     float body = sdCylX(lp - vec3(0.55, 0.0, 0.0), 0.42, 0.55);
     float rod = sdCylX(lp - vec3(0.55 + ext * 0.5, 0.0, 0.0), 0.13, ext * 0.5 + 0.2);
     float head = sdCylX(lp - vec3(0.55 + ext + 0.1, 0.0, 0.0), 0.30, 0.09);
@@ -159,6 +238,197 @@ const COMMON = `
     float pin = sdCylX(cp - vec3(0.0, 0.52, 0.0), 0.07, 0.16);
 
     return min(min(body, min(rod, head)), min(wheel, pin));
+  }
+
+  // --- band 2: THE LONG RUN ------------------------------------------------
+  // Nearly empty. A single spine of hoist beams crosses the void every 50 m,
+  // so there is just enough parallax to read the speed.
+  float mapLongRun(vec3 p, out float mat) {
+    mat = 1.0;
+    float span = floor(p.y / 50.0);
+    float sy = p.y - (span + 0.5) * 50.0;
+    // Alternate the beam axis so the void reads as three-dimensional.
+    vec3 q = mod(span, 2.0) < 0.5 ? vec3(p.x, sy, p.z) : vec3(p.z, sy, p.x);
+    float beam = sdBox(q, vec3(shaftR(p.y), 0.16, 0.22));
+    float tie = sdCylY(vec3(q.x - 3.0, sy, q.z), 0.07, 3.0);
+    return min(beam, tie);
+  }
+
+  // --- band 3: COOLANT TIER ------------------------------------------------
+  // Vertical pipe bundles with valve wheels; the shaft is choked with plumbing.
+  float mapCoolant(vec3 p, out float mat) {
+    mat = 3.0;
+    float R = shaftR(p.y);
+    // Four bundles, one per corner, each a triple of pipes.
+    vec2 c = abs(p.xz) - (R - 0.55);
+    float pipe = length(max(c, 0.0)) + min(max(c.x, c.y), 0.0) - 0.26;
+    vec2 c2 = abs(abs(p.xz) - (R - 0.55)) - 0.34;
+    float pipe2 = length(max(c2, 0.0)) + min(max(c2.x, c2.y), 0.0) - 0.15;
+
+    // Valve wheels every 16 m, turning with the flywheel.
+    float st = floor(p.y / 16.0);
+    float vy = p.y - (st + 0.5) * 16.0;
+    float side = mod(st, 2.0) * 2.0 - 1.0;
+    vec3 vp = vec3((p.x - side * (R - 0.55)) * -side, vy, p.z - 0.0);
+    vp.yz = rot(uMech.x * 0.35 + st) * vp.yz;
+    float wheel = sdTorusX(vp - vec3(0.45, 0.0, 0.0), 0.42, 0.06);
+
+    return min(min(pipe, pipe2), wheel);
+  }
+
+  // --- band 4: GEARWORKS ---------------------------------------------------
+  // Meshing gear wheels set into opposite walls, turning at the integrated
+  // flywheel rate. This is where the cable parts.
+  float mapGearworks(vec3 p, out float mat) {
+    mat = 3.0;
+    float R = shaftR(p.y);
+    float st = floor(p.y / 18.0);
+    float gy = p.y - (st + 0.5) * 18.0;
+    float side = mod(st, 2.0) * 2.0 - 1.0;
+    vec3 gp = vec3((p.x - side * R) * -side, gy, p.z);
+
+    // Counter-rotating pair; the second is offset so the teeth interleave.
+    float spin = uMech.x * (mod(st, 2.0) < 0.5 ? 1.0 : -1.0);
+    vec3 a = gp - vec3(1.1, 0.0, 0.0);
+    a.yz = rot(spin) * a.yz;
+    vec3 b = gp - vec3(1.1, 0.0, 3.4);
+    b.yz = rot(-spin + 0.22) * b.yz;
+
+    // Disc + radial teeth via angular repetition.
+    float da = sdCylX(a, 1.7, 0.22);
+    float ta = abs(mod(atan(a.z, a.y) * 9.0 / PI + 0.5, 1.0) - 0.5) - 0.30;
+    da = min(da, max(sdCylX(a, 1.95, 0.20), ta * 0.35));
+
+    float db = sdCylX(b, 1.7, 0.22);
+    float tb = abs(mod(atan(b.z, b.y) * 9.0 / PI + 0.5, 1.0) - 0.5) - 0.30;
+    db = min(db, max(sdCylX(b, 1.95, 0.20), tb * 0.35));
+
+    return min(da, db);
+  }
+
+  // --- band 5: BRAKE RUN ---------------------------------------------------
+  // Brake-shoe housings clamped around the rails every 6 m — the hardware that
+  // is about to be doing the work.
+  float mapBrakeRun(vec3 p, out float mat) {
+    mat = 5.0;
+    float R = shaftR(p.y);
+    float st = floor(p.y / 6.0);
+    float sy = p.y - (st + 0.5) * 6.0;
+    vec3 hp = vec3(abs(p.x) - (R - 0.56), sy, p.z);
+    float housing = sdBox(hp, vec3(0.34, 0.30, 0.62));
+    float bolt = sdCylX(vec3(hp.x, hp.y, abs(hp.z) - 0.48), 0.07, 0.40);
+    return min(housing, bolt);
+  }
+
+  // --- band 6: FURNACE FLOOR ----------------------------------------------
+  // Molten channels in the walls and the buffer rams waiting at the bottom.
+  float mapFurnace(vec3 p, out float mat) {
+    mat = 0.0;
+    float R = shaftR(p.y);
+    // Tap channels: horizontal slots cut into the plate, glowing from within.
+    float st = floor(p.y / 11.0);
+    float cy = p.y - (st + 0.5) * 11.0;
+    vec3 tp = vec3(abs(p.x) - R, cy, p.z);
+    float channel = sdBox(tp - vec3(0.30, 0.0, 0.0), vec3(0.42, 0.34, 6.0));
+
+    // Four hydraulic buffer rams standing on the floor.
+    vec2 bc = abs(p.xz) - 1.9;
+    float ram = sdCylY(vec3(bc.x, p.y - (FLOOR_Y + 1.4), bc.y), 0.34, 1.4);
+    return min(channel, ram);
+  }
+
+  // ======================= THE FOLDING PATH ================================
+  // Past the bottom of the shaft the walker steps out over an infinite fall.
+  // The only floor is a line of cubes that unfold their six faces about hinge
+  // edges — panels swinging out along all three axes to lay a walkway a moment
+  // before it is stood on, then closing again behind. Each cube's fold
+  // coordinate is a damped hinge integrated on the CPU (physics.ts), so the
+  // panels overshoot and settle instead of easing.
+
+  const float CUBE_SP = 4.0;   // cube spacing — mirrors physics.ts
+  const float CUBE_H = 1.2;    // cube half-size — mirrors physics.ts
+  const float PANEL_T = 0.07;  // panel thickness
+  // The path leads away from the parked cage, so it sits at the shaft floor —
+  // otherwise the walk transition would teleport the camera 1400 m upward.
+  const float PATH_Y = FLOOR_Y;
+
+  float walkBlend() { return uWalk.z; }
+
+  /** Fold coordinate of live cube 'i', unpacked from the two vec4 slots. */
+  float foldAt(int i) {
+    if (i == 0) return uFold0.x;
+    if (i == 1) return uFold0.y;
+    if (i == 2) return uFold0.z;
+    if (i == 3) return uFold0.w;
+    if (i == 4) return uFold1.x;
+    if (i == 5) return uFold1.y;
+    if (i == 6) return uFold1.z;
+    return uFold1.w;
+  }
+
+  /**
+   * One hinged face. 'q' is the sample relative to the hinge edge, with the
+   * hinge running along local Z. At a = 0 the panel stands vertical (closed
+   * cube); at a = -PI/2 it lies flat, extending the walkway.
+   */
+  float foldPanel(vec3 q, float a) {
+    q.xy = rot(-a) * q.xy;
+    return sdBox(q - vec3(0.0, CUBE_H, 0.0), vec3(PANEL_T, CUBE_H, CUBE_H));
+  }
+
+  /** A single cube of the path, centred at the origin, unfolded by 'f' (0..1). */
+  float mapCube(vec3 q, float f) {
+    float a = -f * PI * 0.5;
+
+    // Base plate: the face you actually stand on. Always present.
+    float d = sdBox(q - vec3(0.0, -CUBE_H, 0.0), vec3(CUBE_H, PANEL_T, CUBE_H));
+
+    // Four side faces, hinged on the base plate's four edges and swinging out
+    // along ±X and ±Z — the "all axes" fold.
+    d = min(d, foldPanel(vec3(q.x - CUBE_H, q.y + CUBE_H, q.z), a));
+    d = min(d, foldPanel(vec3(-q.x - CUBE_H, q.y + CUBE_H, q.z), a));
+    d = min(d, foldPanel(vec3(q.z - CUBE_H, q.y + CUBE_H, q.x), a));
+    d = min(d, foldPanel(vec3(-q.z - CUBE_H, q.y + CUBE_H, q.x), a));
+
+    // Lid: the Y-axis fold. Hinged on the +X top edge, it swings through a
+    // half turn — from lying closed across the top, up through vertical, to
+    // flat again on the far side — opening the cube into an overhead canopy.
+    // foldPanel measures its panel from +Y, so the extra quarter turn starts it
+    // pointing along -X.
+    d = min(d, foldPanel(vec3(q.x - CUBE_H, q.y - CUBE_H, q.z), -f * PI + PI * 0.5));
+
+    return d;
+  }
+
+  /**
+   * The live window of cubes. Each is rejected by a bounding sphere first, so
+   * a ray typically pays for one or two cubes rather than all eight.
+   */
+  float mapPath(vec3 p, out float mat) {
+    mat = 6.0;
+    float d = 1e9;
+    float base = uWalk.y;
+    for (int i = 0; i < 8; i++) {
+      float cz = (base + float(i)) * CUBE_SP;
+      vec3 q = vec3(p.x, p.y - (PATH_Y + CUBE_H), p.z - cz);
+      // The unfolded net reaches ~2 cube-halves past the body diagonal.
+      float bound = length(q) - CUBE_H * 3.2;
+      if (bound < 0.5) d = min(d, mapCube(q, foldAt(i)));
+      else d = min(d, bound);
+    }
+    return d;
+  }
+
+  /** Dispatch the sample point to its band's signature structure. */
+  float mapSectionFeature(vec3 p, out float mat) {
+    float sec = secIndex(p.y);
+    if (sec < 0.5) return mapLandings(p, mat);
+    if (sec < 1.5) return mapPistons(p, mat);
+    if (sec < 2.5) return mapLongRun(p, mat);
+    if (sec < 3.5) return mapCoolant(p, mat);
+    if (sec < 4.5) return mapGearworks(p, mat);
+    if (sec < 5.5) return mapBrakeRun(p, mat);
+    return mapFurnace(p, mat);
   }
 
   // The cage: corner posts, floor slab, roof, and a woven grating skin.
@@ -240,12 +510,23 @@ const COMMON = `
 
   float mapScene(vec3 p) {
     float mat, wear, glow;
+
+    // Once the walk begins the shaft is gone entirely — there is nothing out
+    // there but the folding path and the fall under it. Evaluating only one of
+    // the two worlds also keeps the step cost flat across the transition.
+    if (walkBlend() > 0.5) {
+      float pm;
+      float d = mapPath(p, pm);
+      gMat = pm; gWear = 0.25; gGlow = 0.0;
+      return d;
+    }
+
     float d = mapShaft(p, mat, wear);
     gMat = mat; gWear = wear; gGlow = 0.0;
 
     float pm;
-    float pist = mapPistons(p, pm);
-    if (pist < d) { d = pist; gMat = pm; gWear = 0.1; }
+    float feat = mapSectionFeature(p, pm);
+    if (feat < d) { d = feat; gMat = pm; gWear = 0.1; }
 
     float cm;
     float cage = mapCage(p, cm);
@@ -278,16 +559,39 @@ const COMMON = `
 
   // ============================ SHADING ====================================
 
+  // Per-band lamp colour and intensity. This is what actually sells the
+  // sections as different places — sodium at the top, mercury-cold in the long
+  // run, sickly green through the coolant tier, furnace-red at the bottom.
+  vec3 secLampColour(float i) {
+    if (i < 0.5) return vec3(1.00, 0.82, 0.62);  // loading bay   — warm sodium
+    if (i < 1.5) return vec3(1.00, 0.74, 0.40);  // piston gallery— hot tungsten
+    if (i < 2.5) return vec3(0.62, 0.74, 1.00);  // long run      — cold mercury
+    if (i < 3.5) return vec3(0.52, 1.00, 0.72);  // coolant tier  — sickly green
+    if (i < 4.5) return vec3(1.00, 0.88, 0.70);  // gearworks     — work lamps
+    if (i < 5.5) return vec3(1.00, 0.36, 0.30);  // brake run     — red alarm
+    return vec3(1.00, 0.55, 0.22);               // furnace floor — molten
+  }
+  float secLampPower(float i) {
+    if (i < 2.5 && i > 1.5) return 5.4;  // few lamps, so each must carry further
+    if (i > 5.5) return 2.2;             // furnace floor is lit by the melt
+    return 3.4;
+  }
+
   // Nearest two lamps dominate; approximating the strip as a pair of point
   // lights is far cheaper than iterating the whole shaft and is visually
   // indistinguishable at this fog density.
   vec3 lampLight(vec3 p, vec3 n, vec3 albedo, float rough, vec3 rd) {
     vec3 acc = vec3(0.0);
-    float band = floor(p.y / LAMP_SP);
+    float sec = secIndex(p.y);
+    float sp = secLampSpacing(sec);
+    vec3 lcol = secLampColour(sec);
+    float lpow = secLampPower(sec);
+    float band = floor(p.y / sp);
     for (int k = 0; k < 2; k++) {
       float b = band + float(k);
       float side = mod(b, 2.0) * 2.0 - 1.0;
-      vec3 lp = vec3(side * (SHAFT_R - 0.25), (b + 0.5) * LAMP_SP, 0.0);
+      float ly = (b + 0.5) * sp;
+      vec3 lp = vec3(side * (shaftR(ly) - 0.25), ly, 0.0);
       vec3 ld = lp - p;
       float dist = length(ld);
       ld /= max(dist, 0.001);
@@ -297,7 +601,7 @@ const COMMON = `
       float diff = dot(n, ld) * 0.5 + 0.5;
       diff *= diff;
       float spec = pow(max(dot(reflect(-ld, n), -rd), 0.0), mix(90.0, 8.0, rough));
-      acc += (albedo * diff + spec * (1.0 - rough) * 0.32) * atten * vec3(1.0, 0.82, 0.62) * 3.4;
+      acc += (albedo * diff + spec * (1.0 - rough) * 0.32) * atten * lcol * lpow;
     }
     return acc;
   }
@@ -336,10 +640,43 @@ const COMMON = `
     } else if (mat < 4.5) {
       // Lamp glass — emissive, unaffected by lighting.
       return vec3(1.0, 0.76, 0.42) * 2.6;
-    } else {
+    } else if (mat < 5.5) {
       // Guide rails / chain — worn bright steel.
       albedo = vec3(0.34, 0.35, 0.38);
       rough = 0.30;
+    } else {
+      // Folding path panels — pale machined plate with luminous hinge seams,
+      // so the fold lines stay readable against the void.
+      albedo = vec3(0.42, 0.44, 0.50);
+      rough = 0.34;
+    }
+
+    if (walkBlend() > 0.5) {
+      // The void has no fixtures. A single hard key from overhead is the only
+      // light, so orientation alone separates the surfaces: the walkway reads
+      // bright, the panels still standing on edge fall away into the dark, and
+      // the undersides of the canopy are lit only by bounce off the path.
+      vec3 key = normalize(vec3(0.22, 1.0, -0.30));
+      float up = max(dot(n, key), 0.0);
+      float down = max(dot(n, -key), 0.0);
+
+      vec3 lit = albedo * up * vec3(0.86, 0.92, 1.10) * 1.9;   // top faces
+      lit += albedo * down * vec3(0.10, 0.13, 0.20) * 0.9;      // undersides
+      lit += albedo * vec3(0.022, 0.028, 0.042);                // void ambient
+
+      // Specular sheen picks out the machined plate and, on a panel caught
+      // mid-swing, flares as it rotates through the key — the fold reads as
+      // motion even in a still frame.
+      float spec = pow(max(dot(reflect(-key, n), -rd), 0.0), 42.0);
+      lit += vec3(0.75, 0.85, 1.0) * spec * 0.55;
+
+      // Cold rim against the black so silhouettes stay legible.
+      float rim = pow(1.0 - max(dot(n, -rd), 0.0), 3.5);
+      lit += vec3(0.22, 0.46, 0.70) * rim * 0.60;
+
+      // Falloff into the dark ahead and behind, so the path arrives out of
+      // nothing and dissolves back into it.
+      return lit * exp(-max(0.0, abs(p.z - uWalk.x) - 7.0) * 0.055);
     }
 
     vec3 col = albedo * vec3(0.13, 0.145, 0.185);         // cool ambient bounce
@@ -348,7 +685,7 @@ const COMMON = `
 
     // Brake sparks throw a hard white-hot key from the rail contact patch.
     if (spark() > 0.01) {
-      vec3 sp = vec3(sign(p.x) * (SHAFT_R - 0.34), cageY() + 0.1, 0.0);
+      vec3 sp = vec3(sign(p.x) * (shaftR(cageY()) - 0.60), cageY() + 0.1, 0.0);
       vec3 sd = sp - p;
       float sdist = length(sd);
       float att = 1.0 / (1.0 + sdist * sdist * 0.35);
@@ -377,6 +714,22 @@ const COMMON = `
     float yaw = uPointer.x * 0.85 + uSim.x * 0.010;
     float roll = uSim.x * 0.035 + weightless() * 0.05;
 
+    // On the folding path the camera walks forward instead of riding down: a
+    // gait bob at the stride frequency implied by the integrated walk speed,
+    // and a gaze that lifts from the shaft's steep downward stare to level.
+    float wb = walkBlend();
+    if (wb > 0.0) {
+      float stride = uWalk.x * 1.9;
+      vec3 walkRo = vec3(
+        sin(stride * 0.5) * 0.06,
+        PATH_Y + EYE + abs(sin(stride)) * 0.045,
+        uWalk.x);
+      ro = mix(ro, walkRo, wb);
+      // Look ahead down the path, with a slight downward cast at the drop.
+      pitch = mix(pitch, -0.16 + uPointer.y * 0.55 + sin(stride) * 0.012, wb);
+      roll = mix(roll, sin(stride * 0.5) * 0.02, wb);
+    }
+
     vec3 fwd = normalize(vec3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)));
     vec3 wup = normalize(vec3(sin(roll), cos(roll), 0.0));
     vec3 right = normalize(cross(wup, fwd));
@@ -400,11 +753,21 @@ const COMMON = `
       + vec3(0.30, 0.09, 0.02) * pow(max(-rd.y, 0.0), 3.0)
         * clamp((FLOOR_Y + 60.0 - ro.y) / 80.0, 0.0, 1.0);
 
+    // Over the fall there is no floor and no ceiling: a faint cold gradient
+    // above, absolute black below, and nothing at all to catch the eye.
+    if (wb > 0.0) {
+      vec3 voidCol = vec3(0.020, 0.026, 0.040) * pow(max(rd.y, 0.0), 1.5)
+        + vec3(0.004, 0.005, 0.008);
+      col = mix(col, voidCol, wb);
+    }
+
     if (hit > 0.0) {
       vec3 n = calcNormal(p);
       col = shadeSurface(p, n, rd, dist);
-      float fog = 1.0 - exp(-dist * 0.055);
-      col = mix(col, vec3(0.030, 0.026, 0.030), fog);
+      float fogDen = mix(0.055, 0.030, wb);
+      vec3 fogCol = mix(vec3(0.030, 0.026, 0.030), vec3(0.010, 0.013, 0.021), wb);
+      float fog = 1.0 - exp(-dist * fogDen);
+      col = mix(col, fogCol, fog);
     }
 
     // --- spark shower along the guide rails during braking ---
@@ -414,7 +777,7 @@ const COMMON = `
         float fi = float(s);
         float seed = hash11(fi * 13.7 + floor(iTime * 22.0));
         // Sparks are thrown off the rail and fall behind the still-moving cage.
-        vec3 sp = vec3(sign(seed - 0.5) * (SHAFT_R - 0.40),
+        vec3 sp = vec3(sign(seed - 0.5) * (shaftR(sy) - 0.66),
                        sy + 0.2 + fract(seed * 7.3) * 2.4,
                        (fract(seed * 3.1) - 0.5) * 0.9);
         vec3 to = sp - ro;
