@@ -6,21 +6,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "eslint src",
     "clean": "next clean"
   },
   "dependencies": {
-    "lucide-react": "^0.553.0",
-    "next": "^15.4.9",
-    "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "lucide-react": "^1.27.0",
+    "next": "^16.2.12",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@tuomashatakka/eslint-config": "^4.0.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "eslint": "9.39.1",
+    "eslint": "^10.8.0",
     "eslint-config-next": "16.0.8",
     "typescript": "5.9.3"
   }
