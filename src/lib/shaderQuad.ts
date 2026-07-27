@@ -15,6 +15,8 @@
 // uEnv simply ignore it. It loads asynchronously — uEnvLoaded gates use so the
 // first frames before the image arrives fall back to a procedural environment.
 
+import { assetUrl } from './assetUrl'
+
 const QUAD_VS = `
   attribute vec2 position;
   void main() {
@@ -156,8 +158,11 @@ export function createShaderQuad (
       gl.generateMipmap(gl.TEXTURE_2D)
       envLoaded = 1
     }
-    img.onerror = () => console.error('[shaderQuad] env map failed to load:', options.envUrl)
-    img.src     = options.envUrl
+    // Raw <img> loads bypass Next's basePath rewriting, so resolve the public
+    // path explicitly — otherwise every env map 404s under a sub-path deploy.
+    const envSrc = assetUrl(options.envUrl)
+    img.onerror = () => console.error('[shaderQuad] env map failed to load:', envSrc)
+    img.src     = envSrc
   }
 
   // Lazily-resolved locations for simulation uniforms. `null` is a cached miss
