@@ -19,14 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
+      # The repo is bun-managed (bun.lock, no package-lock.json), so setup-node's
+      # npm cache has nothing to key off and `npm ci` has no lockfile to install from.
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
       - name: Switch to static export
         run: "sed -i \"s/output: 'standalone'/output: 'export'/\" next.config.ts"
-      - run: npm run build
+      - run: bun run build
         env:
           NODE_ENV: production
       - uses: actions/configure-pages@v5
