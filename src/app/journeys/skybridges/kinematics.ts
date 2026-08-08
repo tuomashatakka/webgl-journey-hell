@@ -5,7 +5,8 @@ export interface SkybridgesSection {
   endZ:   number;
 }
 
-export const SKYBRIDGES_SPEED = 7.5
+// Twelve seconds per section at default speed gives each theme room to land.
+export const SKYBRIDGES_SPEED = 5.0
 export const SKYBRIDGES_LOOP_Z = 540.0
 
 // Nine themed scenes on one continuous first-person run (~60 units each). The

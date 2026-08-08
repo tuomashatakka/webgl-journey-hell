@@ -13,15 +13,15 @@ single-pass raymarched WebGL 1.0 / GLSL ES 1.00 fragment shader (`shader.ts`).
 | Quantity | Value | Notes |
 |----------|-------|-------|
 | Units | 1 unit ≈ 1 metre | |
-| Forward speed | `SPEED = 7.5` u/s | constant along the path Z axis |
+| Forward speed | `SPEED = 5.0` u/s | paced for longer, distinct sections |
 | Loop length | `LOOP_Z = 540` | nine 60-unit sections; seams crossfade |
-| Section time | `(z - startZ) / SPEED` ≈ 8 s | per section |
+| Section time | `(z - startZ) / SPEED` = 12 s | per section |
 | Gravity | `g ≈ 18 u/s²` | snappy-but-plausible (≈1.8× Earth for game feel) |
 | Eye height | `1.6` u above the deck | first-person |
 | Deck width | `3.2` u (half 1.6) | main path |
 
 **Camera model — FIRST PERSON.** The camera *is* the runner. Position
-`ro = (laneSway, camY(z), playerZ())`; `camY` is authored piecewise (Section 4).
+`ro = (pathX(z) + laneSway, camY(z), playerZ())`; `camY` is authored piecewise (Section 4).
 Forward heading follows the path; scripted glances (look back at a collapse, look
 down on a jump, snap up on a climb) layer on top, plus subtle run-bob and
 pointer free-look (`uPointer`).
@@ -34,6 +34,11 @@ band — no per-pixel blend of nine geometries.
 **Collapse-behind.** Every main-deck segment the runner passes begins to fall on
 a per-segment delay (`segmentFall`): a whole-slab tip far away, a shattering glass
 shard-field up close. Glancing back reveals the deck dropping into the cloud sea.
+
+**Turning centreline.** The route bends between offset tower canyons throughout
+the lap. The camera follows the centreline tangent and all bridge geometry is
+warped onto the same curve, so these are physical turns rather than view-only yaw.
+Nearby skyscrapers also shear, tip, and fall after the runner passes them.
 
 ---
 
