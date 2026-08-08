@@ -3,11 +3,20 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { vsQuad, fsScene, fsPost } from './shaders'
 import { getKinematicState, getWalkSpeed } from './kinematics'
-import { GraphicsSettings } from '@/lib/settings'
 import { useSettings } from '@/components/SettingsProvider'
 import { Settings as SettingsIcon } from 'lucide-react'
 import Link from 'next/link'
 import SettingsView from '@/components/SettingsView'
+import useAudioEngine from '@/hooks/use-audio-engine'
+import usePanControl from '@/hooks/use-pan-control'
+import {
+  useDisplayFilter,
+  useFpsMeter,
+  useFullscreenToggle,
+  useLatestRef,
+  useResolutionResize
+
+} from '@/hooks/use-journey-runtime'
 
 // Procedural ambience for the concrete shaft: HVAC room tone + a low wind drone,
 // reverberant water drips, and the occasional distant handrail clang. All
@@ -247,49 +256,28 @@ class StairwellAudioEngine {
 }
 
 export default function StairwellJourney () {
-  const canvasRef  = useRef<HTMLCanvasElement>(null)
-  const pointerRef = useRef({ x: 0, y: 0 })
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Pointer + gyroscope panning, tweened across sudden jumps (see lib/panControl).
+  // X is mirrored: the camera turns away from the pointer down here.
+  const { pointerRef, updatePan } = usePanControl({ invertX: true })
 
   const [ sectorName, setSectorName ] = useState('ENTERING THE STAIRWELL')
   const [ glitchKey, setGlitchKey ]   = useState(0)
-  const [ fps, setFps ]               = useState(60)
-  const [ renderRes, setRenderRes ]   = useState({ w: 0, h: 0 })
-  const [ isMuted, setIsMuted ]       = useState(true)
+
+  const { fps, renderRes, setRenderRes, sampleFrame } = useFpsMeter()
 
   const { settings, setSettings }             = useSettings()
   const [ isSettingsOpen, setIsSettingsOpen ] = useState(false)
 
-  const audioEngineRef = useRef<StairwellAudioEngine | null>(null)
+  const audio = useAudioEngine(() => new StairwellAudioEngine())
 
-  const handleAudioToggle = () => {
-    if (!audioEngineRef.current)
-      audioEngineRef.current = new StairwellAudioEngine()
+  const settingsRef = useLatestRef(settings)
+  // Contrast via CSS filter (brightness stays in-shader through uBrightness).
+  useDisplayFilter(canvasRef, settings, { brightnessInShader: true })
 
-    const currentMuted = audioEngineRef.current.toggleMute()
-    setIsMuted(currentMuted)
-  }
-
-  const settingsRef = useRef<GraphicsSettings>(settings)
-  useEffect(() => {
-    settingsRef.current = settings
-    // Contrast via CSS filter (brightness stays in-shader through uBrightness).
-    if (canvasRef.current)
-      canvasRef.current.style.filter = `contrast(${settings.contrast})`
-  }, [ settings ])
-
-  const resizeRef = useRef<() => void>(() => {})
-  useEffect(() => {
-    if (resizeRef.current)
-      resizeRef.current()
-  }, [ settings.resolution ])
-
-  const handleFullscreenToggle = () => {
-    if (!document.fullscreenElement)
-      document.documentElement.requestFullscreen().catch(err => {
-        console.error('Error attempting to enable fullscreen:', err)
-      }); else
-      document.exitFullscreen()
-  }
+  const resizeRef              = useResolutionResize(settings.resolution)
+  const handleFullscreenToggle = useFullscreenToggle()
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -301,13 +289,6 @@ export default function StairwellJourney () {
       console.error('WebGL not supported')
       return
     }
-
-    const handlePointerMove = (e: PointerEvent) => {
-      const nx           = e.clientX / window.innerWidth * 2.0 - 1.0
-      const ny           = e.clientY / window.innerHeight * 2.0 - 1.0
-      pointerRef.current = { x: -nx, y: -ny }
-    }
-    window.addEventListener('pointermove', handlePointerMove)
 
     function compileShader (type: number, source: string) {
       const shader = gl!.createShader(type)
@@ -399,9 +380,6 @@ export default function StairwellJourney () {
     let accumulatedTime = 0.0
     let lastDrawTime    = 0.0
 
-    let frameCount  = 0
-    let fpsLastTime = performance.now()
-
     const render = (time: number) => {
       animationId = requestAnimationFrame(render)
 
@@ -421,14 +399,10 @@ export default function StairwellJourney () {
       const currentSettings = settingsRef.current
       const speedMultiplier = currentSettings.speed
 
-      frameCount++
+      sampleFrame()
 
-      const now = performance.now()
-      if (now - fpsLastTime >= 1000) {
-        setFps(Math.round(frameCount * 1000 / (now - fpsLastTime)))
-        frameCount = 0
-        fpsLastTime = now
-      }
+      // Pan on the real delta — the speed setting must not change input feel.
+      updatePan(dt)
 
       const scaledDt = dt * speedMultiplier
 
@@ -436,8 +410,7 @@ export default function StairwellJourney () {
       const speed = getWalkSpeed(currentZ)
       currentZ += speed * scaledDt
 
-      if (audioEngineRef.current)
-        audioEngineRef.current.updateState(currentZ)
+      audio.engineRef.current?.updateState(currentZ)
 
       const state            = getKinematicState(currentZ)
       const currentIteration = state.loop
@@ -517,13 +490,7 @@ export default function StairwellJourney () {
 
     return () => {
       window.removeEventListener('resize', resize)
-      window.removeEventListener('pointermove', handlePointerMove)
       cancelAnimationFrame(animationId)
-
-      if (audioEngineRef.current) {
-        audioEngineRef.current.destroy()
-        audioEngineRef.current = null
-      }
 
       gl.deleteBuffer(quadBuffer)
       gl.deleteTexture(tex)
@@ -543,8 +510,8 @@ export default function StairwellJourney () {
 
     <button id="fullscreen-btn" onClick={ handleFullscreenToggle }>FULLSCREEN</button>
 
-    <button id="audio-btn" onClick={ handleAudioToggle }>
-      {isMuted ? 'UNMUTE AUDIO' : 'MUTE AUDIO'}
+    <button id="audio-btn" onClick={ audio.toggle }>
+      {audio.isMuted ? 'UNMUTE AUDIO' : 'MUTE AUDIO'}
     </button>
 
     <button id="settings-btn" onClick={ () => setIsSettingsOpen(true) } title="Settings" aria-label="Open graphics settings">

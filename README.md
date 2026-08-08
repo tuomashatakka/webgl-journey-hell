@@ -30,11 +30,36 @@ app/
     signal-bloom/           # SIGNAL BLOOM (iridescent plasma)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
-  JourneyCard.tsx           # poster + hover-to-live preview
+  JourneyCard.tsx           # screenshot poster + hover-to-live preview
   ShaderPreviewLayer.tsx    # ONE shared WebGL canvas for all card previews
+  withShaderJourney.tsx     # HOC template: one fragment shader -> a full route
+hooks/
+  use-pan-control.ts        # pointer + gyroscope view panning (tweened)
+  use-journey-runtime.ts    # settings ref, display filter, resize, FPS, fullscreen
+  use-audio-engine.ts       # lazy per-journey audio + mute button state
 lib/
   shaderQuad.ts             # reusable full-screen-quad shader runner
+  panControl.ts             # framework-free pan controller behind use-pan-control
+tools/
+  shoot-posters.mjs         # re-capture public/journeys/<slug>.jpg from the live routes
 ```
+
+### looking around
+
+Every journey steers its camera from one normalized `uPointer` (-1..1, y up),
+fed by `lib/panControl.ts`:
+
+* **pointer / touch** — absolute position over the viewport.
+* **gyroscope** — device orientation is summed on top wherever the device
+  reports it, so a phone pans by tilting as well as dragging. Tilt is measured
+  against the pose you were holding when the readings started (and re-zeroed on
+  rotation or when the tab comes back), and mapped through the screen
+  orientation so "right" is right in landscape too. iOS only hands out
+  orientation after a permission prompt, which is requested once, on your first
+  tap on the page.
+* **tweening** — small moves follow the pointer immediately; a *jump* (a tap
+  landing far from the last touch, a finger lifted and re-planted) is eased over
+  a distance-scaled 0.16–0.5 s instead of teleporting the camera.
 
 ### adding a new journey
 
@@ -42,8 +67,11 @@ lib/
    your shader (use `lib/shaderQuad.ts` for a simple full-screen fragment shader).
 2. Append an entry to `JOURNEYS` in `app/journeys/registry.ts` (title, tagline,
    tags, accent, gradient, and a compact `previewShader` for the hover preview).
-3. (Optional) Drop a poster image at `public/journeys/<slug>.jpg` and set
-   `poster` in the registry; otherwise the card falls back to its CSS gradient.
+3. Add a poster screenshot at `public/journeys/<slug>.jpg` and set `poster` in
+   the registry — `node tools/shoot-posters.mjs` captures one from the running
+   route. The card's art falls back screenshot-first: live preview on hover,
+   the screenshot wherever WebGL or hover isn't available (phones, mostly), the
+   CSS gradient only if the image itself fails to load.
 
 The landing grid picks it up automatically from the registry.
 

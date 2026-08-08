@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { Journey } from '@/app/journeys/registry'
 import { usePreview } from './ShaderPreviewLayer'
 
@@ -12,6 +12,12 @@ type JourneyCardProps = { journey: Journey }
 export default function JourneyCard ({ journey }: JourneyCardProps) {
   const preview  = usePreview()
   const mountRef = useRef<HTMLDivElement>(null)
+
+  // Fallback chain for the tile art: live shader preview (hover, WebGL only) →
+  // journey screenshot → the journey's CSS gradient. The screenshot is what a
+  // touch device or a WebGL-less browser actually sees, so it is never merely
+  // decorative; `posterFailed` drops to the gradient if the file 404s.
+  const [ posterFailed, setPosterFailed ] = useState(false)
 
   const onEnter = () => {
     if (mountRef.current)
@@ -32,13 +38,14 @@ export default function JourneyCard ({ journey }: JourneyCardProps) {
       style={{
         background: `linear-gradient(135deg, ${journey.gradient[0]}, ${journey.gradient[1]})`,
       }}>
-      {journey.poster &&
+      {journey.poster && !posterFailed &&
           <Image
             src={ journey.poster }
-            alt={ journey.title }
+            alt={ `${journey.title} — still from the journey` }
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="journey-card__img" />
+            className="journey-card__img"
+            onError={ () => setPosterFailed(true) } />
       }
 
       {/* Empty mount point — the shared preview canvas docks here on hover.

@@ -15,10 +15,15 @@ export interface Journey {
   /** Drives the card's border glow + tag color. */
   accent: string;
 
-  /** CSS poster gradient, used when `poster` image is absent. */
+  /** CSS poster gradient — the last-resort backdrop if the poster 404s too. */
   gradient: [string, string];
 
-  /** Optional static poster shown before hover (under /public). */
+  /**
+   * Screenshot of the running journey (under /public), shown before hover and
+   * wherever the live preview can't run: touch devices with no hover, browsers
+   * without WebGL, a preview shader that failed to compile. Captured with
+   * `tools/shoot-posters.mjs`.
+   */
   poster?: string;
 
   /** Compact fragment shader for the hover-to-live preview (iTime/iResolution/uPointer). */
@@ -112,6 +117,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'brutalist', 'escher', 'audio' ],
     accent:        '#aeb9c4',
     gradient:      [ '#3a4048', '#181b1f' ],
+    poster:        '/journeys/stairwell.jpg',
     previewShader: stairwellPreviewFrag,
     status:        'live',
   },
@@ -122,6 +128,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'glass', 'vertigo' ],
     accent:        '#9fd8ff',
     gradient:      [ '#dbe6f2', '#aebfce' ],
+    poster:        '/journeys/skybridges.jpg',
     previewShader: skybridgesPreviewFrag,
     status:        'live',
   },
@@ -132,6 +139,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'industrial', 'rigid-body', 'simulated', 'loop' ],
     accent:        '#ff8a3d',
     gradient:      [ '#241206', '#0a0708' ],
+    poster:        '/journeys/foundry.jpg',
     previewShader: foundryPreviewFrag,
     status:        'live',
   },

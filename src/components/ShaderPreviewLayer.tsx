@@ -18,6 +18,8 @@ import {
 import type { ReactNode } from 'react'
 import { createShaderQuad } from '@/lib/shaderQuad'
 import type { ShaderQuad } from '@/lib/shaderQuad'
+import { createPanControl } from '@/lib/panControl'
+import type { PanControl } from '@/lib/panControl'
 import type { Journey } from '@/app/journeys/registry'
 
 
@@ -46,7 +48,8 @@ export function PreviewProvider ({ children }: PreviewProviderProps) {
   const quadCache     = useRef<Map<string, ShaderQuad | null>>(new Map())
   const rafRef        = useRef<number>(0)
   const activeSlugRef = useRef<string | null>(null)
-  const pointerRef    = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const panRef        = useRef<PanControl | null>(null)
+  const lastFrameRef  = useRef(0)
 
   // Create the canvas + context imperatively so React StrictMode's dev double
   // mount cannot leak a second GL context — cleanup tears everything down.
@@ -64,16 +67,13 @@ export function PreviewProvider ({ children }: PreviewProviderProps) {
     canvas.style.pointerEvents = 'none' // keep the card clickable underneath
     host.appendChild(canvas)
 
-    const onPointer = (e: PointerEvent) => {
-      const rect = canvas.getBoundingClientRect()
-      if (rect.width === 0 || rect.height === 0)
-        return
-      pointerRef.current = {
-        x: (e.clientX - rect.left) / rect.width * 2 - 1,
-        y: 1 - (e.clientY - rect.top) / rect.height * 2,
-      }
-    }
-    window.addEventListener('pointermove', onPointer)
+    // Card-relative pointer, tweened like the journeys themselves (a cursor
+    // arriving from another card is a big delta and would otherwise snap).
+    // No gyroscope here — a tilt shouldn't stir every thumbnail on the grid.
+    panRef.current = createPanControl({
+      gyroscope: false,
+      getRect:   () => canvas.getBoundingClientRect(),
+    })
 
     canvasRef.current = canvas
     glRef.current     = canvas.getContext('webgl', {
@@ -84,7 +84,8 @@ export function PreviewProvider ({ children }: PreviewProviderProps) {
 
     return () => {
       cancelAnimationFrame(rafRef.current)
-      window.removeEventListener('pointermove', onPointer)
+      panRef.current?.dispose()
+      panRef.current = null
       quadCache.current.forEach(q => q?.dispose())
       quadCache.current.clear()
       glRef.current?.getExtension('WEBGL_lose_context')?.loseContext()
@@ -95,14 +96,18 @@ export function PreviewProvider ({ children }: PreviewProviderProps) {
     }
   }, [])
 
-  const renderLoop = useCallback(() => {
+  const renderLoop = useCallback((now: number) => {
     const gl   = glRef.current
     const slug = activeSlugRef.current
     if (!gl || !slug)
       return
 
-    const quad = quadCache.current.get(slug)
-    quad?.draw({ time: performance.now() * 0.001, pointer: pointerRef.current })
+    const dt             = lastFrameRef.current ? (now - lastFrameRef.current) * 0.001 : 0
+    lastFrameRef.current = now
+
+    const pointer = panRef.current?.update(dt)
+    const quad    = quadCache.current.get(slug)
+    quad?.draw({ time: now * 0.001, pointer })
     rafRef.current = requestAnimationFrame(renderLoop)
   }, [])
 
@@ -125,7 +130,8 @@ export function PreviewProvider ({ children }: PreviewProviderProps) {
         quadCache.current.set(journey.slug, createShaderQuad(gl, journey.previewShader))
 
       cancelAnimationFrame(rafRef.current)
-      rafRef.current = requestAnimationFrame(renderLoop)
+      lastFrameRef.current = 0 // fresh delta — the canvas may have been parked for minutes
+      rafRef.current       = requestAnimationFrame(renderLoop)
     },
     [ renderLoop ],
   )

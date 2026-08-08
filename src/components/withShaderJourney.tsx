@@ -26,8 +26,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { createShaderQuad } from '@/lib/shaderQuad'
 import type { CustomUniforms, ShaderQuad } from '@/lib/shaderQuad'
-import { displayFilter } from '@/lib/settings'
 import { useFrameLoop } from '@/lib/frameLoopManager'
+import usePanControl from '@/hooks/use-pan-control'
+import {
+  useDisplayFilter,
+  useFpsMeter,
+  useFullscreenToggle,
+  useLatestRef,
+  useResolutionResize
+
+} from '@/hooks/use-journey-runtime'
 import { useSettings } from './SettingsProvider'
 import SettingsButton from './SettingsButton'
 
@@ -86,12 +94,14 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
     const { settings } = useSettings()
 
     // Bottom-right HUD: render resolution (backing-store px) + measured FPS.
-    const [ fps, setFps ]                 = useState(0)
-    const [ res, setRes ]                 = useState({ w: 0, h: 0 })
+    const { fps, renderRes, setRenderRes, sampleFrame } = useFpsMeter()
+
     const [ sectionName, setSectionName ] = useState(
       () => options.getSectionName?.(0) ?? '',
     )
     const [ sectionGlitchKey, setSectionGlitchKey ] = useState(0)
+
+    const toggleFullscreen = useFullscreenToggle()
 
     const canvasRef = useRef<HTMLCanvasElement>(null)
     const quadRef   = useRef<ShaderQuad | null>(null)
@@ -101,20 +111,17 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
     if (options.createSimulation && !simRef.current)
       simRef.current = options.createSimulation()
 
-    const pointerRef       = useRef({ x: 0, y: 0 })
-    const iTimeRef         = useRef(0)
-    const sectionNameRef   = useRef(sectionName)
-    const fpsFrameCountRef = useRef(0)
-    const fpsLastTimeRef   = useRef(0)
+    // Pointer + gyroscope panning, tweened across sudden jumps (see lib/panControl).
+    const { pointerRef, updatePan } = usePanControl()
+
+    const iTimeRef       = useRef(0)
+    const sectionNameRef = useRef(sectionName)
 
     // Latest settings for the (stable) frame callback + resize, without re-registering.
-    const settingsRef = useRef(settings)
-    useEffect(() => {
-      settingsRef.current = settings
-    }, [ settings ])
+    const settingsRef = useLatestRef(settings)
 
-    // Resize is stored here so the resolution effect can re-trigger it.
-    const resizeRef = useRef<() => void>(() => {})
+    // Resize is stored here so the resolution setting can re-trigger it.
+    const resizeRef = useResolutionResize(settings.resolution)
 
     // --- GL setup / teardown (once) ---
     useEffect(() => {
@@ -138,24 +145,15 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
         const scale   = dpr * settingsRef.current.resolution
         canvas.width  = Math.max(1, Math.floor(window.innerWidth * scale))
         canvas.height = Math.max(1, Math.floor(window.innerHeight * scale))
-        setRes({ w: canvas.width, h: canvas.height })
+        setRenderRes({ w: canvas.width, h: canvas.height })
       }
       resizeRef.current = resize
 
-      const onPointer = (e: PointerEvent) => {
-        pointerRef.current = {
-          x: e.clientX / window.innerWidth * 2 - 1,
-          y: 1 - e.clientY / window.innerHeight * 2,
-        }
-      }
-
       window.addEventListener('resize', resize)
-      window.addEventListener('pointermove', onPointer)
       resize()
 
       return () => {
         window.removeEventListener('resize', resize)
-        window.removeEventListener('pointermove', onPointer)
         quad.dispose()
         quadRef.current = null
         // NOTE: do NOT call WEBGL_lose_context.loseContext() here. A canvas
@@ -179,18 +177,8 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
       }
     }, [])
 
-    // Re-scale the backing store when the resolution setting changes.
-    useEffect(() => {
-      resizeRef.current()
-    }, [ settings.resolution ])
-
-    // Apply brightness + contrast as a CSS filter (works for any shader, no uniforms needed).
-    const { brightness, contrast } = settings
-    useEffect(() => {
-      const canvas = canvasRef.current
-      if (canvas)
-        canvas.style.filter = displayFilter({ brightness, contrast })
-    }, [ brightness, contrast ])
+    // Brightness + contrast as a CSS filter (works for any shader, no uniforms needed).
+    useDisplayFilter(canvasRef, settings)
 
     // One draw per (capped) frame, on the shared loop. Stable callback reading refs.
     type ManagerType = { deltaTime: number }
@@ -202,6 +190,10 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
 
       const dt = manager.deltaTime * settingsRef.current.speed
       iTimeRef.current += dt
+
+      // Input is tweened on the *real* delta — panning shouldn't slow down or
+      // speed up with the time-scale setting.
+      updatePan(manager.deltaTime)
 
       // Step the simulation before the draw so the frame renders the state the
       // integrator just produced, not last frame's.
@@ -229,20 +221,8 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
         }
       }
 
-      // FPS sampling — count frames and publish once per second.
-      fpsFrameCountRef.current += 1
-
-      const now = performance.now()
-      if (fpsLastTimeRef.current === 0)
-        fpsLastTimeRef.current = now
-
-      const elapsed = now - fpsLastTimeRef.current
-      if (elapsed >= 1000) {
-        setFps(Math.round(fpsFrameCountRef.current * 1000 / elapsed))
-        fpsFrameCountRef.current = 0
-        fpsLastTimeRef.current   = now
-      }
-    }, [])
+      sampleFrame()
+    }, [ pointerRef, sampleFrame, settingsRef, updatePan ])
     useFrameLoop(onFrame)
 
     const containerStyle = options.accent
@@ -267,20 +247,12 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
           </header>
       }
 
-      <button
-        id="fullscreen-btn"
-        onClick={ () => {
-          if (!document.fullscreenElement)
-            document.documentElement.requestFullscreen().catch(err =>
-              console.error('Error enabling fullscreen:', err),
-            ); else
-            document.exitFullscreen()
-        } }>
+      <button id="fullscreen-btn" onClick={ toggleFullscreen }>
         FULLSCREEN
       </button>
 
       <aside id="fps-display">
-        {res.w}×{res.h} · {fps} FPS
+        {renderRes.w}×{renderRes.h} · {fps} FPS
       </aside>
 
       <SettingsButton />

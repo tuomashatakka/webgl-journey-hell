@@ -27,7 +27,7 @@ export default function IndexPage () {
     <JourneyGrid />
 
     <footer className="index-footer">
-      <span>{`// ${process.env.NODE_ENV === 'production' ? 'live' : 'dev'} — hover a tile to wake it`}</span>
+      <span>{`// ${process.env.NODE_ENV === 'production' ? 'live' : 'dev'} — hover a tile to wake it, stills stand in where it can't`}</span>
     </footer>
   </main>
 }
