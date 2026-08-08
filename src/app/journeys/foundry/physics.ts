@@ -1,28 +1,43 @@
-// THE FOUNDRY — rigid-body simulation.
+// THE FOUNDRY — rigid-body simulation of a walking loop.
 //
 // Unlike the other journeys (whose motion is authored as easing curves baked
-// into GLSL), the Foundry's cage, debris and machinery are *simulated on the
-// CPU* with a deterministic fixed-step integrator, and the resulting state is
-// pushed to the fragment shader as uniforms each frame. Nothing here is a
+// into GLSL), the Foundry's walker, cage, debris and machinery are *simulated on
+// the CPU* with a deterministic fixed-step integrator, and the resulting state
+// is pushed to the fragment shader as uniforms each frame. Nothing here is a
 // sin() approximation of physics — it is the physics.
 //
+// The journey is a loop: one continuous first-person walk through seven machine
+// halls that closes back onto the first, forever. Distance walked is the only
+// clock — the shader's geometry is periodic in it (CYCLE_LEN), so the seam
+// between the last hall and the first is the same cross-fade as every other
+// section boundary and nothing is ever teleported.
+//
 // What is actually integrated:
-//   • Cage       — semi-implicit Euler under gravity, quadratic aerodynamic
-//                  drag, a tension-only cable spring-damper, brake-shoe
-//                  Coulomb friction, and a nonlinear hydraulic buffer.
-//   • Debris     — 6 free rigid bodies (linear + angular), colliding with the
-//                  *moving* cage interior via relative-velocity impulses with
-//                  restitution and Coulomb friction. During free fall they and
-//                  the cage share an acceleration, so they float — and when the
-//                  brakes bite, the cage stops and they do not.
+//   • Walker     — an inverted-pendulum gait. Head height rides a damped leg
+//                  spring that each heel strike kicks downward, weight transfer
+//                  kicks an alternating lateral sway spring, and the folding
+//                  span's panels ring under the feet that land on them. The
+//                  camera pose is the *output* of that, never a sine wave.
+//   • Cage       — a hoist cage in the vertical shaft that crosses the corridor:
+//                  semi-implicit Euler under gravity, quadratic aerodynamic
+//                  drag, a tension-only cable spring-damper, brake-shoe Coulomb
+//                  friction, and a nonlinear hydraulic buffer. It is armed by
+//                  the walker's *position*, so the cable parts a fixed distance
+//                  short of the crossing and it streaks past as you arrive.
+//   • Debris     — 6 free rigid bodies (linear + angular) riding in the cage,
+//                  colliding with its *moving* interior via relative-velocity
+//                  impulses with restitution and Coulomb friction. During free
+//                  fall they and the cage share an acceleration, so they float —
+//                  and when the brakes bite, the cage stops and they do not.
 //   • Flywheel   — angular momentum with motor torque and a load torque that
 //                  varies with crank angle; drives the wall pistons through the
 //                  exact closed-form slider-crank displacement.
-//   • Hook       — damped pendulum with *base excitation*, i.e. it is swung by
-//                  the cage's own acceleration rather than by a driving sine.
+//   • Chain/hook — damped pendulums with *base excitation*, i.e. swung by the
+//                  cage's own acceleration and by the walker's footfalls rather
+//                  than by a driving sine.
 //
-// Units are SI: metres, seconds, kilograms. +Y is up; the shaft descends into
-// negative Y.
+// Units are SI: metres, seconds, kilograms. +Y is up, the walk runs along +Z,
+// and the hoist shaft descends into negative Y.
 
 const DT           = 1 / 120 // fixed integration step
 const MAX_SUBSTEPS = 6 // clamp so a stalled tab can't spiral
@@ -30,58 +45,114 @@ const MAX_SUBSTEPS = 6 // clamp so a stalled tab can't spiral
 const G            = 9.81 // gravity
 const DEBRIS_COUNT = 6
 
-// --- shaft geometry (mirrored by the shader) -------------------------------
-export const SHAFT_TOP = 0
+// --- the loop (mirrored by the shader) --------------------------------------
 
-/** Section length, metres. Seven bands of this length make up the shaft. */
-export const SECTION_LEN = 200
+/** Section length, metres. Seven halls of this length make up one loop. */
+export const SECTION_LEN = 36
 export const SECTION_COUNT = 7
 
-/** Cable parts entering the gearworks (start of section 5). */
-export const SHAFT_SNAP_Y = -SECTION_LEN * 4
+/** One full circuit of the foundry, metres. Geometry is periodic in this. */
+export const CYCLE_LEN = SECTION_LEN * SECTION_COUNT
 
-/** Emergency shoes bite entering the brake run (start of section 6). */
-export const SHAFT_BRAKE_Y = -SECTION_LEN * 5
+/**
+ * Length of the cross-fade at *every* section boundary, metres — including the
+ * wrap from the furnace floor back into the loading bay. One rule for all seven
+ * seams is what makes the loop read as a single continuous walk.
+ */
+export const TRANSITION = 9
 
-/** Hydraulic buffers at the bottom of the furnace floor. */
-export const SHAFT_FLOOR_Y = -SECTION_LEN * SECTION_COUNT
+// Metres of travel per footstep. CYCLE_LEN is a whole number of these, so the
+// stride phase is continuous across the wrap.
+export const STEP_LEN = 0.875
+
+const WALK_SPEED = 2.4 // m/s, a brisk walk
+const LEG_K      = 210 // leg-spring stiffness (per unit mass)
+const LEG_C      = 9 // leg-spring damping — low enough that the head rings
+const SWAY_K     = 74 // lateral sway stiffness, tuned to one stride period
+const SWAY_C     = 4.0
+const HEEL_KICK  = 0.55 // m/s of head drop injected by each heel strike
+const SWAY_KICK  = 0.30 // m/s of lateral drift injected by weight transfer
+const TREMOR_K   = 130 // floor-tremor spring (the buffer slam travels up it)
+const TREMOR_C   = 5.5
+
+/** Eye height above the walking surface, metres. */
+export const EYE_HEIGHT = 1.62
+
+// --- the hoist shaft crossing (mirrored by the shader) ----------------------
+
+/**
+ * Cyclic position at which the vertical hoist shaft crosses the corridor —
+ * mid-way down the brake run, deliberately clear of a section boundary so the
+ * bulkhead portal there does not stand in the cage's path.
+ */
+export const CROSS_Z = SECTION_LEN * 5 + 18
+
+/** Half-width of the square hoist shaft. */
+export const SHAFT_R = 2.4
+
+/** Shaft head (ceiling) and the height the cage waits at between loops. */
+export const SHAFT_HEAD_Y = 34
+export const CAGE_PARK_Y = 26
+
+/** Emergency shoes bite here, on the way down past the corridor. */
+export const SHAFT_BRAKE_Y = -10
+
+/** Hydraulic buffers at the bottom of the well. */
+export const SHAFT_FLOOR_Y = -46
+
 export const CAGE_HALF = 1.5 // cage interior half-width
 export const CAGE_HEIGHT = 2.6
 
-export const PHASE_DESCENT = 0
-export const PHASE_FREEFALL = 1
-export const PHASE_BRAKING = 2
-export const PHASE_BUFFER = 3
+/** Metres short of the crossing at which the winch starts lowering the cage. */
+const ARM_DIST = 40
 
-/** On foot, forward, over the infinite fall. */
-export const PHASE_WALK = 4
+/** Metres short of the crossing at which the cable parts. */
+const SNAP_DIST = 5.5
 
-const CAGE_MASS       = 900 // kg, cage + occupant
+// Metres past the crossing — out of sight behind you — before it is hoisted
+// back to the shaft head for the next loop.
+const RESET_DIST = 45
+
+export const CAGE_PARKED = 0
+export const CAGE_DESCENT = 1
+export const CAGE_FREEFALL = 2
+export const CAGE_BRAKING = 3
+export const CAGE_BUFFER = 4
+
+const CAGE_MASS       = 900 // kg, cage + load
 const CAGE_DRAG       = 1.15 // ½ρCdA, quadratic drag coefficient
 const CABLE_K         = 42000 // N/m
 const CABLE_C         = 5200 // N·s/m
-const PAYOUT_SPEED    = 23 // winch pay-out rate during the controlled descent
-const CREEP_SPEED     = 15 // m/s, governed lowering rate once the shoes hold
+const CABLE_SAG       = CAGE_MASS * G / CABLE_K // static stretch under load
+const PAYOUT_SPEED    = 0.4 // winch pay-out rate during the controlled descent
+const CREEP_SPEED     = 6 // m/s, governed lowering rate once the shoes hold
 const CREEP_MAX_FORCE = 60000 // N ceiling on the lowering servo
 const BUFFER_K        = 260000 // N/m, hydraulic buffer stiffness
 const BUFFER_C        = 34000 // N·s/m
 const BUFFER_POWER    = 1.6 // >1 = progressively stiffer as it compresses
 
-// --- the walk (mirrored by the shader) -------------------------------------
-export const PATH_CUBES = 8 // live cubes in the sliding window
+// --- the folding span (mirrored by the shader) ------------------------------
+
+/** Cubes in the span that bridges the gap over the melt. */
+export const SPAN_CUBES = 8
 export const CUBE_SPACING = 4.0 // metres between cube centres
 export const CUBE_HALF = 1.2 // cube half-size; faces are 2 x CUBE_HALF square
-export const WALK_LENGTH = 150 // metres of path before the cycle restarts
 
-const WALK_SPEED  = 3.1 // m/s, walking pace
-const UNFOLD_LEAD = 15 // metres of warning before you reach a cube
+/** Cyclic position of the first cube's centre, in the furnace-floor hall. */
+export const SPAN_Z0 = SECTION_LEN * 6 + 4
+
+/** Molten surface far below the span. */
+export const MELT_Y = -30
+
+const UNFOLD_LEAD = 14 // metres of warning before you reach a cube
 const REFOLD_LAG  = 5 // metres behind you before it closes again
 const HINGE_K     = 46 // hinge stiffness — higher snaps the panels open
 const HINGE_C     = 7.5 // hinge damping — lower leaves them ringing
+const HINGE_KICK  = 0.42 // hinge rate injected by a footfall landing on a panel
 
 export interface DebrisBody {
 
-  /** World position of the body centre. */
+  /** Position: x/z are in the cage's frame, y is world height. */
   px: number
   py: number
   pz: number
@@ -106,16 +177,59 @@ export interface DebrisBody {
 }
 
 export interface FoundryState {
+
+  // --- the walker ---------------------------------------------------------
+
+  /** Total distance walked, metres. The journey's only clock. */
+  dist: number
+
+  /** Position within the current loop, 0..CYCLE_LEN. */
+  z: number
+
+  /** Completed loops, and the version that ramps smoothly across the wrap. */
+  loop:       number
+  smoothLoop: number
+
+  /** Walking speed, m/s. */
+  v: number
+
+  /** Footsteps taken; the fractional part is the stride phase. */
+  stride: number
+
+  /** Which foot is down: ±1. */
+  foot: number
+
+  /** Head height relative to the walking surface, and its rate — a leg spring. */
+  bob:  number
+  bobV: number
+
+  /** Lateral weight-transfer sway, and its rate. */
+  sway:  number
+  swayV: number
+
+  /** Floor tremor travelling up from the buffer slam, and its rate. */
+  tremor:  number
+  tremorV: number
+
+  /** Camera pose, all of it derived from the gait above. */
+  eyeY:   number
+  yaw:    number
+  pitch:  number
+  roll:   number
+  shakeX: number
+  shakeY: number
+
+  // --- the cage in the crossing shaft -------------------------------------
   phase: number
 
   /** Cage floor height, metres. */
   y: number
 
   /** Cage vertical velocity, m/s (negative = falling). */
-  v: number
+  cageV: number
 
-  /** Cage vertical acceleration, m/s² — drives camera shake and the hook. */
-  a: number
+  /** Cage vertical acceleration, m/s² — drives the hook and the tremor. */
+  cageA: number
 
   /** Unspooled cable length; the cable only pulls once y drops below it. */
   cableRest:   number
@@ -124,8 +238,14 @@ export interface FoundryState {
   /** Instantaneous brake friction power, normalised 0..1 — spark intensity. */
   spark: number
 
-  /** Seconds spent settled at the bottom, gating the hoist. */
+  /** Seconds spent settled, gating the phase machine's exits. */
   settleTime: number
+
+  /** True once the brake shoes have stalled the cage and slipped to a creep. */
+  creeping: boolean
+  debris:   DebrisBody[]
+
+  // --- machinery ----------------------------------------------------------
 
   /** Flywheel angle and rate driving the wall pistons. */
   crank:      number
@@ -134,23 +254,43 @@ export interface FoundryState {
   /** Damped pendulum hook hanging from the cage roof. */
   hook:      number
   hookOmega: number
-  shakeX:    number
-  shakeY:    number
-  debris:    DebrisBody[]
 
-  /** True once the brake shoes have stalled the cage and slipped to a creep. */
-  creeping: boolean
+  /** Damped pendulum chain hanging from the hall's hoist beams. */
+  chain:      number
+  chainOmega: number
 
-  /** Forward position and speed during PHASE_WALK, metres and m/s. */
-  walkZ: number
-  walkV: number
-
-  /** World index of the first cube in the live window. */
-  cubeBase: number
+  // --- the folding span ---------------------------------------------------
 
   /** Per-cube fold coordinate (0 = closed cube, 1 = fully unfolded). */
   fold:      number[]
   foldOmega: number[]
+}
+
+// --- cyclic helpers ---------------------------------------------------------
+
+/** Wrap a distance into one loop, 0..CYCLE_LEN. */
+export function cyclic (z: number): number {
+  return z - CYCLE_LEN * Math.floor(z / CYCLE_LEN)
+}
+
+/** Signed distance from `from` to `to` the short way round the loop. */
+export function cycDelta (to: number, from: number): number {
+  const d = cyclic(to - from)
+  return d > CYCLE_LEN * 0.5 ? d - CYCLE_LEN : d
+}
+
+function smoothstep (a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
+  return t * t * (3 - 2 * t)
+}
+
+/**
+ * How hard the world is coming apart on this loop, 0..0.85. A little more each
+ * circuit — enough that the second lap is visibly wrong and the fifth is barely
+ * holding together, but never so much that you cannot see where you are walking.
+ */
+export function decayFor (smoothLoop: number): number {
+  return Math.min(0.85, smoothLoop * 0.11)
 }
 
 // --- deterministic RNG ------------------------------------------------------
@@ -163,6 +303,12 @@ function mulberry32 (seed: number): () => number {
     t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
     return ((t ^ t >>> 14) >>> 0) / 4294967296
   }
+}
+
+/** Cheap scalar hash, used to vary one footfall from the next. */
+function hash11 (x: number): number {
+  const s = Math.sin(x * 12.9898) * 43758.5453123
+  return s - Math.floor(s)
 }
 
 function spawnDebris (rand: () => number, cageY: number): DebrisBody[] {
@@ -201,34 +347,50 @@ function spawnDebris (rand: () => number, cageY: number): DebrisBody[] {
 export function createFoundryState (seed = 0x5eed): FoundryState {
   const rand = mulberry32(seed)
   return {
-    phase:       PHASE_DESCENT,
-    y:           SHAFT_TOP,
+    dist:        0,
+    z:           0,
+    loop:        0,
+    smoothLoop:  0,
     v:           0,
-    a:           0,
-    cableRest:   0,
+    stride:      0,
+    foot:        1,
+    bob:         0,
+    bobV:        0,
+    sway:        0,
+    swayV:       0,
+    tremor:      0,
+    tremorV:     0,
+    eyeY:        EYE_HEIGHT,
+    yaw:         0,
+    pitch:       0,
+    roll:        0,
+    shakeX:      0,
+    shakeY:      0,
+    phase:       CAGE_PARKED,
+    y:           CAGE_PARK_Y,
+    cageV:       0,
+    cageA:       0,
+    cableRest:   CAGE_PARK_Y + CABLE_SAG,
     cableIntact: true,
     spark:       0,
     settleTime:  0,
+    creeping:    false,
+    debris:      spawnDebris(rand, CAGE_PARK_Y),
     crank:       0,
     crankOmega:  5.4,
     hook:        0.18,
     hookOmega:   0,
-    shakeX:      0,
-    shakeY:      0,
-    debris:      spawnDebris(rand, SHAFT_TOP),
-    creeping:    false,
-    walkZ:       0,
-    walkV:       0,
-    cubeBase:    0,
-    fold:        new Array<number>(PATH_CUBES).fill(0),
-    foldOmega:   new Array<number>(PATH_CUBES).fill(0),
+    chain:       0.12,
+    chainOmega:  0,
+    fold:        new Array<number>(SPAN_CUBES).fill(0),
+    foldOmega:   new Array<number>(SPAN_CUBES).fill(0),
   }
 }
 
 /**
  * Emergency brake force, in newtons, opposing the cage's motion.
  *
- * ── This function defines how the whole journey *feels*. ──
+ * ── This function defines how the plunge past you *feels*. ──
  * The shoes clamp the guide rails, so this is Coulomb friction: μ·N, where the
  * normal force N is what the wedge mechanism applies. The realistic subtlety is
  * that N does not appear instantly — the shoes take time to seat, and once
@@ -236,12 +398,12 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
  *
  * Trade-offs worth playing with:
  *   • A large constant force  → a violent, near-instant slam. High jerk, huge
- *     camera shake, debris hammers the floor. Reads as catastrophic.
+ *     shower of sparks, debris hammers the floor. Reads as catastrophic.
  *   • A ramp on `engaged`     → a progressive squeal, several seconds of
  *     shrieking deceleration. More dread, less impact.
  *   • Velocity-dependent μ    → grabby at low speed, glassy at high speed; the
  *     cage judders (stick-slip) as it slows. Most physically honest, and the
- *     most expensive in shake budget.
+ *     most expensive in spark budget.
  *
  * @param speed    absolute cage speed, m/s
  * @param engaged  seconds since the shoes made contact
@@ -347,35 +509,68 @@ function collideWithCage (b: DebrisBody, cageY: number, cageV: number): number {
 // because it is pure integrator bookkeeping rather than renderable state.
 let brakeEngaged = 0
 
+/** Hoist the cage back to the shaft head with a fresh scatter of debris. */
+function resetCage (s: FoundryState): void {
+  s.phase       = CAGE_PARKED
+  s.y           = CAGE_PARK_Y
+  s.cageV       = 0
+  s.cageA       = 0
+  s.cableRest   = CAGE_PARK_Y + CABLE_SAG
+  s.cableIntact = true
+  s.settleTime  = 0
+  s.creeping    = false
+  brakeEngaged  = 0
+
+  const rand = mulberry32((Math.floor(s.dist * 977) ^ 0x9e3779b9) >>> 0)
+  s.debris   = spawnDebris(rand, CAGE_PARK_Y)
+}
+
 /**
  * Sum the vertical forces on the cage for this step and advance its phase.
  * Returns the net force in newtons; the caller integrates it.
+ *
+ * The phase machine is driven by *where the walker is*, not by a timer: the
+ * winch starts lowering ARM_DIST short of the crossing and the cable parts
+ * SNAP_DIST short of it, which is exactly enough head start for the cage to be
+ * doing ~20 m/s through the corridor as you reach the well.
  */
 function cageForce (s: FoundryState, dt: number): number {
-  // ---- cage: sum forces, then semi-implicit Euler ----
-  let force = -CAGE_MASS * G
-  const speed = Math.abs(s.v)
-  force -= Math.sign(s.v) * CAGE_DRAG * speed * speed // quadratic aero drag
+  const toCross = cycDelta(CROSS_Z, s.z)
 
-  if (s.phase === PHASE_DESCENT) {
+  if (s.phase === CAGE_PARKED) {
+    // Held at the shaft head on a taut cable, out of sight above the ceiling.
+    s.y     = CAGE_PARK_Y
+    s.cageV = 0
+    s.spark *= Math.exp(-dt * 3.5)
+    if (toCross > 0 && toCross < ARM_DIST)
+      s.phase = CAGE_DESCENT
+    return 0
+  }
+
+  // Everything past here is out of the cable's control or on its way there.
+  let force = -CAGE_MASS * G
+  const speed = Math.abs(s.cageV)
+  force -= Math.sign(s.cageV) * CAGE_DRAG * speed * speed // quadratic aero drag
+
+  if (s.phase === CAGE_DESCENT) {
     s.cableRest -= PAYOUT_SPEED * dt
 
     // Tension-only: a cable can pull, never push.
     const stretch = s.cableRest - s.y
     if (stretch > 0)
-      force += CABLE_K * stretch - CABLE_C * s.v
-    if (s.y <= SHAFT_SNAP_Y) {
+      force += CABLE_K * stretch - CABLE_C * s.cageV
+    if (toCross > 0 && toCross < SNAP_DIST) {
       s.cableIntact = false
-      s.phase       = PHASE_FREEFALL
-      brakeEngaged = 0
+      s.phase       = CAGE_FREEFALL
+      brakeEngaged  = 0
     }
   }
-  else if (s.phase === PHASE_FREEFALL) {
+  else if (s.phase === CAGE_FREEFALL) {
     if (s.y <= SHAFT_BRAKE_Y)
-      s.phase = PHASE_BRAKING
+      s.phase = CAGE_BRAKING
   }
 
-  if (s.phase === PHASE_BRAKING) {
+  if (s.phase === CAGE_BRAKING) {
     brakeEngaged += dt
 
     // The impulse the shoes would have to supply to zero the velocity this
@@ -383,12 +578,12 @@ function cageForce (s: FoundryState, dt: number): number {
     // to `f` of this and no more — and because it is signed by `needed` rather
     // than by velocity, it also holds the cage statically once stopped instead
     // of leaving a residual crawl.
-    const needed = -CAGE_MASS * s.v / dt - force
+    const needed = -CAGE_MASS * s.cageV / dt - force
 
     if (s.creeping) {
       // Held on the shoes and lowered under control: a velocity servo running
-      // the cage down the last of the shaft at a fixed rate.
-      const servo = CAGE_MASS * (-CREEP_SPEED - s.v) / dt - force
+      // the cage down the last of the well at a fixed rate.
+      const servo = CAGE_MASS * (-CREEP_SPEED - s.cageV) / dt - force
       force += Math.max(0, Math.min(servo, CREEP_MAX_FORCE))
       s.spark = Math.min(1, 0.22 + speed / CREEP_SPEED * 0.25)
     }
@@ -412,111 +607,52 @@ function cageForce (s: FoundryState, dt: number): number {
     }
 
     if (s.y <= SHAFT_FLOOR_Y) {
-      s.phase      = PHASE_BUFFER
+      s.phase      = CAGE_BUFFER
       s.settleTime = 0
     }
   }
   else
     s.spark *= Math.exp(-dt * 3.5)
 
-  if (s.phase === PHASE_BUFFER) {
+  if (s.phase === CAGE_BUFFER) {
+    // Seconds since the slam, so the HUD can stop reporting it once the
+    // shock has rung out of the floor.
+    s.settleTime += dt
+
     const compress = SHAFT_FLOOR_Y - s.y
     if (compress > 0) {
       // Nonlinear hydraulic buffer: stiffens as it compresses, damps velocity.
       force += BUFFER_K * Math.pow(compress, BUFFER_POWER)
-      if (s.v < 0)
-        force -= BUFFER_C * s.v
-    }
-    if (Math.abs(s.v) < 0.12 && compress > -0.02)
-      s.settleTime += dt
-    if (s.settleTime > 2.4) {
-      // The gate opens and you step out of the cage onto the folding path.
-      s.phase      = PHASE_WALK
-      s.settleTime = 0
+      if (s.cageV < 0)
+        force -= BUFFER_C * s.cageV
     }
   }
 
-  if (s.phase === PHASE_WALK) {
-    // The cage is parked; the walker is on foot from here, so the vertical
-    // solver is done and stepWalk() takes over.
-    force = 0
-    s.v   = 0
-  }
+  // Once the well is well behind you the winch takes it back up for the next
+  // circuit. Nothing on screen moves — it happens out of sight.
+  if (toCross < -RESET_DIST)
+    resetCage(s)
 
   return force
 }
 
-/** Restart the cycle at the top of the shaft with a fresh scatter of debris. */
-function resetCycle (s: FoundryState): void {
-  s.y           = SHAFT_TOP
-  s.v           = 0
-  s.a           = 0
-  s.phase       = PHASE_DESCENT
-  s.cableIntact = true
-  s.cableRest   = SHAFT_TOP
-  s.settleTime  = 0
-  s.creeping    = false
-  s.walkZ       = 0
-  s.walkV       = 0
-  s.cubeBase    = 0
-  brakeEngaged = 0
-  for (let i = 0; i < PATH_CUBES; i++) {
-    s.fold[i]      = 0
-    s.foldOmega[i] = 0
-  }
-
-  const rand = mulberry32((Math.floor(performance.now()) ^ 0x9e3779b9) >>> 0)
-  s.debris   = spawnDebris(rand, SHAFT_TOP)
-}
-
 /**
- * The walk: forward motion over an infinite fall, on a path that only exists
- * because the cubes ahead are unfolding into it.
- *
- * Each cube is a hinged mechanism, not an animation. Its six faces share one
- * fold coordinate integrated as a damped second-order hinge driven toward an
- * open or closed target — so the panels *overshoot and settle* when they slam
- * open, and the path visibly springs into place a moment before it is needed.
+ * Advance the cage and the six free bodies riding in it, and resolve their
+ * contacts. Returns the summed impact speed, which feeds the floor tremor.
  */
-function stepWalk (s: FoundryState, dt: number): void {
-  if (s.phase !== PHASE_WALK)
-    return
+function stepCage (s: FoundryState, dt: number): number {
+  const prevV = s.cageV
 
-  // Gait: accelerate to walking pace and hold it.
-  s.walkV += (WALK_SPEED - s.walkV) * Math.min(1, dt * 1.6)
-  s.walkZ += s.walkV * dt
+  // Semi-implicit Euler: integrate velocity from the summed forces, then
+  // position from the *new* velocity — stable under the stiff buffer spring in
+  // a way that explicit Euler is not.
+  const accel = cageForce(s, dt) / CAGE_MASS
+  s.cageV += accel * dt
+  s.y += s.cageV * dt
+  s.cageA = (s.cageV - prevV) / dt
 
-  // Slide the window of live cubes forward, recycling the one left behind.
-  const wanted = Math.max(0, Math.floor(s.walkZ / CUBE_SPACING) - 2)
-  while (s.cubeBase < wanted) {
-    s.fold.shift()
-    s.foldOmega.shift()
-    s.fold.push(0)
-    s.foldOmega.push(0)
-    s.cubeBase++
-  }
-
-  for (let i = 0; i < PATH_CUBES; i++) {
-    const cubeZ = (s.cubeBase + i) * CUBE_SPACING
-    const ahead = cubeZ - s.walkZ
-    // Unfold well before you arrive, refold once you are safely past.
-    const target = ahead < UNFOLD_LEAD && ahead > -REFOLD_LAG ? 1 : 0
-    const acc    = HINGE_K * (target - s.fold[i]) - HINGE_C * s.foldOmega[i]
-    s.foldOmega[i] += acc * dt
-    s.fold[i] += s.foldOmega[i] * dt
-  }
-
-  // The path runs out; the shaft claims you again and the cycle restarts.
-  if (s.walkZ > WALK_LENGTH)
-    resetCycle(s)
-}
-
-/**
- * Advance the six free bodies and resolve their contacts with the moving cage.
- * Returns the summed impact speed, which feeds the camera shake.
- */
-function stepDebris (s: FoundryState, dt: number): number {
-  // ---- debris: free bodies in world space, colliding with the moving cage ----
+  // ---- debris: free bodies colliding with the moving cage ----
+  // Bodies move after the cage, so their contacts see this step's cage state.
   let impactSum = 0
   for (let i = 0; i < s.debris.length; i++) {
     const b = s.debris[i]
@@ -531,7 +667,7 @@ function stepDebris (s: FoundryState, dt: number): number {
     b.px += b.vx * dt
     b.py += b.vy * dt
     b.pz += b.vz * dt
-    impactSum += collideWithCage(b, s.y, s.v)
+    impactSum += collideWithCage(b, s.y, s.cageV)
 
     // Angular drag so the tumble settles once bodies come to rest.
     const angDamp = Math.exp(-dt * 0.55)
@@ -541,16 +677,15 @@ function stepDebris (s: FoundryState, dt: number): number {
     integrateQuat(b, dt)
   }
 
-  return impactSum
+  return impactSum + stepBodyContacts(s)
 }
 
 /**
  * Bounding-sphere contacts between debris bodies. Returns the summed closing
- * speed so these impacts shake the camera too.
+ * speed so these impacts register too.
  */
 function stepBodyContacts (s: FoundryState): number {
   let impactSum = 0
-  // ---- body-body contacts ----
   // Bounding-sphere pairs only (15 for 6 bodies). Full box-box manifolds would
   // be far more code for a contact that is on screen for a second at a time;
   // spheres are enough to stop offcuts from visibly occupying the same space.
@@ -610,7 +745,7 @@ function stepBodyContacts (s: FoundryState): number {
   return impactSum
 }
 
-/** Flywheel and hook — two scalar ODEs, integrated alongside the bodies. */
+/** Flywheel and the two pendulums — three scalar ODEs. */
 function stepMechanisms (s: FoundryState, dt: number): void {
   // ---- flywheel driving the wall pistons ----
   // I·dω/dt = motor torque − load torque(θ) − viscous damping.
@@ -620,34 +755,133 @@ function stepMechanisms (s: FoundryState, dt: number): void {
   s.crankOmega += (motor - load - 12 * s.crankOmega) / inertia * dt
   s.crank = (s.crank + s.crankOmega * dt) % (Math.PI * 2)
 
-  // ---- hook: damped pendulum excited by the cage's own acceleration ----
+  // ---- cage hook: damped pendulum excited by the cage's own acceleration ----
   const hookLen = 1.35
   const hookAcc =
-    -(G + s.a) / hookLen * Math.sin(s.hook) - 0.9 * s.hookOmega
+    -(G + s.cageA) / hookLen * Math.sin(s.hook) - 0.9 * s.hookOmega
   s.hookOmega += hookAcc * dt
   s.hook += s.hookOmega * dt
+
+  // ---- hall chain: the same pendulum, hung from the hoist beams and excited
+  // by the floor tremor instead, so your own footfalls set it swinging ----
+  const chainLen = 2.4
+  const chainAcc =
+    -(G + s.tremorV * 12.0) / chainLen * Math.sin(s.chain) - 0.42 * s.chainOmega
+  s.chainOmega += chainAcc * dt
+  s.chain += s.chainOmega * dt
+}
+
+/** Index of the span cube nearest the walker, or -1 if the span is elsewhere. */
+function cubeUnderfoot (s: FoundryState): number {
+  let best  = -1
+  let bestD = CUBE_SPACING * 0.5 + 0.4
+  for (let i = 0; i < SPAN_CUBES; i++) {
+    const d = Math.abs(cycDelta(SPAN_Z0 + i * CUBE_SPACING, s.z))
+    if (d < bestD) {
+      bestD = d
+      best  = i
+    }
+  }
+  return best
+}
+
+/**
+ * The folding span: the furnace floor is cut away over the melt, and the only
+ * walkway is a line of cubes that unfold their six faces about hinge edges.
+ *
+ * Each cube is a hinged mechanism, not an animation. Its faces share one fold
+ * coordinate integrated as a damped second-order hinge driven toward an open or
+ * closed target — so the panels *overshoot and settle* when they slam open, the
+ * path visibly springs into place a moment before it is needed, and a boot
+ * landing on a panel sets it ringing under you.
+ */
+function stepSpan (s: FoundryState, dt: number): void {
+  for (let i = 0; i < SPAN_CUBES; i++) {
+    const ahead = cycDelta(SPAN_Z0 + i * CUBE_SPACING, s.z)
+    // Unfold well before you arrive, refold once you are safely past.
+    const target = ahead < UNFOLD_LEAD && ahead > -REFOLD_LAG ? 1 : 0
+    const acc    = HINGE_K * (target - s.fold[i]) - HINGE_C * s.foldOmega[i]
+    s.foldOmega[i] += acc * dt
+    s.fold[i] += s.foldOmega[i] * dt
+  }
+}
+
+/**
+ * The walk. Forward speed is trivially a relaxation to a walking pace; the
+ * interesting part is that everything the camera does is a *consequence* of it.
+ *
+ * Head height rides a damped leg spring whose rest length is the walking
+ * surface; every heel strike kicks that spring downward, so the head dips
+ * sharply on contact and rebounds with a decaying ring rather than tracing a
+ * sine. Weight transfer kicks an alternating lateral spring tuned to one stride
+ * period, and the head's roll and yaw are read straight off that sway. Over the
+ * folding span the spring's rest length is the panel you are standing on, so the
+ * mechanism's ring shows up in your eyes.
+ */
+function stepWalker (s: FoundryState, dt: number): void {
+  s.v += (WALK_SPEED - s.v) * Math.min(1, dt * 1.4)
+  s.dist += s.v * dt
+  s.z    = cyclic(s.dist)
+  s.loop = Math.floor(s.dist / CYCLE_LEN)
+  // Ramp the loop across the wrap so the decay never steps in a single frame.
+  s.smoothLoop = s.loop + smoothstep(CYCLE_LEN - TRANSITION, CYCLE_LEN, s.z)
+
+  const decay = decayFor(s.smoothLoop)
+
+  // ---- footfalls ----
+  const prevStride = s.stride
+  s.stride += s.v / STEP_LEN * dt
+  if (Math.floor(s.stride) > Math.floor(prevStride)) {
+    const n = Math.floor(s.stride)
+    s.foot  = -s.foot
+    // No two steps are identical, and the further the loop has decayed the more
+    // the gait staggers.
+    s.bobV -= HEEL_KICK * (0.85 + 0.30 * hash11(n) + decay * 0.55 * hash11(n * 3.7))
+    s.swayV += SWAY_KICK * s.foot * (0.9 + 0.2 * hash11(n * 1.7))
+
+    const cube = cubeUnderfoot(s)
+    if (cube >= 0)
+      s.foldOmega[cube] -= HINGE_KICK
+  }
+
+  // ---- leg spring, sway spring, floor tremor ----
+  const cube   = cubeUnderfoot(s)
+  // Standing on the span you ride the panel: its hinge ring is your ground.
+  const ground = cube >= 0 ? (s.fold[cube] - 1) * 0.10 : 0
+
+  s.bobV += (LEG_K * (ground - s.bob) - LEG_C * s.bobV) * dt
+  s.bob += s.bobV * dt
+  s.swayV += (-SWAY_K * s.sway - SWAY_C * s.swayV) * dt
+  s.sway += s.swayV * dt
+  s.tremorV += (-TREMOR_K * s.tremor - TREMOR_C * s.tremorV) * dt
+  s.tremor += s.tremorV * dt
+
+  // ---- camera pose, all of it read off the gait ----
+  s.eyeY  = EYE_HEIGHT + s.bob + s.tremor * 0.6 + Math.sin(s.dist * 0.65) * 0.006
+  s.yaw   = s.sway * 0.85 + Math.sin(s.dist * 0.013) * 0.045
+  s.pitch = -0.05 + s.bobV * 0.022 - s.tremorV * 0.010
+  s.roll  = -s.sway * 0.50 + s.tremor * 0.40
+
+  const jolt = Math.min(1, Math.abs(s.tremorV) * 0.45 + s.spark * 0.30)
+  s.shakeX   = jolt * Math.sin(s.dist * 41.3 + s.crank * 5.1)
+  s.shakeY   = jolt * Math.sin(s.dist * 57.7 - s.crank * 3.3)
 }
 
 function step (s: FoundryState, dt: number): void {
-  const prevV = s.v
+  stepWalker(s, dt)
+  stepSpan(s, dt)
 
-  // Semi-implicit Euler: integrate velocity from the summed forces, then
-  // position from the *new* velocity — stable under the stiff buffer spring in
-  // a way that explicit Euler is not.
-  const accel = cageForce(s, dt) / CAGE_MASS
-  s.v += accel * dt
-  s.y += s.v * dt
-  s.a = (s.v - prevV) / dt
-
-  // Bodies move after the cage, so their contacts see this step's cage state.
-  const impactSum = stepDebris(s, dt) + stepBodyContacts(s)
+  const impactSum = stepCage(s, dt)
   stepMechanisms(s, dt)
-  stepWalk(s, dt)
 
-  // ---- camera shake, derived from real jerk and real impacts ----
-  const shakeMag = Math.min(1, Math.abs(s.a) / 55 + impactSum * 0.05 + s.spark * 0.25)
-  s.shakeX       = shakeMag * Math.sin(s.y * 37.4 + s.crank * 5.1)
-  s.shakeY       = shakeMag * Math.sin(s.y * 51.7 - s.crank * 3.3)
+  // The buffer slam and every debris impact travel up through the floor plate.
+  // Distance is what makes it land as a thump rather than a constant rumble.
+  const reach = Math.max(1, Math.abs(cycDelta(CROSS_Z, s.z)))
+  if (impactSum > 0.05 || Math.abs(s.cageA) > 25) {
+    const strength = (impactSum * 0.02 + Math.max(0, Math.abs(s.cageA) - 25) * 0.004) /
+      (1 + reach * reach * 0.004)
+    s.tremorV -= strength
+  }
 }
 
 /**
@@ -674,6 +908,6 @@ export function pistonExtension (crank: number, radius = 0.62, rod = 1.9): numbe
   return radius * Math.cos(crank) + Math.sqrt(Math.max(0, rod * rod - s * s))
 }
 
-// perf: cheap. 6 rigid bodies + 1 cage + 2 scalar ODEs at 120 Hz is ~0.05 ms
-// per frame on the main thread; allocation-free after construction (the only
-// allocation is the debris respawn once per ~40 s cycle).
+// perf: cheap. 1 walker + 6 rigid bodies + 1 cage + 3 scalar ODEs + 8 hinges at
+// 120 Hz is ~0.06 ms per frame on the main thread; allocation-free after
+// construction (the only allocation is the debris respawn once per loop).

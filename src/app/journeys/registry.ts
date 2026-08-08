@@ -128,8 +128,8 @@ export const JOURNEYS: Journey[] = [
   {
     slug:          'foundry',
     title:         'THE FOUNDRY',
-    tagline:       'The cable parts at eighty metres. Everything after that is physics.',
-    tags:          [ 'raymarch', 'industrial', 'rigid-body', 'simulated' ],
+    tagline:       'Walk the seven halls. The seventh runs back into the first, a little more wrong each time.',
+    tags:          [ 'raymarch', 'industrial', 'rigid-body', 'simulated', 'loop' ],
     accent:        '#ff8a3d',
     gradient:      [ '#241206', '#0a0708' ],
     previewShader: foundryPreviewFrag,
