@@ -3,20 +3,25 @@
 // Bridges physics.ts to the shader: owns one FoundryState, advances it on the
 // shared frame loop, packs the result into uniform arrays, and derives the HUD
 // section label. Unlike the other journeys the label is *not* a function of
-// time — it is a function of where the cage actually is and what it is doing,
-// so a slow-motion run reports the same sections in the same order.
+// time — it is a function of how far the walker has actually walked and what the
+// machinery is doing to them, so a slow-motion run reports the same sections in
+// the same order.
 
 import {
   advance,
+  CAGE_BRAKING,
+  CAGE_BUFFER,
+  CAGE_FREEFALL,
   createFoundryState,
+  CROSS_Z,
+  CUBE_SPACING,
+  cycDelta,
+  decayFor,
   pistonExtension,
-  PHASE_BRAKING,
-  PHASE_BUFFER,
-  PHASE_FREEFALL,
-  PHASE_WALK,
   SECTION_COUNT,
-  SECTION_LEN
-
+  SECTION_LEN,
+  SPAN_CUBES,
+  SPAN_Z0
 } from './physics'
 import type { FoundryState } from './physics'
 import type { JourneySimulation } from '@/components/withShaderJourney'
@@ -27,9 +32,10 @@ export interface FoundrySection {
   name: string
 }
 
-// Seven 200 m bands, each a distinct machine environment. The shader keys its
-// geometry, shaft width, rib/lamp cadence and palette off the same indices —
-// SECTION_LEN is the single source of truth for where each one starts.
+// Seven 36 m halls in a ring, each a distinct machine environment. The shader
+// keys its geometry, corridor profile, rib/lamp cadence and palette off the same
+// indices — SECTION_LEN is the single source of truth for where each one starts,
+// and the seventh runs straight back into the first.
 export const FOUNDRY_SECTIONS: FoundrySection[] = [
   { id: 1, name: 'SECTION 1: LOADING BAY' },
   { id: 2, name: 'SECTION 2: PISTON GALLERY' },
@@ -40,38 +46,57 @@ export const FOUNDRY_SECTIONS: FoundrySection[] = [
   { id: 7, name: 'SECTION 7: FURNACE FLOOR' },
 ]
 
-/** Shown instead of the band name while the cage is doing something drastic. */
-const PHASE_LABELS: Record<number, string> = {
-  [PHASE_FREEFALL]: 'THE CABLE PARTS',
-  [PHASE_BRAKING]:  'EMERGENCY SHOES',
-  [PHASE_BUFFER]:   'HYDRAULIC FLOOR',
-  [PHASE_WALK]:     'THE FOLDING PATH',
-}
+/** Metres either side of the crossing over which the cage's plunge takes the label. */
+const CAGE_EARSHOT = 34
+
+/** Seconds the buffer slam keeps the label after the cage has stopped moving. */
+const SLAM_ECHO = 3
+
+/** Shown instead of the hall name while something drastic is happening. */
+const EVENT_CABLE = 'THE CABLE PARTS'
+const EVENT_SHOES = 'EMERGENCY SHOES'
+const EVENT_SLAM  = 'HYDRAULIC FLOOR'
+const EVENT_SPAN  = 'THE FOLDING SPAN'
 
 export function sectionFor (state: FoundryState): FoundrySection {
   const band = Math.min(
     SECTION_COUNT - 1,
-    Math.max(0, Math.floor(-state.y / SECTION_LEN)),
+    Math.max(0, Math.floor(state.z / SECTION_LEN)),
   )
   return FOUNDRY_SECTIONS[band]
 }
 
+/** True while the walker is out over the melt on the unfolding cubes. */
+function onSpan (state: FoundryState): boolean {
+  const first = cycDelta(SPAN_Z0 - CUBE_SPACING * 0.5, state.z)
+  const last  = cycDelta(SPAN_Z0 + (SPAN_CUBES - 0.5) * CUBE_SPACING, state.z)
+  return first <= 0 && last >= 0
+}
+
 /**
- * The HUD label. Depth picks the section; a dramatic phase overrides the name
- * but keeps the section number, so you always know both where you are and what
- * is happening to you.
+ * The HUD label. Position picks the hall; a nearby event overrides the name but
+ * keeps the section number, so you always know both where you are and what is
+ * happening to you. From the second circuit on it is prefixed with the loop
+ * count, because by then the halls are no longer quite the ones you walked.
  */
 export function labelFor (state: FoundryState): string {
-  // The walk leaves the shaft entirely, so it gets its own section number
-  // rather than borrowing the band the cage happens to be parked in.
-  if (state.phase === PHASE_WALK)
-    return `SECTION ${SECTION_COUNT + 1}: ${PHASE_LABELS[PHASE_WALK]}`
+  const section = sectionFor(state)
+  const toCross = cycDelta(CROSS_Z, state.z)
 
-  const section  = sectionFor(state)
-  const override = PHASE_LABELS[state.phase]
-  return override
-    ? `SECTION ${section.id}: ${override}`
-    : section.name
+  let event = ''
+  if (Math.abs(toCross) < CAGE_EARSHOT) {
+    if (state.phase === CAGE_FREEFALL)
+      event = EVENT_CABLE
+    else if (state.phase === CAGE_BRAKING)
+      event = EVENT_SHOES
+    else if (state.phase === CAGE_BUFFER && state.settleTime < SLAM_ECHO)
+      event = EVENT_SLAM
+  }
+  if (!event && onSpan(state))
+    event = EVENT_SPAN
+
+  const name = event ? `SECTION ${section.id}: ${event}` : section.name
+  return state.loop > 0 ? `LOOP ${state.loop + 1} · ${name}` : name
 }
 
 /**
@@ -112,19 +137,16 @@ export function createFoundrySimulation (): JourneySimulation {
         fold1[i] = state.fold[i + 4]
       }
 
-      // Cross-fade into the walk over the first few metres, so stepping out of
-      // the cage dissolves the shaft rather than cutting to it.
-      const walkBlend = state.phase === PHASE_WALK
-        ? Math.min(1, state.walkZ / 4)
-        : 0
-
       return {
-        uCage:    [ state.y, state.v, state.a, state.phase ],
-        uWalk:    [ state.walkZ, state.cubeBase, walkBlend, state.walkV ],
+        // Cyclic position, not total distance: the shader's world is periodic,
+        // so keeping the camera inside one loop costs no precision after an hour.
+        uWalk:    [ state.z, state.smoothLoop, decayFor(state.smoothLoop), state.roll ],
+        uGait:    [ state.eyeY, state.sway, state.yaw, state.pitch ],
+        uCage:    [ state.y, state.cageV, state.cageA, state.phase ],
+        uSim:     [ state.shakeX, state.shakeY, state.spark, state.cableIntact ? 1 : 0 ],
+        uMech:    [ state.crank, pistonExtension(state.crank), state.hook, state.chain ],
         uFold0:   fold0,
         uFold1:   fold1,
-        uSim:     [ state.shakeX, state.shakeY, state.spark, state.cableIntact ? 1 : 0 ],
-        uMech:    [ state.crank, pistonExtension(state.crank), state.hook, state.crankOmega ],
         uDebris:  debris,
         uDebrisQ: debrisQ,
       }
