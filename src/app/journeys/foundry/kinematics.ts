@@ -3,20 +3,21 @@
 // Bridges physics.ts to the shader: owns one FoundryState, advances it on the
 // shared frame loop, packs the result into uniform arrays, and derives the HUD
 // section label. Unlike the other journeys the label is *not* a function of
-// time — it is a function of how far the walker has actually walked and what the
-// machinery is doing to them, so a slow-motion run reports the same sections in
-// the same order.
+// time — it is a function of what the lift is doing to you and, once you are on
+// foot, of how far you have actually walked, so a slow-motion run reports the
+// same sections in the same order.
 
 import {
   advance,
-  CAGE_BRAKING,
-  CAGE_BUFFER,
-  CAGE_FREEFALL,
   createFoundryState,
-  CROSS_Z,
   CUBE_SPACING,
   cycDelta,
   decayFor,
+  MODE_BOARD,
+  MODE_BRAKE,
+  MODE_FALL,
+  MODE_SETTLE,
+  MODE_WALK,
   pistonExtension,
   SECTION_COUNT,
   SECTION_LEN,
@@ -46,17 +47,12 @@ export const FOUNDRY_SECTIONS: FoundrySection[] = [
   { id: 7, name: 'SECTION 7: FURNACE FLOOR' },
 ]
 
-/** Metres either side of the crossing over which the cage's plunge takes the label. */
-const CAGE_EARSHOT = 34
-
-/** Seconds the buffer slam keeps the label after the cage has stopped moving. */
-const SLAM_ECHO = 3
-
 /** Shown instead of the hall name while something drastic is happening. */
-const EVENT_CABLE = 'THE CABLE PARTS'
-const EVENT_SHOES = 'EMERGENCY SHOES'
-const EVENT_SLAM  = 'HYDRAULIC FLOOR'
-const EVENT_SPAN  = 'THE FOLDING SPAN'
+const EVENT_FALL    = 'THE CABLE PARTS'
+const EVENT_SHOES   = 'EMERGENCY SHOES'
+const EVENT_LANDING = 'THE GATE OPENS'
+const EVENT_BOARD   = 'THE SHUTTER'
+const EVENT_SPAN    = 'THE FOLDING SPAN'
 
 export function sectionFor (state: FoundryState): FoundrySection {
   const band = Math.min(
@@ -73,26 +69,32 @@ function onSpan (state: FoundryState): boolean {
   return first <= 0 && last >= 0
 }
 
+/** The ride's own label, or '' once you are on foot. */
+function rideEvent (state: FoundryState): string {
+  if (state.mode === MODE_FALL)
+    return EVENT_FALL
+  if (state.mode === MODE_BRAKE)
+    return EVENT_SHOES
+  if (state.mode === MODE_SETTLE)
+    return EVENT_LANDING
+  if (state.mode === MODE_BOARD)
+    return EVENT_BOARD
+  return ''
+}
+
 /**
- * The HUD label. Position picks the hall; a nearby event overrides the name but
- * keeps the section number, so you always know both where you are and what is
- * happening to you. From the second circuit on it is prefixed with the loop
- * count, because by then the halls are no longer quite the ones you walked.
+ * The HUD label. Position picks the hall; an event overrides the name but keeps
+ * the section number, so you always know both where you are and what is
+ * happening to you. The lift lands in the loading bay, so the whole drop reports
+ * as section 1 — the journey opens on `SECTION 1: THE CABLE PARTS`. From the
+ * second lap on it is prefixed with the lap count, because by then the halls are
+ * no longer quite the ones you walked.
  */
 export function labelFor (state: FoundryState): string {
   const section = sectionFor(state)
-  const toCross = cycDelta(CROSS_Z, state.z)
 
-  let event = ''
-  if (Math.abs(toCross) < CAGE_EARSHOT) {
-    if (state.phase === CAGE_FREEFALL)
-      event = EVENT_CABLE
-    else if (state.phase === CAGE_BRAKING)
-      event = EVENT_SHOES
-    else if (state.phase === CAGE_BUFFER && state.settleTime < SLAM_ECHO)
-      event = EVENT_SLAM
-  }
-  if (!event && onSpan(state))
+  let event = rideEvent(state)
+  if (!event && state.mode === MODE_WALK && onSpan(state))
     event = EVENT_SPAN
 
   const name = event ? `SECTION ${section.id}: ${event}` : section.name
@@ -137,12 +139,18 @@ export function createFoundrySimulation (): JourneySimulation {
         fold1[i] = state.fold[i + 4]
       }
 
+      // The camera is in the cage for every phase but the walk, which is what
+      // uRide.x switches: it moves the eye into the car and lets the shader skip
+      // the corridor entirely while you are up the shaft.
+      const riding = state.mode === MODE_WALK ? 0 : 1
+
       return {
         // Cyclic position, not total distance: the shader's world is periodic,
-        // so keeping the camera inside one loop costs no precision after an hour.
+        // so keeping the camera inside one lap costs no precision after an hour.
         uWalk:    [ state.z, state.smoothLoop, decayFor(state.smoothLoop), state.roll ],
         uGait:    [ state.eyeY, state.sway, state.yaw, state.pitch ],
-        uCage:    [ state.y, state.cageV, state.cageA, state.phase ],
+        uRide:    [ riding, state.shutter, state.gate, state.modeTime ],
+        uCage:    [ state.y, state.cageV, state.cageA, state.mode ],
         uSim:     [ state.shakeX, state.shakeY, state.spark, state.cableIntact ? 1 : 0 ],
         uMech:    [ state.crank, pistonExtension(state.crank), state.hook, state.chain ],
         uFold0:   fold0,
