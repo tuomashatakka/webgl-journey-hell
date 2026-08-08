@@ -23,12 +23,14 @@ const COMMON = `
   const float SPEED = 5.0;       // longer, more legible acts — mirrors kinematics.ts
   const float LOOP_Z = 540.0;    // nine 60-unit sections; mirrored in kinematics.ts
   const float EYE = 1.6;         // first-person eye height above the deck
+  const float LOOKAHEAD = 16.0;  // camera anticipation through an authored corner
+  const float BENDLEN = 24.0;    // half-length over which each hard turn eases in
 
   // Material/look state written by the SDF at the nearest hit, read by shading.
   float gThick;   // thin-film thickness proxy + Beer-Lambert depth
   float gFell;    // fracture/darken weight 0..1
   float gSpark;   // shatter sparkle weight 0..1
-  float gMat;     // 0 = glass, 1 = train (dark metal)
+  float gMat;     // 0 = glass, 1 = train (dark metal), 2 = skyscraper
 
   // Continuous per-fragment atmosphere (set once by setupAtmosphere()).
   vec3  gBg, gKeyDir, gKeyCol, gGlassTint;
@@ -80,21 +82,32 @@ const COMMON = `
     return 1.0 - smoothstep(0.0, halfW, d);
   }
 
-  // Authored turning centreline. Geometry is warped onto this curve in
-  // mapScene and the camera follows its tangent below.
-  float pathX(float z) {
+  // Restored from the original six-act journey: real angular corners instead
+  // of lateral centreline offsets. The final return turn closes the heading so
+  // z=540 flows continuously into z=0 on every lap.
+  float turnHeading(float z) {
     z = mod(z, LOOP_Z);
-    float x = 0.0;
-    x +=  8.0 * easeIO((z - 38.0) / 42.0);
-    x += -17.0 * easeIO((z - 92.0) / 54.0);
-    x +=  14.0 * easeIO((z - 168.0) / 48.0);
-    x += -11.0 * easeIO((z - 252.0) / 42.0);
-    x +=  15.0 * easeIO((z - 334.0) / 54.0);
-    x += -13.0 * easeIO((z - 420.0) / 48.0);
-    x +=   4.0 * easeIO((z - 492.0) / 42.0);
-    return x;
+    float h = 0.0;
+    h += (PI * 0.5)       * smoothstep(90.0  - BENDLEN, 90.0  + BENDLEN, z);
+    h += (-PI / 3.0)      * smoothstep(210.0 - BENDLEN, 210.0 + BENDLEN, z);
+    h += (PI * 2.0 / 3.0) * smoothstep(390.0 - BENDLEN, 390.0 + BENDLEN, z);
+    h += (-PI * 5.0 / 6.0) * smoothstep(510.0 - BENDLEN, 510.0 + BENDLEN, z);
+    return h;
   }
-  float pathHeading(float z) { return atan(pathX(z + 0.5) - pathX(z - 0.5), 1.0); }
+
+  // World -> canonical: undo the local corridor heading around the camera. All
+  // straight authored SDFs then occupy the same visibly turning route.
+  vec3 unbend(vec3 w) {
+    float camZ = playerZ();
+    float angle = turnHeading(w.z) - turnHeading(camZ);
+    vec2 offset = w.xz - vec2(0.0, camZ);
+    offset = rot(-angle) * offset;
+    return vec3(offset.x, w.y, offset.y + camZ);
+  }
+
+  float pathHeading(float z) {
+    return turnHeading(z) - turnHeading(z + LOOKAHEAD);
+  }
 
   // --- vertical path (first-person eye Y), continuous, physically shaped ----
   // E0 = ground eye, E1 = upper-tier eye, ET = train-roof eye. See SPEC.md §4.
@@ -192,6 +205,33 @@ const COMMON = `
     return best;
   }
 
+  // The original journey blew tower crowns into a deterministic 3D debris
+  // field. Keeping the grid compile-time bounded makes the effect WebGL 1-safe.
+  float shatterTower(vec3 lp, vec3 hf, float prog, float seed) {
+    float best = 1e5;
+    float cx = (hf.x * 2.0) / float(TWX);
+    float cy = (hf.y * 2.0) / float(TWY);
+    float cz = (hf.z * 2.0) / float(TWZ);
+    for (int i = 0; i < TWX; i++) {
+      for (int j = 0; j < TWY; j++) {
+        for (int k = 0; k < TWZ; k++) {
+          float fi = float(i) + 0.5, fj = float(j) + 0.5, fk = float(k) + 0.5;
+          vec3 center = vec3(-hf.x + fi * cx, -hf.y + fj * cy, -hf.z + fk * cz);
+          float h = hash21(vec2(seed + fi * 1.7 + fk * 0.3, fj * 2.3));
+          float h2 = hash21(vec2(fj * 1.1, seed + fi * 0.7 + fk * 1.9));
+          vec3 dir = normalize(vec3(center.x + h - 0.5, 0.6 + h2, center.z + h2 - 0.5));
+          vec3 off = dir * prog * prog * 22.0;
+          off.y -= prog * prog * 30.0;
+          vec3 ls = lp - center - off;
+          ls.xy = rot((h - 0.5) * prog * 9.0) * ls.xy;
+          ls.yz = rot((h2 - 0.5) * prog * 9.0) * ls.yz;
+          best = min(best, sdBox(ls, vec3(cx, cy, cz) * 0.5 * (1.0 - prog * 0.3)));
+        }
+      }
+    }
+    return best;
+  }
+
   // --- main deck -----------------------------------------------------------
   float mapMainDeck(vec3 p) {
     float pz = playerZ();
@@ -283,31 +323,68 @@ const COMMON = `
     return d;
   }
 
-  // Real skyscrapers flank the bridge. After the runner passes, alternating
-  // towers shear loose and topple into the cloud sea with the deck.
+  // Tall skyscrapers occupy both flanks. As each tower reaches the runner its
+  // upper mass tears away, bursts into chunks, and falls toward the cloud sea.
   float mapTowers(vec3 p) {
-    float cell = floor(p.z / 30.0 + 0.5);
-    float cz = cell * 30.0;
-    float seed = hash21(vec2(cell, 19.7));
-    float side = mix(-1.0, 1.0, step(0.5, hash21(vec2(cell, 4.2))));
-    float h = 18.0 + seed * 30.0;
-    vec3 q = p - vec3(side * (8.0 + seed * 4.5), h * 0.5 - 15.0, cz);
-    float behind = playerZ() - cz;
-    float collapse = smoothstep(8.0 + seed * 8.0, 42.0 + seed * 12.0, behind);
-    q.y += collapse * collapse * 18.0;
-    q.xy = rot(side * collapse * (0.65 + seed * 0.45)) * q.xy;
-    float body = sdBox(q, vec3(3.0 + seed * 1.8, h * 0.5, 4.0 + seed));
-    float crown = sdBox(q - vec3(0.0, h * 0.5 + 1.2, 0.0), vec3(1.0, 1.2, 1.0));
-    float d = min(body, crown);
-    gThick = 0.08; gFell = collapse; gSpark = collapse * 0.45; gMat = 2.0;
+    float pz = playerZ();
+    float d = 1e5;
+    float gap = 52.0;
+    float blastTheme = max(gSpan, max(gTrain * 0.72, max(gFrost * 0.78, gConv * 0.42)));
+    for (int i = 0; i < SCENE_TOWERS; i++) {
+      float fi = float(i);
+      float baseZ = floor(pz / gap) * gap + fi * gap + 26.0;
+      for (int sideIndex = 0; sideIndex < 2; sideIndex++) {
+        float side = sideIndex == 0 ? -1.0 : 1.0;
+        float seed = hash21(vec2(baseZ * 0.07, side * 3.3 + fi));
+        float tx = side * (22.0 + seed * 10.0);
+        float tz = baseZ + (seed - 0.5) * 16.0;
+        float topY = 14.0 + seed * 24.0;
+        float baseY = -70.0;
+        float halfH = (topY - baseY) * 0.5;
+        float midY = (topY + baseY) * 0.5;
+        float width = 3.5 + seed * 3.0;
+        vec3 lp = p - vec3(tx, midY, tz);
+
+        float ahead = tz - pz;
+        float proximity = 1.0 - smoothstep(16.0, 64.0, ahead);
+        float selected = step(0.48, hash21(vec2(baseZ, side)));
+        float collapse = clamp(proximity * max(selected * 0.84, blastTheme), 0.0, 1.0);
+
+        float tower;
+        if (collapse < 0.001) {
+          tower = sdBox(lp, vec3(width, halfH, width));
+        } else {
+          float stumpH = halfH * (1.0 - collapse * 0.58);
+          float stump = sdBox(
+            lp - vec3(0.0, -(halfH - stumpH), 0.0),
+            vec3(width, stumpH, width)
+          );
+          vec3 crown = lp - vec3(0.0, stumpH, 0.0);
+          float debris = shatterTower(
+            crown,
+            vec3(width, halfH - stumpH + 0.01, width),
+            collapse,
+            hash21(vec2(tz, side))
+          );
+          tower = min(stump, debris);
+        }
+
+        if (tower < d) {
+          d = tower;
+          gThick = 0.12;
+          gFell = collapse * 0.7;
+          gSpark = collapse;
+          gMat = 2.0;
+        }
+      }
+    }
     return d;
   }
 
   // --- scene composition ---------------------------------------------------
   float mapScene(vec3 w) {
     gThick = 0.0; gFell = 0.0; gSpark = 0.0; gMat = 0.0;
-    vec3 pathSpace = w;
-    pathSpace.x -= pathX(w.z);
+    vec3 pathSpace = unbend(w);
     float d = mapMainDeck(pathSpace);
     float t0 = gThick, f0 = gFell, s0 = gSpark, m0 = gMat;
     float dc = mapCrossings(pathSpace);
@@ -497,10 +574,16 @@ const COMMON = `
     float z = playerZ();
     float air = win(z, 224.0, 230.0, 238.0, 244.0) + win(z, 286.0, 290.0, 300.0, 308.0);
     float bob = sin(iTime * 9.0) * 0.05 * (1.0 - clamp(air, 0.0, 1.0));
-    vec3 ro = vec3(pathX(z) + camLateral(z), pathY(z) + bob, z);
+    vec3 ro = vec3(camLateral(z), pathY(z) + bob, z);
 
-    float pitch = camPitch(z) + uPointer.y * 0.25;
+    float towerLook = max(
+      win(z, 174.0, 186.0, 226.0, 238.0),
+      win(z, 354.0, 366.0, 414.0, 426.0)
+    );
+    float pitch = camPitch(z) + towerLook * 0.12 + uPointer.y * 0.25;
     float yaw   = camYaw(z) + uPointer.x * 0.45;
+    float towerSide = mix(-1.0, 1.0, step(0.5, hash21(vec2(floor(z / 52.0), 4.7))));
+    yaw += towerLook * towerSide * 0.55;
     float roll  = camRoll(z);
 
     vec3 fwd = normalize(vec3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)));
@@ -526,7 +609,15 @@ const COMMON = `
       float thick = gThick, fell = gFell, spark = gSpark, matId = gMat;
       vec3 n = calcNormal(p);
       vec3 surf;
-      if (matId > 0.5) {
+      if (matId > 1.5) {
+        // skyscraper: cold curtain wall whose lit grid breaks apart with it
+        float cosT = clamp(dot(n, -rd), 0.0, 1.0);
+        float fres = 0.08 + 0.92 * pow(1.0 - cosT, 5.0);
+        float windows = step(0.48, fract(p.y * 0.55)) * step(0.38, fract((p.x + p.z) * 0.42));
+        vec3 wall = mix(vec3(0.12, 0.18, 0.24), gKeyCol * 0.62, windows * 0.7);
+        surf = mix(wall, environment(reflect(rd, n), 2.5), 0.2 + fres * 0.48);
+        surf += spark * gKeyCol * (0.12 + fres * 0.7);
+      } else if (matId > 0.5) {
         // train: dark metal curtain, reflective, hot edge glints
         float cosT = clamp(dot(n, -rd), 0.0, 1.0);
         float fres = 0.05 + 0.95 * pow(1.0 - cosT, 5.0);
@@ -560,11 +651,15 @@ const COMMON = `
 // Full-quality variant used by the route page (env map bound; see-through on
 // when heavyEffects is enabled).
 export const skybridgesFrag = `
-#define RM_STEPS 72
-#define MAX_DIST 150.0
-#define STEP_K 0.7
+#define RM_STEPS 76
+#define MAX_DIST 160.0
+#define STEP_K 0.62
 #define SHX 3
 #define SHZ 3
+#define TWX 2
+#define TWY 2
+#define TWZ 2
+#define SCENE_TOWERS 2
 #define SEETHRU_STEPS 12
 #define SEETHRU_DIST 30.0
 #define FBM_OCTAVES 3
@@ -573,12 +668,19 @@ ${COMMON}`
 // Cheaper hover-thumbnail variant: fewer steps, coarser noise, shorter
 // see-through march. No env map bound -> procedural sky fallback.
 export const skybridgesPreviewFrag = `
-#define RM_STEPS 48
-#define MAX_DIST 110.0
-#define STEP_K 0.66
+#define RM_STEPS 50
+#define MAX_DIST 115.0
+#define STEP_K 0.58
 #define SHX 2
 #define SHZ 2
+#define TWX 2
+#define TWY 2
+#define TWZ 2
+#define SCENE_TOWERS 2
 #define SEETHRU_STEPS 8
 #define SEETHRU_DIST 22.0
 #define FBM_OCTAVES 2
 ${COMMON}`
+
+// perf: one fullscreen draw call; no persistent geometry buffers; shader cost is
+// medium/high and bounded by the compile-time ray, refraction, shard, and tower grids.

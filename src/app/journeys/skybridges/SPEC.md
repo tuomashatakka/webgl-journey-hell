@@ -21,10 +21,11 @@ single-pass raymarched WebGL 1.0 / GLSL ES 1.00 fragment shader (`shader.ts`).
 | Deck width | `3.2` u (half 1.6) | main path |
 
 **Camera model — FIRST PERSON.** The camera *is* the runner. Position
-`ro = (pathX(z) + laneSway, camY(z), playerZ())`; `camY` is authored piecewise (Section 4).
-Forward heading follows the path; scripted glances (look back at a collapse, look
-down on a jump, snap up on a climb) layer on top, plus subtle run-bob and
-pointer free-look (`uPointer`).
+`ro = (laneSway, camY(z), playerZ())`; `camY` is authored piecewise (Section 4).
+The world is transformed into camera-relative canonical space by `unbend`, and
+camera yaw anticipates the same `turnHeading` function. Scripted glances (look
+back at a collapse, look toward a bursting tower, look down on a jump, snap up on
+a climb) layer on top, plus subtle run-bob and pointer free-look (`uPointer`).
 
 **World-Z band geometry.** Each section's signature structure lives in a fixed Z
 band of world space. As the camera advances it physically enters each scene; the
@@ -35,10 +36,25 @@ band — no per-pixel blend of nine geometries.
 a per-segment delay (`segmentFall`): a whole-slab tip far away, a shattering glass
 shard-field up close. Glancing back reveals the deck dropping into the cloud sea.
 
-**Turning centreline.** The route bends between offset tower canyons throughout
-the lap. The camera follows the centreline tangent and all bridge geometry is
-warped onto the same curve, so these are physical turns rather than view-only yaw.
-Nearby skyscrapers also shear, tip, and fall after the runner passes them.
+**Turning route.** Restored from the original six-act shader at `6a6e320`: the
+route uses eased angular corners rather than small lateral offsets. `unbend`
+rotates the SDF world around the runner into canonical space while camera yaw
+anticipates the same heading, so bridge geometry and view turn together.
+
+| Centre z | Turn | Themed act |
+|----------|------|------------|
+| 90 | +90° left | The Convergence |
+| 210 | −60° right | High Span |
+| 390 | +120° left | Frost Gallery |
+| 510 | −150° return | Skylight Release / loop closure |
+
+The fourth turn cancels the original route's cumulative +150° heading before the
+loop seam, preventing a snap from z=540 back to z=0.
+
+**Collapsing skyscrapers.** Two nearby towers per depth cell flank both sides of
+the path. Their upper masses detach into deterministic 2×2×2 debris fields,
+spin outward, and accelerate into the cloud sea while the curtain-wall stumps
+remain. The camera glances toward tower bursts during High Span and Frost Gallery.
 
 ---
 
@@ -84,8 +100,8 @@ Nearby skyscrapers also shear, tip, and fall after the runner passes them.
 - **Geometry:** **crossing bridges** sweep *over and under* the main deck at
   **30°–135°** yaw, at staggered heights (some pass below through the cloud gap,
   some arc overhead). 3–4 crossings spaced through the band.
-- **Transition:** flat in; flat out (level unchanged). Heading stays straight; the
-  crossings provide the drama.
+- **Transition:** flat in; flat out (level unchanged). The route executes its
+  first hard corner, an eased **+90° left turn**, through the crossing network.
 - **Glass:** strong chromatic dispersion — rainbow fringing on every crossing edge.
 
 ### 3 · THE ASCENT  (z 120–180)
@@ -102,8 +118,9 @@ Nearby skyscrapers also shear, tip, and fall after the runner passes them.
 - **Theme:** a narrow exposed catwalk, then a leap to a lower span.
 - **Light:** teal, thin, high-altitude; vertigo.
 - **Geometry:** narrow high catwalk (L1, y +10), no rails on one side; crossing
-  bridges far below in the cloud sea. Near z≈225 the catwalk **ends at an edge**;
-  a lower deck (L0, y 0) resumes ~10 u below and ahead.
+  bridges far below in the cloud sea. The path bends **−60° right** between
+  skyscrapers whose crowns burst into falling debris. Near z≈225 the catwalk
+  **ends at an edge**; a lower deck (L0, y 0) resumes ~10 u below and ahead.
 - **Transition (PHYSICS — jump down):** at the edge the camera leaves the deck with
   a small forward hop velocity and falls under gravity: `y(τ)=yEdge + v0·τ − ½g·τ²`
   (τ = time since edge). Camera **pitches down** to watch the approaching deck,
@@ -141,7 +158,8 @@ Nearby skyscrapers also shear, tip, and fall after the runner passes them.
 - **Theme:** a cold gallery of frosted crossings.
 - **Light:** dim cold blue, diffuse; storm shear.
 - **Geometry:** crossing bridges return (over/under, like Section 2) but **rimed /
-  frosted**; storm wind shears the path side-to-side (lateral sway).
+  frosted**; storm wind shears the path side-to-side while a **+120° left turn**
+  threads through another field of collapsing towers.
 - **Transition:** flat level; lateral storm sway in and out.
 - **Glass:** **frosted** — high roughness, milky but still see-through (LOD-blurred
   refraction); rain streaks.
@@ -159,7 +177,8 @@ Nearby skyscrapers also shear, tip, and fall after the runner passes them.
 - **Theme:** release — the structure dissolves to light, loops back to dawn.
 - **Light:** brilliant skylight, blooming, fades toward the warm dawn at the seam.
 - **Geometry:** deck thins and dissolves into bloom; crossings fade out; the cloud
-  sea brightens. Crossfades into Section 1 across the loop seam.
+  sea brightens. A broad **−150° return turn** cancels the accumulated route
+  heading, then crossfades into Section 1 across the loop seam without a yaw snap.
 - **Glass:** transmission → white bloom; near-total see-through.
 
 ---
@@ -196,16 +215,19 @@ climbs (120–180, 330–360), bank into helix (420–480).
 - See-through secondary refraction march gated behind `uHeavy` (heavyEffects).
 - World-Z bands keep per-frame SDF cost local; crossing bridges / train evaluated
   only inside their bands via cheap Z-range guards.
-- Collapse shard-field only near camera; far segments fall as whole slabs.
-- Distant skyline is a background heightfield (no marching) + a few far towers.
+- Collapse shard-field only near camera; far bridge segments fall as whole slabs.
+- Tower crowns use a fixed 2×2×2 shatter grid and only two nearby depth cells per
+  side are marched; the distant skyline remains a background heightfield.
+- Strong camera-relative bends use conservative ray steps (`STEP_K ≤ 0.62`) to
+  avoid skipping sheared SDF surfaces.
 
 ---
 
 ## 6. Files
 
-- `app/journeys/skybridges/shader.ts` — the scene (this spec realised).
-- `app/journeys/skybridges/kinematics.ts` — section names/Z windows (HUD); must
-  mirror the nine bands above.
-- `app/journeys/skybridges/page.tsx` — wires `envMapUrl`.
-- `lib/shaderQuad.ts`, `components/withShaderJourney.tsx` — uniforms plumbing
-  (`uEnv`, `uEnvLoaded`, `uHeavy`).
+- `src/app/journeys/skybridges/shader.ts` — the scene (this spec realised).
+- `src/app/journeys/skybridges/kinematics.ts` — section names/Z windows (HUD);
+  must mirror the nine bands above.
+- `src/app/journeys/skybridges/page.tsx` — wires `envMapUrl`.
+- `src/lib/shaderQuad.ts`, `src/components/withShaderJourney.tsx` — uniforms
+  plumbing (`uEnv`, `uEnvLoaded`, `uHeavy`).
