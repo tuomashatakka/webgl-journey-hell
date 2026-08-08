@@ -256,6 +256,8 @@
     border: 1px solid #2d3139;
     width: 90%;
     max-width: 480px;
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
     padding: 24px;
     color: #fff;
     text-align: left;
@@ -296,8 +298,18 @@
     color: #fff;
 }
 
+#settings-close-btn:focus-visible,
+.settings-choice-btn:focus-visible,
+.settings-slider:focus-visible {
+    outline: 2px solid #00ffaa;
+    outline-offset: 3px;
+}
+
 #settings-body {
     display: block;
+    max-height: calc(100dvh - 120px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
 }
 
 .settings-group {
@@ -393,6 +405,11 @@
 
 .settings-switch-label:hover input ~ .settings-custom-checkbox {
     border-color: #00ffaa;
+}
+
+.settings-switch-label:has(input:focus-visible) .settings-custom-checkbox {
+    outline: 2px solid #00ffaa;
+    outline-offset: 3px;
 }
 
 .settings-switch-label input:checked ~ .settings-custom-checkbox {

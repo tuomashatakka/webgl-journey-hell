@@ -284,18 +284,21 @@ class CyberLiminalAudioEngine {
 export default function LiminalJourney () {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // Settings come from the global provider (single source of truth, persisted there).
+  const { settings, setSettings }             = useSettings()
+  const [ isSettingsOpen, setIsSettingsOpen ] = useState(false)
+
   // Pointer + gyroscope panning, tweened across sudden jumps (see lib/panControl).
   // X is mirrored: the camera turns away from the pointer down here.
-  const { pointerRef, updatePan } = usePanControl({ invertX: true })
+  const { pointerRef, updatePan } = usePanControl({
+    invertX:   true,
+    gyroscope: settings.gyroscope,
+  })
 
   const [ sectorName, setSectorName ] = useState('AWAITING TELEMETRY')
   const [ glitchKey, setGlitchKey ]   = useState(0)
 
   const { fps, renderRes, setRenderRes, sampleFrame } = useFpsMeter()
-
-  // Settings come from the global provider (single source of truth, persisted there).
-  const { settings, setSettings }             = useSettings()
-  const [ isSettingsOpen, setIsSettingsOpen ] = useState(false)
 
   const audio = useAudioEngine(() => new CyberLiminalAudioEngine())
 

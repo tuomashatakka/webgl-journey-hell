@@ -85,6 +85,32 @@ interface OrientationPermissionGate {
   requestPermission?: () => Promise<'granted' | 'denied' | 'default'>;
 }
 
+type OrientationPermissionState = 'unknown' | 'granted' | 'denied'
+
+let orientationPermission: OrientationPermissionState = 'unknown'
+
+/** Request orientation access from an explicit UI gesture (required by iOS). */
+export async function requestGyroscopePermission (): Promise<boolean> {
+  if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window))
+    return false
+
+  const gate = window.DeviceOrientationEvent as unknown as OrientationPermissionGate
+  if (typeof gate.requestPermission !== 'function')
+    return true
+
+  if (orientationPermission !== 'unknown')
+    return orientationPermission === 'granted'
+
+  try {
+    const result          = await gate.requestPermission()
+    orientationPermission = result === 'granted' ? 'granted' : 'denied'
+  }
+  catch {
+    orientationPermission = 'denied'
+  }
+  return orientationPermission === 'granted'
+}
+
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
 
 const easeInOutCubic = (t: number) =>
@@ -129,6 +155,7 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
 
   let baseline: { beta: number; gamma: number } | null = null
   let hasGyroscope                                     = false
+  let disposed                                         = false
 
   const onPointerMove = (e: PointerEvent) => {
     const rect = getRect?.()
@@ -199,25 +226,29 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
     const gate = window.DeviceOrientationEvent as unknown as OrientationPermissionGate
 
     const listen = () => {
+      if (disposed)
+        return
       window.addEventListener('deviceorientation', onOrientation)
       detachers.push(() => window.removeEventListener('deviceorientation', onOrientation))
     }
 
     if (typeof gate.requestPermission === 'function') {
-      // iOS: the prompt only opens from a user gesture, so piggyback the first
-      // tap. Kept passive and once-only — a declined prompt is never re-asked.
-      const ask = () => {
-        detachGesture()
-        gate.requestPermission!()
-          .then(result => {
-            if (result === 'granted')
+      if (orientationPermission === 'granted')
+        listen()
+      else if (orientationPermission === 'unknown') {
+        // iOS: the prompt only opens from a user gesture, so piggyback the first
+        // tap. Kept passive and once-only — a declined prompt is never re-asked.
+        const ask = () => {
+          detachGesture()
+          requestGyroscopePermission().then(granted => {
+            if (granted)
               listen()
           })
-          .catch(() => {}) // declined or unavailable — pointer input still works
+        }
+        const detachGesture = () => window.removeEventListener('pointerdown', ask)
+        window.addEventListener('pointerdown', ask, { once: true, passive: true })
+        detachers.push(detachGesture)
       }
-      const detachGesture = () => window.removeEventListener('pointerdown', ask)
-      window.addEventListener('pointerdown', ask, { once: true, passive: true })
-      detachers.push(detachGesture)
     }
     else
       listen()
@@ -295,6 +326,7 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
     update,
     recenter,
     dispose () {
+      disposed = true
       detachers.forEach(off => off())
       detachers.length = 0
     },

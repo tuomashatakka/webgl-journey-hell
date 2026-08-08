@@ -2,10 +2,10 @@
 //
 // These were originally the liminal-only settings (resolution / speed /
 // heavyEffects / brightness); they now live in the library so all journeys —
-// and the landing grid — read one source of truth. Added here: `contrast` and
-// `maxFrameRate`. Brightness + contrast are applied universally via a CSS
-// filter on the canvas (see displayFilter), so they need no per-shader uniform.
-// maxFrameRate drives the shared frame loop's cap (see SettingsProvider).
+// and the landing grid — read one source of truth. Added here: `contrast`,
+// `maxFrameRate`, and `gyroscope`. Brightness + contrast are applied universally
+// via a CSS filter on the canvas (see displayFilter), so they need no per-shader
+// uniform. maxFrameRate drives the shared frame loop's cap (see SettingsProvider).
 
 export interface GraphicsSettings {
 
@@ -26,6 +26,9 @@ export interface GraphicsSettings {
 
   /** Max rendered frames per second; 0 = uncapped. */
   maxFrameRate: number;
+
+  /** Add device-orientation tilt to the shared journey camera controls. */
+  gyroscope: boolean;
 }
 
 const STORAGE_KEY = 'journey-graphics-settings-v1'
@@ -39,6 +42,7 @@ export const DEFAULT_SETTINGS: GraphicsSettings = {
   brightness:   1.0,
   contrast:     1.0,
   maxFrameRate: 60,
+  gyroscope:    true,
 }
 
 /** Allowed discrete choices surfaced in the settings UI. */
@@ -55,6 +59,7 @@ function coerce (parsed: Partial<GraphicsSettings> | null | undefined): Graphics
     brightness:   typeof p.brightness === 'number' ? p.brightness : DEFAULT_SETTINGS.brightness,
     contrast:     typeof p.contrast === 'number' ? p.contrast : DEFAULT_SETTINGS.contrast,
     maxFrameRate: typeof p.maxFrameRate === 'number' ? p.maxFrameRate : DEFAULT_SETTINGS.maxFrameRate,
+    gyroscope:    typeof p.gyroscope === 'boolean' ? p.gyroscope : DEFAULT_SETTINGS.gyroscope,
   }
 }
 

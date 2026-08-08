@@ -55,8 +55,9 @@ fed by `lib/panControl.ts`:
   against the pose you were holding when the readings started (and re-zeroed on
   rotation or when the tab comes back), and mapped through the screen
   orientation so "right" is right in landscape too. iOS only hands out
-  orientation after a permission prompt, which is requested once, on your first
-  tap on the page.
+  orientation after a permission prompt. Gyroscope look can be enabled or
+  disabled in **GRAPHICS & CONTROLS**; enabling it requests permission directly,
+  while the default-on first visit still requests once on the first page tap.
 * **tweening** — small moves follow the pointer immediately; a *jump* (a tap
   landing far from the last touch, a finger lifted and re-planted) is eased over
   a distance-scaled 0.16–0.5 s instead of teleporting the camera.

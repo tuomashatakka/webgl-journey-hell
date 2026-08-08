@@ -11,6 +11,7 @@
 //   • brightness  → CSS filter on the canvas
 //   • contrast    → CSS filter on the canvas
 //   • maxFrameRate→ honored globally by the shared frameLoopManager
+//   • gyroscope   → device-orientation contribution to camera panning
 //
 // Rendering runs on the shared, frame-capped loop (lib/frameLoopManager, vendored
 // from @tuomashatakka/canvas-loop-framecapper) via useFrameLoop, so every
@@ -112,7 +113,7 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
       simRef.current = options.createSimulation()
 
     // Pointer + gyroscope panning, tweened across sudden jumps (see lib/panControl).
-    const { pointerRef, updatePan } = usePanControl()
+    const { pointerRef, updatePan } = usePanControl({ gyroscope: settings.gyroscope })
 
     const iTimeRef       = useRef(0)
     const sectionNameRef = useRef(sectionName)

@@ -14,6 +14,7 @@ import {
   FRAME_RATE_CHOICES,
   frameRateLabel,
 } from '@/lib/settings'
+import { requestGyroscopePermission } from '@/lib/panControl'
 
 
 interface SettingsViewProps {
@@ -26,6 +27,16 @@ interface SettingsViewProps {
 export default function SettingsView ({ isOpen, onClose, settings, onChange }: SettingsViewProps) {
   if (!isOpen)
     return null
+
+  const changeGyroscope = async (enabled: boolean) => {
+    if (!enabled) {
+      onChange({ ...settings, gyroscope: false })
+      return
+    }
+
+    const permitted = await requestGyroscopePermission()
+    onChange({ ...settings, gyroscope: permitted })
+  }
 
   return <aside
     id="settings-overlay" onPointerDown={ e => {
@@ -128,6 +139,32 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
 
               <span className="settings-switch-text">
                 {settings.heavyEffects ? 'COMPUTE HEAVY EFFECTS: ENABLED' : 'COMPUTE HEAVY EFFECTS: MINIFIED'}
+              </span>
+            </label>
+          </p>
+        </fieldset>
+
+        {/* Device-orientation look controls */}
+        <fieldset className="settings-group">
+          <legend className="settings-label">GYROSCOPE LOOK</legend>
+
+          <p className="settings-description" id="gyroscope-description">
+            Add phone tilt to the journey camera. Your browser may ask for motion sensor permission when enabled.
+          </p>
+
+          <p className="settings-toggle-container">
+            <label className="settings-switch-label">
+              <input
+                id="gyroscope-checkbox"
+                aria-describedby="gyroscope-description"
+                type="checkbox"
+                checked={ settings.gyroscope }
+                onChange={ e => void changeGyroscope(e.target.checked) } />
+
+              <span className="settings-custom-checkbox" aria-hidden="true" />
+
+              <span className="settings-switch-text">
+                {settings.gyroscope ? 'GYROSCOPE LOOK: ENABLED' : 'GYROSCOPE LOOK: DISABLED'}
               </span>
             </label>
           </p>

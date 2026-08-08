@@ -258,17 +258,20 @@ class StairwellAudioEngine {
 export default function StairwellJourney () {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  const { settings, setSettings }             = useSettings()
+  const [ isSettingsOpen, setIsSettingsOpen ] = useState(false)
+
   // Pointer + gyroscope panning, tweened across sudden jumps (see lib/panControl).
   // X is mirrored: the camera turns away from the pointer down here.
-  const { pointerRef, updatePan } = usePanControl({ invertX: true })
+  const { pointerRef, updatePan } = usePanControl({
+    invertX:   true,
+    gyroscope: settings.gyroscope,
+  })
 
   const [ sectorName, setSectorName ] = useState('ENTERING THE STAIRWELL')
   const [ glitchKey, setGlitchKey ]   = useState(0)
 
   const { fps, renderRes, setRenderRes, sampleFrame } = useFpsMeter()
-
-  const { settings, setSettings }             = useSettings()
-  const [ isSettingsOpen, setIsSettingsOpen ] = useState(false)
 
   const audio = useAudioEngine(() => new StairwellAudioEngine())
 
