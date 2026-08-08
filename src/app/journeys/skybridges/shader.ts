@@ -20,7 +20,7 @@ const COMMON = `
 
   const float PI = 3.14159265359;
   const float SEG = 9.0;         // Z length of each main-deck segment
-  const float SPEED = 7.5;       // forward run speed (units/sec) — mirrors kinematics.ts
+  const float SPEED = 5.0;       // longer, more legible acts — mirrors kinematics.ts
   const float LOOP_Z = 540.0;    // nine 60-unit sections; mirrored in kinematics.ts
   const float EYE = 1.6;         // first-person eye height above the deck
 
@@ -79,6 +79,22 @@ const COMMON = `
     d = min(d, LOOP_Z - d);
     return 1.0 - smoothstep(0.0, halfW, d);
   }
+
+  // Authored turning centreline. Geometry is warped onto this curve in
+  // mapScene and the camera follows its tangent below.
+  float pathX(float z) {
+    z = mod(z, LOOP_Z);
+    float x = 0.0;
+    x +=  8.0 * easeIO((z - 38.0) / 42.0);
+    x += -17.0 * easeIO((z - 92.0) / 54.0);
+    x +=  14.0 * easeIO((z - 168.0) / 48.0);
+    x += -11.0 * easeIO((z - 252.0) / 42.0);
+    x +=  15.0 * easeIO((z - 334.0) / 54.0);
+    x += -13.0 * easeIO((z - 420.0) / 48.0);
+    x +=   4.0 * easeIO((z - 492.0) / 42.0);
+    return x;
+  }
+  float pathHeading(float z) { return atan(pathX(z + 0.5) - pathX(z - 0.5), 1.0); }
 
   // --- vertical path (first-person eye Y), continuous, physically shaped ----
   // E0 = ground eye, E1 = upper-tier eye, ET = train-roof eye. See SPEC.md §4.
@@ -267,19 +283,44 @@ const COMMON = `
     return d;
   }
 
+  // Real skyscrapers flank the bridge. After the runner passes, alternating
+  // towers shear loose and topple into the cloud sea with the deck.
+  float mapTowers(vec3 p) {
+    float cell = floor(p.z / 30.0 + 0.5);
+    float cz = cell * 30.0;
+    float seed = hash21(vec2(cell, 19.7));
+    float side = mix(-1.0, 1.0, step(0.5, hash21(vec2(cell, 4.2))));
+    float h = 18.0 + seed * 30.0;
+    vec3 q = p - vec3(side * (8.0 + seed * 4.5), h * 0.5 - 15.0, cz);
+    float behind = playerZ() - cz;
+    float collapse = smoothstep(8.0 + seed * 8.0, 42.0 + seed * 12.0, behind);
+    q.y += collapse * collapse * 18.0;
+    q.xy = rot(side * collapse * (0.65 + seed * 0.45)) * q.xy;
+    float body = sdBox(q, vec3(3.0 + seed * 1.8, h * 0.5, 4.0 + seed));
+    float crown = sdBox(q - vec3(0.0, h * 0.5 + 1.2, 0.0), vec3(1.0, 1.2, 1.0));
+    float d = min(body, crown);
+    gThick = 0.08; gFell = collapse; gSpark = collapse * 0.45; gMat = 2.0;
+    return d;
+  }
+
   // --- scene composition ---------------------------------------------------
   float mapScene(vec3 w) {
     gThick = 0.0; gFell = 0.0; gSpark = 0.0; gMat = 0.0;
-    float d = mapMainDeck(w);
+    vec3 pathSpace = w;
+    pathSpace.x -= pathX(w.z);
+    float d = mapMainDeck(pathSpace);
     float t0 = gThick, f0 = gFell, s0 = gSpark, m0 = gMat;
-    float dc = mapCrossings(w);
+    float dc = mapCrossings(pathSpace);
     float t1 = gThick, f1 = gFell, s1 = gSpark, m1 = gMat;
-    float dt = mapTrain(w);
+    float dt = mapTrain(pathSpace);
     float t2 = gThick, f2 = gFell, s2 = gSpark, m2 = gMat;
+    float db = mapTowers(pathSpace);
+    float t3 = gThick, f3 = gFell, s3 = gSpark, m3 = gMat;
 
     float best = d; gThick = t0; gFell = f0; gSpark = s0; gMat = m0;
     if (dc < best) { best = dc; gThick = t1; gFell = f1; gSpark = s1; gMat = m1; }
     if (dt < best) { best = dt; gThick = t2; gFell = f2; gSpark = s2; gMat = m2; }
+    if (db < best) { best = db; gThick = t3; gFell = f3; gSpark = s3; gMat = m3; }
     return best;
   }
 
@@ -438,7 +479,7 @@ const COMMON = `
     return p;
   }
   float camYaw(float z) {
-    float y = 0.0;
+    float y = pathHeading(z);
     y += glanceAmt() * (-2.7);                         // glance over the shoulder at the collapse (~155 deg)
     y += win(z, 288.0, 293.0, 300.0, 306.0) * (-2.7);  // forced look back during the fall
     return y;
@@ -456,7 +497,7 @@ const COMMON = `
     float z = playerZ();
     float air = win(z, 224.0, 230.0, 238.0, 244.0) + win(z, 286.0, 290.0, 300.0, 308.0);
     float bob = sin(iTime * 9.0) * 0.05 * (1.0 - clamp(air, 0.0, 1.0));
-    vec3 ro = vec3(camLateral(z), pathY(z) + bob, z);
+    vec3 ro = vec3(pathX(z) + camLateral(z), pathY(z) + bob, z);
 
     float pitch = camPitch(z) + uPointer.y * 0.25;
     float yaw   = camYaw(z) + uPointer.x * 0.45;
