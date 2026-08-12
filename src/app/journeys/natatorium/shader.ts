@@ -24,6 +24,7 @@
 //   uSecA[i] (cos, sin, tx, tz)          inverse xz transform into slot i
 //   uSecB[i] (ty, halfW, ceilH, len)
 //   uSecC[i] (slope, type, grime, lampPitch)
+//   uSecD[i] (deploy 0..1 of this section's entry, aisleY, sectionId, -)
 //   uCam     (camX, camY, camZ, yaw)     camera in the CURRENT section's frame
 //   uLook    (pitch, roll, above, depth)
 //   uWave    (waterY-local, lap, dist, curType)
@@ -39,6 +40,7 @@ const COMMON = `
   uniform vec4 uSecA[3];
   uniform vec4 uSecB[3];
   uniform vec4 uSecC[3];
+  uniform vec4 uSecD[3];
   uniform vec4 uCam;
   uniform vec4 uLook;
   uniform vec4 uWave;
@@ -78,6 +80,29 @@ const COMMON = `
     return sdBox(p, b - r) - r;
   }
 
+  // The fittings need more than boxes. All exact — nothing here is a cheap
+  // approximation with a Lipschitz constant above 1, which is the failure that
+  // would force the step factor down for the whole journey.
+  float sdSphere(vec3 p, float r) { return length(p) - r; }
+
+  float sdCapsuleX(vec3 p, float h, float r) { p.x -= clamp(p.x, -h, h); return length(p) - r; }
+  float sdCapsuleY(vec3 p, float h, float r) { p.y -= clamp(p.y, -h, h); return length(p) - r; }
+  float sdCapsuleZ(vec3 p, float h, float r) { p.z -= clamp(p.z, -h, h); return length(p) - r; }
+
+  // Ring in the plane of p.xy, axis along p.z. Swizzle the argument to turn it.
+  float sdTorus(vec3 p, float R, float r) {
+    return length(vec2(length(p.xy) - R, p.z)) - r;
+  }
+
+  // Fold onto the nearest lattice cell, unbounded or clamped to a run of 2n+1.
+  // Exact for identical axis-aligned instances: on a lattice of congruent shapes
+  // the nearest centre really is the nearest instance — which is why nothing
+  // repeated in this file jitters its position, however much it would like to.
+  float latt(float x, float cell) { return x - (floor(x / cell) + 0.5) * cell; }
+  float lattN(float x, float cell, float n) {
+    return x - clamp(floor(x / cell + 0.5), -n, n) * cell;
+  }
+
   // --- the route ------------------------------------------------------------
 
   // Carry a point from the current section's frame into slot i's frame. The CPU
@@ -104,25 +129,275 @@ const COMMON = `
   // 4% on THE RISER's grade, and over-estimating is the direction that punches
   // through walls. (stairwell skips this correction and gets away with it only
   // because its surface epsilon is generous.)
-  float sectionAir(vec3 q, vec4 B, vec4 C) {
+  // qs comes back out because the aisle, the join blocks and every fitting
+  // want to work in it: the shear is what flattens the floor ramp, so in that
+  // space the room is an axis-aligned box, the walked line is a straight
+  // cylinder, and a bench standing on a 23% grade is just a bench. Recomputing
+  // it in four places would be four chances to drop the inversesqrt correction.
+  float sectionAir(vec3 q, vec4 B, vec4 C, out vec3 qs) {
     float s   = C.x;
     float inv = inversesqrt(1.0 + s * s);
 
     // Clamp the shear to the section's own span so the floor levels off at the
     // doorways instead of shearing away to infinity out in the solid.
     float zc = clamp(q.z, 0.0, B.w);
-    vec3  qs = vec3(q.x, q.y + s * zc, q.z);
+    qs = vec3(q.x, q.y + s * zc, q.z);
 
     float h = B.z * 0.5;
     return sdRoundBox(qs - vec3(0.0, h, B.w * 0.5),
                       vec3(B.y, h, B.w * 0.5 + OVERLAP), COVE) * inv;
   }
 
+  // --- the aisle ------------------------------------------------------------
+  //
+  // Everything added below stands where the camera walks: the route runs down
+  // each section's local +Z at x = sway, which is exactly where a column, a
+  // bench or a sliding wall slab would otherwise be. Rather than hand-dodging
+  // six different layouts, the route bores its own tube — the fittings are
+  // intersected with the complement of a cylinder swept along the walked line.
+  // It cannot fail to clear the camera, because it is defined by where the
+  // camera goes. (hollow-orchard bores the same aisle with a capsule.)
+  //
+  // In the sheared frame the eye sits at exactly qs.y = EYE whatever the grade,
+  // so the tube follows every ramp for free and costs one length().
+  const float JOIN_SPAN = 5.0;   // how far into a room its entry dressing reaches
+
+  float aisleAt(vec3 qs, vec4 B, vec4 D) {
+    // Scales with the room. One radius sized for THE GRAND HALL would be three
+    // quarters of the width of OVERFLOW CHANNEL and would swallow every fitting
+    // in all four corridors; the camera is a point, not a body, so it needs
+    // only enough clearance not to clip.
+    float r = min(0.95, min(B.y, B.z * 0.5) * 0.60);
+    return length(vec2(qs.x, qs.y - D.y)) - r;
+  }
+
+  // --- the joins ------------------------------------------------------------
+  //
+  // Each section dresses its OWN entry, once. A join between A and B is built by
+  // B and by nobody else, which is half the cost and removes any possibility of
+  // two block sets disagreeing about where the doorway is.
+  //
+  // Approaching it, the building is not finished: jamb courses stand out of the
+  // walls, a lintel hangs from the ceiling, a threshold plate is raised, a
+  // ceiling tier is still sliding in along z. All of it seats flush as you
+  // arrive. Because the only slot ever mid-deployment is the next one, the live cost
+  // is confined to one slot's five-metre window.
+  //
+  // Every offset here is a function of D.x ALONE — a uniform. Not one of them
+  // reads qs to decide how far something has moved. That is deliberate and it is
+  // the whole reason this is affordable: an offset that varied with position
+  // would add d(offset)/dz to the gradient, and in a NEGATED field an
+  // over-estimate is not an artifact, it is a grazing ray leaving the building.
+  // foundry pays a 22% step-factor cut for exactly that (foundry/shader.ts:786);
+  // this pays nothing and keeps the 0.95.
+  float joinBlocks(vec3 qs, vec4 B, vec4 D) {
+    // Built and flush. One compare on a uniform, coherent across the whole draw.
+    if (D.x >= 1.0) return 1e5;
+
+    // Outside the dressed zone, return the distance to that zone rather than a
+    // sentinel: 1e5 would be a hole the march could step straight into.
+    float ez = max(qs.z - JOIN_SPAN, -0.25 - qs.z);
+    if (ez > 0.0) return ez;
+
+    float W = B.y;
+    float H = B.z;
+    float dep = D.x;
+
+    // One deployment scalar, sliced into phase-shifted courses. The stagger is
+    // in the curve, never in space.
+    // Slopes and offsets chosen together so the LAST course finishes exactly at
+    // dep = 1 ((1 + 0.70) / 1.7): a course still mid-travel when the cull fires
+    // is a block that disappears while moving. Earlier courses finish sooner,
+    // which is the stagger.
+    float e0 = 1.0 - clamp(dep * 1.7,        0.0, 1.0);
+    float e1 = 1.0 - clamp(dep * 1.7 - 0.23, 0.0, 1.0);
+    float e2 = 1.0 - clamp(dep * 1.7 - 0.46, 0.0, 1.0);
+    float e3 = 1.0 - clamp(dep * 1.7 - 0.70, 0.0, 1.0);
+
+    float T  = min(0.55, W * 0.30);   // travel, proportional to the room
+    float x  = abs(qs.x);             // both cheeks out of one primitive
+    float ch = H * 0.34;
+
+    // THE INVARIANT, and every offset below is written to satisfy it: at e = 0
+    // each block is EXACTLY coincident with the shell — inner face exactly on
+    // the wall, underside exactly on the ceiling, top exactly on the floor. It
+    // has to be exact, because the moment deploy reaches 1 the whole set is
+    // rejected by the compare above, and anything still protruding by so much
+    // as a centimetre would vanish in one frame. Flush, then gone, is seamless;
+    // nearly flush, then gone, is a pop at every doorway in the building.
+
+    // Three courses of jamb, sliding out of the wall bottom-first.
+    float d = sdRoundBox(vec3(x - (W + T - T * e0), qs.y - ch * 0.5, qs.z - 1.1),
+                         vec3(T, ch * 0.5, 1.0), 0.05);
+    d = min(d, sdRoundBox(vec3(x - (W + T - T * e1), qs.y - ch * 1.5, qs.z - 1.1),
+                          vec3(T, ch * 0.5, 1.0), 0.05));
+    d = min(d, sdRoundBox(vec3(x - (W + T - T * e2), qs.y - ch * 2.5, qs.z - 1.1),
+                          vec3(T, ch * 0.5, 1.0), 0.05));
+
+    // The lintel drops out of the ceiling. At e2 = 0 its underside sits exactly
+    // at H — outside the air, which is to say it does not exist.
+    d = min(d, sdRoundBox(vec3(qs.x, qs.y - (H + 0.45 - e2 * 1.5), qs.z - 1.1),
+                          vec3(W, 0.45, 1.0), 0.05));
+
+    // The threshold rises out of the floor and sinks flush. You watch a 22cm
+    // step go down as you walk up to it.
+    d = min(d, sdRoundBox(vec3(qs.x, qs.y - (0.22 * e3 - 0.22), qs.z - 0.55),
+                          vec3(W, 0.22, 0.5), 0.04));
+
+    // A ceiling tier, travelling along z as well as up — a second motion axis,
+    // which is what stops the join reading as one machine working one lever.
+    // The y term is not decoration: sliding on z alone it could never be flush,
+    // and it would be the one block that popped.
+    d = min(d, sdRoundBox(vec3(qs.x, qs.y - (H + 0.60 - 0.90 * e3), qs.z - (3.4 + e3 * 3.0)),
+                          vec3(W * 0.8, 0.60, 1.2), 0.05));
+
+    // THE APERTURE, cut out of all of it with an exact sdBox — exact inside as
+    // well as out, which sdRoundBox is not, and which is why this one is plain.
+    //
+    // Not a safety bolt-on: this IS the door. The clip is what carves the
+    // opening through the lintel and the jamb, and the blocks are what the
+    // building assembles around it. No arrangement of them can close it.
+    // Proportional to the room, so a 1.4m corridor still has wall to build with.
+    float ax = min(1.15, W * 0.62);
+    float ay = min(2.45, H * 0.78);
+    float ap = sdBox(vec3(qs.x, qs.y - (0.30 + ay) * 0.5, qs.z - JOIN_SPAN * 0.5),
+                     vec3(ax, (ay - 0.30) * 0.5, JOIN_SPAN * 0.5 + 1.0));
+    return max(d, -ap);
+  }
+
+  // --- the fittings ---------------------------------------------------------
+  //
+  // Dispatched on the section's type, mirroring foundry's secFeature(): an
+  // if-chain on a float, because GLSL ES 1.00 has no switch and cannot index an
+  // array with anything but a loop counter.
+  //
+  // Everything repeats through latt()/lattN(), so a row of forty lockers costs
+  // one rounded box and a lane of rope floats costs one sphere.
+  float sectionProps(vec3 qs, vec4 B, vec4 C, vec4 D) {
+    float W = B.y;
+    float H = B.z;
+    float t = C.y;
+    float d = 1e5;
+
+    // The flood in this section's own frame, held off the floor and the ceiling
+    // so what floats on it still reads once the building is full.
+    float wy = clamp(uWave.x - B.x, 0.35, H - 0.5);
+
+    if (t < 0.5) {
+      // TILE — the swimming halls.
+      // Lane ropes, bobbing on the flood. Offset half a lane off centre so the
+      // aisle does not have to eat one whole rope to let you through.
+      float bob   = sin(qs.z * 0.7 + iTime * 0.9) * 0.03;
+      float lanes = floor(max(W - 2.0, 0.0) / 2.4);
+      d = min(d, sdSphere(vec3(lattN(qs.x - 1.2, 2.4, lanes),
+                               qs.y - wy - bob, latt(qs.z, 0.36)), 0.075));
+
+      // A wall ladder: two stringers 0.44 apart, rungs every 0.30.
+      vec3 lp = vec3(abs(qs.x) - (W - 0.18), qs.y - 1.1, qs.z - B.w * 0.32);
+      d = min(d, sdCapsuleY(vec3(lp.x, lp.y, abs(lp.z) - 0.22), 1.1, 0.045));
+      d = min(d, sdCapsuleZ(vec3(lp.x, lattN(lp.y, 0.30, 3.0), lp.z), 0.22, 0.030));
+
+      // The deep room gets a dive platform. Among the tiled halls only THE
+      // DIVING WELL is this tall, so the height is the test.
+      if (H > 8.0) {
+        vec3 dp = vec3(abs(qs.x) - (W - 1.5), qs.y - H * 0.55, qs.z - B.w * 0.70);
+        d = min(d, sdRoundBox(dp, vec3(1.5, 0.10, 1.1), 0.05));
+        d = min(d, sdCapsuleY(vec3(dp.x, qs.y - H * 0.275, dp.z), H * 0.275, 0.13));
+      }
+    }
+    else if (t < 1.5) {
+      // GUTTER — the service runs. Three conduits along the ceiling, and a
+      // junction box dropped off them every few metres.
+      vec3 cp = vec3(abs(qs.x) - (W - 0.22), qs.y - (H - 0.30), qs.z);
+      d = min(d, sdCapsuleZ(vec3(cp.x, lattN(cp.y, 0.26, 1.0), 0.0), 1e4, 0.055));
+      d = min(d, sdRoundBox(vec3(cp.x, cp.y + 0.55, latt(qs.z, 4.2)),
+                            vec3(0.12, 0.20, 0.26), 0.03));
+    }
+    else if (t < 2.5) {
+      // VAULT — THE GRAND HALL. Columns down both sides, and the flume.
+      d = min(d, sdCapsuleY(vec3(abs(qs.x) - (W - 1.7), qs.y - H * 0.5, latt(qs.z, 6.0)),
+                            H * 0.5, 0.55));
+
+      // The waterslide: a quarter of a torus swooping from high on one wall down
+      // toward the water. A swept tube is not an exact SDF and is not worth the
+      // step factor; a clipped torus is exact, and reads as a flume.
+      vec3  fp    = vec3(qs.x - (W - 5.0), qs.y - H * 0.62, qs.z - B.w * 0.5);
+      float flume = sdTorus(fp.yzx, 4.2, 0.80);
+      flume = max(flume, fp.y);    // the descending half
+      flume = max(flume, -fp.z);   // ...and only the near quarter of it
+      d = min(d, flume);
+      d = min(d, sdCapsuleY(vec3(fp.x, qs.y - H * 0.31, fp.z - 4.2), H * 0.31, 0.16));
+    }
+    else if (t < 3.5) {
+      // LOCKER — a run of lockers down both walls, with a bench under them.
+      d = min(d, sdRoundBox(vec3(abs(qs.x) - (W - 0.24), qs.y - 0.95, qs.z - B.w * 0.5),
+                            vec3(0.24, 0.95, B.w * 0.55), 0.03));
+      d = min(d, sdRoundBox(vec3(abs(qs.x) - (W - 0.85), qs.y - 0.44, latt(qs.z, 5.0)),
+                            vec3(0.22, 0.05, 1.30), 0.03));
+    }
+    else if (t < 4.5) {
+      // PLANT — pumps and pipework, the only warm light in the building.
+      vec3 pp = vec3(abs(qs.x) - (W - 0.30), qs.y, qs.z);
+      d = min(d, sdCapsuleZ(vec3(pp.x, lattN(pp.y - 1.9, 0.42, 3.0), 0.0), 1e4, 0.085));
+      d = min(d, sdRoundBox(vec3(pp.x - 0.55, qs.y - 0.55, latt(qs.z, 7.0)),
+                            vec3(0.55, 0.55, 0.80), 0.10));
+      d = min(d, sdTorus(vec3(pp.x, qs.y - 1.35, latt(qs.z, 7.0) - 0.95).zyx, 0.26, 0.045));
+    }
+    else {
+      // RAW — bare concrete. The big room gets pillars, the tight ones a rail.
+      if (W > 6.0) {
+        // Offset half a bay so no pillar stands on the walked line: the aisle
+        // would carve a tunnel clean through it and leave a floating stump.
+        d = min(d, sdCapsuleY(vec3(lattN(qs.x - 2.75, 5.5, 2.0), qs.y - H * 0.5, latt(qs.z, 6.5)),
+                              H * 0.5, 0.62));
+      }
+      else {
+        vec3 rp = vec3(abs(qs.x) - (W - 0.16), qs.y - 1.02, qs.z);
+        d = min(d, sdCapsuleZ(vec3(rp.x, rp.y, 0.0), 1e4, 0.045));
+        d = min(d, sdCapsuleY(vec3(rp.x, qs.y - 0.51, latt(qs.z, 2.4)), 0.51, 0.035));
+      }
+    }
+
+    return d;
+  }
+
+  // Everything one section owns that is solid. The aisle is applied last, so
+  // whatever the branches above decided, none of it can reach the camera.
+  float sectionSolid(vec3 q, vec3 qs, vec4 B, vec4 C, vec4 D) {
+    // foundry's FEAT_ERODE: additively push the fittings away as they near a
+    // doorway. Additive rather than a fade, because f + c erodes a shape while
+    // staying Lipschitz, whereas a fade would leave a ghost with no surface for
+    // the march to stop against. The join blocks are exempt — standing near a
+    // doorway is their whole job, and they hug the surfaces, not the aperture.
+    float endFade = smoothstep(0.0, 1.6, min(q.z, B.w - q.z));
+    float props   = sectionProps(qs, B, C, D) + (1.0 - endFade) * 3.0;
+
+    return max(min(props, joinBlocks(qs, B, D)), -aisleAt(qs, B, D));
+  }
+
   // Union of the resident air volumes. Negative inside the walkable space.
   float mapAir(vec3 p) {
     float air = 1e5;              // large POSITIVE — starting at 0 is the classic bug
-    for (int i = 0; i < 3; i++)
-      air = min(air, sectionAir(toLocal(p, uSecA[i], uSecB[i].x), uSecB[i], uSecC[i]));
+    for (int i = 0; i < 3; i++) {
+      vec3  qs;
+      vec3  q = toLocal(p, uSecA[i], uSecB[i].x);
+      float a = sectionAir(q, uSecB[i], uSecC[i], qs);
+
+      // Only a room you are INSIDE can put anything between you and its shell.
+      // If a >= 0 the clip could only raise a, and either some other slot is
+      // negative and wins the min anyway, or none is and the march has already
+      // stopped. Exact, and it frees two slots in three on essentially every
+      // step — which is what pays for all of this.
+      if (a < 0.0) {
+        // The same sqrt(1+s*s) the shell is divided by. Everything built in the
+        // sheared frame inherits the sheared metric; on THE RISER's 23% grade
+        // that is 2.5%, and 2.5% the over-estimating way is a hole in a wall.
+        float sInv = inversesqrt(1.0 + uSecC[i].x * uSecC[i].x);
+        a = max(a, -sectionSolid(q, qs, uSecB[i], uSecC[i], uSecD[i]) * sInv);
+      }
+
+      air = min(air, a);
+    }
     return air;
   }
 
@@ -153,8 +428,9 @@ const COMMON = `
     A = uSecA[1]; B = uSecB[1]; C = uSecC[1]; q = p;
 
     for (int i = 0; i < 3; i++) {
+      vec3  qsi;
       vec3  qi = toLocal(p, uSecA[i], uSecB[i].x);
-      float d  = sectionAir(qi, uSecB[i], uSecC[i]);
+      float d  = sectionAir(qi, uSecB[i], uSecC[i], qsi);
       if (d < best) {
         second = best;
         best   = d;

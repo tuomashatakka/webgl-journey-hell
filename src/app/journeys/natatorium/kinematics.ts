@@ -335,6 +335,34 @@ const FLOOR0: number[] = []
 const RISE_FROM = 8 // THE DIVING WELL
 const RISE_TO   = 10 // THE CISTERN
 
+/**
+ * How far a section's entry has been built, 0..1, from how far ahead of the
+ * camera that entry still lies.
+ *
+ * Monotone, and exactly 0 and exactly 1 at its ends. Both exactnesses are load
+ * bearing. At 1 every block offset is exactly 0, every block is exactly flush
+ * with the shell, and the shader rejects the whole set with one compare on a
+ * uniform — so the room you stand in is provably the room sectionAir() carved
+ * and nothing else, and the reconfiguration is always something happening
+ * further down the hall.
+ *
+ * A damped hinge was the obvious thing here, and it is what foundry swings its
+ * span panels on, but it is wrong for this: it rings ABOVE 1 and then settles
+ * back through it, so with a `>= 1` cull the dressing would deploy, vanish, and
+ * come back. Quintic instead — the same curve the corner blend already rides.
+ *
+ * SIGHT is 12 rather than foundry's 20 because the fog here is far denser:
+ * exp(-t*0.030) above the water, exp(-t*0.115) below it. At 20 metres submerged
+ * you are at a tenth of contrast, and the whole performance would be happening
+ * where nobody can see it.
+ */
+const SIGHT  = 12.0
+const SETTLE = 3.0
+
+export function deployAt (ahead: number): number {
+  return smootherstep(SIGHT, SETTLE, ahead)
+}
+
 function sectionAt (index: number): Section {
   const n = SECTION_COUNT
   return SECTIONS[(index % n + n) % n]
@@ -478,6 +506,16 @@ export interface Slot {
   tx:    number;
   ty:    number;
   tz:    number;
+
+  /**
+   * The camera's z in *this slot's own frame*. Negated, it is how far ahead of
+   * the camera this section's entry still lies, which is what deployAt() turns
+   * into the blocks moving at that join.
+   */
+  camZ: number;
+
+  /** Section id, 1..12. Salts per-section hashing so rooms of a type differ. */
+  id: number;
   halfW: number;
   ceilH: number;
   len:   number;
@@ -541,6 +579,8 @@ function makeSlot (
     tx,
     ty,
     tz,
+    camZ:  0, // filled in below, once the camera pose is known
+    id:    s.id,
     halfW: s.halfW,
     ceilH: s.ceilH,
     len:   s.len,
@@ -644,6 +684,13 @@ export function getNatatoriumState (dist: number): NatatoriumState {
   const stride = 1.0 - 0.75 * clamp01(depth / EYE)
   const bob    = Math.abs(Math.sin(dist * 1.7)) * 0.045 * stride
 
+  // The camera's z down each resident section's own axis — the same affine the
+  // shader applies to any other point, evaluated once here rather than ninety-six
+  // times a pixel: q.z = sin * (p.x - tx) + cos * (p.z - tz).
+  const slots = [ slotPrv, slotCur, slotNxt ]
+  for (const sl of slots)
+    sl.camZ = sl.sin * (here[0] - sl.tx) + sl.cos * (here[2] - sl.tz)
+
   return {
     dist,
     lap,
@@ -667,7 +714,7 @@ export function getNatatoriumState (dist: number): NatatoriumState {
              (1.0 - above) * 0.10,
     roll: Math.sin(dist * 0.31) * 0.012 +
            Math.max(-0.14, Math.min(0.14, bank * 0.55)),
-    slots: [ slotPrv, slotCur, slotNxt ],
+    slots,
     name:  cur.name,
   }
 }
@@ -747,6 +794,7 @@ export function createNatatoriumSimulation (): JourneySimulation {
   const uSecA = new Array<number>(12).fill(0) // cos, sin, tx, tz
   const uSecB = new Array<number>(12).fill(0) // ty, halfW, ceilH, len
   const uSecC = new Array<number>(12).fill(0) // slope, type, grime, lampPitch
+  const uSecD = new Array<number>(12).fill(0) // deploy, aisleY, sectionId, -
   const uCam  = [ 0, 0, 0, 0 ]
   const uLook = [ 0, 0, 0, 0 ]
   const uWave = [ 0, 0, 0, 0 ]
@@ -776,6 +824,14 @@ export function createNatatoriumSimulation (): JourneySimulation {
         uSecC[o + 1] = s.type
         uSecC[o + 2] = s.grime
         uSecC[o + 3] = s.lamp
+
+        uSecD[o]     = deployAt(-s.camZ)
+        // The aisle's height, uploaded rather than mirrored as a GLSL constant:
+        // it is derived from EYE, and a hand-kept copy of EYE in the shader is
+        // exactly the kind of contract that rots (see stairwell's SEG_LEN).
+        uSecD[o + 1] = EYE - 0.35
+        uSecD[o + 2] = s.id
+        uSecD[o + 3] = 0
       }
 
       uCam[0] = state.camX
@@ -798,7 +854,7 @@ export function createNatatoriumSimulation (): JourneySimulation {
       uWave[2] = state.dist
       uWave[3] = state.section.type
 
-      return { uSecA, uSecB, uSecC, uCam, uLook, uWave }
+      return { uSecA, uSecB, uSecC, uSecD, uCam, uLook, uWave }
     },
 
     label () {
