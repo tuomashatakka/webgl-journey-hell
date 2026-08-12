@@ -63,6 +63,10 @@ const COMMON = `
   // to back cannot bridge a section that is not resident.
   const float DOOR_STUB = 2.2;
 
+  // ...and how big it is. Fixed, not proportional -- see sectionAir.
+  const float DOOR_W = 1.05;
+  const float DOOR_H = 2.25;
+
   // Coving radius on every room corner. Exact outside, conservative inside.
   const float COVE = 0.06;
 
@@ -99,6 +103,15 @@ const COMMON = `
     return length(vec2(length(p.xy) - R, p.z)) - r;
   }
 
+  // Segment capsule between two arbitrary points. Exact, and the only primitive
+  // here that can be aimed: fronds do not grow axis-aligned.
+  float sdSeg(vec3 p, vec3 a, vec3 b, float r) {
+    vec3  pa = p - a;
+    vec3  ba = b - a;
+    float h  = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
+  }
+
   // Fold onto the nearest lattice cell, unbounded or clamped to a run of 2n+1.
   // Exact for identical axis-aligned instances: on a lattice of congruent shapes
   // the nearest centre really is the nearest instance — which is why nothing
@@ -106,6 +119,115 @@ const COMMON = `
   float latt(float x, float cell) { return x - (floor(x / cell) + 0.5) * cell; }
   float lattN(float x, float cell, float n) {
     return x - clamp(floor(x / cell + 0.5), -n, n) * cell;
+  }
+
+  // --- materials -------------------------------------------------------------
+  //
+  // Which surface the march last decided on. foundry's gWear pattern: written
+  // where the geometry is chosen, read exactly one call later by shadeFace, and
+  // eliminated out of the march itself because nothing there reads it. ES 1.00
+  // cannot return a struct from a min chain, and re-deriving the material at the
+  // hit point would mean writing every fitting out twice.
+  const float MAT_TILE  = 0.0;
+  const float MAT_FLOAT = 1.0;   // lane rope floats
+  const float MAT_METAL = 2.0;   // ladders, conduit, rails, valve wheels
+  const float MAT_PAINT = 3.0;   // lockers, benches, pump housings, the flume
+  const float MAT_LEAF  = 4.0;   // everything green
+  const float MAT_CONC  = 5.0;   // columns, pillars, the dive platform
+
+  float gMat;
+
+  // The min chain, with the material riding along. A plain min cannot say which
+  // branch won, and which branch won is the entire question.
+#define PUT(E, M) { float dd = (E); if (dd < d) { d = dd; gMat = (M); } }
+
+  // --- decay -----------------------------------------------------------------
+  //
+  // How far gone the building is, riding the lapF that kinematics ramps across
+  // THE DIVING WELL..THE CISTERN -- so each lap's escalation arrives while you
+  // are under water and well past a doorway, rather than stepping in the one
+  // frame that crosses a seam.
+  //
+  // The floor is deliberately not zero. It was, and the consequence was that the
+  // first circuit -- the only one most people ever see -- was a building in
+  // perfect repair, which is not what a natatorium carved out of solid rock and
+  // left to flood looks like. A tenth is a scatter of broken tiles and a handful
+  // of lit holes. The coarse concrete patches and the missing courses are what
+  // has to wait, and they are gated on their own thresholds further down.
+  float decay() { return min(0.90, 0.10 + uWave.y * 0.32); }
+
+  // --- the tiles that have let go --------------------------------------------
+  //
+  // Shading cannot do this one. A painted hole has no depth to be dark inside,
+  // no lip for the strip light to rake across, and nowhere for the red to come
+  // out of; a painted proud tile does not catch the light on its edge. So the
+  // damage is geometry, cut on the same lattice tileSurface draws on, and a hole
+  // is exactly and only where a tile is missing.
+  //
+  // Two halves sharing one face-selection:
+  //
+  //   hole   a recess cut INTO the shell, unioned into the air with min. Only
+  //          the cell the point is in is ever evaluated, never its neighbours,
+  //          which makes this an OVER-estimate of the air -- and over-stating
+  //          air under-states the concrete, the one direction a sphere trace is
+  //          allowed to be wrong in. The zero set is still exact, because a
+  //          point inside a recess is inside that recess's own cell by
+  //          construction.
+  //
+  //   proud  a tile standing out of the wall, as a non-negative offset ADDED to
+  //          the shell. Adding a positive number moves the surface into the room
+  //          and can only ever shorten a step. The one price is paid at the
+  //          silhouette of a proud tile, where the neighbouring cell's offset is
+  //          not seen and a grazing ray can bite up to PROUD off a corner --
+  //          three centimetres, off a three-centimetre feature.
+  //
+  // Suppressed in the coving, where two faces are equidistant and the choice
+  // between them flips: that is the one place where the discontinuity would
+  // matter, and a coved corner is a single moulded piece in a real pool anyway.
+  const float TILE_W = 0.22;   // wall tile, matching tileSurface
+  const float TILE_F = 0.30;   // floor and ceiling tile, ditto
+  const float HOLE_D = 0.24;   // how far into the wall a missing tile goes
+  const float PROUD  = 0.032;  // how far out of it the survivors are pushed
+
+  // Per-face salt, so the same cell index on the floor and on the wall is not the
+  // same tile. tileSurface derives these from the normal and must agree.
+  const float SALT_WALL = 0.0;
+  const float SALT_FLR  = 3.7;
+  const float SALT_CEIL = 8.1;
+
+  void tileBreak(vec3 qs, vec4 B, float dec, out float proud, out float hole) {
+    proud = 0.0;
+    hole  = 1e5;
+
+    // Not in the doorways. The recesses there are the doorways.
+    if (qs.z < 0.35 || qs.z > B.w - 0.35) return;
+
+    float dx = B.y - abs(qs.x);
+    float dy = qs.y;
+    float dz = B.z - qs.y;
+
+    float m1, m2, salt, ts;
+    vec2  uv;
+    if (dx <= dy && dx <= dz) { m1 = dx; m2 = min(dy, dz); uv = vec2(qs.z, qs.y); salt = SALT_WALL; ts = TILE_W; }
+    else if (dy <= dz)        { m1 = dy; m2 = min(dx, dz); uv = vec2(qs.x, qs.z); salt = SALT_FLR;  ts = TILE_F; }
+    else                      { m1 = dz; m2 = min(dx, dy); uv = vec2(qs.x, qs.z); salt = SALT_CEIL; ts = TILE_F; }
+    if (m2 - m1 < 0.30) return;
+
+    vec2  g    = floor(uv / ts);
+    float id   = hash21(g + salt);
+
+    if (id < 0.004 + dec * 0.16) {
+      // The recess pokes two centimetres proud of the nominal face, so a ray
+      // arriving at the wall finds its way in rather than stopping on the plane
+      // in front of it.
+      vec2 f = uv - (g + 0.5) * ts;
+      hole = sdBox(vec3(f.x, f.y, m1 + (HOLE_D - 0.02) * 0.5),
+                   vec3(ts * 0.42, ts * 0.42, (HOLE_D + 0.02) * 0.5));
+    }
+    else {
+      float pr = hash21(g + salt + 41.3);
+      proud = step(pr, 0.02 + dec * 0.18) * PROUD * (0.35 + 0.65 * fract(pr * 53.0));
+    }
   }
 
   // --- the route ------------------------------------------------------------
@@ -152,6 +274,15 @@ const COMMON = `
     float room = sdRoundBox(qs - vec3(0.0, h, B.w * 0.5),
                             vec3(B.y, h, B.w * 0.5 + OVERLAP), COVE);
 
+    // Broken tile, but only within reach of a surface. Outside that band the
+    // whole term is provably zero, and outside that band is exactly where the
+    // long steps are and therefore where the frame is actually spent.
+    if (room > -0.55) {
+      float proud, hole;
+      tileBreak(qs, B, decay(), proud, hole);
+      room = min(room + proud, hole);
+    }
+
     // Every section carries its own doorways, at both ends, whether or not the
     // room on the far side is loaded.
     //
@@ -172,12 +303,17 @@ const COMMON = `
     // what a doorway looks like at thirty metres anyway; when the neighbour does
     // load, the recess simply continues into it, and nothing changes on screen.
     // Same aperture the join dressing clips itself against, so the two agree.
-    float ax = min(1.15, B.y * 0.62);
-    float ay = min(2.45, B.z * 0.78);
-    float door = sdBox(vec3(qs.x,
-                            qs.y - (0.30 + ay) * 0.5,
-                            qs.z - B.w * 0.5),
-                       vec3(ax, (ay - 0.30) * 0.5, B.w * 0.5 + DOOR_STUB));
+    // ONE doorway size for the whole building, shrunk only where the room is too
+    // small to hold it. Proportional apertures meant a 16m hall and the 1.4m
+    // corridor it opened into cut recesses of different sizes at the same join --
+    // and since each section carries its own, you walked up to a doorway to find
+    // a second, differently sized doorway nested inside it and offset from it.
+    // The sill sits ON the floor for the same reason: a 30cm lip that only one of
+    // the two rooms had read as a step that was there and then was not.
+    float ax = min(DOOR_W, B.y * 0.72);
+    float ay = min(DOOR_H, B.z * 0.80);
+    float door = sdBox(vec3(qs.x, qs.y - ay * 0.5, qs.z - B.w * 0.5),
+                       vec3(ax, ay * 0.5, B.w * 0.5 + DOOR_STUB));
 
     // Union of two exact primitives, so still an under-estimate everywhere.
     // Inside the room the stub is strictly contained by the room and changes
@@ -313,10 +449,12 @@ const COMMON = `
     // opening through the lintel and the jamb, and the blocks are what the
     // building assembles around it. No arrangement of them can close it.
     // Proportional to the room, so a 1.4m corridor still has wall to build with.
-    float ax = min(1.15, W * 0.62);
-    float ay = min(2.45, H * 0.78);
-    float ap = sdBox(vec3(qs.x, qs.y - (0.30 + ay) * 0.5, qs.z - JOIN_SPAN * 0.5),
-                     vec3(ax, (ay - 0.30) * 0.5, JOIN_SPAN * 0.5 + 1.0));
+    // A hand's width larger than the doorway itself, so the dressing frames the
+    // opening instead of pinching it.
+    float ax = min(DOOR_W, W * 0.72) + 0.12;
+    float ay = min(DOOR_H, H * 0.80) + 0.12;
+    float ap = sdBox(vec3(qs.x, qs.y - ay * 0.5, qs.z - JOIN_SPAN * 0.5),
+                     vec3(ax, ay * 0.5, JOIN_SPAN * 0.5 + 1.0));
     return max(d, -ap);
   }
 
@@ -355,48 +493,75 @@ const COMMON = `
 
     // The flood in this section's own frame, held off the floor and the ceiling
     // so what floats on it still reads once the building is full.
-    float wy = clamp(uWave.x - B.x, 0.35, H - 0.5);
+    float wy  = clamp(uWave.x - B.x, 0.35, H - 0.5);
+    float dec = decay();
+    gMat = MAT_TILE;
+
+    // WHAT MOVED IN. Every room gets this, because the flood reaches every room:
+    // a skirt of weed on the walls at the waterline, thickening with the lap.
+    // Bounded on a slab of its own, so crossing the middle of a twenty-two metre
+    // pool costs one max and one branch.
+    float gb = max(abs(qs.y - wy) - 0.95, hx - 0.85);
+    if (gb < BOUND_SLACK) {
+      float lz = latt(qs.z, 0.9);
+      float gh = hash21(vec2(floor(qs.z / 0.9), sign(qs.x) * 3.0) + 7.7);
+      float gr = (0.055 + 0.075 * gh) * smoothstep(0.04, 0.60, dec);
+      vec3  gp = vec3(abs(qs.x) - (W - 0.04), qs.y - wy + (gh - 0.5) * 0.30, lz);
+      PUT(sdSeg(gp, vec3(0.0), vec3(-0.34 - gh * 0.30, -0.30 - gh * 0.55, (gh - 0.5) * 0.5), gr), MAT_LEAF)
+      PUT(sdSeg(gp, vec3(0.0), vec3(-0.18 - gh * 0.22,  0.26 + gh * 0.30, (0.5 - gh) * 0.6), gr * 0.8), MAT_LEAF)
+    }
+    else d = gb;
 
     if (t < 0.5) {
       // Ropes sit in a thin slab at the waterline and span the room; the ladder
       // hugs the wall, and the platform reaches 3.2 in — but only in the one
       // hall tall enough to have one, so the shallow rooms are not made to pay
       // for it. Branching on H is free here: it is a uniform.
-      float reach = H > 8.0 ? 3.25 : 0.50;
+      float reach = H > 8.0 ? 3.25 : 1.35;
       float bt = min(abs(qs.y - wy) - 0.12, hx - reach);
-      if (bt > BOUND_SLACK) return bt;
+      if (bt > BOUND_SLACK) return min(d, bt);
       // TILE — the swimming halls.
       // Lane ropes, bobbing on the flood. Offset half a lane off centre so the
       // aisle does not have to eat one whole rope to let you through.
       float bob   = sin(qs.z * 0.7 + iTime * 0.9) * 0.03;
       float lanes = floor(max(W - 2.0, 0.0) / 2.4);
-      d = min(d, sdSphere(vec3(lattN(qs.x - 1.2, 2.4, lanes),
-                               qs.y - wy - bob, latt(qs.z, 0.36)), 0.075));
+      PUT(sdSphere(vec3(lattN(qs.x - 1.2, 2.4, lanes),
+                        qs.y - wy - bob, latt(qs.z, 0.36)), 0.075), MAT_FLOAT)
 
       // A wall ladder: two stringers 0.44 apart, rungs every 0.30.
       vec3 lp = vec3(abs(qs.x) - (W - 0.18), qs.y - 1.1, qs.z - B.w * 0.32);
-      d = min(d, sdCapsuleY(vec3(lp.x, lp.y, abs(lp.z) - 0.22), 1.1, 0.045));
-      d = min(d, sdCapsuleZ(vec3(lp.x, lattN(lp.y, 0.30, 3.0), lp.z), 0.22, 0.030));
+      PUT(sdCapsuleY(vec3(lp.x, lp.y, abs(lp.z) - 0.22), 1.1, 0.045), MAT_METAL)
+      PUT(sdCapsuleZ(vec3(lp.x, lattN(lp.y, 0.30, 3.0), lp.z), 0.22, 0.030), MAT_METAL)
+
+      // Poolside planters. The only green this building ever had on purpose, and
+      // the reason sdSeg exists: three aimed capsules out of a pot is the
+      // cheapest thing that still reads as a plant from across a pool.
+      vec3 pl = vec3(abs(qs.x) - (W - 0.52), qs.y, latt(qs.z, 7.5));
+      PUT(sdRoundBox(vec3(pl.x, pl.y - 0.25, pl.z), vec3(0.28, 0.25, 0.28), 0.06), MAT_PAINT)
+      vec3 pb = vec3(pl.x, pl.y - 0.46, pl.z);
+      PUT(min(min(sdSeg(pb, vec3(0.0), vec3(-0.58, 0.66, 0.16), 0.042),
+                  sdSeg(pb, vec3(0.0), vec3(-0.16, 0.98, -0.38), 0.042)),
+              sdSeg(pb, vec3(0.0), vec3(0.14, 0.82, 0.48), 0.042)), MAT_LEAF)
 
       // The deep room gets a dive platform. Among the tiled halls only THE
       // DIVING WELL is this tall, so the height is the test.
       if (H > 8.0) {
         vec3 dp = vec3(abs(qs.x) - (W - 1.5), qs.y - H * 0.55, qs.z - B.w * 0.70);
-        d = min(d, sdRoundBox(dp, vec3(1.5, 0.10, 1.1), 0.05));
-        d = min(d, sdCapsuleY(vec3(dp.x, qs.y - H * 0.275, dp.z), H * 0.275, 0.13));
+        PUT(sdRoundBox(dp, vec3(1.5, 0.10, 1.1), 0.05), MAT_CONC)
+        PUT(sdCapsuleY(vec3(dp.x, qs.y - H * 0.275, dp.z), H * 0.275, 0.13), MAT_CONC)
       }
     }
     else if (t < 1.5) {
       // Conduit runs the ceiling corner, so it is bounded on both axes at once.
       float bt = max(hx - 0.34, hy - 0.62);
-      if (bt > BOUND_SLACK) return bt;
+      if (bt > BOUND_SLACK) return min(d, bt);
 
       // GUTTER — the service runs. Three conduits along the ceiling, and a
       // junction box dropped off them every few metres.
       vec3 cp = vec3(abs(qs.x) - (W - 0.22), qs.y - (H - 0.30), qs.z);
-      d = min(d, sdCapsuleZ(vec3(cp.x, lattN(cp.y, 0.26, 1.0), 0.0), 1e4, 0.055));
-      d = min(d, sdRoundBox(vec3(cp.x, cp.y + 0.55, latt(qs.z, 4.2)),
-                            vec3(0.12, 0.20, 0.26), 0.03));
+      PUT(sdCapsuleZ(vec3(cp.x, lattN(cp.y, 0.26, 1.0), 0.0), 1e4, 0.055), MAT_METAL)
+      PUT(sdRoundBox(vec3(cp.x, cp.y + 0.55, latt(qs.z, 4.2)),
+                     vec3(0.12, 0.20, 0.26), 0.03), MAT_PAINT)
     }
     else if (t < 2.5) {
       // The columns hug the walls; the flume swings far out into the room, so
@@ -404,11 +569,19 @@ const COMMON = `
       // out to meet it.
       vec3  fc = vec3(qs.x - (W - 5.0), qs.y - H * 0.62, qs.z - B.w * 0.5);
       float bt = min(hx - 2.30, length(fc) - 5.2);
-      if (bt > BOUND_SLACK) return bt;
+      if (bt > BOUND_SLACK) return min(d, bt);
 
       // VAULT — THE GRAND HALL. Columns down both sides, and the flume.
-      d = min(d, sdCapsuleY(vec3(abs(qs.x) - (W - 1.7), qs.y - H * 0.5, latt(qs.z, 6.0)),
-                            H * 0.5, 0.55));
+      PUT(sdCapsuleY(vec3(abs(qs.x) - (W - 1.7), qs.y - H * 0.5, latt(qs.z, 6.0)),
+                     H * 0.5, 0.55), MAT_CONC)
+
+      // Planters between the columns, on the scale of the room they stand in.
+      vec3 vp = vec3(abs(qs.x) - (W - 0.80), qs.y, latt(qs.z - 3.0, 6.0));
+      PUT(sdRoundBox(vec3(vp.x, vp.y - 0.36, vp.z), vec3(0.42, 0.36, 0.42), 0.07), MAT_PAINT)
+      vec3 vb = vec3(vp.x, vp.y - 0.66, vp.z);
+      PUT(min(min(sdSeg(vb, vec3(0.0), vec3(-0.86, 0.92, 0.24), 0.055),
+                  sdSeg(vb, vec3(0.0), vec3(-0.22, 1.44, -0.56), 0.055)),
+              sdSeg(vb, vec3(0.0), vec3(0.20, 1.20, 0.70), 0.055)), MAT_LEAF)
 
       // The waterslide: a quarter of a torus swooping from high on one wall down
       // toward the water. A swept tube is not an exact SDF and is not worth the
@@ -417,45 +590,45 @@ const COMMON = `
       float flume = sdTorus(fp.yzx, 4.2, 0.80);
       flume = max(flume, fp.y);    // the descending half
       flume = max(flume, -fp.z);   // ...and only the near quarter of it
-      d = min(d, flume);
-      d = min(d, sdCapsuleY(vec3(fp.x, qs.y - H * 0.31, fp.z - 4.2), H * 0.31, 0.16));
+      PUT(flume, MAT_PAINT)
+      PUT(sdCapsuleY(vec3(fp.x, qs.y - H * 0.31, fp.z - 4.2), H * 0.31, 0.16), MAT_METAL)
     }
     else if (t < 3.5) {
       float bt = max(hx - 1.10, qs.y - 2.00);
-      if (bt > BOUND_SLACK) return bt;
+      if (bt > BOUND_SLACK) return min(d, bt);
 
       // LOCKER — a run of lockers down both walls, with a bench under them.
-      d = min(d, sdRoundBox(vec3(abs(qs.x) - (W - 0.24), qs.y - 0.95, qs.z - B.w * 0.5),
-                            vec3(0.24, 0.95, B.w * 0.55), 0.03));
-      d = min(d, sdRoundBox(vec3(abs(qs.x) - (W - 0.85), qs.y - 0.44, latt(qs.z, 5.0)),
-                            vec3(0.22, 0.05, 1.30), 0.03));
+      PUT(sdRoundBox(vec3(abs(qs.x) - (W - 0.24), qs.y - 0.95, qs.z - B.w * 0.5),
+                     vec3(0.24, 0.95, B.w * 0.55), 0.03), MAT_PAINT)
+      PUT(sdRoundBox(vec3(abs(qs.x) - (W - 0.85), qs.y - 0.44, latt(qs.z, 5.0)),
+                     vec3(0.22, 0.05, 1.30), 0.03), MAT_PAINT)
     }
     else if (t < 4.5) {
       float bt = hx - 1.45;
-      if (bt > BOUND_SLACK) return bt;
+      if (bt > BOUND_SLACK) return min(d, bt);
 
       // PLANT — pumps and pipework, the only warm light in the building.
       vec3 pp = vec3(abs(qs.x) - (W - 0.30), qs.y, qs.z);
-      d = min(d, sdCapsuleZ(vec3(pp.x, lattN(pp.y - 1.9, 0.42, 3.0), 0.0), 1e4, 0.085));
-      d = min(d, sdRoundBox(vec3(pp.x - 0.55, qs.y - 0.55, latt(qs.z, 7.0)),
-                            vec3(0.55, 0.55, 0.80), 0.10));
-      d = min(d, sdTorus(vec3(pp.x, qs.y - 1.35, latt(qs.z, 7.0) - 0.95).zyx, 0.26, 0.045));
+      PUT(sdCapsuleZ(vec3(pp.x, lattN(pp.y - 1.9, 0.42, 3.0), 0.0), 1e4, 0.085), MAT_METAL)
+      PUT(sdRoundBox(vec3(pp.x - 0.55, qs.y - 0.55, latt(qs.z, 7.0)),
+                     vec3(0.55, 0.55, 0.80), 0.10), MAT_PAINT)
+      PUT(sdTorus(vec3(pp.x, qs.y - 1.35, latt(qs.z, 7.0) - 0.95).zyx, 0.26, 0.045), MAT_METAL)
     }
     else {
       // RAW — bare concrete. The big room gets pillars, the tight ones a rail.
       if (W > 6.0) {
         // Offset half a bay so no pillar stands on the walked line: the aisle
         // would carve a tunnel clean through it and leave a floating stump.
-        d = min(d, sdCapsuleY(vec3(lattN(qs.x - 2.75, 5.5, 2.0), qs.y - H * 0.5, latt(qs.z, 6.5)),
-                              H * 0.5, 0.62));
+        PUT(sdCapsuleY(vec3(lattN(qs.x - 2.75, 5.5, 2.0), qs.y - H * 0.5, latt(qs.z, 6.5)),
+                       H * 0.5, 0.62), MAT_CONC)
       }
       else {
         float bt = hx - 0.25;
-        if (bt > BOUND_SLACK) return bt;
+        if (bt > BOUND_SLACK) return min(d, bt);
 
         vec3 rp = vec3(abs(qs.x) - (W - 0.16), qs.y - 1.02, qs.z);
-        d = min(d, sdCapsuleZ(vec3(rp.x, rp.y, 0.0), 1e4, 0.045));
-        d = min(d, sdCapsuleY(vec3(rp.x, qs.y - 0.51, latt(qs.z, 2.4)), 0.51, 0.035));
+        PUT(sdCapsuleZ(vec3(rp.x, rp.y, 0.0), 1e4, 0.045), MAT_METAL)
+        PUT(sdCapsuleY(vec3(rp.x, qs.y - 0.51, latt(qs.z, 2.4)), 0.51, 0.035), MAT_METAL)
       }
     }
 
@@ -607,11 +780,45 @@ const COMMON = `
     return h * 0.020;
   }
 
+  // Chop. Deliberately NOT folded into waveH: waveH displaces the plane solve and
+  // has to stay shallow or the surface parts company with the walls it meets,
+  // while the normal wants detail an order of magnitude finer. Ten times the
+  // slope for none of the displacement, which is what real water is -- and it is
+  // the whole difference between a pool and a sheet of black glass with a hard
+  // edge, which is what this was.
+  float chopH(vec2 xz, float t) {
+    float h = 0.0;
+    float a = 0.011;
+    vec2  q = xz;
+    for (int i = 0; i < 3; i++) {
+      h += sin(q.x * 3.1 + t * 1.30) * sin(q.y * 2.6 - t * 1.07) * a;
+      q  = mat2(0.86, 0.51, -0.51, 0.86) * q * 2.07;
+      a *= 0.52;
+    }
+    return h;
+  }
+
+  float vnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash21(i),                 hash21(i + vec2(1.0, 0.0)), f.x),
+               mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+
+  // What is floating ON it. A dead flat mirror is the most artificial thing a
+  // shader can put in a room; a pool nobody has skimmed in years is not a mirror
+  // at all in patches, and the patches are what tell you which way it is drifting.
+  float surfaceFilm(vec2 xz, float dec) {
+    float n = vnoise(xz * 0.55 + vec2(iTime * 0.013, -iTime * 0.009)) * 0.66
+            + vnoise(xz * 2.10 - vec2(iTime * 0.022,  iTime * 0.017)) * 0.34;
+    return smoothstep(0.50, 0.80, n) * (0.30 + 0.70 * dec);
+  }
+
   vec3 waterNormal(vec2 xz, float t) {
-    float e = 0.06;
-    float h  = waveH(xz, t);
-    float hx = waveH(xz + vec2(e, 0.0), t);
-    float hz = waveH(xz + vec2(0.0, e), t);
+    float e = 0.05;
+    float h  = waveH(xz, t)                  + chopH(xz, t);
+    float hx = waveH(xz + vec2(e, 0.0), t)   + chopH(xz + vec2(e, 0.0), t);
+    float hz = waveH(xz + vec2(0.0, e), t)   + chopH(xz + vec2(0.0, e), t);
     return normalize(vec3(-(hx - h) / e, 1.0, -(hz - h) / e));
   }
 
@@ -664,44 +871,42 @@ const COMMON = `
 
   // --- surfaces -------------------------------------------------------------
 
-  // How far gone the building is, 0..0.85, riding the lapF that kinematics ramps
-  // across THE DIVING WELL..THE CISTERN — so each lap's escalation arrives while
-  // you are under water and well past a doorway, rather than stepping in the one
-  // frame that crosses the seam.
-  //
-  // Zero on the first circuit and steep after it. Both halves matter and they
-  // pull in opposite directions: at 0.14 a lap the escalation sat below every
-  // threshold downstream and nothing was ever visibly wrong, but lifting the
-  // floor to 0.12 turned lap one into static — a quarter of every wall already
-  // broken back to concrete before you had walked anywhere. The first lap is
-  // meant to be a tiled building that is merely wet. The damage is what arrives.
-  float decay() { return min(0.85, uWave.y * 0.30); }
 
-  // The fracture field, built on the tile lattice that tileSurface already has.
-  // No fbm and no value noise: a generic crazing would sit ON the tile rather
-  // than in it, and real glazed tile crazes per tile and lets go per tile. Each
-  // tile picks a bearing from its own hash and splits along it.
+  // The fracture field, built on the tile lattice tileSurface already has. No
+  // fbm and no value noise: generic crazing sits ON a tile rather than in it, and
+  // real glazed tile crazes per tile and lets go per tile. Each tile picks a
+  // bearing from its own hash and splits along it.
   //
-  // The gradient comes free by the same trick the grout already uses two
-  // functions down — d|dot(f,dir)|/df is just sign(e) * dir — which is what
-  // makes the cracks catch the light instead of reading as printed-on dirt.
+  // The gradient comes free by the same trick the grout uses two functions down
+  // (d|dot(f,dir)|/df is just sign(e) * dir), which is what makes a crack catch
+  // the light instead of reading as printed-on dirt.
+  //
+  // Two things stop it reading as a scratch, which is exactly what it read as
+  // before: the split KINKS, by an offset that is a function of the across-crack
+  // coordinate alone (so it bends the line without a noise lookup and without
+  // touching the gradient trick), and it TAPERS to nothing at the grout, because
+  // a break in glazed tile stops at the edge of the tile.
   void crackAt(vec2 cell, vec2 f, float id, float dec,
                out float hair, out float spall, out vec2 grad) {
     float a   = id * 6.2831;
     vec2  dir = vec2(cos(a), sin(a));
+    vec2  per = vec2(-dir.y, dir.x);
+    float ac  = dot(f, per);
 
-    // Offset off centre by the tile's own hash, so the split is not a neat
-    // bisector through every tile in the building.
-    float e = dot(f, dir) + (fract(id * 17.13) - 0.5) * 0.45;
+    float e = dot(f, dir) + (fract(id * 17.13) - 0.5) * 0.45
+            + sin(ac * 17.0 + id * 41.0) * 0.022
+            + sin(ac * 43.0 - id * 13.0) * 0.009;
 
-    hair  = 1.0 - smoothstep(0.0, 0.02 + 0.05 * dec, abs(e));
-    hair *= step(hash21(cell + 5.1), 0.04 + dec * 0.85);
+    float taper = 1.0 - smoothstep(0.26, 0.50, max(abs(f.x), abs(f.y)));
+    float wdt   = max((0.007 + 0.032 * dec) * taper, 0.0015);
+
+    hair  = (1.0 - smoothstep(0.0, wdt, abs(e))) * taper;
+    hair *= step(hash21(cell + 5.1), 0.015 + dec * 0.62);
     grad  = dir * sign(e);
 
-    // ...and the ones that have let go of the wall entirely.
-    // Tiles off the wall entirely. Held back until the crazing has had a lap to
-    // establish itself, so the two stages read as a sequence and not as one.
-    spall = step(1.0 - max(dec - 0.22, 0.0) * 0.62, hash21(cell + 19.7));
+    // ...and the ones that have let go of the wall entirely. Held back until the
+    // crazing has had a lap to establish itself, so the two read as a sequence.
+    spall = step(1.0 - max(dec - 0.26, 0.0) * 0.66, hash21(cell + 19.7));
   }
 
   // Tile. The normal perturbation is what makes tile look like tile rather than
@@ -711,50 +916,96 @@ const COMMON = `
   // caller, one call later.
   float crackGlow;
 
+  // How far the shaded point is from the eye, in metres. Set once by the march.
+  //
+  // Everything in tileSurface is a hard step across a lattice: 14mm of grout on
+  // a 220mm tile, a crack a few millimetres wide, the lip of a hole. At the far
+  // end of a twenty-two metre hall those are a third of a pixel across, and a
+  // third of a pixel of pure black sampled once per pixel is not a grout line,
+  // it is moire -- the interference pattern that made every far wall in this
+  // building look like corduroy. There is no mip chain to lean on here (nothing
+  // is textured) and no derivatives (ES 1.00 has no dFdx without an extension),
+  // so the footprint is estimated from distance and the detail is faded into its
+  // own mean before it can alias. This is what a mip chain does; it is just done
+  // by hand, and it is why detail must go to its MEAN and not to zero.
+  float gDist;
+
+  // 0 at arm's length, 1 once one tile is about a pixel across.
+  float lodFade(float feature) {
+    return smoothstep(feature * 260.0, feature * 900.0, gDist);
+  }
+
+  // Evaluated in the SHEARED frame, on the SAME lattice tileBreak cuts the
+  // geometry on -- same cell size, same per-face salt, same hash. That agreement
+  // is the whole point: a tile that reads as missing is missing, because the hole
+  // it left is real, and the grout line at its edge is the lip of that hole.
   void tileSurface(vec3 p, vec3 n, float wy, float grime,
                    out vec3 alb, out vec3 nOut, out float rough) {
-    vec2 uv; vec3 tu, tv;
-    if (abs(n.y) > 0.7)      { uv = p.xz; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 0.0, 1.0); }
-    else if (abs(n.x) > 0.7) { uv = p.zy; tu = vec3(0.0, 0.0, 1.0); tv = vec3(0.0, 1.0, 0.0); }
-    else                     { uv = p.xy; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 1.0, 0.0); }
-
-    // Real pools run a contrasting mosaic course at the water line.
-    float band = smoothstep(0.20, 0.14, abs(p.y - wy));
-    float size = mix(abs(n.y) > 0.7 ? 0.30 : 0.22, 0.11, band);
+    vec2 uv; vec3 tu, tv; float size; float salt;
+    if (abs(n.y) > 0.7) {
+      uv = p.xz; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 0.0, 1.0);
+      size = TILE_F; salt = n.y > 0.0 ? SALT_FLR : SALT_CEIL;
+    } else if (abs(n.x) > 0.7) {
+      uv = p.zy; tu = vec3(0.0, 0.0, 1.0); tv = vec3(0.0, 1.0, 0.0);
+      size = TILE_W; salt = SALT_WALL;
+    } else {
+      uv = p.xy; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 1.0, 0.0);
+      size = TILE_W; salt = 5.5;               // the end walls, which are not holed
+    }
 
     vec2  g = uv / size;
     vec2  f = fract(g) - 0.5;
     float d = (0.5 - max(abs(f.x), abs(f.y))) * size;
-    float groove = 1.0 - smoothstep(0.0, 0.014, d);
 
-    float dec = decay();
+    // Grout, widening and fading with distance rather than thinning to nothing.
+    // Widening is what keeps a far wall reading as tiled at all; fading is what
+    // stops it reading as corduroy.
+    float lodG   = lodFade(0.014);
+    float groove = (1.0 - smoothstep(0.0, mix(0.014, 0.030, lodG), d)) * (1.0 - lodG * 0.62);
+
+    // Real pools run a contrasting mosaic course at the water line. It used to be
+    // drawn by shrinking the lattice; the lattice is shared with the geometry now
+    // and cannot move, so the finer course is an extra grout line through the
+    // middle of each tile instead.
+    float band = smoothstep(0.20, 0.14, abs(p.y - wy));
+    groove = max(groove, band * (1.0 - smoothstep(0.0, 0.016,
+                                   min(abs(f.x), abs(f.y)) * size)));
+
+    float dec  = decay();
     vec2  cell = floor(g);
-    float id   = hash21(cell);
+    float id   = hash21(cell + salt);
 
     float hair, spall; vec2 cg;
-    crackAt(cell, f, id, dec, hair, spall, cg);
+    crackAt(cell + salt, f, id, dec, hair, spall, cg);
 
     // The crack cuts the surface as well as marking it. Same form as the grout
     // perturbation above and about as cheap.
     nOut = normalize(n - (tu * sign(f.x) + tv * sign(f.y)) * groove * 0.5
                        - (tu * cg.x + tv * cg.y) * hair * 0.35);
 
-    alb = vec3(0.86, 0.89, 0.87) * (0.93 + 0.13 * id);
+    // The per-tile shade variation is a lattice too, and the first thing to turn
+    // into a shimmer. Half a tile per pixel is where it stops being detail.
+    alb = vec3(0.86, 0.89, 0.87) * (0.93 + 0.13 * mix(id, 0.5, lodFade(size * 0.5)));
     alb = mix(alb, vec3(0.30, 0.36, 0.34), band * 0.55);          // the mosaic course
 
-    // A missing tile. The threshold walks down out of the original 0.5%, so the
-    // wall loses tiles at a rate rather than having always been missing them.
-    alb = mix(alb, vec3(0.44, 0.46, 0.44), step(0.995 - dec * 0.35, id));
+    // A tile standing proud of the wall. The relief itself is geometry; this is
+    // only the dirt line that a tile with a lifted edge collects around it, and
+    // it uses tileBreak's hash so it lands on the tiles that actually moved.
+    float pr = hash21(cell + salt + 41.3);
+    float up = step(pr, 0.02 + dec * 0.18);
+    alb *= 1.0 - up * 0.18 * smoothstep(0.30, 0.50, max(abs(f.x), abs(f.y)));
 
-    // Whole blocks of tile gone, on a lattice four times coarser than the tiles
-    // themselves — reusing the same hash rather than paying for a second field.
-    // This is what turns scattered damage into a wall that is coming down.
-    // Whole courses gone. The most destructive of the three, so it is the last
-    // to arrive — below half decay the wall is damaged, not demolished.
+    // Whole courses gone, on a lattice four times coarser than the tiles
+    // themselves, reusing the same hash rather than paying for a second field.
+    // The most destructive of the stages, so it is the last to arrive: below half
+    // decay the wall is damaged, not demolished.
     float patch = step(0.92 - dec * 0.34, hash21(floor(g * 0.25) + 3.7))
                 * smoothstep(0.42, 0.60, dec);
     vec3  conc  = vec3(0.38, 0.39, 0.37) * (0.86 + 0.28 * hash21(cell * 2.3));
     alb = mix(alb, conc, max(spall * 0.85, patch * 0.75));
+
+    hair *= 1.0 - lodFade(0.004);
+    spall = mix(spall, 0.18, lodFade(size * 0.5));
 
     float mildew = groove * (0.35 + 0.65 * band) * grime;
     alb = mix(alb, vec3(0.30, 0.36, 0.28), mildew * 0.75);
@@ -764,9 +1015,9 @@ const COMMON = `
     // Splash zone: wet tile above the line is darker and much glossier.
     float wet = exp(-max(p.y - wy, 0.0) * 2.5);
 
-    // Water finding its way out of the cracks and running down the wall. Fed
-    // into the wet term rather than painted on, so the existing roughness term below
-    // makes the seep glossy for free — which is the whole read.
+    // Water finding its way out of the cracks and running down the wall. Fed into
+    // the wet term rather than painted on, so the roughness term below makes the
+    // seep glossy for free, which is the whole read.
     float seep = hair * (1.0 - abs(n.y)) * smoothstep(0.18, 0.45, dec);
     wet = max(wet, seep);
 
@@ -777,12 +1028,77 @@ const COMMON = `
     alb *= 1.0 - 0.35 * smoothstep(0.03, 0.0, abs(p.y - wy)) * grime;
 
     // Late on, the breaks stop being dark and start giving off light. Only some
-    // of them, and not equally: a constant emission on every crack reads as a
-    // neon wireframe laid over the wall rather than as something behind it
-    // showing through. The per-tile hash is already computed, so the variation
-    // is free.
+    // of them and not equally: a constant emission on every crack reads as a neon
+    // wireframe laid over the wall rather than as something behind it showing
+    // through. The per-tile hash is already computed, so the variation is free.
     float lit = smoothstep(0.55, 0.95, fract(id * 7.77));
-    crackGlow = hair * lit * smoothstep(0.26, 0.66, dec);
+    crackGlow = hair * lit * smoothstep(0.20, 0.62, dec);
+  }
+
+  // What the light coming out of a hole lands on: the wall around it.
+  //
+  // The emission inside a recess alone cannot read as a source, because a source
+  // is only ever recognised by what it lights. This walks the eight neighbouring
+  // tiles, asks each the same question tileBreak asks -- is this one missing --
+  // and accumulates a smooth falloff from the ones that are. Nine hashes, once
+  // per PIXEL, not once per march step; the same nine in the map would be
+  // unaffordable and this is why the geometry and the shading each ask the
+  // question in the place that suits them.
+  float holeSpill(vec2 uv, float size, float salt, float dec) {
+    vec2  g   = uv / size;
+    vec2  c0  = floor(g);
+    float thr = 0.004 + dec * 0.16;
+    float acc = 0.0;
+    for (int j = -1; j <= 1; j++) {
+      for (int i = -1; i <= 1; i++) {
+        vec2  c = c0 + vec2(float(i), float(j));
+        if (hash21(c + salt) >= thr) continue;
+        float r = length(g - (c + 0.5)) * size;
+        acc += exp(-r * 3.4);
+      }
+    }
+    return acc;
+  }
+
+  // Anything that is not the building. The same if-chain shape as the fittings
+  // themselves, because it has to answer in the same order they were built in.
+  void propSurface(vec3 qs, float mat, float dec, out vec3 alb, out float rough) {
+    float n1 = hash21(floor(qs.xz * 7.0) + floor(qs.y * 7.0));
+    if (mat < 1.5) {
+      // Lane rope floats: red, white and blue in RUNS. The run is what makes a
+      // line of spheres read as a lane rope instead of as beads on a string.
+      float k = fract(floor(qs.z / 1.35) * 0.37 + floor(qs.x) * 0.11);
+      alb = k < 0.34 ? vec3(0.58, 0.09, 0.07)
+          : (k < 0.67 ? vec3(0.82, 0.83, 0.82) : vec3(0.09, 0.20, 0.52));
+      // Each float is moulded with ribs, and they are all slightly sun-bleached
+      // by a different amount.
+      float rib = 0.82 + 0.18 * abs(sin(qs.z * 52.0));
+      alb  *= rib * (0.80 + 0.35 * hash21(vec2(floor(qs.z / 0.36), 3.0)));
+      alb   = mix(alb, vec3(0.20, 0.26, 0.16), smoothstep(0.25, 0.85, dec) * 0.45);
+      rough = 0.30;
+    }
+    else if (mat < 2.5) {
+      // Galvanised steel, going over to rust as the laps pile up.
+      alb   = mix(vec3(0.42, 0.44, 0.46), vec3(0.36, 0.16, 0.07),
+                  smoothstep(0.08, 0.70, dec) * (0.35 + 0.65 * n1));
+      rough = 0.20;
+    }
+    else if (mat < 3.5) {
+      // Municipal enamel. There is precisely one colour this is ever painted.
+      alb   = vec3(0.29, 0.41, 0.35) * (0.78 + 0.42 * n1);
+      alb   = mix(alb, vec3(0.30, 0.14, 0.07), smoothstep(0.3, 0.9, dec) * n1 * 0.5);
+      rough = 0.28;
+    }
+    else if (mat < 4.5) {
+      // Green. Dark, matte, and the only hue in the building that is not either
+      // fluorescent white or rust.
+      alb   = vec3(0.09, 0.19, 0.08) * (0.55 + 1.05 * n1);
+      rough = 0.66;
+    }
+    else {
+      alb   = vec3(0.40, 0.40, 0.38) * (0.85 + 0.30 * n1);
+      rough = 0.74;
+    }
   }
 
   // Ceiling fluorescents. Emissive is a shading term on ceiling hits, not
@@ -867,6 +1183,48 @@ const COMMON = `
     return acc;
   }
 
+  // Fish. Impostors in the in-scatter beside motes(): a body that is an ellipse
+  // in the ray's own lattice, a tail that beats, and a drift across the beam so
+  // the shoal crosses it rather than hanging in it. Shading only, which is the
+  // only reason a shoal is affordable at all -- one evaluation per PIXEL instead
+  // of one per march step, in a map() that has no room left in it.
+  vec3 shoal(vec3 rd, float tMax, float lit) {
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 3; i++) {
+      float fi = float(i);
+      float dz = 3.0 + fi * 5.0;
+      if (dz > tMax) break;
+
+      // The lattice scale is what sets apparent SIZE, and getting it wrong does
+      // not read as "big fish", it reads as a flying saucer: at 2.4 a body was
+      // most of a cell across and a shoal was a row of dinner plates. At 9 and up
+      // they are hand-sized at three metres, which is what they should be.
+      float sw = iTime * (0.13 + fi * 0.04);
+      vec2  g  = rd.xy / max(abs(rd.z), 0.25) * (9.0 + fi * 5.0)
+               + vec2(sw, sin(sw * 1.7) * 0.10 + fi * 7.3);
+      vec2  c  = floor(g);
+      float rn = hash21(c + fi * 13.0);
+      if (rn < 0.86) continue;
+
+      vec2 f = fract(g) - 0.5;
+      f.y += sin(iTime * 1.9 + rn * 31.0) * 0.06;
+      f.x *= rn > 0.93 ? -1.0 : 1.0;          // half of them are facing the other way
+
+      // Body and tail as two ellipses, four to one along the swim direction. The
+      // tail beats about its own root, which is what separates a fish from a
+      // grain of rice.
+      float body = length(vec2(f.x * 0.85, f.y * 3.4)) - 0.100;
+      float tail = length(vec2((f.x + 0.105) * 2.6,
+                               (f.y - sin(iTime * 8.0 + rn * 20.0) * 0.030) * 5.0)) - 0.048;
+      float m = smoothstep(0.030, 0.004, min(body, tail));
+
+      // Silhouettes, not lamps. They are BETWEEN you and the far wall, so they
+      // are dark against it and only just catch the light.
+      acc += vec3(0.30, 0.40, 0.38) * m * lit / (1.0 + dz * 0.55);
+    }
+    return acc;
+  }
+
   // Lamp halos, added whether or not the ray hit anything. This is what replaces
   // a bloom post pass — there is no FBO in a single-pass journey.
   // Unlike the others this one is swept along the RAY from the camera, and the
@@ -898,40 +1256,95 @@ const SCENE = `
     vec4 A, B, C, A2, B2, C2; vec3 q; float w;
     resolveSlot(p, A, B, C, A2, B2, C2, q, w);
 
-    // Into the owning room's coordinates: the point, the normal and the view
-    // ray together. Carrying only some of them across is worse than carrying
-    // none, because the errors stop being a uniform offset.
-    vec3  nq  = dirToLocal(n, A);
-    vec3  rdq = dirToLocal(rd, A);
-    float wy  = waterYIn(B);
+    // Into the owning room's coordinates: the point, the normal and the view ray
+    // together. Carrying only some of them across is worse than carrying none,
+    // because then the errors stop being a uniform offset.
+    vec3 nq  = dirToLocal(n, A);
+    vec3 rdq = dirToLocal(rd, A);
+
+    // ...and then into the SHEARED frame, which is the one the geometry was
+    // actually built in. On the two ramped sections that is the difference
+    // between tile that follows the floor and tile that slides underneath it;
+    // everywhere else the shear is zero and the two frames are identical. The
+    // flood is flat in world so it picks up the same shear on the way in, and the
+    // normal picks up the inverse transpose, which for a shear is one subtract.
+    float zc  = clamp(q.z, 0.0, B.w);
+    vec3  qs  = vec3(q.x, q.y + C.x * zc, q.z);
+    vec3  ns  = normalize(vec3(nq.x, nq.y, nq.z - C.x * nq.y));
+    float wy  = waterYIn(B) + C.x * zc;
+    float dec = decay();
 
     vec3 alb, nn; float rough;
-    tileSurface(q, nq, wy, C.z, alb, nn, rough);
+    tileSurface(qs, ns, wy, C.z, alb, nn, rough);
 
-    vec3 c = stripLight(q, nn, alb, rough, rdq, B, C);
+    // Was it the building, or something standing in it? One extra evaluation of
+    // the fittings, at the hit point only. The march never reads gMat, so the
+    // material costs a pixel rather than ninety-six steps -- and re-deriving it
+    // from the geometry instead would mean writing every fitting out twice.
+    float pd = sectionProps(qs, B, C, uSecD[1]);
+    if (pd < 0.035 && gMat > 0.5) {
+      propSurface(qs, gMat, dec, alb, rough);
+      nn = ns;
+      crackGlow = 0.0;
+    }
+
+    vec3 c = stripLight(qs, nn, alb, rough, rdq, B, C);
 
     // In the throat of a doorway, light the surface as both rooms and mix. The
-    // tile frame is NOT mixed — coordinates from two rigid frames average into a
-    // point in neither, and the grid would ghost — but the light is just a
-    // number, and crossing it over is what stops the threshold reading as a line
-    // ruled across the floor.
+    // tile frame is NOT mixed -- coordinates from two rigid frames average into a
+    // point in neither, and the grid would ghost -- but light is just a number,
+    // and crossing it over is what stops the threshold reading as a line ruled
+    // across the floor.
     if (w > 0.004) {
-      vec3 q2 = toLocal(p, A2, B2.x);
-      c = mix(c, stripLight(q2, dirToLocal(n, A2), alb, rough, dirToLocal(rd, A2), B2, C2), w);
+      vec3  q2  = toLocal(p, A2, B2.x);
+      float zc2 = clamp(q2.z, 0.0, B2.w);
+      vec3  qs2 = vec3(q2.x, q2.y + C2.x * zc2, q2.z);
+      c = mix(c, stripLight(qs2, dirToLocal(n, A2), alb, rough, dirToLocal(rd, A2), B2, C2), w);
     }
 
     c += alb * 0.06;
 
-    // Caustics stay in the CURRENT frame on purpose. The water is one flat
-    // plane through the entire building and depth below it is the only quantity
-    // that has to be right; projecting the pattern in each room's own frame
-    // would make it swim sideways every time you crossed a join.
+    // Caustics stay in WORLD on purpose. The water is one flat plane through the
+    // entire building and depth below it is the only quantity that has to be
+    // right; projecting the pattern in each room's own frame would make it swim
+    // sideways every time you crossed a join.
     if (p.y < waterY()) c += alb * causticAt(p) * 0.9;
-    if (n.y < -0.6) c += vec3(0.95, 0.99, 1.0) * ceilPanel(q, B, C) * 3.2;
+    if (ns.y < -0.6) c += vec3(0.95, 0.99, 1.0) * ceilPanel(qs, B, C) * 3.2;
 
-    // Whatever is behind the walls by now. Same oxblood foundry's decay rots
-    // its grade toward, and the only warm thing in a building lit entirely by
-    // dying fluorescents.
+    // INSIDE A BREAK IN THE SHELL: past the nominal face plane, in the recess a
+    // missing tile left behind. Whatever is behind this building is lit, and it
+    // is not lit white. This is what the red rays come out of -- the surface half
+    // of it; crackShafts does the air.
+    // Depth first. What you see through a missing tile is a dark hole; the red
+    // is what is at the BACK of it, so it falls off with how far in the surface
+    // you are looking at actually is. Emitting a flat value over the whole recess
+    // was the difference between a lit break and a red sticker.
+    // A hole is DARK first. Almost all of what you can see of one is its own
+    // unlit side walls, and only the very back of it is the source -- so the two
+    // ramps are deliberately disjoint, the shadow reaching full a centimetre in
+    // and the emission not starting until the far end. Overlapping them lit the
+    // whole recess evenly, and a recess lit evenly across its whole depth is not
+    // a hole, it is a red tile: flat, frontal and exactly tile-shaped, which is
+    // precisely what it looked like.
+    float face  = min(min(B.y - abs(qs.x), qs.y), B.z - qs.y);
+    c *= 1.0 - 0.94 * smoothstep(-0.005, -0.055, face);
+    c += vec3(1.00, 0.09, 0.02) * smoothstep(-0.155, -0.225, face) * (0.35 + 2.6 * dec);
+
+    // ...and what it falls on. Suppressed inside the recess itself, where the
+    // neighbours are on the other side of a wall and the surface is already the
+    // source rather than something the source is lighting.
+    if (face > -0.02 && dec > 0.12) {
+      vec2  suv; float ssz, ssl;
+      if (abs(ns.y) > 0.7)      { suv = qs.xz; ssz = TILE_F; ssl = ns.y > 0.0 ? SALT_FLR : SALT_CEIL; }
+      else if (abs(ns.x) > 0.7) { suv = qs.zy; ssz = TILE_W; ssl = SALT_WALL; }
+      else                      { suv = qs.xy; ssz = TILE_W; ssl = 5.5; }
+      c += vec3(1.00, 0.13, 0.04) * holeSpill(suv, ssz, ssl, dec)
+         * smoothstep(0.12, 0.55, dec) * 0.55 * (1.0 - lodFade(ssz * 0.5));
+    }
+
+    // ...and the same oxblood out of the hairlines, once they are deep enough to
+    // have reached anything. Same tint foundry rots its grade toward, and the
+    // only warm thing in a building lit entirely by dying fluorescents.
     c += vec3(1.00, 0.17, 0.06) * crackGlow * 3.0;
     return c;
   }
@@ -946,8 +1359,14 @@ const SCENE = `
     for (int i = 0; i < 20; i++) {
       float d = mapScene(p + r * rt);
       if (d < 0.004 * (1.0 + rt * 0.02)) {
-        vec3 q = p + r * rt;
-        return mix(HAZE, shadeFace(q, calcNormal(q, rt), r), exp(-rt * 0.035));
+        vec3  q  = p + r * rt;
+        // The reflected ray has travelled to the water and then on again, and the
+        // tile it lands on is that far away however near the surface is.
+        float keep = gDist;
+        gDist = keep + rt;
+        vec3 sc = shadeFace(q, calcNormal(q, rt), r);
+        gDist = keep;
+        return mix(HAZE, sc, exp(-rt * 0.035));
       }
       rt += d * 0.95;
       if (rt > 45.0) break;
@@ -979,21 +1398,32 @@ const SCENE = `
   // Each tap is weighted by how close it is to a surface. That proximity term is
   // what makes the glow hug the cracked walls and pool in the corners, instead
   // of hanging in the middle of the room like coloured fog.
-  vec3 crackShafts(vec3 ro, vec3 rd, float t) {
+  vec3 crackShafts(vec3 ro, vec3 rd, float tMax) {
     float dec = decay();
-    if (dec < 0.18) return vec3(0.0);
+    if (dec < 0.12) return vec3(0.0);
 
+    // Six taps along the primary ray, hugging whatever surface is nearest.
+    //
+    // This deliberately does NOT ask the tile lattice where the holes are, and
+    // that is the whole design note. It did, and the result was not shafts: the
+    // last tap of every ray landed in the same tile cell as its neighbours, the
+    // per-cell answer is constant across a tile face, and what appeared on screen
+    // was a flat tile-shaped red rectangle -- a quantised field projected through
+    // a pinhole draws the quantisation, not the light. A volumetric term has to
+    // be continuous in space or it will draw its own lattice.
+    //
+    // So: a smooth field, gated on proximity to concrete, which is where the
+    // holes are and where the glow belongs. The surface half of the effect knows
+    // about individual holes; the air half only has to know it is near a wall.
     float acc = 0.0;
     for (int k = 0; k < 6; k++) {
-      vec3  sp = ro + rd * (t * (float(k) + 0.5) / 6.0);
-      float prox = 1.0 - clamp(mapScene(sp) * 0.5, 0.0, 1.0);
-
-      // A coarse standing field rather than the per-tile one: this is sampled in
-      // mid-air, where there is no tile lattice to fracture along.
-      float v = sin(sp.x * 1.7 + cos(sp.z * 2.1)) * cos(sp.z * 1.9 + sin(sp.y * 1.5));
-      acc += (1.0 - smoothstep(0.0, 0.16 + 0.30 * dec, abs(v))) * prox * prox;
+      vec3  sp   = ro + rd * (tMax * (float(k) + 0.35) / 6.0);
+      float prox = exp(-max(mapScene(sp), 0.0) * 1.9);
+      float v    = sin(sp.x * 2.3 + cos(sp.z * 1.7) * 1.4)
+                 * cos(sp.z * 2.1 + sin(sp.y * 1.9) * 1.2);
+      acc += smoothstep(0.25, 0.95, abs(v)) * prox;
     }
-    return vec3(1.00, 0.17, 0.06) * acc * (1.0 / 6.0) * dec * 1.7;
+    return vec3(1.00, 0.15, 0.05) * acc * (1.0 / 6.0) * (0.10 + 0.55 * dec);
   }
 
   void main() {
@@ -1024,6 +1454,7 @@ const SCENE = `
     // ever end the march sooner, never overshoot it.
     float t   = 0.05;
     bool  hit = false;
+    gDist = 0.0;
     for (int i = 0; i < 96; i++) {
       vec3  p = ro + rd * t;
       float d = mapScene(p);
@@ -1048,6 +1479,7 @@ const SCENE = `
     if (hit) {
       vec3 p = ro + rd * t;
       vec3 n = calcNormal(p, t);
+      gDist = t;
       col = shadeFace(p, n, rd) * calcAO(p, n);
     }
 
@@ -1064,8 +1496,9 @@ const SCENE = `
 
         // Everything beyond the surface is seen through the water.
         vec3 under = hit ? col : deepCol;
-        under = mix(deepCol, under, exp(-max(t - tW, 0.0) * 0.55));
+        under = mix(deepCol, under, exp(-max(t - tW, 0.0) * 0.40));
         under += vec3(0.35, 0.62, 0.68) * causticAt(wp) * 0.25;
+        under += shoal(rd, max(t - tW, 0.0), 0.55);
 
         vec3 rr   = reflect(rd, wn);
         vec3 refl = reflectShade(wp, rr);
@@ -1074,7 +1507,13 @@ const SCENE = `
         float cosT = clamp(dot(wn, -rd), 0.0, 1.0);
         float fres = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
 
+        // Scum kills the reflection where it sits and shows its own colour, which
+        // is exactly what makes the rest of the surface read as water.
+        float film = surfaceFilm(wp.xz, decay());
+        fres *= 1.0 - film * 0.80;
+
         col = mix(under, refl, fres);
+        col = mix(col, vec3(0.11, 0.14, 0.10) * (0.7 + causticAt(wp) * 0.25), film * 0.75);
         col = mix(hazeCol, col, exp(-tW * 0.030));
       }
     }
@@ -1085,6 +1524,7 @@ const SCENE = `
       col += deepCol * 0.35;                       // in-scattered ambient, not just darkness
       col += lightShafts(ro, rd, tEnd);
       col += motes(rd, tEnd);
+      col += shoal(rd, tEnd, 1.0);
 
       if (crosses) {
         // Snell's window: looking up, everything outside the 48.6 degree cone is
