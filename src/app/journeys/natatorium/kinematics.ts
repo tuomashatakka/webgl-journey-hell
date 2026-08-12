@@ -323,6 +323,18 @@ const FLOOR0: number[] = []
   }
 }
 
+/**
+ * The window over which a lap's flood arrives, as indices into SECTIONS. It has
+ * to sit entirely *after* the crossing in THE STAIR DOWN: within a lap the water
+ * is flat at WATER_Y0 + lap * WATER_RISE right up to the start of this window,
+ * which is what keeps invariant 3 true on every lap and not just on lap 0. By
+ * THE DIVING WELL the floor has already dropped 1.55 and your head is under, so
+ * a metre of rise arriving there changes nothing you can see — and by the time
+ * THE RISER carries you back up, the new level is fully in.
+ */
+const RISE_FROM = 8 // THE DIVING WELL
+const RISE_TO   = 10 // THE CISTERN
+
 function sectionAt (index: number): Section {
   const n = SECTION_COUNT
   return SECTIONS[(index % n + n) % n]
@@ -480,9 +492,9 @@ export interface NatatoriumState {
   lap:  number;
 
   /**
-   * Laps completed as a *fraction* — `dist / LAP_LEN`. Anything that escalates
-   * per lap reads this rather than `lap`, so it ramps through the seam instead
-   * of stepping across it.
+   * Laps completed, with the fractional part ramping across RISE_FROM..RISE_TO
+   * rather than snapping at the seam. Anything that escalates per lap reads this
+   * instead of `lap`, so it arrives while you are under and not in a doorway.
    */
   lapF:    number;
   localZ:  number;
@@ -552,9 +564,9 @@ function makeSlot (
  * which is why the shader needs exactly one transform routine.
  */
 export function getNatatoriumState (dist: number): NatatoriumState {
-  const lapF = dist / LAP_LEN
-  const lap  = Math.floor(lapF)
+  const lap  = Math.floor(dist / LAP_LEN)
   const lapZ = dist - lap * LAP_LEN
+  const lapF = lap + smootherstep(STARTS[RISE_FROM], STARTS[RISE_TO], lapZ)
 
   let idx = 0
   for (let i = SECTION_COUNT - 1; i >= 0; i--)
@@ -613,10 +625,12 @@ export function getNatatoriumState (dist: number): NatatoriumState {
   // one source of truth.
   const floorLocal = here[1]
   const floorY     = FLOOR0[idx] + floorLocal
-  // Continuous in distance, not stepped per lap. Stepping put the whole 1.15u
-  // rise into the single frame that crosses the seam: the surface teleported to
-  // chest height in a doorway and the wading penalty snapped with it. Rising
-  // over the lap lands on exactly the same level at every seam.
+  // Continuous, not stepped per lap. Stepping put the whole 1.15u rise into the
+  // single frame that crosses the seam: the surface teleported to chest height
+  // in a doorway and the wading penalty snapped with it. The rise now arrives
+  // across RISE_FROM..RISE_TO, deep in the flooded half of the lap where the
+  // camera is already under, and reaches the next lap's level before the seam —
+  // so the seam is smooth and the level at any point of a lap is unchanged.
   const waterY = WATER_Y0 + lapF * WATER_RISE
   const depth  = Math.max(0, waterY - floorY)
   const above  = smoothstep(waterY - 0.12, waterY + 0.12, floorY + EYE)
@@ -702,6 +716,12 @@ export function assertRouteSane (): string[] {
   }
   if (crossedIn !== 'THE STAIR DOWN')
     problems.push(`water closes overhead in "${crossedIn}", expected THE STAIR DOWN`)
+
+  // The flood window must open after that crossing, or the rise from the
+  // previous lap moves the moment earlier and the beat above stops being true.
+  const crossIdx = SECTIONS.findIndex(s => s.name === 'THE STAIR DOWN')
+  if (RISE_FROM <= crossIdx)
+    problems.push(`flood window opens in "${SECTIONS[RISE_FROM].name}", at or before the crossing`)
 
   return problems
 }
