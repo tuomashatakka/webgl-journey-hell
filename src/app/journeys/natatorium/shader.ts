@@ -87,6 +87,16 @@ const COMMON = `
     return vec3(A.x * d.x - A.y * d.y, p.y - ty, A.y * d.x + A.x * d.y);
   }
 
+  // The same rotation for a DIRECTION: no translation, and y is untouched
+  // because every section frame shares one up axis. Normals and view rays both
+  // need this before they meet anything expressed in a section's own frame —
+  // mixing a world-frame ray with a local-frame normal silently produces a
+  // specular highlight in the wrong place, which is the kind of bug that reads
+  // as "the lighting is a bit off" for a week.
+  vec3 dirToLocal(vec3 v, vec4 A) {
+    return vec3(A.x * v.x - A.y * v.z, v.y, A.y * v.x + A.x * v.z);
+  }
+
   // The air volume of one section: a box whose floor ramps at C.x.
   //
   // Shearing y to flatten the ramp scales the metric by sqrt(1 + s*s), so the
@@ -121,6 +131,43 @@ const COMMON = `
     return -mapAir(p);
   }
 
+  // Which resident section owns this point, and the point in THAT section's own
+  // frame. Deliberately not folded into mapAir: the march calls that ~96 times
+  // per pixel and needs only the minimum, while shading needs the winner twice
+  // (the primary hit, and the hit behind the water reflection).
+  //
+  // Everything downstream used to read uSecB[1] / uSecC[1] — the section the
+  // CAMERA is in — and evaluate it against p in the camera's frame. So the room
+  // on the far side of a doorway was lit with this room's width, ceiling height
+  // and lamp pitch, with its lamp rows running along the wrong axis; and the
+  // instant the slot window rotated, that whole far room snapped. The README
+  // states the rule for the camera ("every per-section quantity goes through the
+  // corner blend, not just position"); this is that rule applied to shading.
+  void resolveSlot(vec3 p, out vec4 A, out vec4 B, out vec4 C,
+                   out vec3 q, out float margin) {
+    float best   = 1e5;
+    float second = 1e5;
+
+    // Seeded from the current slot only so the compiler sees them assigned; the
+    // loop below always overwrites, since every distance beats 1e5.
+    A = uSecA[1]; B = uSecB[1]; C = uSecC[1]; q = p;
+
+    for (int i = 0; i < 3; i++) {
+      vec3  qi = toLocal(p, uSecA[i], uSecB[i].x);
+      float d  = sectionAir(qi, uSecB[i], uSecC[i]);
+      if (d < best) {
+        second = best;
+        best   = d;
+        A = uSecA[i]; B = uSecB[i]; C = uSecC[i]; q = qi;
+      }
+      else if (d < second) second = d;
+    }
+
+    // How much the winner won by. Near zero means this point sits in the overlap
+    // where two rooms interpenetrate — i.e. in a door jamb.
+    margin = second - best;
+  }
+
   // 4-tap tetrahedron rather than 6-tap central differences: mapScene evaluates
   // three transformed boxes, so a third fewer taps is a real saving per pixel.
   vec3 calcNormal(vec3 p, float t) {
@@ -146,6 +193,13 @@ const COMMON = `
 
   // The water level, in the current section's local frame.
   float waterY() { return uWave.x; }
+
+  // ...and in some other slot's frame. The flood is one flat plane through the
+  // whole building; toLocal subtracts B.x from y, so a section whose floor
+  // origin sits higher carries the surface correspondingly lower in its own
+  // coordinates. Getting this wrong puts the scum line and the mosaic course at
+  // different heights on either side of a doorway.
+  float waterYIn(vec4 B) { return uWave.x - B.x; }
 
   // Kept deliberately shallow in amplitude: this displaces the *plane solve*,
   // not the SDF, so it costs nothing and cannot break the march.
@@ -215,7 +269,7 @@ const COMMON = `
 
   // Tile. The normal perturbation is what makes tile look like tile rather than
   // like wallpaper, and it is nearly free: the derivative of fract() is +-1.
-  void tileSurface(vec3 p, vec3 n, float grime,
+  void tileSurface(vec3 p, vec3 n, float wy, float grime,
                    out vec3 alb, out vec3 nOut, out float rough) {
     vec2 uv; vec3 tu, tv;
     if (abs(n.y) > 0.7)      { uv = p.xz; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 0.0, 1.0); }
@@ -223,7 +277,7 @@ const COMMON = `
     else                     { uv = p.xy; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 1.0, 0.0); }
 
     // Real pools run a contrasting mosaic course at the water line.
-    float band = smoothstep(0.20, 0.14, abs(p.y - waterY()));
+    float band = smoothstep(0.20, 0.14, abs(p.y - wy));
     float size = mix(abs(n.y) > 0.7 ? 0.30 : 0.22, 0.11, band);
 
     vec2  g = uv / size;
@@ -243,39 +297,41 @@ const COMMON = `
     alb *= mix(1.0, 0.6, groove);                                  // grout is darker
 
     // Splash zone: wet tile above the line is darker and much glossier.
-    float wet = exp(-max(p.y - waterY(), 0.0) * 2.5);
+    float wet = exp(-max(p.y - wy, 0.0) * 2.5);
     alb  *= mix(1.0, 0.72, wet);
     rough = mix(0.32, 0.06, wet);
 
     // Scum line: a dirty ring exactly at the water level.
-    alb *= 1.0 - 0.35 * smoothstep(0.03, 0.0, abs(p.y - waterY())) * grime;
+    alb *= 1.0 - 0.35 * smoothstep(0.03, 0.0, abs(p.y - wy)) * grime;
   }
 
   // Ceiling fluorescents. Emissive is a shading term on ceiling hits, not
   // geometry — keeping them out of the SDF saves their cost on every march step.
-  float deadFrac() {
-    return clamp(0.10 + uWave.y * 0.22 + uSecC[1].z * 0.30, 0.0, 0.85);
+  float deadFrac(vec4 C) {
+    return clamp(0.10 + uWave.y * 0.22 + C.z * 0.30, 0.0, 0.85);
   }
 
-  float lampAlive(float band) {
-    float dead = step(hash11(band * 3.17 + 11.0), deadFrac());
-    float buzz = 0.72 + 0.28 * step(0.30, hash11(band * 7.7 + floor(iTime * 9.0)));
+  // Salted with the section's own lamp pitch, so two rooms visible through one
+  // doorway do not fail the same tubes in the same order.
+  float lampAlive(float band, vec4 C) {
+    float dead = step(hash11(band * 3.17 + 11.0 + C.w * 7.31), deadFrac(C));
+    float buzz = 0.72 + 0.28 * step(0.30, hash11(band * 7.7 + floor(iTime * 9.0) + C.w));
     return (1.0 - dead) * buzz;
   }
 
   // A fluorescent tube IS a segment, so light it as one: the closest-point-on-
   // segment costs about five instructions and produces the long specular streak
   // across wet tile and water that a point light simply cannot.
-  vec3 stripLight(vec3 p, vec3 n, vec3 alb, float rough, vec3 rd) {
+  vec3 stripLight(vec3 p, vec3 n, vec3 alb, float rough, vec3 rd, vec4 B, vec4 C) {
     vec3  acc = vec3(0.0);
-    float sp  = max(uSecC[1].w, 2.0);
-    float W   = uSecB[1].y;
-    float H   = uSecB[1].z;
+    float sp  = max(C.w, 2.0);
+    float W   = B.y;
+    float H   = B.z;
     float band = floor(p.z / sp);
 
     for (int k = 0; k < 3; k++) {
       float bi = band - 1.0 + float(k);
-      float on = lampAlive(bi);
+      float on = lampAlive(bi, C);
       if (on < 0.01) continue;
 
       vec3 a  = vec3(-W * 0.55, H - 0.12, (bi + 0.5) * sp);
@@ -301,14 +357,14 @@ const COMMON = `
 
   // The lit face of a recessed ceiling panel. Emissive only — it is a shading
   // term on ceiling hits, so it costs nothing on the other 95 march steps.
-  float ceilPanel(vec3 p) {
-    float sp   = max(uSecC[1].w, 2.0);
-    float W    = uSecB[1].y;
+  float ceilPanel(vec3 p, vec4 B, vec4 C) {
+    float sp   = max(C.w, 2.0);
+    float W    = B.y;
     float band = floor(p.z / sp);
     float lz   = p.z - (band + 0.5) * sp;
     float inZ  = 1.0 - smoothstep(0.20, 0.27, abs(lz));
     float inX  = 1.0 - smoothstep(W * 0.50, W * 0.56, abs(p.x));
-    return inZ * inX * lampAlive(band);
+    return inZ * inX * lampAlive(band, C);
   }
 
   // Suspended particulate. Nothing else says "this space is full of water"
@@ -333,15 +389,18 @@ const COMMON = `
 
   // Lamp halos, added whether or not the ray hit anything. This is what replaces
   // a bloom post pass — there is no FBO in a single-pass journey.
-  vec3 lampGlow(vec3 ro, vec3 rd, float tMax) {
+  // Unlike the others this one is swept along the RAY from the camera, and the
+  // camera is by definition in the current section — so it keeps slot 1, and
+  // takes it as a parameter only to keep every lamp routine reading the same way.
+  vec3 lampGlow(vec3 ro, vec3 rd, float tMax, vec4 B, vec4 C) {
     vec3  acc = vec3(0.0);
-    float sp  = max(uSecC[1].w, 2.0);
-    float H   = uSecB[1].z;
+    float sp  = max(C.w, 2.0);
+    float H   = B.z;
     float band = floor(ro.z / sp);
 
     for (int k = 0; k < 3; k++) {
       float bi = band - 1.0 + float(k);
-      float on = lampAlive(bi);
+      float on = lampAlive(bi, C);
       if (on < 0.01) continue;
       vec3  lp = vec3(0.0, H - 0.12, (bi + 0.5) * sp);
       vec3  v  = lp - ro;
@@ -356,12 +415,28 @@ const COMMON = `
 // Camera, march, water split and the inline post chain.
 const SCENE = `
   vec3 shadeFace(vec3 p, vec3 n, vec3 rd) {
+    vec4 A, B, C; vec3 q; float margin;
+    resolveSlot(p, A, B, C, q, margin);
+
+    // Into the owning room's coordinates: the point, the normal and the view
+    // ray together. Carrying only some of them across is worse than carrying
+    // none, because the errors stop being a uniform offset.
+    vec3  nq  = dirToLocal(n, A);
+    vec3  rdq = dirToLocal(rd, A);
+    float wy  = waterYIn(B);
+
     vec3 alb, nn; float rough;
-    tileSurface(p, n, uSecC[1].z, alb, nn, rough);
-    vec3 c = stripLight(p, nn, alb, rough, rd);
+    tileSurface(q, nq, wy, C.z, alb, nn, rough);
+
+    vec3 c = stripLight(q, nn, alb, rough, rdq, B, C);
     c += alb * 0.06;
+
+    // Caustics stay in the CURRENT frame on purpose. The water is one flat
+    // plane through the entire building and depth below it is the only quantity
+    // that has to be right; projecting the pattern in each room's own frame
+    // would make it swim sideways every time you crossed a join.
     if (p.y < waterY()) c += alb * causticAt(p) * 0.9;
-    if (n.y < -0.6) c += vec3(0.95, 0.99, 1.0) * ceilPanel(p) * 3.2;
+    if (n.y < -0.6) c += vec3(0.95, 0.99, 1.0) * ceilPanel(q, B, C) * 3.2;
     return c;
   }
 
@@ -508,7 +583,7 @@ const SCENE = `
       }
     }
 
-    col += lampGlow(ro, rd, tEnd) * (camWet ? 0.55 : 1.0);
+    col += lampGlow(ro, rd, tEnd, uSecB[1], uSecC[1]) * (camWet ? 0.55 : 1.0);
 
     // --- inline post (no FBO in a single-pass journey) ---
 
