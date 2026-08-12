@@ -58,17 +58,20 @@ export function useDisplayFilter (
 }
 
 /**
- * Re-run a journey's resize when the resolution setting changes.
+ * Re-run a journey's resize when anything affecting the backing-store size
+ * changes — the resolution setting, or a debug override that forces an exact
+ * size. Takes an opaque key rather than a number so callers can combine several
+ * inputs into one dependency.
  *
  * The returned ref is assigned by the GL effect once it knows how to resize;
- * changing resolution then re-scales the backing store in place instead of
- * tearing down and rebuilding the GL context.
+ * changing the key then re-scales the backing store in place instead of tearing
+ * down and rebuilding the GL context.
  */
-export function useResolutionResize (resolution: number): React.RefObject<() => void> {
+export function useResolutionResize (key: number | string): React.RefObject<() => void> {
   const resizeRef = useRef<() => void>(() => {})
   useEffect(() => {
     resizeRef.current()
-  }, [ resolution ])
+  }, [ key ])
   return resizeRef
 }
 

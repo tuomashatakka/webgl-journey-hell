@@ -117,6 +117,49 @@ Two are not, and they solve it differently:
     damped hinge, because a hinge rings above 1 and settles back through it, and
     the shader culls the whole block set on `deploy >= 1`.
 
+### debugging a journey
+
+A journey is a clock, so everything interesting about it — which room you are in,
+how flooded it is, how far a doorway has assembled — is a function of elapsed
+time. Every journey therefore accepts a set of query parameters, honoured
+centrally by `withShaderJourney`, that let you ask for one exact moment:
+
+| param | meaning |
+| --- | --- |
+| `?t=42.5` | seek to 42.5s of journey time and hold there |
+| `?debug=1` | overlay the live state and publish `window.__journeyDebug` (on by default with `?t=`) |
+| `?dt=0.008` | the seek's fixed timestep (default 1/60) |
+| `?hud=0` | hide the chrome, for a clean plate |
+| `?w=1600&h=900` | exact backing-store size, ignoring dpr and the resolution setting |
+| `?res=1` | resolution scale override |
+| `?pointer=0.3,-0.2` | hold the pan offset, to look somewhere other than straight ahead |
+
+```
+/journeys/natatorium?t=30&w=1200&h=760          # the frame 7m before a join
+/journeys/natatorium?t=30&hud=0&debug=0         # ...as a clean plate
+```
+
+`?t=` **seeks rather than jumps**, replaying the simulation from zero in fixed
+increments. An integrating journey cannot be jumped — natatorium advances
+`dist += speed * dt` and its speed depends on how deep the water is where it
+already is — so the only way to know where `t` seconds puts you is to walk it,
+and a fixed `dt` is what makes walking it reproducible. The same URL renders
+byte-identical pixels across reloads and machines.
+
+`document.documentElement.dataset.journeyReady` flips to `"1"` only once the
+seeked frame is actually on the canvas, so a driver can wait on it instead of
+sleeping and hoping:
+
+```js
+await page.goto(url)
+await page.waitForSelector('html[data-journey-ready="1"]')
+await page.screenshot({ path: 'shot.png' })
+```
+
+The overlay prints the uniforms grouped as the `vec4`s they are uploaded as,
+which is usually the fastest way to find out that a value you believed was
+varying is in fact pinned.
+
 ### adding a new journey
 
 1. Create `app/journeys/<slug>/page.tsx` — a `'use client'` route that hands one

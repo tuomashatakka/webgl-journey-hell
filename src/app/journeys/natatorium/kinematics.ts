@@ -515,11 +515,19 @@ export interface Slot {
   lamp:  number;
 
   /**
-   * The camera's z in *this slot's own frame*. Negated, it is how far ahead of
-   * the camera this section's entry still lies, which is what deployAt() turns
+   * How far along the route the camera still has to walk before it reaches this
+   * section's entry; negative once that entry is behind it. deployAt() turns it
    * into the blocks moving at that join.
+   *
+   * Measured along the ROUTE, not by projecting the camera onto this section's
+   * own +Z. That projection is the obvious thing and it is wrong: the axis is
+   * rotated by the join's turn, so past 90 degrees its cosine goes negative and
+   * a camera approaching the doorway projects as though it were already through
+   * it — the dressing at every sharp corner would report itself finished before
+   * you arrived. Route distance has no such failure; it is also exact and needs
+   * no trigonometry.
    */
-  camZ: number;
+  ahead: number;
 
   /** Section id, 1..12. Salts per-section hashing so rooms of a type differ. */
   id: number;
@@ -586,7 +594,7 @@ function makeSlot (
     type:  s.type,
     grime: s.grime,
     lamp:  s.lamp,
-    camZ:  0, // filled in below, once the camera pose is known
+    ahead: 0, // filled in below, once localZ is known
     id:    s.id,
   }
 }
@@ -684,12 +692,15 @@ export function getNatatoriumState (dist: number): NatatoriumState {
   const stride = 1.0 - 0.75 * clamp01(depth / EYE)
   const bob    = Math.abs(Math.sin(dist * 1.7)) * 0.045 * stride
 
-  // The camera's z down each resident section's own axis — the same affine the
-  // shader applies to any other point, evaluated once here rather than ninety-six
-  // times a pixel: q.z = sin * (p.x - tx) + cos * (p.z - tz).
+  // Route distance to each resident section's entry. The previous section's is
+  // a whole section behind, the current one's is behind by however far into it
+  // we have walked, and the next one's is whatever is left of this one — which
+  // makes `next` the only slot that is ever mid-deployment.
+  slotPrv.ahead = -(prev.len + localZ)
+  slotCur.ahead = -localZ
+  slotNxt.ahead = cur.len - localZ
+
   const slots = [ slotPrv, slotCur, slotNxt ]
-  for (const sl of slots)
-    sl.camZ = sl.sin * (here[0] - sl.tx) + sl.cos * (here[2] - sl.tz)
 
   return {
     dist,
@@ -825,7 +836,7 @@ export function createNatatoriumSimulation (): JourneySimulation {
         uSecC[o + 2] = s.grime
         uSecC[o + 3] = s.lamp
 
-        uSecD[o]     = deployAt(-s.camZ)
+        uSecD[o]     = deployAt(s.ahead)
         // The aisle's height, uploaded rather than mirrored as a GLSL constant:
         // it is derived from EYE, and a hand-kept copy of EYE in the shader is
         // exactly the kind of contract that rots (see stairwell's SEG_LEN).

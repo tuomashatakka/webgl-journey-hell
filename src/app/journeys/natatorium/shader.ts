@@ -190,7 +190,7 @@ const COMMON = `
   // over-estimate is not an artifact, it is a grazing ray leaving the building.
   // foundry pays a 22% step-factor cut for exactly that (foundry/shader.ts:786);
   // this pays nothing and keeps the 0.95.
-  float joinBlocks(vec3 qs, vec4 B, vec4 D) {
+  float joinBlocks(vec3 qs, vec4 B, vec4 D, float wd) {
     // Built and flush. One compare on a uniform, coherent across the whole draw.
     if (D.x >= 1.0) return 1e5;
 
@@ -198,6 +198,13 @@ const COMMON = `
     // sentinel: 1e5 would be a hole the march could step straight into.
     float ez = max(qs.z - JOIN_SPAN, -0.25 - qs.z);
     if (ez > 0.0) return ez;
+
+    // Nothing here reaches more than the lintel's 1.5 in from the shell, so a
+    // point further into the room than that cannot be inside a block — and
+    // wd - 1.55 is how much further. Returning that rather than a sentinel is
+    // what keeps this an under-estimate and therefore safe.
+    float bz = wd - 1.55;
+    if (bz > 0.0) return bz;
 
     float W = B.y;
     float H = B.z;
@@ -273,17 +280,43 @@ const COMMON = `
   //
   // Everything repeats through latt()/lattN(), so a row of forty lockers costs
   // one rounded box and a lane of rope floats costs one sphere.
+  //
+  // Each family opens by declaring how far it reaches in off the surface it
+  // hangs on, and hands back that bound when the point is clear of it. Without
+  // this every step of a march across a twenty-two metre pool evaluates a lane
+  // rope it is nowhere near, and the wide rooms — the ones with the most open
+  // air to cross — pay the most. It is worth roughly half the frame.
+  //
+  // The distance used has to be per-AXIS, which is the part that is easy to get
+  // wrong: the obvious -air is the distance to the nearest face of the shell
+  // counting floor and ceiling, so in a room 4.2 high it never exceeds 2.1, and
+  // a bound written against it for something reaching 3.2 in off a side wall can
+  // never clear no matter how far away you stand. Wall fittings are bounded on
+  // hx, ceiling fittings on hy, and a fitting in a corner on the max of the two
+  // — max, because outside a box the distance is at least the largest of the
+  // per-axis overshoots, which makes it both correct and the tightest of the
+  // cheap options.
   float sectionProps(vec3 qs, vec4 B, vec4 C, vec4 D) {
     float W = B.y;
     float H = B.z;
     float t = C.y;
     float d = 1e5;
 
+    float hx = W - abs(qs.x);   // to the nearer side wall
+    float hy = H - qs.y;        // to the ceiling
+
     // The flood in this section's own frame, held off the floor and the ceiling
     // so what floats on it still reads once the building is full.
     float wy = clamp(uWave.x - B.x, 0.35, H - 0.5);
 
     if (t < 0.5) {
+      // Ropes sit in a thin slab at the waterline and span the room; the ladder
+      // hugs the wall, and the platform reaches 3.2 in — but only in the one
+      // hall tall enough to have one, so the shallow rooms are not made to pay
+      // for it. Branching on H is free here: it is a uniform.
+      float reach = H > 8.0 ? 3.25 : 0.50;
+      float bt = min(abs(qs.y - wy) - 0.12, hx - reach);
+      if (bt > 0.0) return bt;
       // TILE — the swimming halls.
       // Lane ropes, bobbing on the flood. Offset half a lane off centre so the
       // aisle does not have to eat one whole rope to let you through.
@@ -306,6 +339,10 @@ const COMMON = `
       }
     }
     else if (t < 1.5) {
+      // Conduit runs the ceiling corner, so it is bounded on both axes at once.
+      float bt = max(hx - 0.34, hy - 0.62);
+      if (bt > 0.0) return bt;
+
       // GUTTER — the service runs. Three conduits along the ceiling, and a
       // junction box dropped off them every few metres.
       vec3 cp = vec3(abs(qs.x) - (W - 0.22), qs.y - (H - 0.30), qs.z);
@@ -314,6 +351,13 @@ const COMMON = `
                             vec3(0.12, 0.20, 0.26), 0.03));
     }
     else if (t < 2.5) {
+      // The columns hug the walls; the flume swings far out into the room, so
+      // it gets its own bounding sphere rather than dragging the columns' bound
+      // out to meet it.
+      vec3  fc = vec3(qs.x - (W - 5.0), qs.y - H * 0.62, qs.z - B.w * 0.5);
+      float bt = min(hx - 2.30, length(fc) - 5.2);
+      if (bt > 0.0) return bt;
+
       // VAULT — THE GRAND HALL. Columns down both sides, and the flume.
       d = min(d, sdCapsuleY(vec3(abs(qs.x) - (W - 1.7), qs.y - H * 0.5, latt(qs.z, 6.0)),
                             H * 0.5, 0.55));
@@ -329,6 +373,9 @@ const COMMON = `
       d = min(d, sdCapsuleY(vec3(fp.x, qs.y - H * 0.31, fp.z - 4.2), H * 0.31, 0.16));
     }
     else if (t < 3.5) {
+      float bt = max(hx - 1.10, qs.y - 2.00);
+      if (bt > 0.0) return bt;
+
       // LOCKER — a run of lockers down both walls, with a bench under them.
       d = min(d, sdRoundBox(vec3(abs(qs.x) - (W - 0.24), qs.y - 0.95, qs.z - B.w * 0.5),
                             vec3(0.24, 0.95, B.w * 0.55), 0.03));
@@ -336,6 +383,9 @@ const COMMON = `
                             vec3(0.22, 0.05, 1.30), 0.03));
     }
     else if (t < 4.5) {
+      float bt = hx - 1.45;
+      if (bt > 0.0) return bt;
+
       // PLANT — pumps and pipework, the only warm light in the building.
       vec3 pp = vec3(abs(qs.x) - (W - 0.30), qs.y, qs.z);
       d = min(d, sdCapsuleZ(vec3(pp.x, lattN(pp.y - 1.9, 0.42, 3.0), 0.0), 1e4, 0.085));
@@ -352,6 +402,9 @@ const COMMON = `
                               H * 0.5, 0.62));
       }
       else {
+        float bt = hx - 0.25;
+        if (bt > 0.0) return bt;
+
         vec3 rp = vec3(abs(qs.x) - (W - 0.16), qs.y - 1.02, qs.z);
         d = min(d, sdCapsuleZ(vec3(rp.x, rp.y, 0.0), 1e4, 0.045));
         d = min(d, sdCapsuleY(vec3(rp.x, qs.y - 0.51, latt(qs.z, 2.4)), 0.51, 0.035));
@@ -363,16 +416,25 @@ const COMMON = `
 
   // Everything one section owns that is solid. The aisle is applied last, so
   // whatever the branches above decided, none of it can reach the camera.
-  float sectionSolid(vec3 q, vec3 qs, vec4 B, vec4 C, vec4 D) {
+  float sectionSolid(vec3 q, vec3 qs, vec4 B, vec4 C, vec4 D, float wd) {
+    float pr = sectionProps(qs, B, C, D);
+    float bl = joinBlocks(qs, B, D, wd);
+
+    // Clear of everything this section owns. Tested before the erode, which can
+    // only push the fittings further away, so the bail is conservative. And
+    // skipping the aisle returns a value no larger than the true one, which is
+    // the safe direction: the clip is air = max(air, -solid), so under-stating
+    // the solid over-states the air, and over-stated air only ever shortens the
+    // march's next step.
+    if (min(pr, bl) > 0.75) return min(pr, bl);
+
     // foundry's FEAT_ERODE: additively push the fittings away as they near a
     // doorway. Additive rather than a fade, because f + c erodes a shape while
     // staying Lipschitz, whereas a fade would leave a ghost with no surface for
     // the march to stop against. The join blocks are exempt — standing near a
     // doorway is their whole job, and they hug the surfaces, not the aperture.
     float endFade = smoothstep(0.0, 1.6, min(q.z, B.w - q.z));
-    float props   = sectionProps(qs, B, C, D) + (1.0 - endFade) * 3.0;
-
-    return max(min(props, joinBlocks(qs, B, D)), -aisleAt(qs, B, D));
+    return max(min(pr + (1.0 - endFade) * 3.0, bl), -aisleAt(qs, B, D));
   }
 
   // Union of the resident air volumes. Negative inside the walkable space.
@@ -393,7 +455,7 @@ const COMMON = `
         // sheared frame inherits the sheared metric; on THE RISER's 23% grade
         // that is 2.5%, and 2.5% the over-estimating way is a hole in a wall.
         float sInv = inversesqrt(1.0 + uSecC[i].x * uSecC[i].x);
-        a = max(a, -sectionSolid(q, qs, uSecB[i], uSecC[i], uSecD[i]) * sInv);
+        a = max(a, -sectionSolid(q, qs, uSecB[i], uSecC[i], uSecD[i], -a) * sInv);
       }
 
       air = min(air, a);
