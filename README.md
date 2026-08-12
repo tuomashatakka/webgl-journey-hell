@@ -93,20 +93,60 @@ Two are not, and they solve it differently:
     continuous and the camera arcs through a corner instead of doglegging. Miss
     one term — the lateral sway amplitude, say, which scales with room width —
     and that single scalar snaps the camera sideways at the join.
-  * **Shading resolves the owning slot**, which is the rule above applied to the
-    GPU. `mapAir`'s union tells the march how far the concrete is and then throws
-    away *whose* concrete it is, so every shading term downstream used to assume
+  * **Shading resolves the owning slot** — and so does anything else swept
+    through the scene. This is the rule above applied to the GPU. `mapAir`'s
+    union tells the march how far the concrete is and then throws away *whose*
+    concrete it is, so every shading term downstream used to assume
     the answer was the camera's own section — and a room seen through a doorway
     was lit with the wrong width, ceiling height and lamp pitch, in a frame that
     rotated out from under it the moment the slot window advanced. `resolveSlot`
     re-runs the loop once at the hit point (one evaluation, against ninety-six)
     and returns the point, the normal and the view ray in the winner's own
     coordinates. A point's coordinates in a section's own frame do not change
-    when the camera crosses a join, and that invariance is the whole fix.
+    when the camera crosses a join, and that invariance is the whole fix. The
+    lamp *halos* are the same rule and were missed for a long time: they are
+    swept along a ray that goes wherever you look, so they must sum over all
+    three slots, not the camera's — otherwise every halo on screen jumps the
+    instant the slot window advances, while nothing in the picture behind them
+    moves at all.
   * **Nothing added to the SDF may enter the walked tube.** Fittings and join
     dressing are intersected with the complement of a cylinder swept along the
     walked line. It cannot fail to clear the camera, because it is defined by
     where the camera goes. (hollow-orchard bores the same aisle with a capsule.)
+  * **A bound is not a distance.** Every fitting and every join block bails
+    early by handing back how far the point still is from the volume that
+    encloses it, which is what makes a twenty-two metre pool affordable to
+    cross. But the march cannot tell a bound from a surface: if one is allowed
+    to reach zero the ray stops on it and it is *shaded as tile*. The flume's
+    bounding sphere appeared as a tiled ball hanging over THE GRAND HALL, the
+    slab around the lane ropes as a black lid twelve centimetres above the
+    water, and the join zone's z-plane sealed the doorway it was dressing. Bail
+    only while the bound is clear of the hit epsilon; everything a bound
+    protects is thin, so the band this costs is thin too.
+  * **Damage is geometry, decoration is shading, and they share one lattice.**
+    A missing tile is a recess unioned into the air, cut on exactly the grid
+    `tileSurface` draws grout on — same cell size, same per-face salt, same
+    hash. A painted hole has no depth to be dark inside, no lip for a strip
+    light to rake across and nowhere for the red to come out of. Only the cell
+    the point is in is ever evaluated, which *over*-states the air and therefore
+    under-states the concrete, the one direction a sphere trace may be wrong in.
+    Tiles left standing are pushed proud by a non-negative offset *added* to the
+    shell, which can only shorten a step.
+  * **A quantised field through a pinhole draws the quantisation.** The red
+    volumetric used to ask the tile lattice where the holes were. Adjacent
+    pixels' taps land in the same cell, the per-cell answer is constant across a
+    tile face, and what appeared on screen was a flat tile-shaped red rectangle
+    — not a shaft, a decal. A term accumulated along a ray has to be continuous
+    in space. The surface half of the effect knows about individual holes; the
+    air half only needs to know it is near a wall.
+  * **Detail must fade to its mean, not to zero.** Fourteen millimetres of grout
+    on a 220mm tile is a third of a pixel at the far end of a twenty-two metre
+    hall, and a third of a pixel of pure black sampled once per pixel is not a
+    grout line, it is moiré — which is why every far wall in this building read
+    as corduroy. There is no mip chain (nothing is textured) and no derivatives
+    (ES 1.00 has no `dFdx` without an extension), so the footprint is estimated
+    from distance and the grout *widens* as it fades. Widening keeps the wall
+    reading as tiled; fading stops it shimmering.
   * **Animated offsets are functions of a uniform, never of position.** The
     blocks that reconfigure each doorway ride a single CPU-computed deploy
     scalar. An offset that varied with `p` would add its own derivative to the
@@ -170,6 +210,8 @@ node tools/journey.mjs film  natatorium --from=26 --to=34 --step=0.5
 node tools/journey.mjs probe natatorium --from=0 --to=60 --step=2 [--json]
 node tools/journey.mjs scan  natatorium --from=4 --to=24 --step=0.4
 node tools/journey.mjs uv    natatorium --t=30
+node tools/journey.mjs hud   natatorium --from=0 --to=60 --step=2
+node tools/journey.mjs fps   natatorium --at=11,24,48 --w=1200 --h=760
 ```
 
 * **probe** prints mean luminance, the fraction of pure-black pixels and the
@@ -184,6 +226,17 @@ node tools/journey.mjs uv    natatorium --t=30
 * **uv** reports horizontal against vertical detail, for the class of bug where
   the image is stable but wrong: a surface that picked the wrong projection axis
   smears into stripes and one of the two collapses.
+* **hud** measures the DOM overlays instead of the canvas, printing each one's
+  box per timestamp and flagging any that moves. Chrome is laid out by CSS and
+  CSS is not on the journey's clock, so this is the only reliable way to tell an
+  overlay that is genuinely drifting from one that merely looks like it because
+  the picture behind it changed. "The overlays jump on each section change" was
+  settled this way in a minute: every box pinned to the pixel, every label — so
+  the thing moving was a *shader* overlay, the lamp halos, still being evaluated
+  in the camera's section while pointing anywhere.
+* **fps** holds an instant and counts frames. The journey caps itself at 60, so
+  pass `--w/--h` above the default resolution to measure what the shader
+  actually costs; a locked 60 tells you it is affordable but not by how much.
 
 The honest way to use these is against a baseline. Check out the last known-good
 commit over the journey's own files, probe, restore, probe again, and compare —
