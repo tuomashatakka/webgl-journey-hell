@@ -506,6 +506,13 @@ export interface Slot {
   tx:    number;
   ty:    number;
   tz:    number;
+  halfW: number;
+  ceilH: number;
+  len:   number;
+  slope: number;
+  type:  number;
+  grime: number;
+  lamp:  number;
 
   /**
    * The camera's z in *this slot's own frame*. Negated, it is how far ahead of
@@ -516,13 +523,6 @@ export interface Slot {
 
   /** Section id, 1..12. Salts per-section hashing so rooms of a type differ. */
   id: number;
-  halfW: number;
-  ceilH: number;
-  len:   number;
-  slope: number;
-  type:  number;
-  grime: number;
-  lamp:  number;
 }
 
 export interface NatatoriumState {
@@ -579,8 +579,6 @@ function makeSlot (
     tx,
     ty,
     tz,
-    camZ:  0, // filled in below, once the camera pose is known
-    id:    s.id,
     halfW: s.halfW,
     ceilH: s.ceilH,
     len:   s.len,
@@ -588,6 +586,8 @@ function makeSlot (
     type:  s.type,
     grime: s.grime,
     lamp:  s.lamp,
+    camZ:  0, // filled in below, once the camera pose is known
+    id:    s.id,
   }
 }
 
@@ -715,7 +715,7 @@ export function getNatatoriumState (dist: number): NatatoriumState {
     roll: Math.sin(dist * 0.31) * 0.012 +
            Math.max(-0.14, Math.min(0.14, bank * 0.55)),
     slots,
-    name:  cur.name,
+    name: cur.name,
   }
 }
 

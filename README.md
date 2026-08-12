@@ -80,7 +80,7 @@ Two are not, and they solve it differently:
   owns an authored chain of sections and uploads, every frame, the affine
   transform carrying a point from the camera's current section into each
   neighbour's — so turns are *data* and can be any angle, and the shader holds no
-  route table at all. Two things make it work:
+  route table at all. Five things make it work:
   * **`min`, never `smin`.** Rooms are carved by unioning air boxes and negating.
     Inside a union `min` under-estimates distance to the boundary, which is the
     safe direction for a sphere trace; `smin` returns up to `k/4` *below* its
@@ -93,6 +93,29 @@ Two are not, and they solve it differently:
     continuous and the camera arcs through a corner instead of doglegging. Miss
     one term — the lateral sway amplitude, say, which scales with room width —
     and that single scalar snaps the camera sideways at the join.
+  * **Shading resolves the owning slot**, which is the rule above applied to the
+    GPU. `mapAir`'s union tells the march how far the concrete is and then throws
+    away *whose* concrete it is, so every shading term downstream used to assume
+    the answer was the camera's own section — and a room seen through a doorway
+    was lit with the wrong width, ceiling height and lamp pitch, in a frame that
+    rotated out from under it the moment the slot window advanced. `resolveSlot`
+    re-runs the loop once at the hit point (one evaluation, against ninety-six)
+    and returns the point, the normal and the view ray in the winner's own
+    coordinates. A point's coordinates in a section's own frame do not change
+    when the camera crosses a join, and that invariance is the whole fix.
+  * **Nothing added to the SDF may enter the walked tube.** Fittings and join
+    dressing are intersected with the complement of a cylinder swept along the
+    walked line. It cannot fail to clear the camera, because it is defined by
+    where the camera goes. (hollow-orchard bores the same aisle with a capsule.)
+  * **Animated offsets are functions of a uniform, never of position.** The
+    blocks that reconfigure each doorway ride a single CPU-computed deploy
+    scalar. An offset that varied with `p` would add its own derivative to the
+    gradient, and in a *negated* field over-estimating is not an artifact — it is
+    a grazing ray leaving the building. This is why the step factor here is still
+    0.95 where foundry, which morphs geometry across its boundaries, has to cut
+    to 0.78. Corollary: the deploy curve is quintic rather than the obvious
+    damped hinge, because a hinge rings above 1 and settles back through it, and
+    the shader culls the whole block set on `deploy >= 1`.
 
 ### adding a new journey
 

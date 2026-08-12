@@ -543,8 +543,44 @@ const COMMON = `
 
   // --- surfaces -------------------------------------------------------------
 
+  // How far gone the building is, 0..0.85. Same shape as foundry's decayFor,
+  // riding the lapF that kinematics ramps across THE DIVING WELL..THE CISTERN —
+  // so each lap's escalation arrives while you are under water and well past a
+  // doorway, rather than stepping in the one frame that crosses the seam.
+  float decay() { return min(0.85, uWave.y * 0.14); }
+
+  // The fracture field, built on the tile lattice that tileSurface already has.
+  // No fbm and no value noise: a generic crazing would sit ON the tile rather
+  // than in it, and real glazed tile crazes per tile and lets go per tile. Each
+  // tile picks a bearing from its own hash and splits along it.
+  //
+  // The gradient comes free by the same trick the grout already uses two
+  // functions down — d|dot(f,dir)|/df is just sign(e) * dir — which is what
+  // makes the cracks catch the light instead of reading as printed-on dirt.
+  void crackAt(vec2 cell, vec2 f, float id, float dec,
+               out float hair, out float spall, out vec2 grad) {
+    float a   = id * 6.2831;
+    vec2  dir = vec2(cos(a), sin(a));
+
+    // Offset off centre by the tile's own hash, so the split is not a neat
+    // bisector through every tile in the building.
+    float e = dot(f, dir) + (fract(id * 17.13) - 0.5) * 0.45;
+
+    hair  = 1.0 - smoothstep(0.0, 0.02 + 0.05 * dec, abs(e));
+    hair *= step(hash21(cell + 5.1), 0.05 + dec * 1.05);
+    grad  = dir * sign(e);
+
+    // ...and the ones that have let go of the wall entirely.
+    spall = step(1.0 - dec * 0.55, hash21(cell + 19.7));
+  }
+
   // Tile. The normal perturbation is what makes tile look like tile rather than
   // like wallpaper, and it is nearly free: the derivative of fract() is +-1.
+  // Set by tileSurface, read by shadeFace. A global rather than a seventh out
+  // parameter, following foundry's gWear: the value is wanted by exactly one
+  // caller, one call later.
+  float crackGlow;
+
   void tileSurface(vec3 p, vec3 n, float wy, float grime,
                    out vec3 alb, out vec3 nOut, out float rough) {
     vec2 uv; vec3 tu, tv;
@@ -561,24 +597,59 @@ const COMMON = `
     float d = (0.5 - max(abs(f.x), abs(f.y))) * size;
     float groove = 1.0 - smoothstep(0.0, 0.014, d);
 
-    nOut = normalize(n - (tu * sign(f.x) + tv * sign(f.y)) * groove * 0.5);
+    float dec = decay();
+    vec2  cell = floor(g);
+    float id   = hash21(cell);
 
-    float id = hash21(floor(g));
+    float hair, spall; vec2 cg;
+    crackAt(cell, f, id, dec, hair, spall, cg);
+
+    // The crack cuts the surface as well as marking it. Same form as the grout
+    // perturbation above and about as cheap.
+    nOut = normalize(n - (tu * sign(f.x) + tv * sign(f.y)) * groove * 0.5
+                       - (tu * cg.x + tv * cg.y) * hair * 0.35);
+
     alb = vec3(0.86, 0.89, 0.87) * (0.93 + 0.13 * id);
     alb = mix(alb, vec3(0.30, 0.36, 0.34), band * 0.55);          // the mosaic course
-    alb = mix(alb, vec3(0.44, 0.46, 0.44), step(0.995, id));      // a missing tile
+
+    // A missing tile. The threshold walks down out of the original 0.5%, so the
+    // wall loses tiles at a rate rather than having always been missing them.
+    alb = mix(alb, vec3(0.44, 0.46, 0.44), step(min(0.995, 1.0 - dec * 0.55), id));
+
+    // Whole blocks of tile gone, on a lattice four times coarser than the tiles
+    // themselves — reusing the same hash rather than paying for a second field.
+    // This is what turns scattered damage into a wall that is coming down.
+    float patch = step(0.72 - dec * 0.30, hash21(floor(g * 0.25) + 3.7)) * step(0.30, dec);
+    vec3  conc  = vec3(0.38, 0.39, 0.37) * (0.86 + 0.28 * hash21(cell * 2.3));
+    alb = mix(alb, conc, max(spall * 0.85, patch * 0.75));
 
     float mildew = groove * (0.35 + 0.65 * band) * grime;
     alb = mix(alb, vec3(0.30, 0.36, 0.28), mildew * 0.75);
     alb *= mix(1.0, 0.6, groove);                                  // grout is darker
+    alb *= 1.0 - hair * 0.55;                                      // and the cracks darker still
 
     // Splash zone: wet tile above the line is darker and much glossier.
     float wet = exp(-max(p.y - wy, 0.0) * 2.5);
+
+    // Water finding its way out of the cracks and running down the wall. Fed
+    // into the wet term rather than painted on, so the existing roughness term below
+    // makes the seep glossy for free — which is the whole read.
+    float seep = hair * (1.0 - abs(n.y)) * smoothstep(0.15, 0.5, dec);
+    wet = max(wet, seep);
+
     alb  *= mix(1.0, 0.72, wet);
     rough = mix(0.32, 0.06, wet);
 
     // Scum line: a dirty ring exactly at the water level.
     alb *= 1.0 - 0.35 * smoothstep(0.03, 0.0, abs(p.y - wy)) * grime;
+
+    // Late on, the breaks stop being dark and start giving off light. Only some
+    // of them, and not equally: a constant emission on every crack reads as a
+    // neon wireframe laid over the wall rather than as something behind it
+    // showing through. The per-tile hash is already computed, so the variation
+    // is free.
+    float lit = smoothstep(0.55, 0.95, fract(id * 7.77));
+    crackGlow = hair * lit * smoothstep(0.40, 0.85, dec);
   }
 
   // Ceiling fluorescents. Emissive is a shading term on ceiling hits, not
@@ -713,6 +784,11 @@ const SCENE = `
     // would make it swim sideways every time you crossed a join.
     if (p.y < waterY()) c += alb * causticAt(p) * 0.9;
     if (n.y < -0.6) c += vec3(0.95, 0.99, 1.0) * ceilPanel(q, B, C) * 3.2;
+
+    // Whatever is behind the walls by now. Same oxblood foundry's decay rots
+    // its grade toward, and the only warm thing in a building lit entirely by
+    // dying fluorescents.
+    c += vec3(1.00, 0.16, 0.07) * crackGlow * 1.6;
     return c;
   }
 
@@ -750,6 +826,30 @@ const SCENE = `
       acc += caustic(cp, iTime * 0.6) * exp(-max(dep, 0.0) * 0.22);
     }
     return vec3(0.55, 0.85, 0.92) * acc * (1.0 / 6.0) * phase * 0.9;
+  }
+
+  // Red light bleeding out of the breaks, accumulated along the primary ray.
+  // Deliberately the same six-tap shape as lightShafts above, so this is one
+  // more instance of a pattern the file already has rather than a new mechanism.
+  //
+  // Each tap is weighted by how close it is to a surface. That proximity term is
+  // what makes the glow hug the cracked walls and pool in the corners, instead
+  // of hanging in the middle of the room like coloured fog.
+  vec3 crackShafts(vec3 ro, vec3 rd, float t) {
+    float dec = decay();
+    if (dec < 0.15) return vec3(0.0);
+
+    float acc = 0.0;
+    for (int k = 0; k < 6; k++) {
+      vec3  sp = ro + rd * (t * (float(k) + 0.5) / 6.0);
+      float prox = 1.0 - clamp(mapScene(sp) * 0.5, 0.0, 1.0);
+
+      // A coarse standing field rather than the per-tile one: this is sampled in
+      // mid-air, where there is no tile lattice to fracture along.
+      float v = sin(sp.x * 1.7 + cos(sp.z * 2.1)) * cos(sp.z * 1.9 + sin(sp.y * 1.5));
+      acc += (1.0 - smoothstep(0.0, 0.10 + 0.22 * dec, abs(v))) * prox * prox;
+    }
+    return vec3(1.00, 0.16, 0.07) * acc * (1.0 / 6.0) * dec * 0.55;
   }
 
   void main() {
@@ -860,6 +960,10 @@ const SCENE = `
     }
 
     col += lampGlow(ro, rd, tEnd, uSecB[1], uSecC[1]) * (camWet ? 0.55 : 1.0);
+
+    // Above and below the surface both: the red is the one thing in here that
+    // does not care whether your head is under.
+    col += crackShafts(ro, rd, tEnd);
 
     // --- inline post (no FBO in a single-pass journey) ---
 
