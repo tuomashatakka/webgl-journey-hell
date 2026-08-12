@@ -14,6 +14,8 @@
 //   probe  natatorium --from=0 --to=60 --step=2 [--json]
 //   scan   natatorium --from=0 --to=60 --step=0.25 [--top=15]
 //   uv     natatorium --t=30
+//   hud    natatorium --from=0 --to=60 --step=2
+//   fps    natatorium --at=11,24,48 --w=1200 --h=760
 //
 // `scan` is the one worth knowing about. It walks time in small increments and
 // measures how much the image changed between neighbouring frames. A journey is
@@ -24,6 +26,12 @@
 // `uv` samples texture-space statistics rather than pixels: it is for the class
 // of bug where the image is *stable* but wrong, e.g. tiles stretched into
 // streaks because a surface picked the wrong projection axis.
+//
+// `hud` measures the DOM overlays rather than the canvas, because they are laid
+// out by CSS and CSS is not on the journey's clock. It prints each overlay's box
+// per timestamp and flags any that moves, which is the only reliable way to tell
+// an overlay that is genuinely drifting from one that merely looks like it is
+// because the picture behind it changed.
 
 import { chromium } from 'playwright-core'
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
@@ -196,7 +204,9 @@ async function cmdShot (page, journey, opts) {
   const dbg = await seek(page, journey, t, opts)
   const out = opts.out ?? `/tmp/${journey}-${t}.png`
   await mkdir(path.dirname(out), { recursive: true })
-  await page.locator('canvas').screenshot({ path: out })
+  // --full grabs the page, chrome and all, which is the only way to see the DOM
+  // overlays; the default is the canvas alone so a plate is just the picture.
+  await (opts.full ? page : page.locator('canvas')).screenshot({ path: out })
   console.log(`t=${t}  ${dbg.label}  ${dbg.width}x${dbg.height}  -> ${out}`)
 }
 
@@ -311,6 +321,103 @@ function uvFn () {
   return { hDetail: hAcc / n, vDetail: vAcc / n, ratio: (hAcc / n) / Math.max(vAcc / n, 1e-6) }
 }
 
+// Every fixed piece of chrome, and what each is anchored to. An overlay that
+// moves between two timestamps is a layout bug; one that stays put is not, no
+// matter what the frame behind it did.
+const HUD_IDS = [ 'sector-title', 'back-btn', 'fullscreen-btn', 'audio-btn', 'fps-display' ]
+
+const hudFn = ids => ids.map(id => {
+  const el = document.getElementById(id)
+  if (!el)
+    return { id, present: false }
+  const r = el.getBoundingClientRect()
+  return {
+    id, present: true, text: (el.textContent ?? '').trim(),
+    // The CENTRE is what the eye tracks, and for a centred overlay it is the
+    // thing that is supposed to be invariant while the width is not.
+    cx: +((r.left + r.right) / 2).toFixed(1),
+    cy: +((r.top + r.bottom) / 2).toFixed(1),
+    w:  +r.width.toFixed(1),
+    h:  +r.height.toFixed(1),
+  }
+})
+
+async function cmdHud (page, journey, opts) {
+  const from = num(opts.from, 0)
+  const to   = num(opts.to, 60)
+  const step = num(opts.step, 2)
+  const rows = []
+
+  for (let t = from; t <= to + 1e-9; t += step) {
+    const dbg = await seek(page, journey, t, { ...opts, hud: true })
+    rows.push({ t: +t.toFixed(2), label: dbg.label, els: await page.evaluate(hudFn, HUD_IDS) })
+  }
+
+  if (opts.json) {
+    console.log(JSON.stringify(rows, null, 2))
+    return
+  }
+
+  for (const id of HUD_IDS) {
+    const seen = rows.map(r => ({ t: r.t, label: r.label, e: r.els.find(x => x.id === id) }))
+                     .filter(x => x.e && x.e.present)
+    if (!seen.length) {
+      console.log(`${id.padEnd(15)} absent`)
+      continue
+    }
+    const xs = seen.map(x => x.e.cx)
+    const ys = seen.map(x => x.e.cy)
+    const dx = Math.max(...xs) - Math.min(...xs)
+    const dy = Math.max(...ys) - Math.min(...ys)
+    const moves = dx > 0.5 || dy > 0.5
+    console.log(`${id.padEnd(15)} ${moves ? 'MOVES' : 'fixed'}  centre drift  x ${dx.toFixed(1)}px  y ${dy.toFixed(1)}px`)
+    if (moves)
+      for (const x of seen)
+        console.log(`    t=${String(x.t).padStart(5)}  cx ${String(x.e.cx).padStart(7)}  cy ${String(x.e.cy).padStart(6)} ` +
+                    ` w ${String(x.e.w).padStart(6)}  ${x.e.text}`)
+  }
+}
+
+async function cmdGlyph (page, journey, opts) {
+  const from = num(opts.from, 0), to = num(opts.to, 60), step = num(opts.step, 2)
+  for (let t = from; t <= to + 1e-9; t += step) {
+    const dbg = await seek(page, journey, t, { ...opts, hud: true })
+    const g = await page.evaluate(() => {
+      const el = document.getElementById('sector-title')
+      if (!el) return null
+      const r = document.createRange(); r.selectNodeContents(el)
+      const gb = r.getBoundingClientRect(), b = el.getBoundingClientRect()
+      return { boxCx: +((b.left+b.right)/2).toFixed(1), boxW: +b.width.toFixed(1),
+               gl: +gb.left.toFixed(1), gr: +gb.right.toFixed(1),
+               gcx: +((gb.left+gb.right)/2).toFixed(1), ls: getComputedStyle(el).letterSpacing }
+    })
+    console.log(String(t).padStart(5), dbg.label.padEnd(22), JSON.stringify(g))
+  }
+}
+
+// Frames per second at a held instant. The journey caps itself at 60 by default
+// (frameLoopManager), so use --res/--w/--h to take the cap off and measure what
+// the shader actually costs: a locked 60 tells you it is affordable, not by how
+// much. Held rather than moving, so the number belongs to one place on the route.
+async function cmdFps (page, journey, opts) {
+  const ms = num(opts.ms, 2000)
+  for (const t of String(opts.at ?? '0').split(',').map(Number)) {
+    const dbg = await seek(page, journey, t, opts)
+    const fps = await page.evaluate(d => new Promise(res => {
+      let n = 0
+      const t0 = performance.now()
+      const loop = () => {
+        n++
+        const el = performance.now() - t0
+        if (el < d) requestAnimationFrame(loop)
+        else res(n / (el / 1000))
+      }
+      requestAnimationFrame(loop)
+    }), ms)
+    console.log(`t=${String(t).padStart(5)}  ${dbg.label.padEnd(22)} ${fps.toFixed(1)} fps  ${dbg.width}x${dbg.height}`)
+  }
+}
+
 async function cmdUv (page, journey, opts) {
   const t   = num(opts.t, 0)
   const dbg = await seek(page, journey, t, opts)
@@ -321,11 +428,11 @@ async function cmdUv (page, journey, opts) {
   console.log(`  h/v ratio         ${uv.ratio.toFixed(2)}   (far from 1.0 = smeared on one axis)`)
 }
 
-const COMMANDS = { shot: cmdShot, film: cmdFilm, probe: cmdProbe, scan: cmdScan, uv: cmdUv }
+const COMMANDS = { shot: cmdShot, film: cmdFilm, probe: cmdProbe, scan: cmdScan, uv: cmdUv, hud: cmdHud, glyph: cmdGlyph, fps: cmdFps }
 
 const { cmd, journey, opts } = parseArgs(process.argv.slice(2))
 if (!COMMANDS[cmd] || !journey) {
-  console.error('usage: node tools/journey.mjs <shot|film|probe|scan|uv> <journey> [--opts]')
+  console.error('usage: node tools/journey.mjs <shot|film|probe|scan|uv|hud|fps> <journey> [--opts]')
   process.exit(1)
 }
 await withBrowser(page => COMMANDS[cmd](page, journey, opts))

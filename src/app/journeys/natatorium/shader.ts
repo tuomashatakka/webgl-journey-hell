@@ -501,14 +501,18 @@ const COMMON = `
     // a skirt of weed on the walls at the waterline, thickening with the lap.
     // Bounded on a slab of its own, so crossing the middle of a twenty-two metre
     // pool costs one max and one branch.
-    float gb = max(abs(qs.y - wy) - 0.95, hx - 0.85);
+    // Scaled to the room, and hard. A frond sized for a sixteen-metre hall is a
+    // green scaffold pole lying across a 1.8m service corridor -- the same
+    // absolute size that reads as weed in THE CISTERN blocks THE DRAIN outright.
+    float gs = clamp(min(W, H) * 0.28, 0.22, 0.75);
+    float gb = max(abs(qs.y - wy) - gs, hx - gs * 0.85);
     if (gb < BOUND_SLACK) {
-      float lz = latt(qs.z, 0.9);
-      float gh = hash21(vec2(floor(qs.z / 0.9), sign(qs.x) * 3.0) + 7.7);
-      float gr = (0.055 + 0.075 * gh) * smoothstep(0.04, 0.60, dec);
-      vec3  gp = vec3(abs(qs.x) - (W - 0.04), qs.y - wy + (gh - 0.5) * 0.30, lz);
-      PUT(sdSeg(gp, vec3(0.0), vec3(-0.34 - gh * 0.30, -0.30 - gh * 0.55, (gh - 0.5) * 0.5), gr), MAT_LEAF)
-      PUT(sdSeg(gp, vec3(0.0), vec3(-0.18 - gh * 0.22,  0.26 + gh * 0.30, (0.5 - gh) * 0.6), gr * 0.8), MAT_LEAF)
+      float lz = latt(qs.z, 0.62);
+      float gh = hash21(vec2(floor(qs.z / 0.62), sign(qs.x) * 3.0) + 7.7);
+      float gr = (0.016 + 0.020 * gh) * gs * 1.4 * smoothstep(0.04, 0.60, dec);
+      vec3  gp = vec3(abs(qs.x) - (W - 0.03), qs.y - wy + (gh - 0.5) * 0.22 * gs, lz);
+      PUT(sdSeg(gp, vec3(0.0), gs * vec3(-0.50 - gh * 0.40, -0.42 - gh * 0.70, (gh - 0.5) * 0.6), gr), MAT_LEAF)
+      PUT(sdSeg(gp, vec3(0.0), gs * vec3(-0.26 - gh * 0.30,  0.36 + gh * 0.40, (0.5 - gh) * 0.7), gr * 0.8), MAT_LEAF)
     }
     else d = gb;
 
@@ -809,9 +813,12 @@ const COMMON = `
   // shader can put in a room; a pool nobody has skimmed in years is not a mirror
   // at all in patches, and the patches are what tell you which way it is drifting.
   float surfaceFilm(vec2 xz, float dec) {
-    float n = vnoise(xz * 0.55 + vec2(iTime * 0.013, -iTime * 0.009)) * 0.66
-            + vnoise(xz * 2.10 - vec2(iTime * 0.022,  iTime * 0.017)) * 0.34;
-    return smoothstep(0.50, 0.80, n) * (0.30 + 0.70 * dec);
+    float n = vnoise(xz * 0.42 + vec2(iTime * 0.013, -iTime * 0.009)) * 0.62
+            + vnoise(xz * 1.70 - vec2(iTime * 0.022,  iTime * 0.017)) * 0.38;
+    // A wide ramp, not a threshold. Scum has no edge -- it thins out. A tight
+    // smoothstep over a two-octave noise gave the sharp-edged blob that read as a
+    // hole in the water rather than as something floating on it.
+    return smoothstep(0.40, 0.86, n) * (0.20 + 0.55 * dec);
   }
 
   vec3 waterNormal(vec2 xz, float t) {
@@ -1091,9 +1098,11 @@ const COMMON = `
     }
     else if (mat < 4.5) {
       // Green. Dark, matte, and the only hue in the building that is not either
-      // fluorescent white or rust.
-      alb   = vec3(0.09, 0.19, 0.08) * (0.55 + 1.05 * n1);
-      rough = 0.66;
+      // fluorescent white or rust. Kept genuinely dark: a lamp two metres away in
+      // a service corridor puts 2.4x on this, and anything brighter comes back as
+      // moulded plastic rather than as something growing.
+      alb   = vec3(0.045, 0.098, 0.042) * (0.55 + 0.95 * n1);
+      rough = 0.80;
     }
     else {
       alb   = vec3(0.40, 0.40, 0.38) * (0.85 + 0.30 * n1);
@@ -1226,25 +1235,50 @@ const COMMON = `
   }
 
   // Lamp halos, added whether or not the ray hit anything. This is what replaces
-  // a bloom post pass — there is no FBO in a single-pass journey.
-  // Unlike the others this one is swept along the RAY from the camera, and the
-  // camera is by definition in the current section — so it keeps slot 1, and
-  // takes it as a parameter only to keep every lamp routine reading the same way.
-  vec3 lampGlow(vec3 ro, vec3 rd, float tMax, vec4 B, vec4 C) {
-    vec3  acc = vec3(0.0);
-    float sp  = max(C.w, 2.0);
-    float H   = B.z;
-    float band = floor(ro.z / sp);
+  // a bloom post pass -- there is no FBO in a single-pass journey.
+  //
+  // Over ALL THREE resident slots, and that is the fix rather than the flourish.
+  // This was the last thing in the file still hard-wired to uSecB[1]/uSecC[1] --
+  // the section the camera happens to be in -- while being swept along a ray that
+  // goes wherever you are looking. Every quantity it uses is per-section: the
+  // lamp pitch sets which bands exist, the ceiling height sets how high they
+  // hang, and the frame sets which way the row runs. So the instant idx advanced
+  // and the slot window rotated, every halo on screen was recomputed against a
+  // different room's pitch in a different room's frame and jumped somewhere else
+  // -- an overlay moving on a section change, with nothing in the picture behind
+  // it moving at all. resolveSlot fixed this for surfaces a while ago; the halos
+  // are the same rule and they were simply missed.
+  //
+  // Nine iterations of about ten instructions, once per PIXEL. The march is
+  // ninety-six steps against three slots and does not go near this.
+  vec3 lampGlow(vec3 ro, vec3 rd, float tMax) {
+    vec3 acc = vec3(0.0);
+    for (int i = 0; i < 3; i++) {
+      vec4  B  = uSecB[i];
+      vec4  C  = uSecC[i];
+      vec3  o  = toLocal(ro, uSecA[i], B.x);
+      vec3  r  = dirToLocal(rd, uSecA[i]);
+      float sp = max(C.w, 2.0);
+      float band = floor(o.z / sp);
 
-    for (int k = 0; k < 3; k++) {
-      float bi = band - 1.0 + float(k);
-      float on = lampAlive(bi, C);
-      if (on < 0.01) continue;
-      vec3  lp = vec3(0.0, H - 0.12, (bi + 0.5) * sp);
-      vec3  v  = lp - ro;
-      float proj = clamp(dot(v, rd), 0.0, tMax);
-      float dist = length(v - rd * proj);
-      acc += vec3(0.85, 0.92, 1.0) * on * 0.05 / (1.0 + dist * dist * 2.2);
+      for (int k = 0; k < 3; k++) {
+        float bi = band - 1.0 + float(k);
+
+        // Only lamps this section actually has. Without this, a corridor's lamp
+        // row carries on into the rock beyond both its ends and lights the room
+        // next door through a solid wall.
+        float lz = (bi + 0.5) * sp;
+        if (lz < -1.0 || lz > B.w + 1.0) continue;
+
+        float on = lampAlive(bi, C);
+        if (on < 0.01) continue;
+
+        vec3  lp   = vec3(0.0, B.z - 0.12, lz);
+        vec3  v    = lp - o;
+        float proj = clamp(dot(v, r), 0.0, tMax);
+        float dist = length(v - r * proj);
+        acc += vec3(0.85, 0.92, 1.0) * on * 0.05 / (1.0 + dist * dist * 2.2);
+      }
     }
     return acc;
   }
@@ -1339,7 +1373,7 @@ const SCENE = `
       else if (abs(ns.x) > 0.7) { suv = qs.zy; ssz = TILE_W; ssl = SALT_WALL; }
       else                      { suv = qs.xy; ssz = TILE_W; ssl = 5.5; }
       c += vec3(1.00, 0.13, 0.04) * holeSpill(suv, ssz, ssl, dec)
-         * smoothstep(0.12, 0.55, dec) * 0.55 * (1.0 - lodFade(ssz * 0.5));
+         * smoothstep(0.12, 0.55, dec) * 0.22 * (1.0 - lodFade(ssz * 0.5));
     }
 
     // ...and the same oxblood out of the hairlines, once they are deep enough to
@@ -1507,13 +1541,16 @@ const SCENE = `
         float cosT = clamp(dot(wn, -rd), 0.0, 1.0);
         float fres = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
 
-        // Scum kills the reflection where it sits and shows its own colour, which
-        // is exactly what makes the rest of the surface read as water.
+        // Scum dulls the reflection where it sits, which is what makes the rest
+        // of the surface read as water. It must stay LIGHTER than the water it
+        // floats on -- a dark film reads as a hole in the pool, not as a skin on
+        // it, and that is exactly how it read at first: a black amoeba lying flat
+        // across THE SHALLOW END with a hard edge.
         float film = surfaceFilm(wp.xz, decay());
-        fres *= 1.0 - film * 0.80;
+        fres *= 1.0 - film * 0.55;
 
         col = mix(under, refl, fres);
-        col = mix(col, vec3(0.11, 0.14, 0.10) * (0.7 + causticAt(wp) * 0.25), film * 0.75);
+        col = mix(col, vec3(0.19, 0.22, 0.17) * (0.55 + causticAt(wp) * 0.55), film * 0.45);
         col = mix(hazeCol, col, exp(-tW * 0.030));
       }
     }
@@ -1543,7 +1580,7 @@ const SCENE = `
       }
     }
 
-    col += lampGlow(ro, rd, tEnd, uSecB[1], uSecC[1]) * (camWet ? 0.55 : 1.0);
+    col += lampGlow(ro, rd, tEnd) * (camWet ? 0.55 : 1.0);
 
     // Above and below the surface both: the red is the one thing in here that
     // does not care whether your head is under.
