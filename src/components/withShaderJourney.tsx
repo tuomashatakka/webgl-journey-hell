@@ -184,7 +184,21 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
       if (!canvas)
         return
 
-      const gl = canvas.getContext('webgl', { antialias: false, depth: false, alpha: false })
+      // Read straight from the query string rather than from `dbg` state: this
+      // effect runs on mount, one render before the state lands, and context
+      // attributes cannot be changed afterwards.
+      //
+      // preserveDrawingBuffer is what lets a driver read the frame back at all
+      // (readPixels and toDataURL both return an empty buffer once the compositor
+      // has taken it otherwise). It costs a copy per frame, so it is on only when
+      // something is actually debugging.
+      const boot = readDebugParams()
+      const gl = canvas.getContext('webgl', {
+        antialias:            false,
+        depth:                false,
+        alpha:                false,
+        preserveDrawingBuffer: boot.debug || boot.t !== null,
+      })
       if (!gl) {
         console.error('WebGL not supported')
         return
