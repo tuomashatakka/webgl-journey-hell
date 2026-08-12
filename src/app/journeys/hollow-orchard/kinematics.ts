@@ -56,6 +56,63 @@ export const SCAPE_W        = 12.0 // scape -> scape crossfade, world units
 export const PIECE_W        = 0.30 // setpiece crossfade, fraction of a slot
 export const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
 
+// ---- the route ------------------------------------------------------------
+//
+// The twelve stages are all authored around a straight +Z axis, and for a long
+// time that is exactly what you walked: a 660-unit corridor with a sine wobble
+// on top, which reads as a treadmill. The route bends instead, and it bends by
+// warping the *domain* rather than by re-authoring any geometry — the shader
+// offsets x by `pathX(z)` before it evaluates a stage, so walls, trunks, shafts
+// and floors all snake together and the camera simply rides the centreline.
+//
+// Two constraints fix the numbers:
+//
+//  1. Both harmonics must complete a whole number of cycles per loop, or the
+//     world fails to close at the seam and z = 660 lands somewhere z = 0 isn't.
+//     Hence the frequencies are integer multiples of 2*pi / ORCHARD_LOOP_Z.
+//  2. The shear inflates the shader's distance estimate by up to
+//     `(sqrt(s^2 + 4) + s) / 2` for a slope s, and the march has to stay under
+//     the reciprocal of that or it steps through walls. s peaks at 0.95 here
+//     (a 43 degree heading swing), so the march runs at 0.48 rather than 0.55.
+export const PATH_K1 = Math.PI * 2 / ORCHARD_LOOP_Z * 2 // two long sweeps a loop
+export const PATH_A1 = 32.0
+export const PATH_K2 = Math.PI * 2 / ORCHARD_LOOP_Z * 5 // five tighter kinks
+export const PATH_A2 = 7.0
+
+/** Lateral offset of the route centreline at a distance along it. */
+export function pathX (z: number): number {
+  return Math.sin(z * PATH_K1) * PATH_A1 + Math.sin(z * PATH_K2) * PATH_A2
+}
+
+/** Its slope — the tangent of the heading, so the camera can face down it. */
+export function pathDX (z: number): number {
+  return Math.cos(z * PATH_K1) * PATH_A1 * PATH_K1 +
+         Math.cos(z * PATH_K2) * PATH_A2 * PATH_K2
+}
+
+/** Its curvature, up to a factor — what the camera banks into. */
+export function pathDDX (z: number): number {
+  return -Math.sin(z * PATH_K1) * PATH_A1 * PATH_K1 * PATH_K1 -
+       Math.sin(z * PATH_K2) * PATH_A2 * PATH_K2 * PATH_K2
+}
+
+// ---- the aisle ------------------------------------------------------------
+//
+// Turning is only half of it. Every stage that repeats a cell puts something at
+// the centre of that cell — a sapling in THE NURSERY, a stem in the CATHEDRAL,
+// a pod in the SEED VAULT — and the route walks straight down x = 0, which is
+// exactly where those centres are. So the camera has always been passing through
+// solid geometry several times a second.
+//
+// Rather than dodging twelve different layouts by hand, the route bores its own
+// aisle: the scene is intersected with the complement of a capsule swept along
+// the walked line. It cannot fail to clear the camera, because it is defined by
+// where the camera goes, and an orchard with a row eaten through it is the
+// reading this journey wants anyway.
+export const AISLE_R  = 0.95 // radius around the walked line
+export const AISLE_DY = 0.35 // how far below the eye the capsule is centred
+export const AISLE_HY = 0.45 // half-height of its straight part
+
 export interface OrchardStage {
 
   /** 1..12; matches the STAGE_* constants and the shader's if-chain. */
@@ -275,8 +332,11 @@ export interface OrchardState {
   /** Integrated walk speed for this frame. */
   speed: number;
 
-  camX:  number;
-  eyeY:  number;
+  camX: number;
+  eyeY: number;
+
+  /** Blended lateral sway amplitude — the aisle has to follow the same track. */
+  sway:  number;
   fall:  number;
   yaw:   number;
   pitch: number;
@@ -383,12 +443,21 @@ export function getOrchardState (z: number): OrchardState {
     descent,
     rot,
     speed,
-    camX:   Math.sin(loopZ * 0.055) * sway + Math.sin(loopZ * 0.017) * sway * 0.6,
+    // Lateral position *within* the bent frame — the shader adds pathX(z) to it
+    // to get world x, and centres the aisle on the same track.
+    camX:  Math.sin(loopZ * 0.055) * sway + Math.sin(loopZ * 0.017) * sway * 0.6,
     eyeY,
+    sway,
     fall,
-    yaw:    Math.sin(loopZ * 0.021) * 0.10 * sway,
-    pitch:  -fall * 0.85,
-    roll:   Math.sin(loopZ * 0.013) * 0.06 + fall * 0.10 * Math.sin(loopZ * 0.09),
+    // Face down the route. The wobble that used to be the entire heading is
+    // still here, now riding on top of a real turn.
+    yaw:   Math.atan(pathDX(loopZ)) + Math.sin(loopZ * 0.021) * 0.10 * sway,
+    pitch: -fall * 0.85,
+    // Bank into the corner. Curvature, not heading: heading is periodic and
+    // would roll the camera to one side for a third of the loop at a time.
+    roll:  Math.sin(loopZ * 0.013) * 0.06 +
+          fall * 0.10 * Math.sin(loopZ * 0.09) +
+          Math.max(-0.11, Math.min(0.11, pathDDX(loopZ) * 7.0)),
     bob:    Math.abs(Math.sin(loopZ * 0.55)) * 0.09 * (1.0 - fall) - 0.04,
     breath: breath * breathAmp,
     spore:  clamp01(0.15 + fleshy * 0.25 + rot * 0.55 + (stageA === STAGE_CATHEDRAL ? 0.5 : 0)),
@@ -427,6 +496,12 @@ export function createHollowOrchardSimulation (): JourneySimulation {
   const uCam   = [ 0, 0, 0, 0 ]
   const uLook  = [ 0, 0, 0, 0 ]
   const uPulse = [ 0, 0, 0, 0 ]
+  const uAisle = [ 0, 0, 0, 0 ]
+
+  // The route's shape, uploaded rather than duplicated in GLSL. The shader needs
+  // pathX at every *marched* z, not just the camera's, so it cannot be a scalar
+  // — but it can be the four coefficients the CPU authored it from.
+  const uPath = [ PATH_A1, PATH_K1, PATH_A2, PATH_K2 ]
 
   return {
     step (dt: number) {
@@ -463,12 +538,19 @@ export function createHollowOrchardSimulation (): JourneySimulation {
       uPulse[2] = state.wet
       uPulse[3] = state.glow
 
+      uAisle[0] = state.sway
+      uAisle[1] = AISLE_R
+      uAisle[2] = state.eyeY - AISLE_DY
+      uAisle[3] = AISLE_HY
+
       return {
         uStage,
         uWalk,
         uCam,
         uLook,
         uPulse,
+        uPath,
+        uAisle,
         uBg:   state.bg,
         uKey:  state.key,
         uTint: state.tint,

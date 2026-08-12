@@ -35,6 +35,8 @@ const COMMON = `
   uniform vec4 uCam;        // camX, eyeY, fall, stageLen
   uniform vec4 uLook;       // yaw, pitch, roll, bob
   uniform vec4 uPulse;      // breath, spore, wet, glow
+  uniform vec4 uPath;       // A1, k1, A2, k2 — the route's two harmonics
+  uniform vec4 uAisle;      // swayAmp, radius, centreY, halfHeight
   uniform vec3 uBg;
   uniform vec3 uKey;
   uniform vec3 uTint;
@@ -57,6 +59,22 @@ const COMMON = `
 
   float lodAt(vec3 p) {
     return 1.0 - smoothstep(16.0, 30.0, length(p - gRo));
+  }
+
+  // --- the route -----------------------------------------------------------
+  // Coefficients, not a table: kinematics.ts owns the shape and uploads it, and
+  // this evaluates it at any marched z. Every stage below is authored around a
+  // straight axis and mapScene bends the domain underneath them, so the whole
+  // world snakes and no SDF has to know the route exists.
+  float pathX(float z) {
+    return sin(z * uPath.y) * uPath.x + sin(z * uPath.w) * uPath.z;
+  }
+
+  // Where the camera sits *within* the bent frame. Same expression the CPU uses
+  // for camX, so the aisle below is centred on the line actually walked rather
+  // than on the axis the camera only averages out to.
+  float trackX(float z) {
+    return sin(z * 0.055) * uAisle.x + sin(z * 0.017) * uAisle.x * 0.6;
   }
 
   // --- hash / noise --------------------------------------------------------
@@ -365,8 +383,12 @@ const COMMON = `
     float rib = abs(sin(a * 9.0)) * 0.5 + 0.5;
     d -= rib * 0.35;
 
-    float stalk = length(q.xz) - (open * 0.55 + 1.2);
+    // A sleeve *around* the throat, not a plug inside it: at open = 3 the old
+    // radius of 2.85 sat entirely within the 3-unit bore, so the one opening the
+    // camera is aimed at was filled with solid stalk and you fell through it.
+    float stalk = length(q.xz) - (open + 1.8);
     stalk = max(stalk, q.y - 7.0);
+    stalk = max(stalk, -bore);
     if (stalk < d) { d = stalk; gMat = 3.0; gWet = 0.9; gGlow = 0.35; }
     return d;
   }
@@ -514,16 +536,38 @@ const COMMON = `
   // Crossfading two SDFs is a *morph*, not a union — which for fungus is the
   // correct artifact rather than a bug. Where it does misbehave it is buried
   // under the spore surge that peaks at exactly the same moment (see main).
-  float mapScene(vec3 p) {
-    float dA = stageSDF(p, uStage.x);
-    if (uStage.z < 0.002) return dA;          // uniform branch: coherent across the frame
+  // The cleared aisle, as a capsule swept along the walked line: a vertical
+  // stadium in (x, y), infinite in z, wobbling so it reads as eaten rather than
+  // bored. Everything inside it is removed from the scene, which is the only
+  // reason the camera can be promised a clear run — twelve stages all grow
+  // something at the centre of their repeated cell, and that centre is the line
+  // the camera walks.
+  float aisleSD(vec3 p) {
+    float r = uAisle.y + 0.20 * sin(p.z * 0.23) + 0.12 * sin(p.z * 0.61 + 1.1);
+    vec2  q = vec2(p.x - trackX(p.z), p.y - uAisle.z);
+    q.y     = max(0.0, abs(q.y) - uAisle.w);
+    return length(q) - r;
+  }
 
-    float mA = gMat, wA = gWet, gA = gGlow;
-    float dB = stageSDF(p, uStage.y);
-    gMat  = mix(mA, gMat,  uStage.z);
-    gWet  = mix(wA, gWet,  uStage.z);
-    gGlow = mix(gA, gGlow, uStage.z);
-    return mix(dA, dB, uStage.z);
+  float mapScene(vec3 p) {
+    // Bend first: every SDF below sees the straight world it was authored in.
+    p.x -= pathX(p.z);
+
+    float dA = stageSDF(p, uStage.x);
+    float d  = dA;
+
+    if (uStage.z >= 0.002) {                  // uniform branch: coherent across the frame
+      float mA = gMat, wA = gWet, gA = gGlow;
+      float dB = stageSDF(p, uStage.y);
+      gMat  = mix(mA, gMat,  uStage.z);
+      gWet  = mix(wA, gWet,  uStage.z);
+      gGlow = mix(gA, gGlow, uStage.z);
+      d     = mix(dA, dB, uStage.z);
+    }
+
+    // Then carve. smax rather than max so the aisle blends into what it cut
+    // instead of leaving a machined lip along its whole length.
+    return smax(d, -aisleSD(p), 0.35);
   }
 
   vec3 calcNormal(vec3 p, float t) {
@@ -628,8 +672,12 @@ const SCENE = `
     float yaw   = uLook.x + uPointer.x * 0.42;
     float pitch = uLook.y + uPointer.y * 0.26;
 
-    vec3 ro = vec3(uCam.x, uCam.y + uLook.w, uWalk.x);
-    gRo     = ro;   // published for lodAt() — must be set before any mapScene call
+    // The camera rides the bent centreline, so its world x carries pathX. gRo is
+    // deliberately the *straight-frame* position instead: lodAt() compares it
+    // against points that mapScene has already unbent, and mixing the two frames
+    // would fade displacement in and out with the turn rather than with distance.
+    gRo     = vec3(uCam.x, uCam.y + uLook.w, uWalk.x);
+    vec3 ro = gRo + vec3(pathX(uWalk.x), 0.0, 0.0);
 
     vec3 fwd = normalize(vec3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)));
     vec3 rgt = normalize(cross(fwd, vec3(0.0, 1.0, 0.0)));
@@ -654,7 +702,10 @@ const SCENE = `
       d = mapScene(p);
       if (d < 0.0015 * t + 0.0012) { hit = true; break; }
       if (t > 120.0) break;
-      t += d * 0.55;   // undershoot: fbm displacement breaks the Lipschitz bound
+      // Undershoot: fbm displacement breaks the Lipschitz bound, and the route's
+      // shear inflates the estimate by up to ~1.8x on top of that (see the note
+      // on PATH_A1 in kinematics.ts). 0.48 stays under the reciprocal of both.
+      t += d * 0.48;
     }
 
     vec3 col = uBg;

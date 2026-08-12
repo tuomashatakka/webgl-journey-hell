@@ -46,7 +46,12 @@ export interface PanVector {
 
 export interface PanControlOptions {
 
-  /** Mirror the horizontal axis (journeys that steer *away* from the pointer). */
+  /**
+   * Mirror the horizontal axis. Defaults to **true**: every journey steers
+   * *away* from the pointer, so that pushing the pointer right swings the world
+   * right and the camera looks left, the way dragging a scene around works.
+   * Pass `false` for the look-toward-the-pointer reading.
+   */
   invertX?: boolean;
 
   /** Mirror the vertical axis. */
@@ -133,7 +138,7 @@ function tiltAxis (deg: number): number {
 }
 
 export function createPanControl (options: PanControlOptions = {}): PanControl {
-  const invertX                      = options.invertX ? -1 : 1
+  const invertX                      = options.invertX === false ? 1 : -1
   const invertY                      = options.invertY ? -1 : 1
   const useGyro                      = options.gyroscope !== false
   const getRect                      = options.getRect

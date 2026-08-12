@@ -4,7 +4,7 @@
 // jump tweening. Every journey drives `uPointer` from this, so the input feel
 // (and the iOS orientation-permission dance) lives in exactly one place.
 //
-//   const { pointerRef, updatePan } = usePanControl({ invertX: true })
+//   const { pointerRef, updatePan } = usePanControl({ gyroscope: true })
 //   ...
 //   updatePan(dt)                                    // once per rendered frame
 //   gl.uniform2f(loc, pointerRef.current.x, pointerRef.current.y)
