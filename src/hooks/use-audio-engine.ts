@@ -11,6 +11,7 @@
 //   <button onClick={ audio.toggle }>{ audio.isMuted ? 'UNMUTE' : 'MUTE' }</button>
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CustomUniforms } from '@/lib/shaderQuad'
 
 
 /** Minimum surface a journey audio engine has to expose. */
@@ -21,6 +22,18 @@ export interface JourneyAudioEngine {
 
   /** Release the AudioContext and any scheduled timers. */
   destroy: () => void;
+
+  /**
+   * Optional per-frame modulation, called by withShaderJourney. Receives the
+   * journey's accumulated (speed-scaled) shader time and, for journeys that run
+   * a simulation, the very uniform map the shader is about to be drawn with —
+   * so the mix can follow the same state the geometry does.
+   *
+   * Deliberately *not* named `updateState`: the two hand-written journeys
+   * (liminal, stairwell) already expose a concrete `updateState(z)` with a
+   * different signature, and they must keep satisfying this interface.
+   */
+  update?: (time: number, state?: CustomUniforms) => void;
 }
 
 export interface AudioEngineHandle<T extends JourneyAudioEngine> {

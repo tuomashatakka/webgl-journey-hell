@@ -1,6 +1,7 @@
 // Single source of truth for the landing grid and the journey routes.
 // Adding a journey = append one entry here + create app/journeys/<slug>/page.tsx.
 import { foundryPreviewFrag } from './foundry/shader'
+import { hollowOrchardPreviewFrag } from './hollow-orchard/shader'
 import { skybridgesPreviewFrag } from './skybridges/shader'
 
 
@@ -141,6 +142,17 @@ export const JOURNEYS: Journey[] = [
     gradient:      [ '#241206', '#0a0708' ],
     poster:        '/journeys/foundry.jpg',
     previewShader: foundryPreviewFrag,
+    status:        'live',
+  },
+  {
+    slug:          'hollow-orchard',
+    title:         'THE HOLLOW ORCHARD',
+    tagline:       'Something was planted down here. It finished growing, and it has been waiting for a body.',
+    tags:          [ 'raymarch', 'body-horror', 'organic', 'audio', 'loop' ],
+    accent:        '#d8a13a',
+    gradient:      [ '#2a1c07', '#150a1b' ],
+    poster:        '/journeys/hollow-orchard.jpg',
+    previewShader: hollowOrchardPreviewFrag,
     status:        'live',
   },
 ]

@@ -27,7 +27,10 @@ app/
   journeys/
     registry.ts             # journey metadata (single source of truth for the grid)
     liminal/                # THE LIMINAL JOURNEY (raymarched descent + audio)
-    signal-bloom/           # SIGNAL BLOOM (iridescent plasma)
+    stairwell/              # THE STAIRWELL (impossible brutalist descent + audio)
+    skybridges/             # SKYBRIDGES (collapsing glass spans over a cloud sea)
+    foundry/                # THE FOUNDRY (seven halls, rigid-body physics)
+    hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
@@ -39,6 +42,7 @@ hooks/
   use-audio-engine.ts       # lazy per-journey audio + mute button state
 lib/
   shaderQuad.ts             # reusable full-screen-quad shader runner
+  frameLoopManager.ts       # ONE frame-capped rAF shared by every templated journey
   panControl.ts             # framework-free pan controller behind use-pan-control
 tools/
   shoot-posters.mjs         # re-capture public/journeys/<slug>.jpg from the live routes
@@ -64,10 +68,31 @@ fed by `lib/panControl.ts`:
 
 ### adding a new journey
 
-1. Create `app/journeys/<slug>/page.tsx` — a `'use client'` route that renders
-   your shader (use `lib/shaderQuad.ts` for a simple full-screen fragment shader).
+1. Create `app/journeys/<slug>/page.tsx` — a `'use client'` route that hands one
+   fragment shader to `withShaderJourney`. That HOC owns *all* the WebGL
+   boilerplate (context, resize, pointer, FPS, fullscreen, settings, frame loop),
+   so the route itself is about ten lines. Options:
+
+   * `accent` — the `--accent` CSS var for the route
+   * `getSectionName(time)` — HUD label, when pacing is a pure function of time
+   * `createSimulation()` — a CPU simulation instead, when it isn't: it is stepped
+     once per capped frame, its `uniforms()` go straight to the shader and its
+     `label()` drives the HUD. Use this whenever speed varies by section, because
+     then position is an *integral* and has no closed form.
+   * `createAudioEngine()` — a Web Audio engine (see `hooks/use-audio-engine.ts`).
+     Passing it is what renders the mute button; its optional `update(time, state)`
+     is fed the same uniforms the shader is drawn with, so sound and geometry stay
+     on one clock.
+   * `sectionTitleClassName`, `envMapUrl`
+
+   `liminal/` and `stairwell/` predate the HOC and still hand-roll their own
+   two-pass routes — don't copy them for new work; `foundry/`, `skybridges/` and
+   `hollow-orchard/` are the current reference.
 2. Append an entry to `JOURNEYS` in `app/journeys/registry.ts` (title, tagline,
    tags, accent, gradient, and a compact `previewShader` for the hover preview).
+   Export the preview shader from your own `shader.ts` and import it here. Keep it
+   cheap and **self-driving from `iTime` alone** — the grid attaches no simulation,
+   so a preview that reads `uStage`/`uCam` renders a black card.
 3. Add a poster screenshot at `public/journeys/<slug>.jpg` and set `poster` in
    the registry — `node tools/shoot-posters.mjs` captures one from the running
    route. The card's art falls back screenshot-first: live preview on hover,

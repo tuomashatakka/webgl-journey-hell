@@ -29,6 +29,8 @@ import { createShaderQuad } from '@/lib/shaderQuad'
 import type { CustomUniforms, ShaderQuad } from '@/lib/shaderQuad'
 import { useFrameLoop } from '@/lib/frameLoopManager'
 import usePanControl from '@/hooks/use-pan-control'
+import useAudioEngine from '@/hooks/use-audio-engine'
+import type { JourneyAudioEngine } from '@/hooks/use-audio-engine'
 import {
   useDisplayFilter,
   useFpsMeter,
@@ -42,6 +44,12 @@ import SettingsButton from './SettingsButton'
 
 
 const MAX_DPR = 2
+
+// Stand-in for journeys with no soundtrack. useAudioEngine has to be called
+// unconditionally (hook order), but it only invokes the factory on the first
+// unmute — which, with no #audio-btn rendered, never happens. So this is never
+// actually constructed; it exists to keep `toggle` total.
+const SILENT_ENGINE: JourneyAudioEngine = { toggleMute: () => true, destroy: () => {} }
 
 /**
  * A CPU-side simulation driving a journey's shader. Journeys whose motion is
@@ -88,6 +96,18 @@ interface ShaderJourneyOptions {
    * provides a `label`, that takes precedence over `getSectionName`.
    */
   createSimulation?: () => JourneySimulation;
+
+  /**
+   * Optional per-mount audio engine. Built lazily on the first unmute (an
+   * AudioContext may only start from a user gesture) and destroyed with the
+   * component. Passing this is what renders the mute button — journeys without
+   * a soundtrack get no #audio-btn and never touch Web Audio.
+   *
+   * When the journey also has a simulation, the engine's optional `update` is
+   * fed the same uniforms the shader is drawn with, so sound and geometry stay
+   * on one clock.
+   */
+  createAudioEngine?: () => JourneyAudioEngine;
 }
 
 export function withShaderJourney (fragmentShader: string, options: ShaderJourneyOptions = {}) {
@@ -115,6 +135,10 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
     // Pointer + gyroscope panning, tweened across sudden jumps (see lib/panControl).
     const { pointerRef, updatePan } = usePanControl({ gyroscope: settings.gyroscope })
 
+    // Lazily built on first unmute; a no-op engine stands in when the journey is silent.
+    const audio = useAudioEngine(() => options.createAudioEngine?.() ?? SILENT_ENGINE)
+
+    const audioRef       = audio.engineRef
     const iTimeRef       = useRef(0)
     const sectionNameRef = useRef(sectionName)
 
@@ -201,11 +225,15 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
       const sim = simRef.current
       sim?.step(dt, iTimeRef.current)
 
+      // Evaluated once and shared: the mix hears exactly what the frame shows.
+      const custom = sim?.uniforms()
+      audioRef.current?.update?.(iTimeRef.current, custom)
+
       quad.draw({
         time:    iTimeRef.current,
         pointer: pointerRef.current,
         heavy:   settingsRef.current.heavyEffects ? 1 : 0,
-        custom:  sim?.uniforms(),
+        custom,
       })
 
       const getLabel = sim?.label
@@ -223,7 +251,9 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
       }
 
       sampleFrame()
-    }, [ pointerRef, sampleFrame, settingsRef, updatePan ])
+      // NOTE: audio.isMuted is deliberately absent — reading it here would
+      // re-register the frame callback on every toggle. audioRef is stable.
+    }, [ audioRef, pointerRef, sampleFrame, settingsRef, updatePan ])
     useFrameLoop(onFrame)
 
     const containerStyle = options.accent
@@ -251,6 +281,12 @@ export function withShaderJourney (fragmentShader: string, options: ShaderJourne
       <button id="fullscreen-btn" onClick={ toggleFullscreen }>
         FULLSCREEN
       </button>
+
+      {options.createAudioEngine &&
+          <button id="audio-btn" onClick={ audio.toggle }>
+            {audio.isMuted ? 'UNMUTE AUDIO' : 'MUTE AUDIO'}
+          </button>
+      }
 
       <aside id="fps-display">
         {renderRes.w}×{renderRes.h} · {fps} FPS
