@@ -31,6 +31,7 @@ app/
     skybridges/             # SKYBRIDGES (collapsing glass spans over a cloud sea)
     foundry/                # THE FOUNDRY (seven halls, rigid-body physics)
     hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
+    natatorium/             # THE NATATORIUM (flooded poolrooms, turning route + audio)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
@@ -65,6 +66,33 @@ fed by `lib/panControl.ts`:
 * **tweening** — small moves follow the pointer immediately; a *jump* (a tap
   landing far from the last touch, a finger lifted and re-planted) is eased over
   a distance-scaled 0.16–0.5 s instead of teleporting the camera.
+
+### routes that turn
+
+Most journeys are a straight `+Z` scroll with the scenery changing around them.
+Two are not, and they solve it differently:
+
+* **stairwell** re-anchors. Its `map()` evaluates only the current section plus
+  its two neighbours, each rotated into the camera's frame, so turn #500 costs
+  exactly what turn #1 did and no coordinate ever drifts far from the origin.
+  The turn table lives in GLSL.
+* **natatorium** takes that idea and moves the table to the CPU. `kinematics.ts`
+  owns an authored chain of sections and uploads, every frame, the affine
+  transform carrying a point from the camera's current section into each
+  neighbour's — so turns are *data* and can be any angle, and the shader holds no
+  route table at all. Two things make it work:
+  * **`min`, never `smin`.** Rooms are carved by unioning air boxes and negating.
+    Inside a union `min` under-estimates distance to the boundary, which is the
+    safe direction for a sphere trace; `smin` returns up to `k/4` *below* its
+    inputs, so negating it over-estimates and a grazing ray at a door jamb
+    punches through the wall. Corners are rounded with `sdRoundBox` instead —
+    which is also what real tiled halls have, since coved corners are moppable.
+  * **Every per-section quantity goes through the corner blend**, not just
+    position. The camera pose is a weighted mix of both frames' predictions
+    across a window straddling each boundary, so the path *and its tangent* are
+    continuous and the camera arcs through a corner instead of doglegging. Miss
+    one term — the lateral sway amplitude, say, which scales with room width —
+    and that single scalar snaps the camera sideways at the join.
 
 ### adding a new journey
 

@@ -26,6 +26,7 @@ const SHOTS = [
   { slug: 'skybridges', section: /THE ASCENT/ },
   { slug: 'foundry',    section: /FURNACE FLOOR|GEARWORKS/ },
   { slug: 'hollow-orchard', section: /THE NURSERY/ },
+  { slug: 'natatorium', section: /TILE CORRIDOR/ },
 ]
 
 const SETTINGS = {

@@ -2,6 +2,7 @@
 // Adding a journey = append one entry here + create app/journeys/<slug>/page.tsx.
 import { foundryPreviewFrag } from './foundry/shader'
 import { hollowOrchardPreviewFrag } from './hollow-orchard/shader'
+import { natatoriumPreviewFrag } from './natatorium/shader'
 import { skybridgesPreviewFrag } from './skybridges/shader'
 
 
@@ -153,6 +154,17 @@ export const JOURNEYS: Journey[] = [
     gradient:      [ '#2a1c07', '#150a1b' ],
     poster:        '/journeys/hollow-orchard.jpg',
     previewShader: hollowOrchardPreviewFrag,
+    status:        'live',
+  },
+  {
+    slug:          'natatorium',
+    title:         'THE NATATORIUM',
+    tagline:       'The pool has been filling for a long time, and the route only goes downhill.',
+    tags:          [ 'raymarch', 'poolrooms', 'liminal', 'water', 'audio' ],
+    accent:        '#67d5e0',
+    gradient:      [ '#9fd0dc', '#2c5866' ],
+    poster:        '/journeys/natatorium.jpg',
+    previewShader: natatoriumPreviewFrag,
     status:        'live',
   },
 ]
