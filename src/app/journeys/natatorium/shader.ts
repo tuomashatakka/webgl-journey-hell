@@ -58,6 +58,11 @@ const COMMON = `
   // sweeps back across the pivot) but the opening must not depend on that.
   const float OVERLAP = 0.35;
 
+  // How far a section's doorway recesses reach past its own ends. Long enough to
+  // read as an opening rather than a panel, short enough that two of them back
+  // to back cannot bridge a section that is not resident.
+  const float DOOR_STUB = 2.2;
+
   // Coving radius on every room corner. Exact outside, conservative inside.
   const float COVE = 0.06;
 
@@ -144,8 +149,40 @@ const COMMON = `
     qs = vec3(q.x, q.y + s * zc, q.z);
 
     float h = B.z * 0.5;
-    return sdRoundBox(qs - vec3(0.0, h, B.w * 0.5),
-                      vec3(B.y, h, B.w * 0.5 + OVERLAP), COVE) * inv;
+    float room = sdRoundBox(qs - vec3(0.0, h, B.w * 0.5),
+                            vec3(B.y, h, B.w * 0.5 + OVERLAP), COVE);
+
+    // Every section carries its own doorways, at both ends, whether or not the
+    // room on the far side is loaded.
+    //
+    // Only three sections are resident, so the fourth one along does not exist
+    // yet — and if a doorway were merely the place where two air boxes happen to
+    // overlap, then the far wall of the next room would be solid until the room
+    // beyond IT became resident, at which point a hole would punch through it in
+    // one frame. That is exactly what happened crossing into THE LANE POOL: its
+    // far wall was blank, and the instant the slot window advanced, OVERFLOW
+    // CHANNEL arrived and opened a door in it while you were looking straight at
+    // it. (The route table's fourth invariant was supposed to prevent this, but
+    // it constrains the span of three sections, not the distance from the camera
+    // to the far end of them — which is barely half that, and well inside the
+    // fog.)
+    //
+    // A stub, being part of the section, is there from the moment the section
+    // is. Before its neighbour loads it reads as a shallow dark recess, which is
+    // what a doorway looks like at thirty metres anyway; when the neighbour does
+    // load, the recess simply continues into it, and nothing changes on screen.
+    // Same aperture the join dressing clips itself against, so the two agree.
+    float ax = min(1.15, B.y * 0.62);
+    float ay = min(2.45, B.z * 0.78);
+    float door = sdBox(vec3(qs.x,
+                            qs.y - (0.30 + ay) * 0.5,
+                            qs.z - B.w * 0.5),
+                       vec3(ax, (ay - 0.30) * 0.5, B.w * 0.5 + DOOR_STUB));
+
+    // Union of two exact primitives, so still an under-estimate everywhere.
+    // Inside the room the stub is strictly contained by the room and changes
+    // nothing; it only ever adds the two recesses past the ends.
+    return min(room, door) * inv;
   }
 
   // --- the aisle ------------------------------------------------------------
@@ -621,13 +658,13 @@ const COMMON = `
   // you are under water and well past a doorway, rather than stepping in the one
   // frame that crosses the seam.
   //
-  // Starts at 0.12 rather than 0 and climbs steeply: a building that has been
-  // flooding for years is not pristine on the first circuit, and at 0.14 a lap
-  // the first two laps sat below every threshold downstream — no spalling, no
-  // seep, and no light out of the cracks until lap three, which is well past the
-  // point anyone is still walking. Lap 1 now reads as damaged, lap 2 as failing,
-  // lap 4 as barely holding together.
-  float decay() { return min(0.85, 0.12 + uWave.y * 0.24); }
+  // Zero on the first circuit and steep after it. Both halves matter and they
+  // pull in opposite directions: at 0.14 a lap the escalation sat below every
+  // threshold downstream and nothing was ever visibly wrong, but lifting the
+  // floor to 0.12 turned lap one into static — a quarter of every wall already
+  // broken back to concrete before you had walked anywhere. The first lap is
+  // meant to be a tiled building that is merely wet. The damage is what arrives.
+  float decay() { return min(0.85, uWave.y * 0.30); }
 
   // The fracture field, built on the tile lattice that tileSurface already has.
   // No fbm and no value noise: a generic crazing would sit ON the tile rather
@@ -647,11 +684,13 @@ const COMMON = `
     float e = dot(f, dir) + (fract(id * 17.13) - 0.5) * 0.45;
 
     hair  = 1.0 - smoothstep(0.0, 0.02 + 0.05 * dec, abs(e));
-    hair *= step(hash21(cell + 5.1), 0.05 + dec * 1.05);
+    hair *= step(hash21(cell + 5.1), 0.04 + dec * 0.85);
     grad  = dir * sign(e);
 
     // ...and the ones that have let go of the wall entirely.
-    spall = step(1.0 - dec * 0.55, hash21(cell + 19.7));
+    // Tiles off the wall entirely. Held back until the crazing has had a lap to
+    // establish itself, so the two stages read as a sequence and not as one.
+    spall = step(1.0 - max(dec - 0.22, 0.0) * 0.62, hash21(cell + 19.7));
   }
 
   // Tile. The normal perturbation is what makes tile look like tile rather than
@@ -694,12 +733,15 @@ const COMMON = `
 
     // A missing tile. The threshold walks down out of the original 0.5%, so the
     // wall loses tiles at a rate rather than having always been missing them.
-    alb = mix(alb, vec3(0.44, 0.46, 0.44), step(min(0.995, 1.0 - dec * 0.55), id));
+    alb = mix(alb, vec3(0.44, 0.46, 0.44), step(0.995 - dec * 0.35, id));
 
     // Whole blocks of tile gone, on a lattice four times coarser than the tiles
     // themselves — reusing the same hash rather than paying for a second field.
     // This is what turns scattered damage into a wall that is coming down.
-    float patch = step(0.78 - dec * 0.34, hash21(floor(g * 0.25) + 3.7)) * step(0.22, dec);
+    // Whole courses gone. The most destructive of the three, so it is the last
+    // to arrive — below half decay the wall is damaged, not demolished.
+    float patch = step(0.92 - dec * 0.34, hash21(floor(g * 0.25) + 3.7))
+                * smoothstep(0.42, 0.60, dec);
     vec3  conc  = vec3(0.38, 0.39, 0.37) * (0.86 + 0.28 * hash21(cell * 2.3));
     alb = mix(alb, conc, max(spall * 0.85, patch * 0.75));
 
@@ -714,7 +756,7 @@ const COMMON = `
     // Water finding its way out of the cracks and running down the wall. Fed
     // into the wet term rather than painted on, so the existing roughness term below
     // makes the seep glossy for free — which is the whole read.
-    float seep = hair * (1.0 - abs(n.y)) * smoothstep(0.12, 0.40, dec);
+    float seep = hair * (1.0 - abs(n.y)) * smoothstep(0.18, 0.45, dec);
     wet = max(wet, seep);
 
     alb  *= mix(1.0, 0.72, wet);
@@ -729,7 +771,7 @@ const COMMON = `
     // showing through. The per-tile hash is already computed, so the variation
     // is free.
     float lit = smoothstep(0.55, 0.95, fract(id * 7.77));
-    crackGlow = hair * lit * smoothstep(0.22, 0.62, dec);
+    crackGlow = hair * lit * smoothstep(0.26, 0.66, dec);
   }
 
   // Ceiling fluorescents. Emissive is a shading term on ceiling hits, not
