@@ -199,6 +199,17 @@ const COMMON = `
   // so the tube follows every ramp for free and costs one length().
   const float JOIN_SPAN = 5.0;   // how far into a room its entry dressing reaches
 
+  // Every early-out below hands back a BOUND, not a distance. A bound that is
+  // allowed to reach zero IS geometry: the march stops on it and shades it as
+  // tile. That is where the ghost ball hanging in THE GRAND HALL came from (the
+  // flume's bounding sphere, radius 5.2, four metres outside the flume), and the
+  // black lid over every pool (the slab bound around the lane ropes, 0.12 above
+  // the waterline), and the wall inset 1.55 into every room approaching a join.
+  // So bail only while the bound is comfortably clear of the hit epsilon — which
+  // tops out at 0.0046 at the far plane — and evaluate the real thing inside it.
+  // Everything a bound protects is thin, so the band this opens up is thin too.
+  const float BOUND_SLACK = 0.30;
+
   float aisleAt(vec3 qs, vec4 B, vec4 D) {
     // Scales with the room. One radius sized for THE GRAND HALL would be three
     // quarters of the width of OVERFLOW CHANNEL and would swallow every fitting
@@ -234,14 +245,14 @@ const COMMON = `
     // Outside the dressed zone, return the distance to that zone rather than a
     // sentinel: 1e5 would be a hole the march could step straight into.
     float ez = max(qs.z - JOIN_SPAN, -0.25 - qs.z);
-    if (ez > 0.0) return ez;
+    if (ez > BOUND_SLACK) return ez;
 
     // Nothing here reaches more than the lintel's 1.5 in from the shell, so a
     // point further into the room than that cannot be inside a block — and
     // wd - 1.55 is how much further. Returning that rather than a sentinel is
     // what keeps this an under-estimate and therefore safe.
     float bz = wd - 1.55;
-    if (bz > 0.0) return bz;
+    if (bz > BOUND_SLACK) return bz;
 
     float W = B.y;
     float H = B.z;
@@ -353,7 +364,7 @@ const COMMON = `
       // for it. Branching on H is free here: it is a uniform.
       float reach = H > 8.0 ? 3.25 : 0.50;
       float bt = min(abs(qs.y - wy) - 0.12, hx - reach);
-      if (bt > 0.0) return bt;
+      if (bt > BOUND_SLACK) return bt;
       // TILE — the swimming halls.
       // Lane ropes, bobbing on the flood. Offset half a lane off centre so the
       // aisle does not have to eat one whole rope to let you through.
@@ -378,7 +389,7 @@ const COMMON = `
     else if (t < 1.5) {
       // Conduit runs the ceiling corner, so it is bounded on both axes at once.
       float bt = max(hx - 0.34, hy - 0.62);
-      if (bt > 0.0) return bt;
+      if (bt > BOUND_SLACK) return bt;
 
       // GUTTER — the service runs. Three conduits along the ceiling, and a
       // junction box dropped off them every few metres.
@@ -393,7 +404,7 @@ const COMMON = `
       // out to meet it.
       vec3  fc = vec3(qs.x - (W - 5.0), qs.y - H * 0.62, qs.z - B.w * 0.5);
       float bt = min(hx - 2.30, length(fc) - 5.2);
-      if (bt > 0.0) return bt;
+      if (bt > BOUND_SLACK) return bt;
 
       // VAULT — THE GRAND HALL. Columns down both sides, and the flume.
       d = min(d, sdCapsuleY(vec3(abs(qs.x) - (W - 1.7), qs.y - H * 0.5, latt(qs.z, 6.0)),
@@ -411,7 +422,7 @@ const COMMON = `
     }
     else if (t < 3.5) {
       float bt = max(hx - 1.10, qs.y - 2.00);
-      if (bt > 0.0) return bt;
+      if (bt > BOUND_SLACK) return bt;
 
       // LOCKER — a run of lockers down both walls, with a bench under them.
       d = min(d, sdRoundBox(vec3(abs(qs.x) - (W - 0.24), qs.y - 0.95, qs.z - B.w * 0.5),
@@ -421,7 +432,7 @@ const COMMON = `
     }
     else if (t < 4.5) {
       float bt = hx - 1.45;
-      if (bt > 0.0) return bt;
+      if (bt > BOUND_SLACK) return bt;
 
       // PLANT — pumps and pipework, the only warm light in the building.
       vec3 pp = vec3(abs(qs.x) - (W - 0.30), qs.y, qs.z);
@@ -440,7 +451,7 @@ const COMMON = `
       }
       else {
         float bt = hx - 0.25;
-        if (bt > 0.0) return bt;
+        if (bt > BOUND_SLACK) return bt;
 
         vec3 rp = vec3(abs(qs.x) - (W - 0.16), qs.y - 1.02, qs.z);
         d = min(d, sdCapsuleZ(vec3(rp.x, rp.y, 0.0), 1e4, 0.045));
