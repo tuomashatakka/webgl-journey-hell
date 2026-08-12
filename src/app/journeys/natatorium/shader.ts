@@ -480,14 +480,23 @@ const COMMON = `
   // instant the slot window rotated, that whole far room snapped. The README
   // states the rule for the camera ("every per-section quantity goes through the
   // corner blend, not just position"); this is that rule applied to shading.
-  void resolveSlot(vec3 p, out vec4 A, out vec4 B, out vec4 C,
-                   out vec3 q, out float margin) {
+  // Returns the runner-up as well, because in a doorway the two answers can be
+  // wildly different — a 1.4m service corridor lights its walls from 1.3m away,
+  // the 16m hall it opens into lights the same wall from across a swimming pool
+  // — and switching between them on a hard argmin puts a visible seam down the
+  // middle of every threshold. w is how much of the runner-up to mix in: a
+  // half at a dead tie, nothing once the two rooms have separated by a metre.
+  void resolveSlot(vec3 p,
+                   out vec4 A,  out vec4 B,  out vec4 C,
+                   out vec4 A2, out vec4 B2, out vec4 C2,
+                   out vec3 q,  out float w) {
     float best   = 1e5;
     float second = 1e5;
 
     // Seeded from the current slot only so the compiler sees them assigned; the
     // loop below always overwrites, since every distance beats 1e5.
     A = uSecA[1]; B = uSecB[1]; C = uSecC[1]; q = p;
+    A2 = A; B2 = B; C2 = C;
 
     for (int i = 0; i < 3; i++) {
       vec3  qsi;
@@ -495,15 +504,17 @@ const COMMON = `
       float d  = sectionAir(qi, uSecB[i], uSecC[i], qsi);
       if (d < best) {
         second = best;
+        A2 = A; B2 = B; C2 = C;
         best   = d;
         A = uSecA[i]; B = uSecB[i]; C = uSecC[i]; q = qi;
       }
-      else if (d < second) second = d;
+      else if (d < second) {
+        second = d;
+        A2 = uSecA[i]; B2 = uSecB[i]; C2 = uSecC[i];
+      }
     }
 
-    // How much the winner won by. Near zero means this point sits in the overlap
-    // where two rooms interpenetrate — i.e. in a door jamb.
-    margin = second - best;
+    w = 0.5 - 0.5 * smoothstep(0.0, 1.1, second - best);
   }
 
   // 4-tap tetrahedron rather than 6-tap central differences: mapScene evaluates
@@ -605,11 +616,18 @@ const COMMON = `
 
   // --- surfaces -------------------------------------------------------------
 
-  // How far gone the building is, 0..0.85. Same shape as foundry's decayFor,
-  // riding the lapF that kinematics ramps across THE DIVING WELL..THE CISTERN —
-  // so each lap's escalation arrives while you are under water and well past a
-  // doorway, rather than stepping in the one frame that crosses the seam.
-  float decay() { return min(0.85, uWave.y * 0.14); }
+  // How far gone the building is, 0..0.85, riding the lapF that kinematics ramps
+  // across THE DIVING WELL..THE CISTERN — so each lap's escalation arrives while
+  // you are under water and well past a doorway, rather than stepping in the one
+  // frame that crosses the seam.
+  //
+  // Starts at 0.12 rather than 0 and climbs steeply: a building that has been
+  // flooding for years is not pristine on the first circuit, and at 0.14 a lap
+  // the first two laps sat below every threshold downstream — no spalling, no
+  // seep, and no light out of the cracks until lap three, which is well past the
+  // point anyone is still walking. Lap 1 now reads as damaged, lap 2 as failing,
+  // lap 4 as barely holding together.
+  float decay() { return min(0.85, 0.12 + uWave.y * 0.24); }
 
   // The fracture field, built on the tile lattice that tileSurface already has.
   // No fbm and no value noise: a generic crazing would sit ON the tile rather
@@ -681,7 +699,7 @@ const COMMON = `
     // Whole blocks of tile gone, on a lattice four times coarser than the tiles
     // themselves — reusing the same hash rather than paying for a second field.
     // This is what turns scattered damage into a wall that is coming down.
-    float patch = step(0.72 - dec * 0.30, hash21(floor(g * 0.25) + 3.7)) * step(0.30, dec);
+    float patch = step(0.78 - dec * 0.34, hash21(floor(g * 0.25) + 3.7)) * step(0.22, dec);
     vec3  conc  = vec3(0.38, 0.39, 0.37) * (0.86 + 0.28 * hash21(cell * 2.3));
     alb = mix(alb, conc, max(spall * 0.85, patch * 0.75));
 
@@ -696,7 +714,7 @@ const COMMON = `
     // Water finding its way out of the cracks and running down the wall. Fed
     // into the wet term rather than painted on, so the existing roughness term below
     // makes the seep glossy for free — which is the whole read.
-    float seep = hair * (1.0 - abs(n.y)) * smoothstep(0.15, 0.5, dec);
+    float seep = hair * (1.0 - abs(n.y)) * smoothstep(0.12, 0.40, dec);
     wet = max(wet, seep);
 
     alb  *= mix(1.0, 0.72, wet);
@@ -711,7 +729,7 @@ const COMMON = `
     // showing through. The per-tile hash is already computed, so the variation
     // is free.
     float lit = smoothstep(0.55, 0.95, fract(id * 7.77));
-    crackGlow = hair * lit * smoothstep(0.40, 0.85, dec);
+    crackGlow = hair * lit * smoothstep(0.22, 0.62, dec);
   }
 
   // Ceiling fluorescents. Emissive is a shading term on ceiling hits, not
@@ -824,8 +842,8 @@ const COMMON = `
 // Camera, march, water split and the inline post chain.
 const SCENE = `
   vec3 shadeFace(vec3 p, vec3 n, vec3 rd) {
-    vec4 A, B, C; vec3 q; float margin;
-    resolveSlot(p, A, B, C, q, margin);
+    vec4 A, B, C, A2, B2, C2; vec3 q; float w;
+    resolveSlot(p, A, B, C, A2, B2, C2, q, w);
 
     // Into the owning room's coordinates: the point, the normal and the view
     // ray together. Carrying only some of them across is worse than carrying
@@ -838,6 +856,17 @@ const SCENE = `
     tileSurface(q, nq, wy, C.z, alb, nn, rough);
 
     vec3 c = stripLight(q, nn, alb, rough, rdq, B, C);
+
+    // In the throat of a doorway, light the surface as both rooms and mix. The
+    // tile frame is NOT mixed — coordinates from two rigid frames average into a
+    // point in neither, and the grid would ghost — but the light is just a
+    // number, and crossing it over is what stops the threshold reading as a line
+    // ruled across the floor.
+    if (w > 0.004) {
+      vec3 q2 = toLocal(p, A2, B2.x);
+      c = mix(c, stripLight(q2, dirToLocal(n, A2), alb, rough, dirToLocal(rd, A2), B2, C2), w);
+    }
+
     c += alb * 0.06;
 
     // Caustics stay in the CURRENT frame on purpose. The water is one flat
@@ -850,7 +879,7 @@ const SCENE = `
     // Whatever is behind the walls by now. Same oxblood foundry's decay rots
     // its grade toward, and the only warm thing in a building lit entirely by
     // dying fluorescents.
-    c += vec3(1.00, 0.16, 0.07) * crackGlow * 1.6;
+    c += vec3(1.00, 0.17, 0.06) * crackGlow * 3.0;
     return c;
   }
 
@@ -899,7 +928,7 @@ const SCENE = `
   // of hanging in the middle of the room like coloured fog.
   vec3 crackShafts(vec3 ro, vec3 rd, float t) {
     float dec = decay();
-    if (dec < 0.15) return vec3(0.0);
+    if (dec < 0.18) return vec3(0.0);
 
     float acc = 0.0;
     for (int k = 0; k < 6; k++) {
@@ -909,9 +938,9 @@ const SCENE = `
       // A coarse standing field rather than the per-tile one: this is sampled in
       // mid-air, where there is no tile lattice to fracture along.
       float v = sin(sp.x * 1.7 + cos(sp.z * 2.1)) * cos(sp.z * 1.9 + sin(sp.y * 1.5));
-      acc += (1.0 - smoothstep(0.0, 0.10 + 0.22 * dec, abs(v))) * prox * prox;
+      acc += (1.0 - smoothstep(0.0, 0.16 + 0.30 * dec, abs(v))) * prox * prox;
     }
-    return vec3(1.00, 0.16, 0.07) * acc * (1.0 / 6.0) * dec * 0.55;
+    return vec3(1.00, 0.17, 0.06) * acc * (1.0 / 6.0) * dec * 1.7;
   }
 
   void main() {
@@ -1036,7 +1065,17 @@ const SCENE = `
     col *= 1.0 - smoothstep(0.42, 1.15, length(uv)) * (0.45 + 0.2 * (1.0 - above));
     float lum = dot(col, vec3(0.299, 0.587, 0.114));
     col += col * smoothstep(0.75, 1.6, lum) * 0.4;
-    col  = pow(clamp(col, 0.0, 1.8), vec3(0.92));
+
+    // Reinhard shoulder rather than clamp(col, 0.0, 1.8). The clamp was the real
+    // reason bright tile turned into featureless white paper: every value past
+    // 1.8 became exactly 1.0, so grout lines, mosaic courses and cracks all
+    // flattened into the same flat area the moment a wall came near a lamp. This
+    // compresses instead, so the highlights stay highlights and keep their
+    // detail. White point at 2.6: anything beyond that is a lamp, and lamps are
+    // allowed to be white.
+    col = max(col, 0.0);
+    col = col * (1.0 + col / (2.6 * 2.6)) / (1.0 + col);
+    col = pow(col, vec3(0.92));
     col += (hash21(gl_FragCoord.xy + fract(iTime) * 71.3) - 0.5) * 0.028;
 
     gl_FragColor = vec4(col, 1.0);

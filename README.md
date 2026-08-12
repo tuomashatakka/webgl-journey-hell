@@ -160,6 +160,35 @@ The overlay prints the uniforms grouped as the `vec4`s they are uploaded as,
 which is usually the fastest way to find out that a value you believed was
 varying is in fact pinned.
 
+`tools/journey.mjs` drives all of this from a shell (needs `bun add -d
+playwright-core`; it finds any Chromium already in the Playwright cache rather
+than insisting on the exact pinned build):
+
+```
+node tools/journey.mjs shot  natatorium --t=30 --out=/tmp/a.png
+node tools/journey.mjs film  natatorium --from=26 --to=34 --step=0.5
+node tools/journey.mjs probe natatorium --from=0 --to=60 --step=2 [--json]
+node tools/journey.mjs scan  natatorium --from=4 --to=24 --step=0.4
+node tools/journey.mjs uv    natatorium --t=30
+```
+
+* **probe** prints mean luminance, the fraction of pure-black pixels and the
+  fraction of blown-out ones per timestamp. `blown` is the one to watch: a wall
+  that clips to white has lost its grout, its mosaic course and its cracks, and
+  the number says so long before the eye admits it.
+* **scan** walks time finely and reports where the image *jumps* between
+  neighbouring frames, normalised against the median so it reads as a multiple
+  of the journey's own baseline motion. Turning a corner at 5 m/s legitimately
+  changes most of the frame, so absolute deltas mean nothing — the multiple is
+  what separates "sharp turn" from "something popped".
+* **uv** reports horizontal against vertical detail, for the class of bug where
+  the image is stable but wrong: a surface that picked the wrong projection axis
+  smears into stripes and one of the two collapses.
+
+The honest way to use these is against a baseline. Check out the last known-good
+commit over the journey's own files, probe, restore, probe again, and compare —
+the two columns settle arguments that screenshots do not.
+
 ### adding a new journey
 
 1. Create `app/journeys/<slug>/page.tsx` — a `'use client'` route that hands one
