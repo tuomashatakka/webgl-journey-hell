@@ -476,15 +476,15 @@ export interface Slot {
 }
 
 export interface NatatoriumState {
-  dist:    number; // total distance walked, CPU-only
-  lap:     number;
+  dist: number; // total distance walked, CPU-only
+  lap:  number;
 
   /**
    * Laps completed as a *fraction* — `dist / LAP_LEN`. Anything that escalates
    * per lap reads this rather than `lap`, so it ramps through the seam instead
    * of stepping across it.
    */
-  lapF: number;
+  lapF:    number;
   localZ:  number;
   section: Section;
 
@@ -617,9 +617,9 @@ export function getNatatoriumState (dist: number): NatatoriumState {
   // rise into the single frame that crosses the seam: the surface teleported to
   // chest height in a doorway and the wading penalty snapped with it. Rising
   // over the lap lands on exactly the same level at every seam.
-  const waterY     = WATER_Y0 + lapF * WATER_RISE
-  const depth      = Math.max(0, waterY - floorY)
-  const above      = smoothstep(waterY - 0.12, waterY + 0.12, floorY + EYE)
+  const waterY = WATER_Y0 + lapF * WATER_RISE
+  const depth  = Math.max(0, waterY - floorY)
+  const above  = smoothstep(waterY - 0.12, waterY + 0.12, floorY + EYE)
 
   // Wading is slow, and slower the deeper it gets. Base speed rides the corner
   // blend too, so the pace eases between rooms instead of stepping.
@@ -651,7 +651,7 @@ export function getNatatoriumState (dist: number): NatatoriumState {
     pitch:   Math.atan2(dy, hyp) * 0.65 +
              Math.sin(dist * 0.85) * 0.012 * stride -
              (1.0 - above) * 0.10,
-    roll:  Math.sin(dist * 0.31) * 0.012 +
+    roll: Math.sin(dist * 0.31) * 0.012 +
            Math.max(-0.14, Math.min(0.14, bank * 0.55)),
     slots: [ slotPrv, slotCur, slotNxt ],
     name:  cur.name,
