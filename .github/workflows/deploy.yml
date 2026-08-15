@@ -18,7 +18,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # The repo is bun-managed (bun.lock, no package-lock.json), so setup-node's
       # npm cache has nothing to key off and `npm ci` has no lockfile to install from.
       - uses: oven-sh/setup-bun@v2
