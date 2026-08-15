@@ -1,0 +1,24 @@
+version: 2
+
+updates:
+  # `npm` is Dependabot's name for the whole npm-compatible family (npm, yarn,
+  # pnpm, bun); version updates have maintained bun.lock since Feb 2025. Declaring
+  # it explicitly is what stops Dependabot from resurrecting package-lock.json —
+  # which CI never reads — and leaving bun.lock behind, desyncing it from
+  # package.json until the next `bun install --frozen-lockfile` refuses to run.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      production-dependencies:
+        dependency-type: production
+      development-dependencies:
+        dependency-type: development
+
+  # The deploy workflow pins actions by major tag; without this nothing ever bumps
+  # them, which is why checkout@v4 is still warning about the Node 20 deprecation.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

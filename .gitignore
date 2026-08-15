@@ -11,3 +11,5 @@ public/*
 # which the static export needs at build time.
 !public/journeys
 out/*
+# The repo is bun-managed; a second lockfile desyncs from bun.lock and breaks CI.
+package-lock.json
