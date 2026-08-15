@@ -23,8 +23,6 @@ jobs:
       # npm cache has nothing to key off and `npm ci` has no lockfile to install from.
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
-      - name: Switch to static export
-        run: "sed -i \"s/output: 'standalone'/output: 'export'/\" next.config.ts"
       - run: bun run build
         env:
           NODE_ENV: production
