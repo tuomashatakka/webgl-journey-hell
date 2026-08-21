@@ -133,6 +133,22 @@
 .natatorium-sector-title::after {
     text-shadow: 2px 0 rgba(210, 245, 250, 0.75), 0 2px rgba(20, 70, 90, 0.6);
 }
+.switchback-sector-title {
+    font-family: "Futura", "Century Gothic", "Avenir Next", "Trebuchet MS", sans-serif;
+    font-size: clamp(11px, 1.5vw, 20px);
+    font-weight: 500;
+    letter-spacing: clamp(5px, 0.85vw, 13px);
+    color: rgba(255, 236, 244, 0.94);
+    text-shadow:
+        0 0 12px rgba(255, 158, 196, 0.72),
+        0 0 46px rgba(120, 70, 170, 0.32);
+}
+.switchback-sector-title::before {
+    text-shadow: -2px 0 rgba(255, 110, 170, 0.9);
+}
+.switchback-sector-title::after {
+    text-shadow: 2px 0 rgba(150, 235, 255, 0.8), 0 2px rgba(60, 30, 70, 0.6);
+}
 #fullscreen-btn {
     position: absolute;
     bottom: 20px;

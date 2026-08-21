@@ -27,6 +27,7 @@ const SHOTS = [
   { slug: 'foundry',    section: /FURNACE FLOOR|GEARWORKS/ },
   { slug: 'hollow-orchard', section: /THE NURSERY/ },
   { slug: 'natatorium', section: /TILE CORRIDOR/ },
+  { slug: 'switchback', section: /THE BOARDING PLATFORM/ },
 ]
 
 const SETTINGS = {
