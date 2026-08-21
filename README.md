@@ -32,6 +32,7 @@ app/
     foundry/                # THE FOUNDRY (seven halls, rigid-body physics)
     hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
     natatorium/             # THE NATATORIUM (flooded poolrooms, turning route + audio)
+    switchback/             # THE SWITCHBACK (dreamcore mine railway, gravity cart + audio)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
@@ -70,7 +71,7 @@ fed by `lib/panControl.ts`:
 ### routes that turn
 
 Most journeys are a straight `+Z` scroll with the scenery changing around them.
-Two are not, and they solve it differently:
+Three are not, and all three solve it differently:
 
 * **stairwell** re-anchors. Its `map()` evaluates only the current section plus
   its two neighbours, each rotated into the camera's frame, so turn #500 costs
@@ -156,6 +157,57 @@ Two are not, and they solve it differently:
     to 0.78. Corollary: the deploy curve is quintic rather than the obvious
     damped hinge, because a hinge rings above 1 and settles back through it, and
     the shader culls the whole block set on `deploy >= 1`.
+
+* **switchback** does not move the camera at all. Both of the above model a
+  route as a *chain of straight rooms*; a rail is not that. A railway's defining
+  quantity is curvature — continuous, and the thing that banks the car — so
+  chopping it into segments with joins is precisely what you must not do. So the
+  shader marches in a **rectified** space where the track is the +Z axis, dead
+  straight, with the cart at the origin, and the real curve arrives as four
+  floats: `bend(z) = (ax*z + bx*z^2, ay*z + by*z^2)`, fitted every frame and
+  applied by looking a point up at `p.xy - bend(p.z)`. Rails, sleepers, trestle
+  bents and lamps become lattices along a straight axis, which is as cheap as
+  geometry gets, and there is **no world position at all** — not a small one like
+  natatorium's section-local coordinates, none — so `?t=100000` is as exact as
+  `?t=1`. Four things make *that* work:
+  * **A bend is a shear, so it stretches distance.** For `T(p) = (p.xy - bend(z), z)`
+    the Jacobian is the identity plus `bend'(z)` in one column, so
+    `|grad(f o T)| <= 1 + |bend'(z)|` and dividing the whole map by that is
+    provably conservative. It is a function of z, so near geometry marches at
+    full speed and only the far end of a hard turn pays for it.
+  * **Rectification has a range limit.** A track that turns 90 degrees inside the
+    view distance leaves the +Z half-space and no quadratic can follow it out.
+    That is what `MAX_CURV` is, and the route table asserts against it —
+    pointwise for the shear's cost, and windowed for the correctness. It is not
+    much of a constraint, because a coaster's turns are wide *because* it is
+    fast: 44 metres of radius at 20 m/s is still 0.9g in your ribs.
+  * **The fit is pinned by camera-space depth, not by arc length.** In a hard
+    turn the track's depth grows far slower than its length — 88 metres of rail
+    through a 60 degree sweep only reaches 56 metres ahead — so pinning by length
+    puts the far knot outside the range the shader marches and lets the quadratic
+    extrapolate across the part of the picture you can see.
+  * **The car is bolted to the rail, so a bank rotates the world, not the rider.**
+    Bent space is the track's frame and the bank is carried entirely by where
+    `uUp` and `uSun` point. The honest consequence is that a banked turn is
+    invisible inside a tunnel, exactly as it is in a real POV video, and the
+    moment the walls fall away over the void the whole sky rolls.
+
+  Two bugs this cost, both worth knowing because neither looks like its cause.
+  **Iteration exhaustion is not a miss:** a ray down a long narrow bore grazes
+  the wall for its whole length, burns all its steps on small useful-looking
+  positive ones, and rendering that as sky put a wing-shaped hole through the
+  roof of the chalk drift, in exactly the shape of the drift. **The fog has to be
+  complete at the march limit, not merely thick:** either side of `T_MAX` the
+  shader renders two different things, so any surface still showing through there
+  draws the set of directions that just barely reach something — which over the
+  overlook was a perfect dark arc hanging in the sunset with no object anywhere
+  near it.
+
+  A third, in the same family as natatorium's halo bug: **a room is a range of
+  *depth*, and a ray not looking down the track covers less depth than distance.**
+  Resolving the room from `t` rather than from `rd.z * t` says a ray fired
+  sideways at ninety metres is ninety metres down the line, and lights the drift
+  with the lamps of the room two portals away.
 
 ### debugging a journey
 
@@ -263,7 +315,8 @@ the two columns settle arguments that screenshots do not.
 
    `liminal/` and `stairwell/` predate the HOC and still hand-roll their own
    two-pass routes — don't copy them for new work; `foundry/`, `skybridges/` and
-   `hollow-orchard/` are the current reference.
+   `hollow-orchard/` are the current reference, and `natatorium/` and
+   `switchback/` are the two worked examples of a route that goes somewhere.
 2. Append an entry to `JOURNEYS` in `app/journeys/registry.ts` (title, tagline,
    tags, accent, gradient, and a compact `previewShader` for the hover preview).
    Export the preview shader from your own `shader.ts` and import it here. Keep it

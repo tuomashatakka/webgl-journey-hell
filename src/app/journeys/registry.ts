@@ -4,6 +4,7 @@ import { foundryPreviewFrag } from './foundry/shader'
 import { hollowOrchardPreviewFrag } from './hollow-orchard/shader'
 import { natatoriumPreviewFrag } from './natatorium/shader'
 import { skybridgesPreviewFrag } from './skybridges/shader'
+import { switchbackPreviewFrag } from './switchback/shader'
 
 
 export interface Journey {
@@ -165,6 +166,17 @@ export const JOURNEYS: Journey[] = [
     gradient:      [ '#9fd0dc', '#2c5866' ],
     poster:        '/journeys/natatorium.jpg',
     previewShader: natatoriumPreviewFrag,
+    status:        'live',
+  },
+  {
+    slug:          'switchback',
+    title:         'THE SWITCHBACK',
+    tagline:       'The cart is a gravity machine and the brakes are only at the platform. Six rooms, and it comes back round.',
+    tags:          [ 'raymarch', 'dreamcore', 'mine cart', 'coaster', 'simulated', 'loop' ],
+    accent:        '#ff9ec4',
+    gradient:      [ '#f3b9c8', '#221226' ],
+    poster:        '/journeys/switchback.jpg',
+    previewShader: switchbackPreviewFrag,
     status:        'live',
   },
 ]
