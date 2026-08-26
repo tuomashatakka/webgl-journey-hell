@@ -66,6 +66,16 @@ export interface MeshBuilder {
   /** Interleaved vertex data built so far. */
   vertices(): Float32Array;
   indices(): Uint32Array;
+
+  /**
+   * Split every shared vertex so each triangle owns its own three. Required
+   * before `fracture`: a vertex shared by two triangles can only carry one
+   * shard, so a shared vertex on a shard boundary is dragged by whichever shard
+   * wrote it last and the two shards stay stitched together by it — a rigid
+   * break comes out stringy. Triples the vertex count of a welded mesh, which
+   * is why it is opt-in rather than the builder's default.
+   */
+  unweld(): void;
 }
 
 
@@ -300,6 +310,25 @@ export function createMeshBuilder (): MeshBuilder {
         }
     },
 
+    unweld () {
+      const triCount = iLen / 3 | 0
+      const outV     = new Float32Array(triCount * 3 * VERTEX_FLOATS)
+      const outI     = new Uint32Array(triCount * 3)
+
+      for (let t = 0; t < triCount * 3; t++) {
+        const src = indices[t] * VERTEX_FLOATS
+        const dst = t * VERTEX_FLOATS
+        for (let k = 0; k < VERTEX_FLOATS; k++)
+          outV[dst + k] = verts[src + k]
+        outI[t] = t
+      }
+
+      verts   = outV
+      indices = outI
+      vLen    = outV.length
+      iLen    = outI.length
+    },
+
     vertices () {
       return verts.subarray(0, vLen)
     },
@@ -324,9 +353,38 @@ export function createMeshBuilder (): MeshBuilder {
 export function fracture (
   builder: MeshBuilder, cellSize: number, rand: () => number,
 ): void {
+  // Un-weld first, unconditionally. Fracture is precisely the operation that
+  // requires per-triangle independence, so doing it here rather than trusting
+  // the caller to remember is the difference between a rigid break and a
+  // stringy one.
+  builder.unweld()
+
   const idx      = builder.indices()
   const verts    = builder.vertices()
   const triCount = idx.length / 3 | 0
+
+  // Cells are measured from the mesh's own minimum corner rather than from the
+  // world origin. Flooring an absolute coordinate puts a cell boundary on every
+  // axis plane through zero, so a prop modelled symmetrically about its own
+  // origin — which is most of them — splits into eight octants however large a
+  // cell is asked for. Offsetting by the bound makes `cellSize` mean what it
+  // says: cells of that size, laid out across this mesh.
+  let minX = Infinity
+  let minY = Infinity
+  let minZ = Infinity
+  for (let i = 0; i < verts.length; i += VERTEX_FLOATS) {
+    if (verts[i] < minX)
+      minX = verts[i]
+    if (verts[i + 1] < minY)
+      minY = verts[i + 1]
+    if (verts[i + 2] < minZ)
+      minZ = verts[i + 2]
+  }
+
+  const cellOf = (x: number, y: number, z: number): string =>
+    `${Math.floor((x - minX) / cellSize)},` +
+    `${Math.floor((y - minY) / cellSize)},` +
+    `${Math.floor((z - minZ) / cellSize)}`
 
   // Bucket triangles by cell index → { centroid, count, seed }.
   const shards = new Map<string, { cx: number; cy: number; cz: number; n: number; seed: number }>()
@@ -341,7 +399,7 @@ export function fracture (
     const tcy = (verts[i0 + 1] + verts[i1 + 1] + verts[i2 + 1]) / 3
     const tcz = (verts[i0 + 2] + verts[i1 + 2] + verts[i2 + 2]) / 3
 
-    const key = `${Math.floor(tcx / cellSize)},${Math.floor(tcy / cellSize)},${Math.floor(tcz / cellSize)}`
+    const key = cellOf(tcx, tcy, tcz)
 
     let shard = shards.get(key)
     if (!shard) {
@@ -371,7 +429,7 @@ export function fracture (
     const tcy = (verts[i0 + 1] + verts[i1 + 1] + verts[i2 + 1]) / 3
     const tcz = (verts[i0 + 2] + verts[i1 + 2] + verts[i2 + 2]) / 3
 
-    const key   = `${Math.floor(tcx / cellSize)},${Math.floor(tcy / cellSize)},${Math.floor(tcz / cellSize)}`
+    const key   = cellOf(tcx, tcy, tcz)
     const shard = shards.get(key)!
 
     for (const vi of [ i0, i1, i2 ]) {
