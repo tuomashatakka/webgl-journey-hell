@@ -33,11 +33,14 @@ app/
     hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
     natatorium/             # THE NATATORIUM (flooded poolrooms, turning route + audio)
     switchback/             # THE SWITCHBACK (dreamcore mine railway, gravity cart + audio)
+    loop-line/              # THE LOOP LINE (rasterized closed circuit, six stations + audio)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
   ShaderPreviewLayer.tsx    # ONE shared WebGL canvas for all card previews
-  withShaderJourney.tsx     # HOC template: one fragment shader -> a full route
+  withJourneyShell.tsx      # the route: context, resize, pointer, HUD, ?t= seeking
+  withShaderJourney.tsx     # a journey that is one fragment shader (six of them)
+  withGeometryJourney.tsx   # a journey that is actual triangles (loop-line)
 hooks/
   use-pan-control.ts        # pointer + gyroscope view panning (tweened)
   use-journey-runtime.ts    # settings ref, display filter, resize, FPS, fullscreen
@@ -46,6 +49,11 @@ lib/
   shaderQuad.ts             # reusable full-screen-quad shader runner
   frameLoopManager.ts       # ONE frame-capped rAF shared by every templated journey
   panControl.ts             # framework-free pan controller behind use-pan-control
+  mat4.ts                   # column-major 4x4s, out-param and allocation-free
+  curve.ts                  # closed Catmull-Rom, arc-length LUT, transported frames
+  mesh.ts                   # VAO/VBO/IBO + instancing, and pre-fracturing into shards
+  glProgram.ts              # WebGL2 program + lazily cached uniform locations
+  rng.ts                    # mulberry32 + integer hashes, for reproducible decay
 tools/
   shoot-posters.mjs         # re-capture public/journeys/<slug>.jpg from the live routes
 ```
@@ -294,12 +302,52 @@ The honest way to use these is against a baseline. Check out the last known-good
 commit over the journey's own files, probe, restore, probe again, and compare —
 the two columns settle arguments that screenshots do not.
 
+### the fourth way of turning
+
+There is a fourth, and it is the one that cheats.
+
+* **loop-line** just builds the whole thing. The three approaches above all exist
+  because the route is *unbounded* — a descent, a corridor chain, a railway that
+  runs forever — so no amount of geometry can cover it and the world has to be
+  generated around a moving observer. A **closed circuit is not unbounded**. It is
+  1.26 km long and then it is the same 1.26 km again. So the entire loop is built
+  once, out of actual triangles, in real world space, and an ordinary camera moves
+  through it.
+
+  Everything the other three work hardest at evaporates. There is no turn-radius
+  floor, because nothing is being fitted to a quadratic. There is no coordinate
+  drift, because arc length wraps at the loop length and the world never
+  translates. And the track can cross over itself, which not one of the SDF
+  journeys can express, because it is just vertices.
+
+  What it buys beyond that is rupture you can afford. Meshes are pre-fractured at
+  build time and displaced per-shard in the *vertex* shader from one uniform, so
+  the world comes apart with nothing re-uploaded and no instruction added to the
+  frame: 120 fps at 1400x860 on lap 1, lap 3 and lap 5 alike. See
+  `app/journeys/loop-line/SPEC.md`.
+
 ### adding a new journey
 
+There are two kinds of journey, and they share everything except the renderer.
+`components/withJourneyShell` owns *all* the route boilerplate — context, resize,
+pointer, FPS, fullscreen, settings, frame loop, `?t=` seeking, HUD, debug panel —
+and takes a factory returning anything with `{ draw, dispose }`. Pick the path:
+
+* **`withShaderJourney(frag, options)`** — the journey is one fragment shader on a
+  full-screen quad, in GLSL ES 1.00, on a WebGL 1.0 context with no depth buffer.
+  Six of the seven originals are this.
+* **`withGeometryJourney(createScene, options)`** — the journey is triangles. You
+  get a WebGL2 context with `depth: true` and hand back your own scene object.
+  Reach for `lib/mat4`, `lib/curve`, `lib/mesh` and `lib/glProgram`. `loop-line`
+  is the worked example.
+
+  A rasterizer needs that depth buffer: without one it draws its rooms in
+  submission order and you see straight through the walls. A raymarch resolves
+  visibility along the ray, which is why the shell's default is `depth: false`.
+
 1. Create `app/journeys/<slug>/page.tsx` — a `'use client'` route that hands one
-   fragment shader to `withShaderJourney`. That HOC owns *all* the WebGL
-   boilerplate (context, resize, pointer, FPS, fullscreen, settings, frame loop),
-   so the route itself is about ten lines. Options:
+   fragment shader to `withShaderJourney` (or a scene factory to
+   `withGeometryJourney`). The route itself is about ten lines. Options:
 
    * `accent` — the `--accent` CSS var for the route
    * `getSectionName(time)` — HUD label, when pacing is a pure function of time
@@ -322,6 +370,10 @@ the two columns settle arguments that screenshots do not.
    Export the preview shader from your own `shader.ts` and import it here. Keep it
    cheap and **self-driving from `iTime` alone** — the grid attaches no simulation,
    so a preview that reads `uStage`/`uCam` renders a black card.
+
+   A preview is **always GLSL ES 1.00**, even for a geometry journey whose own
+   renderer is WebGL2: every card's preview shares one WebGL 1.0 context, so the
+   preview cannot be the journey's real renderer and has to fake the shot.
 3. Add a poster screenshot at `public/journeys/<slug>.jpg` and set `poster` in
    the registry — `node tools/shoot-posters.mjs` captures one from the running
    route. The card's art falls back screenshot-first: live preview on hover,

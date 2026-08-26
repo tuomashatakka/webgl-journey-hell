@@ -265,8 +265,12 @@ export const DECAY_BAY = 5
 export const JUNCTION_U = 0.2833
 export const REJOIN_U   = 0.5417
 
-/** The lap on which the point machine throws. Before this, ALT is scenery. */
-export const SWITCH_LAP = 3
+/**
+ * The lap on which the point machine throws. Before this, the chord is scenery
+ * you ride past. Zero-based, so 2 is the lap the HUD calls LAP 3 — the HUD adds
+ * one because no passenger counts their first lap as the zeroth.
+ */
+export const SWITCH_LAP = 2
 
 // --- the plan shape -------------------------------------------------------
 

@@ -245,17 +245,17 @@ function dressBay (
         for (const side of [ -1, 1 ]) {
           curve.frameAtDistance(s, frame)
 
-          const off = side * bay.bore * 0 + side * 10.5
+          const off = side * 11.6
           writeInstance(at('fence'),
                         frame.pos.x + frame.right.x * off,
-                        frame.pos.y + frame.right.y * off + 4.2,
+                        frame.pos.y + frame.right.y * off + 9.2,
                         frame.pos.z + frame.right.z * off,
                         yawOf(frame), 1, 0.6, rand(), bay.id)
         }
       break
     case Theme.MACHINE:
       // Racks lining the cold aisle, tight enough to scrape at full rupture.
-      for (let s = span.s0 + 2; s < span.s1 - 2; s += 1.05)
+      for (let s = span.s0 + 2; s < span.s1 - 2; s += 0.64)
         for (const side of [ -1, 1 ]) {
           curve.frameAtDistance(s, frame)
 
@@ -600,6 +600,10 @@ export function createLoopLineScene (
           : -1e4
         geoProg.uniform4f('uWater', flood, b.rupture === Rupture.FLOOD ? 1 : 0, 0, 0)
         geoProg.uniform4f('uRupture', ruptureWeight(b, decay), 0, 0, 0)
+        // Every lamp in a bay shares one colour, so the emissive term can be
+        // tinted from a per-bay uniform — no need for a fragment to know which
+        // lamp it is part of. Without this a sodium housing glows white.
+        geoProg.uniform3f('uLampTint', b.lampTint[0], b.lampTint[1], b.lampTint[2])
 
         // Lamps, and which of them this lap has killed. The roll is fixed per
         // lamp, so failure order is stable and a seek reproduces it exactly.

@@ -28,6 +28,7 @@ const SHOTS = [
   { slug: 'hollow-orchard', section: /THE NURSERY/ },
   { slug: 'natatorium', section: /TILE CORRIDOR/ },
   { slug: 'switchback', section: /THE BOARDING PLATFORM/ },
+  { slug: 'loop-line',  section: /THE CUT/ },
 ]
 
 const SETTINGS = {

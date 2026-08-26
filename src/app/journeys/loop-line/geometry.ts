@@ -156,9 +156,15 @@ export function profileFor (bay: Bay): ProfileForReturnType {
   switch (bay.theme) {
     case Theme.CUT:
       // An open trench: floor, then walls battered outward, ending in air.
+      //
+      // The crest has to stand well above eye height or the bay stops being a
+      // cut. At two and a half metres the camera looks straight over the top and
+      // the whole thing reads as a shallow ditch with a lot of sky; at nine it
+      // reads as what it is, a railway running below ground level with a strip
+      // of blown-out daylight overhead. Depth is the entire content of this bay.
       return {
         profile: [
-          [ -w * 2.2, d * 2.4 ], [ -w * 1.5, -d ], [ w * 1.5, -d ], [ w * 2.2, d * 2.4 ],
+          [ -w * 2.7, 9.2 ], [ -w * 1.45, -d ], [ w * 1.45, -d ], [ w * 2.7, 9.2 ],
         ],
         closed: false,
         facing: Facing.IN,

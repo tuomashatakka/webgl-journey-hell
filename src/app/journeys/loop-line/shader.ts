@@ -94,15 +94,19 @@ void main () {
   if (amount > 0.001) {
     vec3 axis = normalize(vec3(
       sin(seed * 91.7) , cos(seed * 47.3) + 0.35, sin(seed * 13.1 + 2.0)));
-    float spin = amount * (0.7 + seed * 2.2) * 1.4;
+    float spin = amount * (0.35 + seed * 1.15) * 0.6;
     mat3 R = axisAngle(axis, spin);
     vec3 local = world - pivot;
     world = pivot + R * local;
     n = R * n;
 
-    float throwDist = amount * amount * (2.5 + seed * 9.0);
+    // Sub-metre for most of the ride. A shard thrown ten metres has left the
+    // building and reads as debris in a void; a shard that has moved thirty
+    // centimetres and turned five degrees reads as a wall that is failing, which
+    // is the thing worth looking at.
+    float throwDist = amount * amount * (0.30 + seed * 1.5);
     world += axis * throwDist;
-    world.y -= throwDist * (0.8 + seed * 0.9);   // and down, because gravity
+    world.y -= throwDist * (0.7 + seed * 1.1);   // and down, because gravity
   }
 
   vWorld  = world;
@@ -142,6 +146,7 @@ uniform int  uLampCount;
 uniform vec4 uBayFog;     // (fog.rgb, density)
 uniform vec4 uBayAmb;     // (ambient.rgb, sky)
 uniform vec4 uWater;      // (surfaceY, murk, 0, 0)
+uniform vec3 uLampTint;   // the bay's lamp colour, for emissive housings
 
 out vec4 fragColor;
 
@@ -149,6 +154,20 @@ float hash21 (vec2 p) {
   p = fract(p * vec2(123.34, 456.21));
   p += dot(p, p + 45.32);
   return fract(p.x * p.y);
+}
+
+// Bilinear value noise. Every journey in this repo pastes its own copy of this
+// rather than importing one; that is the established convention here, not an
+// oversight, because a shader is a string and there is no include step.
+float vnoise (vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = hash21(i);
+  float b = hash21(i + vec2(1.0, 0.0));
+  float c = hash21(i + vec2(0.0, 1.0));
+  float d = hash21(i + vec2(1.0, 1.0));
+  return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
 }
 
 void main () {
@@ -170,6 +189,21 @@ void main () {
   float emissive = max(vTint - 1.0, 0.0);
   float tint = clamp(vTint, 0.0, 1.0);
   vec3 albedo = mix(vec3(0.62, 0.58, 0.52), vec3(0.34, 0.36, 0.40), tint) * grid;
+
+  // Grime. A perfectly uniform wall is the loudest possible tell that a scene
+  // has no textures in it, and two octaves of value noise on world position fix
+  // most of that for a handful of instructions. Projected on whichever plane the
+  // surface faces most, so nothing smears into stripes on any wall — the failure
+  // mode that journey.mjs's uv subcommand exists to catch.
+  vec3 an = abs(N);
+  vec2 gp = an.y > max(an.x, an.z) ? vWorld.xz
+          : an.x > an.z            ? vWorld.zy
+                                   : vWorld.xy;
+  albedo *= 0.70 + (vnoise(gp * 0.7) * 0.55 + vnoise(gp * 2.9) * 0.26) * 0.55;
+
+  // Vertical staining. What actually makes a tunnel look old is that water has
+  // run down it, and water only ever runs one way.
+  albedo *= 1.0 - clamp(vnoise(vec2(gp.x * 1.7, vWorld.y * 0.11)) - 0.46, 0.0, 1.0) * 0.55;
 
   // Rot: desaturate, then flatten toward a dead grey. The geometry stops
   // pretending to be a material before it stops being geometry.
@@ -199,7 +233,7 @@ void main () {
     lit += uLampCol[i].rgb * pow(max(dot(N, H), 0.0), 48.0) * atten * alive * 0.65;
   }
 
-  vec3 col = albedo * lit + albedo * emissive * 2.4;
+  vec3 col = albedo * lit + uLampTint * emissive * 2.8;
 
   // A shard in flight loses its shading and goes toward silhouette, because
   // nothing is lighting its new orientation and pretending otherwise reads as

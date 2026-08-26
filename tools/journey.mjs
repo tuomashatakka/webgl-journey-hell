@@ -60,12 +60,17 @@ function parseArgs (argv) {
 
 const num = (v, d) => (v === undefined ? d : Number(v))
 
+// Flags arrive as STRINGS, and "0" is truthy in JavaScript — so `opts.hud ? …`
+// answered yes to --hud=0 and every "clean plate" ever taken with it came back
+// with the whole HUD still on it. Anything that reads as an off-switch is off.
+const flag = (v, d) => (v === undefined ? d : !/^(0|false|no|off)$/i.test(String(v)))
+
 function url (journey, t, opts, extra = {}) {
   const q = new URLSearchParams({
     t:     String(t),
     w:     String(num(opts.w, DEF_W)),
     h:     String(num(opts.h, DEF_H)),
-    hud:   opts.hud ? '1' : '0',
+    hud:   flag(opts.hud, false) ? '1' : '0',
     debug: '0',
     ...extra,
   })

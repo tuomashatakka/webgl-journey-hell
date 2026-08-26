@@ -156,7 +156,7 @@ class LoopLineRide implements JourneySimulation {
     // Drag falls away as the line ages, so the ride speeds up without anything
     // pushing it. Darker and faster together, which is switchback's trick and
     // is worth reusing because it is the honest way to make decay feel unsafe.
-    const target = span.bay.speed * (1 + this.lapF * 0.10)
+    const target = span.bay.speed * (1 + this.lapF * 0.065)
     this.speed  += (target - this.speed) * (1 - Math.exp(-h / SPEED_TAU))
 
     const before = this.s
@@ -212,7 +212,7 @@ class LoopLineRide implements JourneySimulation {
 
     // Rail joints, at fixed places on the track, getting rougher as the line
     // wears. Hashed on distance so the same joint is in the same metre forever.
-    const wear   = clamp01(this.lapF * 0.35)
+    const wear   = clamp01(this.lapF * 0.16)
     const joint  = this.travelled / 12.5
     const jitter = (hash1(Math.floor(joint)) - 0.5) * 2
     this.shake   = jitter * (0.012 + wear * 0.075) *
@@ -257,11 +257,20 @@ class LoopLineRide implements JourneySimulation {
 
     // The four rupture channels. Every one of them is a pure function of lapF,
     // so a seek to any t reproduces them exactly.
+    //
+    // The rates matter more than the effects do. At three times these numbers
+    // the line was unrecognisable rubble by the fourth lap — technically "more
+    // ruptured", actually just over, because a room that has stopped being a
+    // room cannot decay any further and there is nowhere for the fifth lap to
+    // go. Slowed to this, lap two is a place with something wrong with it, lap
+    // four is a place coming apart, and total collapse sits somewhere around lap
+    // eight, which nobody will reach — and that is fine. What has to be true is
+    // only that the next lap is always worse than this one.
     this.out.uDecay = [
-      clamp01((lapF - 0.5) * 0.42), // fracture — shard displacement
-      Math.min(0.92, lapF * 0.30), // lightFail — how many lamps are out
-      Math.min(1, lapF * 0.26), // rot — desaturate, flatten, wireframe
-      clamp01(lapF * 0.35), // wear — chatter, overshoot, gaps
+      clamp01((lapF - 0.8) * 0.135), // fracture — shard displacement
+      Math.min(0.85, lapF * 0.135), // lightFail — how many lamps are out
+      Math.min(1, lapF * 0.105), // rot — desaturate and flatten
+      clamp01(lapF * 0.16), // wear — chatter, overshoot, gaps
     ]
     this.out.uLoop = [ this.s, this.travelled, this.lap, bay.id ]
 
