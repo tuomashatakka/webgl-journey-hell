@@ -2,6 +2,7 @@
 // Adding a journey = append one entry here + create app/journeys/<slug>/page.tsx.
 import { foundryPreviewFrag } from './foundry/shader'
 import { hollowOrchardPreviewFrag } from './hollow-orchard/shader'
+import { loopLinePreviewFrag } from './loop-line/shader'
 import { natatoriumPreviewFrag } from './natatorium/shader'
 import { skybridgesPreviewFrag } from './skybridges/shader'
 import { switchbackPreviewFrag } from './switchback/shader'
@@ -177,6 +178,17 @@ export const JOURNEYS: Journey[] = [
     gradient:      [ '#f3b9c8', '#221226' ],
     poster:        '/journeys/switchback.jpg',
     previewShader: switchbackPreviewFrag,
+    status:        'live',
+  },
+  {
+    slug:          'loop-line',
+    title:         'THE LOOP LINE',
+    tagline:       'Six stations on a circle line with no terminus. It comes round more broken every time, and the timetable has no last train.',
+    tags:          [ 'geometry', 'rasterized', 'transit', 'dreamcore', 'simulated', 'loop' ],
+    accent:        '#b39dff',
+    gradient:      [ '#cfc4ff', '#0d0b14' ],
+    poster:        '/journeys/loop-line.jpg',
+    previewShader: loopLinePreviewFrag,
     status:        'live',
   },
 ]

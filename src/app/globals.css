@@ -149,6 +149,31 @@
 .switchback-sector-title::after {
     text-shadow: 2px 0 rgba(150, 235, 255, 0.8), 0 2px rgba(60, 30, 70, 0.6);
 }
+/* THE LOOP LINE — enamel station signage: a heavy humanist caps face on a
+   painted plate, the way a platform name is actually made. The underline is
+   the plate's lower edge. */
+.loop-line-sector-title {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-weight: 700;
+  font-size: clamp(0.95rem, 2.1vw, 1.5rem);
+  letter-spacing: 0.16em;
+  color: #ece7ff;
+  text-transform: uppercase;
+  padding: 0.34em 0.9em 0.28em;
+  background: linear-gradient(180deg, rgba(58, 44, 96, 0.55), rgba(20, 15, 34, 0.72));
+  border-top: 2px solid rgba(179, 157, 255, 0.85);
+  border-bottom: 2px solid rgba(179, 157, 255, 0.45);
+  text-shadow: 0 0 18px rgba(179, 157, 255, 0.45);
+}
+
+.loop-line-sector-title::before {
+  color: #6f5ea8;
+}
+
+.loop-line-sector-title::after {
+  color: #b39dff;
+}
+
 #fullscreen-btn {
     position: absolute;
     bottom: 20px;

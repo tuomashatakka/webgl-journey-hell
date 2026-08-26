@@ -99,7 +99,11 @@ async function seek (page, journey, t, opts, extra) {
 /** Mean luminance, clipping counts, and a small plate for frame comparison. */
 function statsFn () {
   const c = document.querySelector('canvas')
-  const gl = c.getContext('webgl')
+  // A canvas hands back only the context it was created with, so asking for
+  // 'webgl' on a WebGL2 journey (the rasterized ones) returns null. Try the
+  // newer one first and fall back, rather than assuming every journey is a
+  // full-screen quad -- which stopped being true with loop-line.
+  const gl = c.getContext('webgl2') || c.getContext('webgl')
   const w = c.width, h = c.height
   const px = new Uint8Array(w * h * 4)
   gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px)
@@ -306,7 +310,11 @@ async function cmdScan (page, journey, opts) {
  */
 function uvFn () {
   const c = document.querySelector('canvas')
-  const gl = c.getContext('webgl')
+  // A canvas hands back only the context it was created with, so asking for
+  // 'webgl' on a WebGL2 journey (the rasterized ones) returns null. Try the
+  // newer one first and fall back, rather than assuming every journey is a
+  // full-screen quad -- which stopped being true with loop-line.
+  const gl = c.getContext('webgl2') || c.getContext('webgl')
   const w = c.width, h = c.height
   const px = new Uint8Array(w * h * 4)
   gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px)
