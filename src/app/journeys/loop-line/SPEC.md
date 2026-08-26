@@ -65,9 +65,30 @@ line loses THE CUT: the switch trades the only daylight on the circuit for the
 only darkness. That is the entire argument for putting the chord *there* and not
 somewhere cheaper.
 
-The handover rebases arc length by the difference between the junction's distance
-on each circuit. Get that wrong by a metre and the train teleports a metre, which
-at twenty metres a second is a frame you will absolutely see.
+The handover rebases arc length across the change of circuit. Get that wrong by a
+metre and the train teleports a metre, which at twenty metres a second is a frame
+you will absolutely see.
+
+The junction and rejoin fractions have to **bracket** where the two splines
+actually separate, not sit inside it: replacing six ring control points perturbs
+the curve for a segment either side of them, so the measured divergence runs
+373 m to 731 m of a 1262 m loop. Bracketing costs the chord the tail of THE
+CONCOURSE and most of THE ANNEX as well as all of THE CUT — which is left as it
+is, because it is honest and it is better. Taking the shortcut does not just cost
+you the daylight; it truncates the flooded interchange to a 63 m stub and shortens
+the lap. The late circuit is smaller and more wrong than the early one in more
+ways than one.
+
+Mapping the bay boundaries onto the alt circuit has an exact answer that needs no
+search. The obvious approach — take a boundary's world position on main, find the
+nearest arc length on alt — is wrong in a way that looks right: the chord runs
+close to the main line near both ends of its detour, so a boundary there snaps to
+the **wrong branch** and its bay collapses. It reported THE ANNEX as 127 m of a
+189 m room. But outside the detour the two circuits are not merely close, they are
+*the same control points*, so `altS = altLength - (mainLength - mainS)` after the
+rejoin, exactly, because the run from the rejoin to the seam is shared. THE STACKS
+and THE TURNBACK now measure 214 m and 227 m on both circuits, which is the check
+that the identity holds.
 
 ## One scalar
 

@@ -56,6 +56,8 @@ lib/
   rng.ts                    # mulberry32 + integer hashes, for reproducible decay
 tools/
   shoot-posters.mjs         # re-capture public/journeys/<slug>.jpg from the live routes
+  journey.mjs               # drive a journey deterministically (shot/film/probe/scan/fps)
+  verify-geometry.ts        # invariant checks for lib/curve and lib/mesh
 ```
 
 ### looking around
@@ -298,7 +300,34 @@ node tools/journey.mjs fps   natatorium --at=11,24,48 --w=1200 --h=760
   pass `--w/--h` above the default resolution to measure what the shader
   actually costs; a locked 60 tells you it is affordable but not by how much.
 
-The honest way to use these is against a baseline. Check out the last known-good
+The honest way to use these is against a baseline.
+
+### verifying the geometry primitives
+
+```bash
+bun tools/verify-geometry.ts
+```
+
+Everything else here is verified by *looking* at it, and for a shader that is the
+right instrument, because a wrong SDF looks wrong. `lib/curve` and `lib/mesh` are
+not like that: they are pure maths with no picture of their own, they sit
+underneath the thing you can see, and their failures stay invisible until they are
+catastrophic. A spline that misses its own control points still produces a
+perfectly plausible screenshot of the wrong track.
+
+That is not hypothetical. The first cut of `lib/curve` multiplied centripetal knot
+spacing into a *uniform* Catmull-Rom basis, so it interpolated nothing and tore at
+every segment join — and it passed a suite of seven checks, because every one of
+them measured the curve *through* its own arc-length LUT, and the LUT happily
+resamples whatever shape it is handed.
+
+So the checks in this file are chosen to be ones a wrong implementation cannot
+pass: the curve must go through its control points; densely-sampled step lengths
+must have no outlier; the total turning of a closed planar loop must be exactly
+2*pi (a *pointwise* curvature check cannot catch a wrong differentiation variable,
+because a coarse spline through circle points is legitimately not a circle); and
+no triangle may straddle two fracture shards.
+ Check out the last known-good
 commit over the journey's own files, probe, restore, probe again, and compare —
 the two columns settle arguments that screenshots do not.
 

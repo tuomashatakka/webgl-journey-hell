@@ -270,62 +270,81 @@ export const loopLinePreviewFrag = `
   uniform float iTime;
   uniform vec2 uPointer;
 
+  // A box corridor by nearest-plane intersection, which is the cheapest way to
+  // get a CRISP tunnel rather than a soft one. For each pixel, ask how far along
+  // the corridor the floor, the ceiling and the side walls would be, and keep the
+  // nearest -- that single min is the whole perspective, and because depth comes
+  // out analytically the sleepers and lamps land on exact bands instead of being
+  // faded blobs. Everything else here is a function of that depth.
   void main () {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
-    uv += uPointer * 0.06;
+    uv += uPointer * 0.05;
 
-    float run = iTime * 7.0;
+    float run = iTime * 5.2;
 
-    // Fake perspective: depth from the inverse of the distance to the vanishing
-    // point, which is all a corridor needs.
-    float r = max(abs(uv.x) * 0.62, abs(uv.y));
-    float depth = 0.26 / max(r, 0.004);
+    const float HW = 0.40;   // half-width of the bore, in screen units at z = 1
+    const float HH = 0.26;   // half-height
 
-    // Tunnel shell, banded into ring segments along its length.
-    float ring = fract(depth * 0.5 - run * 0.1);
-    float seg  = smoothstep(0.02, 0.10, ring) * (1.0 - smoothstep(0.86, 0.96, ring));
-    float shade = clamp(2.2 / depth, 0.04, 1.0);
+    float tF = uv.y < -0.0015 ? HH / -uv.y : 1e9;
+    float tC = uv.y >  0.0015 ? HH /  uv.y : 1e9;
+    float tW = abs(uv.x) > 0.0015 ? HW / abs(uv.x) : 1e9;
 
-    vec3 col = mix(vec3(0.20, 0.18, 0.17), vec3(0.30, 0.29, 0.31), seg) * shade;
+    float z = min(min(tF, tC), tW);
+    float depth = z + run;
 
-    // Which wall are we looking at — floor gets the trackbed, ceiling stays dark.
-    float floorish = smoothstep(0.0, -0.06, uv.y - abs(uv.x) * 0.3);
-    col = mix(col, vec3(0.13, 0.12, 0.12), floorish * 0.7);
+    // Lateral position across whichever surface we landed on, -1..1.
+    float lat = uv.x * z / HW;
+    float vert = uv.y * z / HH;
 
-    // Sleepers, only on the floor, receding.
-    float tie = fract(depth * 1.6 - run * 0.32);
-    col += floorish * shade * 0.10 *
-           (1.0 - smoothstep(0.0, 0.32, tie));
+    bool onFloor = tF <= tC && tF <= tW;
+    bool onCeil  = tC <  tF && tC <= tW;
 
-    // Two rails catching the light.
-    float rail = smoothstep(0.016, 0.0, abs(abs(uv.x) - 0.055 / max(r, 0.05) * 0.30));
-    col += vec3(0.55, 0.56, 0.60) * rail * floorish * shade * 0.7;
+    float shade = clamp(1.7 / z, 0.05, 1.0);
+    vec3 col = vec3(0.30, 0.28, 0.26) * shade;
 
-    // The lamp string: a run of sodium lamps at the ceiling line, pitched along
-    // the tunnel, each a soft blob that brightens as it arrives.
-    for (int i = 0; i < 7; i++) {
-      float fi = float(i);
-      float lz = fract((fi * 0.1428) - run * 0.055);
-      float ld = 0.6 / (lz + 0.06);
-      vec2 lp = vec2(0.0, 0.115 * ld - 0.03);
-      float fall = 1.0 / (1.0 + lz * 44.0);
-      col += vec3(1.0, 0.79, 0.48) *
-             exp(-dot(uv - lp, uv - lp) * (170.0 + lz * 5200.0)) * (0.9 + fall);
-      // and the pool it throws down the wall
-      col += vec3(1.0, 0.74, 0.42) * 0.10 * fall *
-             exp(-abs(uv.y - lp.y + 0.16) * 7.0) *
-             exp(-abs(uv.x) * 2.4);
+    if (onCeil)
+      col = vec3(0.15, 0.14, 0.15) * shade;
+    else if (onFloor)
+      col = vec3(0.17, 0.16, 0.15) * shade;
+    else {
+      // Wall: tiled courses, and a painted dado along the lower half.
+      float course = step(0.06, fract(depth * 2.4)) * step(0.10, fract(vert * 3.5 + 0.5));
+      col *= 0.72 + course * 0.42;
+      col *= vert < -0.25 ? 0.72 : 1.0;
     }
 
-    // The mouth: a cold rectangle of somewhere else, straight ahead.
-    float mouth = smoothstep(0.10, 0.045, r);
-    col = mix(col, vec3(0.55, 0.63, 0.72), mouth * 0.55);
+    if (onFloor) {
+      // Sleepers, on exact bands because depth is exact.
+      float tie = step(fract(depth * 1.35), 0.42);
+      col += vec3(0.10, 0.09, 0.08) * tie * shade;
+      // Two rails, catching a hard specular line.
+      float rail = smoothstep(0.055, 0.0, abs(abs(lat) - 0.30));
+      col = mix(col, vec3(0.62, 0.63, 0.66) * (0.35 + shade * 0.9), rail);
+    }
 
-    // Bloom-ish lift, vignette, grain — the family look.
-    col += col * smoothstep(0.65, 1.6, dot(col, vec3(0.299, 0.587, 0.114))) * 0.4;
-    col *= 1.0 - smoothstep(0.34, 1.05, length(uv * vec2(1.0, 1.1))) * 0.55;
+    // The lamp string, hung on the ceiling centreline at a fixed pitch. Drawn as
+    // a band along the corridor rather than as sprites, so it stays sharp at any
+    // card size -- the grid renders these at a fraction of the card's pixels.
+    float lampBand = smoothstep(0.30, 0.0, abs(lat)) * step(fract(depth * 0.62), 0.13);
+    vec3 sodium = vec3(1.0, 0.80, 0.50);
+    if (onCeil)
+      col += sodium * lampBand * (0.55 + shade * 1.5);
+
+    // What each lamp throws down the walls and floor: a soft pool at the same
+    // pitch, phase-matched to the housings above it.
+    float pool = (0.5 + 0.5 * cos(fract(depth * 0.62) * 6.2831)) * shade;
+    col += sodium * pool * 0.16;
+
+    // The far end: a mouth of somewhere colder, and the dark ring around it.
+    float r = max(abs(uv.x) / HW, abs(uv.y) / HH);
+    col = mix(col, vec3(0.42, 0.50, 0.60), smoothstep(0.16, 0.05, r) * 0.65);
+    col *= 0.35 + 0.65 * smoothstep(0.04, 0.30, r);
+
+    // Bloom lift, vignette, Reinhard, grain -- the house tail.
+    col += col * smoothstep(0.62, 1.5, dot(col, vec3(0.299, 0.587, 0.114))) * 0.45;
+    col *= 1.0 - smoothstep(0.35, 1.05, length(uv * vec2(1.0, 1.15))) * 0.5;
     col = col * (1.0 + col / 5.3) / (1.0 + col);
-    col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.022;
+    col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) * 0.024;
 
     gl_FragColor = vec4(col, 1.0);
   }

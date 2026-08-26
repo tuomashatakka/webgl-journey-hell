@@ -261,9 +261,22 @@ export const BAYS: Bay[] = [
  */
 export const DECAY_BAY = 5
 
-/** Loop fraction at which the chord leaves the main line, and where it rejoins. */
-export const JUNCTION_U = 0.2833
-export const REJOIN_U   = 0.5417
+/**
+ * Loop fractions at which the chord leaves the main line and rejoins it.
+ *
+ * These have to BRACKET where the two splines actually separate, not sit inside
+ * it. Replacing six ring control points perturbs the curve for one segment
+ * either side of them, so the measured divergence runs from 373 m to 731 m of a
+ * 1262 m loop — and a junction authored inside that range describes a switch at
+ * a place where the two tracks have already parted, which then makes every bay
+ * boundary derived from it wrong by tens of metres.
+ *
+ * Bracketing costs the chord a little of THE CONCOURSE's throat and the head of
+ * THE ANNEX, which is fine and arguably better: the point machine sits in the
+ * concourse throat, where you can see it.
+ */
+export const JUNCTION_U = 0.28
+export const REJOIN_U   = 0.60
 
 /**
  * The lap on which the point machine throws. Before this, the chord is scenery
@@ -372,45 +385,47 @@ export interface Circuits {
   mainBays: BaySpan[];
   altBays:  BaySpan[];
 
-  /** Where the point machine sits, measured on each circuit independently. */
+  /**
+   * Where the point machine sits. One number, not two: the junction is before
+   * the divergence, so it is at the same arc length on both circuits by
+   * construction. altJunctionS is kept as an alias for callers that read it.
+   */
   junctionS:    number;
   altJunctionS: number;
 }
 
 /**
- * Nearest arc length on `curve` to a world point, by brute-force scan. Only ever
- * called at build time — a few dozen times, once — so the linear sweep costs
- * nothing and saves having to invert a Catmull-Rom analytically.
- */
-function nearestDistance (curve: ClosedCurve, p: Vec3, steps = 4096): number {
-  let best  = 0
-  let bestD = Infinity
-  for (let i = 0; i < steps; i++) {
-    const s = i / steps * curve.length
-    const q = curve.pointAtDistance(s)
-    const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2 + (q.z - p.z) ** 2
-    if (d < bestD) {
-      bestD = d
-      best  = s
-    }
-  }
-  return best
-}
-
-/**
- * Build both circuits. The two-pass elevation trick described in the header
- * lives here: pass one is flat and exists only to learn each control point's
- * arc-length fraction, pass two uses those fractions to sample the profile.
+ * Build both circuits.
+ *
+ * The elevation two-pass lives here: pass one is flat and exists only to learn
+ * each control point's arc-length fraction, pass two uses those fractions to
+ * sample the profile.
+ *
+ * Mapping the bay boundaries onto the alt circuit is the subtle half. The
+ * obvious approach — take the boundary's world position on main and find the
+ * nearest arc length on alt — is wrong, and wrong in a way that looks right: the
+ * chord passes close to the main line near both ends of its detour, so a
+ * boundary sitting there snaps to the WRONG BRANCH and the bay it belongs to
+ * collapses. It reported THE ANNEX as 127 m of a 189 m room.
+ *
+ * There is an exact answer that needs no search at all. Outside the detour the
+ * two circuits are not merely close, they are *the same control points*, so:
+ *
+ *   before the junction   altS = mainS
+ *   after the rejoin      altS = altLength - (mainLength - mainS)
+ *
+ * because the distance from the rejoin to the seam is identical on both. Inside
+ * the detour there is no counterpart, which is the honest answer — that stretch
+ * of main does not exist on alt.
  */
 export function buildCircuits (): Circuits {
   const flatY = new Array(RADII.length).fill(0) as number[]
   const flat  = createClosedCurve(ringPoints(flatY))
 
   // createClosedCurve puts control point i at parameter i/N; what we want back
-  // is where that lands in arc length, which is not the same fraction unless
-  // the radius is constant — and it deliberately is not.
-  const fracs = RADII.map((_, i) =>
-    nearestDistance(flat, flat.sample(i / RADII.length)) / flat.length)
+  // is where that lands in arc length, which is not the same fraction unless the
+  // radius is constant — and it deliberately is not.
+  const fracs = RADII.map((_, i) => arcFractionAtParam(flat, i / RADII.length))
 
   const ring = ringPoints(fracs.map(heightAt))
   const main = createClosedCurve(ring)
@@ -428,48 +443,68 @@ export function buildCircuits (): Circuits {
 
   const alt = createClosedCurve(altPts)
 
-  // Bay spans on the main circuit are just the authored fractions scaled up.
+  const junctionS = JUNCTION_U * main.length
+  const rejoinS   = REJOIN_U * main.length
+
+  // Exact, by the identity above: the run from the rejoin to the seam is shared.
+  const altRejoinS = alt.length - (main.length - rejoinS)
+
+  const toAlt = (mainS: number): number =>
+    mainS <= junctionS ? mainS : altRejoinS + (mainS - rejoinS)
+
   const mainBays: BaySpan[] = BAYS.map(bay => ({
     bay,
     s0: bay.u0 * main.length,
     s1: bay.u1 * main.length,
   }))
 
-  // On the alt circuit they are not, because the loop is a different length and
-  // one bay is gone. Every boundary that still exists on both circuits is
-  // located by finding the world point on main and asking alt where that is —
-  // so the stations stay put in space even though their arc lengths move.
-  const junctionS    = JUNCTION_U * main.length
-  const rejoinS      = REJOIN_U * main.length
-  const altJunctionS = nearestDistance(alt, main.pointAtDistance(junctionS))
-  const altRejoinS   = nearestDistance(alt, main.pointAtDistance(rejoinS))
-
-  const altBoundary = (u: number): number =>
-    nearestDistance(alt, main.pointAtDistance(u * main.length))
-
   const altBays: BaySpan[] = []
+  let chordPlaced = false
   for (const bay of BAYS) {
-    if (bay.theme === Theme.CUT) {
-      altBays.push({ bay: CHORD_BAY, s0: altJunctionS, s1: altRejoinS })
+    const s0 = bay.u0 * main.length
+    const s1 = bay.u1 * main.length
+
+    // Wholly outside the detour: carry it across unchanged.
+    if (s1 <= junctionS || s0 >= rejoinS) {
+      altBays.push({ bay, s0: toAlt(s0), s1: toAlt(s1) })
       continue
     }
-    altBays.push({
-      bay,
-      s0: bay.u0 === 0 ? 0 : altBoundary(bay.u0),
-      s1: bay.u1 === 1 ? alt.length : altBoundary(bay.u1),
-    })
+
+    // Overlapping it: keep whatever head and tail survive, and drop a bay that
+    // the chord swallows whole. THE CUT is the one that gets swallowed, which is
+    // the entire purpose of the chord.
+    if (s0 < junctionS)
+      altBays.push({ bay, s0: toAlt(s0), s1: junctionS })
+
+    if (!chordPlaced) {
+      altBays.push({ bay: CHORD_BAY, s0: junctionS, s1: altRejoinS })
+      chordPlaced = true
+    }
+
+    if (s1 > rejoinS)
+      altBays.push({ bay, s0: altRejoinS, s1: toAlt(s1) })
   }
 
-  // The chord's own span is authored, not measured, so nudge its neighbours to
-  // meet it exactly — a one-metre gap between bays is a one-metre hole in the
-  // world, and the shell generator tiles from these numbers.
-  for (let i = 0; i < altBays.length; i++) {
-    const next = altBays[(i + 1) % altBays.length]
-    if (i < altBays.length - 1)
-      altBays[i].s1 = next.s0
-  }
+  return { main, alt, mainBays, altBays, junctionS, altJunctionS: junctionS }
+}
 
-  return { main, alt, mainBays, altBays, junctionS, altJunctionS }
+// Arc-length fraction of a curve parameter, by scan. Called once per control
+// point at build time, so the linear sweep costs nothing and saves having to
+// invert a Catmull-Rom analytically.
+function arcFractionAtParam (curve: ClosedCurve, t: number): number {
+  const p     = curve.sample(t)
+  const steps = 4096
+  let best  = 0
+  let bestD = Infinity
+  for (let i = 0; i < steps; i++) {
+    const q = curve.pointAtDistance(i / steps * curve.length)
+    const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2 + (q.z - p.z) ** 2
+    if (d < bestD) {
+      bestD = d
+      best  = i / steps
+    }
+  }
+  return best
 }
 
 /** The span owning an arc length on a given circuit. Total: the spans tile it. */
