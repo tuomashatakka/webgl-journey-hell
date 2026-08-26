@@ -84,6 +84,25 @@
 .skybridges-sector-title::after {
     text-shadow: 2px 0 rgba(255, 255, 255, 0.75), 0 2px rgba(128, 206, 255, 0.55);
 }
+.stairwell-sector-title {
+    font-family: "Arial Narrow", "Helvetica Neue", system-ui, sans-serif;
+    font-size: clamp(11px, 1.55vw, 20px);
+    font-weight: 600;
+    letter-spacing: clamp(5px, 0.82vw, 13px);
+    color: rgba(230, 247, 255, 0.94);
+    padding: 0.45em 0.9em;
+    border-block: 1px solid rgba(158, 217, 255, 0.35);
+    background: linear-gradient(90deg, transparent, rgba(8, 22, 31, 0.58), transparent);
+    text-shadow:
+        0 0 14px rgba(158, 217, 255, 0.7),
+        0 0 42px rgba(105, 126, 255, 0.28);
+}
+.stairwell-sector-title::before {
+    text-shadow: -2px 0 rgba(93, 226, 255, 0.82);
+}
+.stairwell-sector-title::after {
+    text-shadow: 2px 0 rgba(219, 128, 255, 0.68), 0 2px rgba(25, 66, 88, 0.6);
+}
 .foundry-sector-title {
     font-family: "Courier New", "IBM Plex Mono", ui-monospace, monospace;
     font-size: clamp(11px, 1.5vw, 19px);

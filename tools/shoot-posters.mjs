@@ -4,7 +4,8 @@
 //
 //   bun run dev                       # in another shell
 //   bun add -d playwright-core        # not a project dependency; only needed here
-//   node tools/shoot-posters.mjs
+//   node tools/shoot-posters.mjs             # all journeys
+//   node tools/shoot-posters.mjs stairwell   # selected journeys only
 //
 // Each journey is left running until its HUD reports the section listed below,
 // then the HUD is hidden and the viewport is captured. On a software renderer
@@ -16,28 +17,40 @@ import { mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const OUT  = path.join(ROOT, 'public/journeys')
 const BASE = process.env.POSTER_BASE_URL ?? 'http://localhost:3000/webgl-journey-hell'
 
 const SHOTS = [
-  { slug: 'liminal',    section: /CRYSTAL CAVE/ },
-  { slug: 'stairwell',  section: /COLONNADE VAULT/ },
+  { slug: 'liminal', section: /CRYSTAL CAVE/ },
+  { slug: 'stairwell', section: /PROTEAN WEATHER BRIDGE/ },
   { slug: 'skybridges', section: /THE ASCENT/ },
-  { slug: 'foundry',    section: /FURNACE FLOOR|GEARWORKS/ },
+  { slug: 'foundry', section: /FURNACE FLOOR|GEARWORKS/ },
   { slug: 'hollow-orchard', section: /THE NURSERY/ },
   { slug: 'natatorium', section: /TILE CORRIDOR/ },
   { slug: 'switchback', section: /THE BOARDING PLATFORM/ },
-  { slug: 'loop-line',  section: /THE CUT/ },
+  { slug: 'loop-line', section: /THE CUT/ },
 ]
 
+const requested = new Set(process.argv.slice(2))
+const unknown   = [ ...requested ].filter(slug => !SHOTS.some(shot => shot.slug === slug))
+if (unknown.length)
+  throw new Error(`unknown journey slug: ${unknown.join(', ')}`)
+
+const shots = requested.size ? SHOTS.filter(shot => requested.has(shot.slug)) : SHOTS
+
 const SETTINGS = {
-  resolution: 0.75, speed: 4.0, heavyEffects: false,
-  brightness: 1.0, contrast: 1.0, maxFrameRate: 60,
+  resolution:   0.75,
+  speed:        4.0,
+  heavyEffects: false,
+  brightness:   1.0,
+  contrast:     1.0,
+  maxFrameRate: 60,
 }
 
 const HIDE_HUD = `
-  #back-btn, #fullscreen-btn, #audio-btn, #settings-btn, #fps-display,
+  #back-btn, #fullscreen-btn, #audio-btn, #settings-btn, #fps-display, #sector-title,
   nextjs-portal { display: none !important; }
 `
 
@@ -54,7 +67,7 @@ await context.addInitScript(settings => {
   localStorage.setItem('journey-graphics-settings-v1', JSON.stringify(settings))
 }, SETTINGS)
 
-for (const { slug, section } of SHOTS) {
+for (const { slug, section } of shots) {
   const page = await context.newPage()
   await page.goto(`${BASE}/journeys/${slug}`, { waitUntil: 'load' })
   await page.waitForSelector('#gl-canvas')
@@ -68,7 +81,7 @@ for (const { slug, section } of SHOTS) {
     await page.waitForTimeout(1000)
   }
 
-  await page.waitForTimeout(4000)          // a few more frames into the section
+  await page.waitForTimeout(4000) // a few more frames into the section
   await page.addStyleTag({ content: HIDE_HUD })
   await page.waitForTimeout(1500)
 
@@ -78,9 +91,11 @@ for (const { slug, section } of SHOTS) {
   await page.close()
 
   // Ship JPEG, not PNG: a 1280×800 raymarch still is ~2 MB as PNG.
+  // eslint-disable-next-line import/no-extraneous-dependencies -- optional tool-only encoder
   const sharp = await import('sharp').catch(() => null)
   if (sharp) {
-    await sharp.default(png).jpeg({ quality: 82 }).toFile(path.join(OUT, `${slug}.jpg`))
+    await sharp.default(png).jpeg({ quality: 82 })
+      .toFile(path.join(OUT, `${slug}.jpg`))
     await rm(png)
   }
   else

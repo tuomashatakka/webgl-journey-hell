@@ -1,65 +1,152 @@
-// THE STAIRWELL — timeline / pacing for the winding brutalist descent.
-//
-// The path is a chain of fixed-length SECTIONS. Each section is a distinct room
-// type, and the corridor turns ±90° at most junctions (the turn table + room
-// types are mirrored in the GLSL — keep SEG_LEN in sync with `SEG` in shaders.ts).
-// The geometry is re-anchored to the camera's current section every frame inside
-// the shader, so this module only drives the HUD label, the slow "iteration"
-// aging counter, and the walk speed the render loop integrates into uPlayerZ.
+import type { JourneySimulation } from '@/components/withJourneyShell'
 
-export function smoothstep (edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
+
+export const LOOP_LENGTH = 500
+export const FINALE_DISTANCE = LOOP_LENGTH * 4
+export const TERMINAL_DISTANCE = FINALE_DISTANCE - 0.25
+
+export interface StairwellSection {
+  id:    number;
+  start: number;
+  end:   number;
+  speed: number;
+  name:  string;
+  short: string;
+}
+
+export const STAIRWELL_SECTIONS: readonly StairwellSection[] = [
+  { id: 0, start: 0, end: 70, speed: 6.2, name: 'I · THE SPILLWAY THRESHOLD', short: 'spillway' },
+  { id: 1, start: 70, end: 155, speed: 4.2, name: 'II · PROTEAN WEATHER BRIDGE', short: 'storm' },
+  { id: 2, start: 155, end: 235, speed: 5.4, name: 'III · THE TURBINE CANYON', short: 'turbines' },
+  { id: 3, start: 235, end: 325, speed: 5.0, name: 'IV · CONVEYOR ESCARPMENT', short: 'quarry' },
+  { id: 4, start: 325, end: 410, speed: 4.6, name: 'V · THE COOLING FIELD', short: 'cooling' },
+  { id: 5, start: 410, end: 500, speed: 4.1, name: 'VI · THE SHEAR HORIZON', short: 'shear' },
+] as const
+
+export interface StairwellState {
+  z:               number;
+  loop:            number;
+  loopProgress:    number;
+  section:         StairwellSection;
+  sectionProgress: number;
+  transition:      number;
+  rupture:         number;
+  finale:          number;
+  terminal:        boolean;
+}
+
+export function clamp01 (value: number): number {
+  return Math.max(0, Math.min(1, value))
+}
+
+export function smoothstep (edge0: number, edge1: number, value: number): number {
+  const t = clamp01((value - edge0) / (edge1 - edge0))
   return t * t * (3 - 2 * t)
 }
 
-export function mix (a: number, b: number, t: number): number {
-  return a * (1.0 - t) + b * t
+function sectionAt (localZ: number): StairwellSection {
+  return STAIRWELL_SECTIONS.find(section => localZ < section.end) ?? STAIRWELL_SECTIONS.at(-1)!
 }
 
-export interface KinematicState {
-  loop:   number; // full towers (500u) descended — drives concrete aging
-  sector: number; // room type 0..5 of the current section
-  localZ: number; // distance travelled into the current section
-  secLen: number; // section length
-  name:   string; // HUD section title
-}
+export function getStairwellState (z: number): StairwellState {
+  const safeZ        = Math.max(0, Math.min(z, TERMINAL_DISTANCE))
+  const loop         = Math.min(3, Math.floor(safeZ / LOOP_LENGTH))
+  const localZ       = safeZ - loop * LOOP_LENGTH
+  const section      = sectionAt(localZ)
+  const sectionLen   = section.end - section.start
+  const sectionLocal = localZ - section.start
+  const progress     = clamp01(sectionLocal / sectionLen)
+  const ruptureLead  = section.id === 5 && loop < 3
+    ? smoothstep(0.62, 1, progress)
+    : 0
+  const finale       = loop === 3 && section.id === 5
+    ? smoothstep(0.04, 0.96, progress)
+    : 0
 
-const SEG_LEN = 70.0 // MUST equal `SEG` in shaders.ts
-
-// Six room types cycle along the descent (index = section mod 6).
-const ROOM_NAMES = [
-  'CONCRETE SHAFT',
-  'THE ATRIUM VOID',
-  'COLONNADE VAULT',
-  'THE IMPOSSIBLE CROSSING',
-  'SKYLIGHT WELL',
-  'THE GALLERY',
-]
-
-export function getKinematicState (z: number): KinematicState {
-  const seg      = Math.floor(z / SEG_LEN)
-  const roomType = (seg % 6 + 6) % 6
   return {
-    loop:   Math.floor(z / 500.0),
-    sector: roomType,
-    localZ: z - seg * SEG_LEN,
-    secLen: SEG_LEN,
-    name:   ROOM_NAMES[roomType],
+    z:               safeZ,
+    loop,
+    loopProgress:    clamp01(localZ / LOOP_LENGTH),
+    section,
+    sectionProgress: progress,
+    transition:      smoothstep(0.58, 1, progress),
+    rupture:         Math.min(1, (loop + ruptureLead) / 3),
+    finale,
+    terminal:        safeZ >= TERMINAL_DISTANCE - 0.001,
   }
 }
 
-// Walk speed (units/sec) per room — linger in the dramatic spaces, march the
-// plain ones. Slows on the approach to a turn so cornering reads cleanly.
 export function getWalkSpeed (z: number): number {
-  const s    = getKinematicState(z)
-  const base =
-    s.sector === 1 ? 4.5 // atrium — gawk at the void
-    : s.sector === 3 ? 4.0 // impossible crossing — wary
-    : s.sector === 4 ? 4.5 // skylight — slow into the light
-    : s.sector === 2 ? 5.5 // vault
-    : s.sector === 5 ? 5.5 // gallery
-    : 6.5 // concrete shaft — brisk
-  // Ease down over the last 20% of the section (the turn / landing).
-  const frac = s.localZ / s.secLen
-  return base * (1.0 - 0.35 * smoothstep(0.8, 1.0, frac))
+  const state = getStairwellState(z)
+  if (state.terminal)
+    return 0
+
+  let speed = state.section.speed
+  speed *= 1 - 0.22 * smoothstep(0.82, 1, state.sectionProgress)
+
+  if (state.loop === 3 && state.section.id === 5) {
+    const fall = smoothstep(0.18, 0.52, state.sectionProgress) *
+      (1 - smoothstep(0.68, 0.98, state.sectionProgress))
+    speed = speed * (1 - state.finale * 0.32) + fall * 7.5
+    speed *= 1 - 0.985 * smoothstep(0.72, 0.995, state.sectionProgress)
+  }
+
+  return Math.max(0.08, speed)
 }
+
+export function getSectionLabel (state: StairwellState): string {
+  if (state.terminal)
+    return 'THE STAIRWELL · SIGNAL LOST'
+  if (state.finale > 0.76)
+    return 'VI · THE WORLD COMES APART'
+  return `LOOP ${state.loop + 1} · ${state.section.name}`
+}
+
+export function assertStairwellRoute (): string[] {
+  const failures: string[] = []
+  let cursor = 0
+  for (const section of STAIRWELL_SECTIONS) {
+    if (section.start !== cursor)
+      failures.push(`${section.short}: starts at ${section.start}, expected ${cursor}`)
+    if (section.end <= section.start)
+      failures.push(`${section.short}: non-positive length`)
+    cursor = section.end
+  }
+  if (cursor !== LOOP_LENGTH)
+    failures.push(`route ends at ${cursor}, expected ${LOOP_LENGTH}`)
+  return failures
+}
+
+export function createStairwellSimulation (): JourneySimulation {
+  let z = 0
+
+  return {
+    step (dt) {
+      if (!Number.isFinite(dt) || dt <= 0)
+        return
+
+      const nextZ = Math.min(TERMINAL_DISTANCE, z + getWalkSpeed(z) * dt)
+      z = nextZ >= TERMINAL_DISTANCE - 0.002 ? TERMINAL_DISTANCE : nextZ
+    },
+
+    uniforms () {
+      const state = getStairwellState(z)
+      return {
+        uPlayerZ:         state.z,
+        uSection:         state.section.id,
+        uSectionProgress: state.sectionProgress,
+        uTransition:      state.transition,
+        uLoop:            state.loop,
+        uLoopProgress:    state.loopProgress,
+        uRupture:         state.rupture,
+        uFinale:          state.finale,
+      }
+    },
+
+    label () {
+      return getSectionLabel(getStairwellState(z))
+    },
+  }
+}
+
+// perf: cheap cpu timeline; constant memory and one scalar integration per frame.

@@ -64,40 +64,45 @@ const liminalPreviewFrag = `
   }
 `
 
-// Stairwell hover preview: a cheap, loop-free fake-perspective descent — grey
-// concrete treads receding into a narrowing shaft with a warm corner light.
-// Stands in for the full two-pass raymarch so the shared-context grid stays smooth.
+// Stairwell hover preview: an open weather bridge crossing a ruptured industrial
+// horizon. It stays loop-free so the shared-context landing grid remains cheap.
 const stairwellPreviewFrag = `
   precision highp float;
   uniform vec2 iResolution;
   uniform float iTime;
   uniform vec2 uPointer;
 
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
   void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
-    uv += uPointer * 0.08;
+    uv += uPointer * 0.1;
 
-    float horizon = 0.32;
-    float d = horizon - uv.y;          // > 0 below the horizon (the stairs)
-    vec3 col;
-    if (d < 0.02) {
-      // Upper wall + faint skylight wash.
-      col = vec3(0.18, 0.20, 0.24) + vec3(0.5, 0.45, 0.35) * pow(max(0.0, uv.y), 1.5) * 0.3;
-    } else {
-      float depth = 0.18 / d;          // crude perspective distance
-      float tread = fract(depth * 0.6 + iTime * 1.1);
-      float stepHi = smoothstep(0.0, 0.08, tread) * (1.0 - smoothstep(0.5, 0.58, tread));
-      float halfW = clamp(0.6 / depth, 0.04, 2.0);
-      float inShaft = smoothstep(halfW, halfW - 0.04, abs(uv.x));
-      float shade = clamp(1.2 / depth, 0.06, 1.0);
-      col = vec3(0.34, 0.35, 0.38) * shade;
-      col += stepHi * 0.10 * shade;
-      col *= mix(0.35, 1.0, inShaft);
-    }
+    float horizon = -0.02;
+    float cloud = sin(uv.x * 7.0 - iTime * 0.35) * sin(uv.y * 9.0 + iTime * 0.22);
+    cloud += 0.55 * sin(uv.x * 15.0 + uv.y * 11.0 + iTime * 0.18);
+    cloud = smoothstep(-0.35, 0.85, cloud - uv.y * 0.7);
+    vec3 col = mix(vec3(0.025, 0.055, 0.09), vec3(0.24, 0.42, 0.48), cloud * 0.72);
 
-    float light = pow(max(0.0, 0.55 - length(uv - vec2(-0.22, 0.28))), 2.0);
-    col += vec3(0.95, 0.82, 0.6) * light * 0.7;       // warm shaft from upper-left
-    col *= smoothstep(1.05, 0.3, length(uv));         // vignette
+    float towerA = step(abs(uv.x + 0.42), 0.035) * step(horizon - 0.03, uv.y);
+    float towerB = step(abs(uv.x - 0.34), 0.055) * step(horizon + 0.08, uv.y);
+    float crane = step(abs(uv.y - 0.27), 0.012) * step(-0.45, uv.x) * step(uv.x, 0.34);
+    col = mix(col, vec3(0.035, 0.04, 0.045), max(max(towerA, towerB), crane));
+
+    float floorDepth = max(0.01, horizon - uv.y);
+    float perspective = 0.12 / floorDepth;
+    float halfWidth = clamp(0.58 / perspective, 0.035, 1.2);
+    float onBridge = smoothstep(halfWidth + 0.025, halfWidth - 0.015, abs(uv.x));
+    float tread = smoothstep(0.04, 0.0, abs(fract(perspective * 0.68 + iTime * 0.5) - 0.5));
+    vec3 bridge = vec3(0.18, 0.21, 0.22) + vec3(0.18, 0.24, 0.25) * tread;
+    col = mix(col, bridge / (1.0 + perspective * 0.08), onBridge * step(uv.y, horizon));
+
+    float rupture = smoothstep(0.025, 0.0, abs(uv.y - 0.24 - uv.x * 0.58));
+    rupture *= smoothstep(-0.45, 0.18, uv.x) * (0.55 + 0.45 * hash(floor(uv * 80.0)));
+    col += vec3(0.18, 0.72, 1.0) * rupture * (0.55 + 0.3 * sin(iTime * 2.0));
+    col *= smoothstep(1.05, 0.28, length(uv));
     gl_FragColor = vec4(col, 1.0);
   }
 `
@@ -117,10 +122,10 @@ export const JOURNEYS: Journey[] = [
   {
     slug:          'stairwell',
     title:         'THE STAIRWELL',
-    tagline:       'An impossible concrete descent where the stairs forget which way is down.',
-    tags:          [ 'raymarch', 'brutalist', 'escher', 'audio' ],
-    accent:        '#aeb9c4',
-    gradient:      [ '#3a4048', '#181b1f' ],
+    tagline:       'Six industrial horizons rupture further every time the stairs return.',
+    tags:          [ 'raymarch', 'industrial', 'volumetric', 'loop', 'audio' ],
+    accent:        '#9ed9ff',
+    gradient:      [ '#142835', '#190a28' ],
     poster:        '/journeys/stairwell.jpg',
     previewShader: stairwellPreviewFrag,
     status:        'live',

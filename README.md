@@ -27,7 +27,7 @@ app/
   journeys/
     registry.ts             # journey metadata (single source of truth for the grid)
     liminal/                # THE LIMINAL JOURNEY (raymarched descent + audio)
-    stairwell/              # THE STAIRWELL (impossible brutalist descent + audio)
+    stairwell/              # THE STAIRWELL (six-act industrial rupture + audio)
     skybridges/             # SKYBRIDGES (collapsing glass spans over a cloud sea)
     foundry/                # THE FOUNDRY (seven halls, rigid-body physics)
     hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
@@ -83,10 +83,12 @@ fed by `lib/panControl.ts`:
 Most journeys are a straight `+Z` scroll with the scenery changing around them.
 Three are not, and all three solve it differently:
 
-* **stairwell** re-anchors. Its `map()` evaluates only the current section plus
-  its two neighbours, each rotated into the camera's frame, so turn #500 costs
-  exactly what turn #1 did and no coordinate ever drifts far from the origin.
-  The turn table lives in GLSL.
+* **stairwell** keeps each act in section-local space. Its CPU simulation owns a
+  500-unit, six-act route and uploads section progress, transition, traversal and
+  rupture state; the two-pass WebGL renderer only ever sees the current act and
+  its successor. The visible treads use a stepped height field, while the camera
+  and handrails follow the matching continuous slope. That separation preserves
+  the descent silhouette without quantising the camera onto every tread.
 * **natatorium** takes that idea and moves the table to the CPU. `kinematics.ts`
   owns an authored chain of sections and uploads, every frame, the affine
   transform carrying a point from the camera's current section into each
@@ -224,7 +226,7 @@ Three are not, and all three solve it differently:
 A journey is a clock, so everything interesting about it — which room you are in,
 how flooded it is, how far a doorway has assembled — is a function of elapsed
 time. Every journey therefore accepts a set of query parameters, honoured
-centrally by `withShaderJourney`, that let you ask for one exact moment:
+centrally by `withJourneyShell`, that let you ask for one exact moment:
 
 | param | meaning |
 | --- | --- |
@@ -390,10 +392,10 @@ and takes a factory returning anything with `{ draw, dispose }`. Pick the path:
      on one clock.
    * `sectionTitleClassName`, `envMapUrl`
 
-   `liminal/` and `stairwell/` predate the HOC and still hand-roll their own
-   two-pass routes — don't copy them for new work; `foundry/`, `skybridges/` and
-   `hollow-orchard/` are the current reference, and `natatorium/` and
-   `switchback/` are the two worked examples of a route that goes somewhere.
+   `liminal/` still predates the HOC and hand-rolls its route. `stairwell/` is the
+   reference for a custom two-pass renderer inside the shared shell;
+   `foundry/`, `skybridges/` and `hollow-orchard/` cover single-shader routes,
+   while `natatorium/` and `switchback/` are worked examples of routes that turn.
 2. Append an entry to `JOURNEYS` in `app/journeys/registry.ts` (title, tagline,
    tags, accent, gradient, and a compact `previewShader` for the hover preview).
    Export the preview shader from your own `shader.ts` and import it here. Keep it
