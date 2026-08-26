@@ -129,6 +129,7 @@ in float vBay;
 in float vBroken;
 
 uniform vec3 uCamPos;
+uniform vec3 uCamFwd;
 uniform vec4 uDecay;      // (fracture, lightFail, rot, wear)
 uniform vec4 uRide;       // (speed, lapF, shake, onAlt)
 uniform float uTime;
@@ -232,6 +233,22 @@ void main () {
     vec3 H = normalize(L + V);
     lit += uLampCol[i].rgb * pow(max(dot(N, H), 0.0), 48.0) * atten * alive * 0.65;
   }
+
+  // The train's own headlight. Every other bay drowns it out, and that is the
+  // point of having it: in THE CHORD — an unlit bore with no fittings of its own
+  // — it is the only light there is, and without it the bay is twenty seconds of
+  // black screen rather than twenty seconds of not being able to see. A dark
+  // room you can just make out is frightening; a dark room you cannot see at all
+  // is a bug report.
+  //
+  // Mounted at the eye rather than on the nose of the car, because the alternative
+  // is explaining to the shader where the nose is.
+  vec3  hl   = uCamPos - vWorld;
+  float hd   = length(hl);
+  vec3  hdir = hl / max(hd, 1e-4);
+  float cone = pow(max(dot(-hdir, normalize(uCamFwd)), 0.0), 5.0);
+  float hAtt = cone / (1.0 + hd * hd * 0.0055);
+  lit += vec3(1.0, 0.95, 0.86) * max(dot(N, hdir), 0.0) * hAtt * 2.6;
 
   vec3 col = albedo * lit + uLampTint * emissive * 2.8;
 

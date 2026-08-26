@@ -564,6 +564,9 @@ export function createLoopLineScene (
       geoProg.use()
       geoProg.uniformMatrix4fv('uViewProj', viewProj)
       geoProg.uniform3f('uCamPos', camPos[0], camPos[1], camPos[2])
+      // The look direction after the pointer pan, not the track tangent — the
+      // headlight is mounted at the eye, so it goes where you look.
+      geoProg.uniform3f('uCamFwd', fx, fy / flen, fz)
       geoProg.uniform4f('uDecay', decay[0], decay[1], decay[2], decay[3])
       geoProg.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
       geoProg.uniform1f('uTime', time)
