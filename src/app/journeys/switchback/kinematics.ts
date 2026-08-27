@@ -370,6 +370,109 @@ const ROLL_RES = 0.010
 const V_MIN = 2.4
 const V_MAX = 26
 
+// ---------------------------------------------------------------------------
+// The pitch-over
+// ---------------------------------------------------------------------------
+//
+// The railway does not decay only in its lamps and its paint. Every lap it also
+// tips further over, until the last one is barely a railway at all. The first
+// lap is the authored table untouched — that is the reference the rest is heard
+// against, and steepening it would just make the ride steep rather than make it
+// *get* steep.
+//
+// The blend is written in angle space and keeps its ordering: a beat authored as
+// a gentle descent is still the gentlest descent on the fourth lap, it is merely
+// gentle at fifty-eight degrees. Working in slope space instead (the obvious
+// alternative) collapses that ordering — tan() runs away so fast that the
+// shallow beats stay shallow while the steep ones go vertical, and the lap loses
+// its shape entirely.
+
+/** Laps over which the railway tips from its authored grades toward vertical. */
+export const PITCH_LAPS = 3
+
+/** The steepest descent in the authored table. The scale the ramp is written against. */
+const AUTHORED_DROP = 28 * D
+
+/** What the gentlest and steepest descents become on the final lap. */
+const DROP_FLOOR = 58 * D
+const DROP_CEIL  = 86 * D
+
+/**
+ * How far the pitch-over has gone at an arc length, 0..1. Reads lapF rather than
+ * the integer lap so it arrives as a ramp across THE OVERLOOK — the same seam
+ * everything else in this journey degrades across, and the only stretch with no
+ * near geometry to pop against.
+ */
+export function pitchAt (s: number): number {
+  return clamp01(lapFAt(s) / PITCH_LAPS)
+}
+
+/** One authored grade, tipped over by `t` of the pitch-over. */
+function steepen (g: number, t: number): number {
+  if (t <= 0)
+    return g
+
+  // Climbs give up. By the last lap there is nothing left to lift the cart back
+  // up with, which is the whole reason the lap stops closing.
+  if (g >= 0)
+    return g * (1 - t)
+
+  const drop   = -g
+  const target = DROP_FLOOR + (DROP_CEIL - DROP_FLOOR) * clamp01(drop / AUTHORED_DROP)
+  return -mix(drop, target, t)
+}
+
+// ---------------------------------------------------------------------------
+// The fall
+// ---------------------------------------------------------------------------
+//
+// Four laps in, the track stops. Not at a buffer stop and not at a portal — the
+// rails simply are not there any more, and the cart carries on into a shaft that
+// has no bottom in it. Everything past this point is outside the lap: the
+// section is not in SECTIONS, so assertRouteSane still validates a six-room
+// cyclic railway and this cannot break it.
+
+export const TYPE_FALL = 6
+
+/** Laps of railway before the rails run out. */
+export const FALL_LAPS = 4
+
+/** Where they run out. */
+export const FALL_START = LAP_LEN * FALL_LAPS
+
+/** The scenery block the shaft is tiled from. It repeats; the fall does not end. */
+export const FALL_BLOCK = 720
+
+/** How steep the shaft gets. Not 90: cos(grade) is load-bearing in the up vector. */
+const FALL_GRADE = -89.2 * D
+
+/** Metres of fall over which the last of the track's grade gives way to the shaft's. */
+const FALL_ENTRY = 150
+
+/** The shaft's corkscrew: peak curvature, and the wavelength it snakes on. */
+const FALL_CURV = 1 / 96
+const FALL_WAVE = 0.019
+
+/** Grade the shaft inherits from the railway, once the pitch-over has finished. */
+const FALL_ENTRY_GRADE = steepen(-20 * D, 1)
+
+export const FALL_SECTION: Section = {
+  id:     7,
+  name:   'THE FALL',
+  len:    FALL_BLOCK,
+  type:   TYPE_FALL,
+  turn:   [ 0 ],
+  grade:  [ FALL_ENTRY_GRADE, FALL_GRADE ],
+  lift:   [ 0 ],
+  bore:   26,
+  ceilH:  OPEN,
+  floorD: OPEN,
+  lamp:   64,
+  lampY:  9.0,
+  grime:  1.0,
+  sky:    0.0,
+}
+
 // ---- precomputed route tables ---------------------------------------------
 
 const STARTS: number[]      = []
@@ -399,12 +502,43 @@ let LAP_TURN = 0
 }
 
 /**
+ * Heading at the instant the rails stop, which is where the shaft's corkscrew is
+ * measured from. Four whole laps of turning, since the lap does not close in yaw
+ * and never needed to.
+ */
+const FALL_YAW0 = FALL_LAPS * LAP_TURN
+
+/**
  * Where along a lap the flood of the next lap's decay arrives. Placed over THE
  * OVERLOOK for the same reason natatorium puts its water rise underwater: it is
  * the one stretch with no near geometry, so lamps going out and the ash thickening
  * happen against open sky where there is nothing to pop.
  */
 const DECAY_SECTION = 5
+
+/**
+ * Laps run, with the fractional part ramping across THE OVERLOOK rather than
+ * stepping at the seam. Hoisted out of getSwitchbackState because the grade now
+ * reads it too — the railway's shape is a function of how many times you have
+ * been round it.
+ */
+export function lapFAt (s: number): number {
+  if (s >= FALL_START)
+    return FALL_LAPS
+
+  const lap  = Math.floor(s / LAP_LEN)
+  const lapU = s - lap * LAP_LEN
+  return lap + smootherstep(
+    STARTS[DECAY_SECTION],
+    STARTS[DECAY_SECTION] + SECTIONS[DECAY_SECTION].len,
+    lapU,
+  )
+}
+
+/** Metres fallen past the end of the track. Zero while there is still track. */
+export function fallDepthAt (s: number): number {
+  return Math.max(0, s - FALL_START)
+}
 
 interface Beat {
   sec:     Section;
@@ -416,6 +550,17 @@ interface Beat {
 
 /** Which section, which beat, and how far through it, for an arc length. */
 function beatAt (s: number): Beat {
+  if (s >= FALL_START) {
+    const d = fallDepthAt(s)
+    return {
+      sec:     FALL_SECTION,
+      index:   SECTION_COUNT,
+      beat:    0,
+      t:       (d - Math.floor(d / FALL_BLOCK) * FALL_BLOCK) / FALL_BLOCK,
+      beatLen: FALL_BLOCK,
+    }
+  }
+
   const lap  = Math.floor(s / LAP_LEN)
   const lapU = s - lap * LAP_LEN
 
@@ -437,6 +582,13 @@ function beatAt (s: number): Beat {
 
 /** Absolute heading at an arc length. Grows without bound; only ever used as a direction. */
 export function yawAt (s: number): number {
+  if (s >= FALL_START) {
+    // The shaft snakes rather than turns: the integral of the corkscrew below,
+    // so heading and curvature cannot disagree and put the rider off the fit.
+    const d = fallDepthAt(s)
+    return FALL_YAW0 + FALL_CURV / FALL_WAVE * (1 - Math.cos(d * FALL_WAVE))
+  }
+
   const lap = Math.floor(s / LAP_LEN)
   const b   = beatAt(s)
   return lap * LAP_TURN + SEC_YAW0[b.index] + BEAT_YAW0[b.index][b.beat] +
@@ -445,12 +597,20 @@ export function yawAt (s: number): number {
 
 /** Track grade at an arc length, radians, positive climbing. */
 export function gradeAt (s: number): number {
+  if (s >= FALL_START)
+    return mix(FALL_ENTRY_GRADE, FALL_GRADE,
+               smootherstep(0, FALL_ENTRY, fallDepthAt(s)))
+
   const b = beatAt(s)
-  return mix(b.sec.grade[b.beat], b.sec.grade[b.beat + 1], smootherstep(0, 1, b.t))
+  const g = mix(b.sec.grade[b.beat], b.sec.grade[b.beat + 1], smootherstep(0, 1, b.t))
+  return steepen(g, clamp01(lapFAt(s) / PITCH_LAPS))
 }
 
 /** Horizontal curvature, rad/m. Positive is a right-hand turn. */
 function curvAt (s: number): number {
+  if (s >= FALL_START)
+    return FALL_CURV * Math.sin(fallDepthAt(s) * FALL_WAVE)
+
   const b = beatAt(s)
   return b.sec.turn[b.beat] * dSmootherstep(b.t) / b.beatLen
 }
@@ -669,6 +829,24 @@ export interface SwitchbackState {
   /** 0..1 how far the lamps have failed, and how far everything else has. */
   lightFail: number;
   decay:     number;
+
+  /** 0..1 how far the railway has tipped over. 0 on the first lap by construction. */
+  pitch: number;
+
+  /** True once the rails have run out. */
+  inFall: boolean;
+
+  /** 0..1 how far into the shaft, eased over FALL_ENTRY metres. */
+  fall: number;
+
+  /** Metres fallen past the end of the track. Unbounded, like the speed. */
+  fallDepth: number;
+
+  /** The shaft's accumulated corkscrew, radians, wrapped. */
+  twist: number;
+
+  /** 0..1 fissure density in the walls, and how hard they are lit from behind. */
+  crack: number;
 }
 
 export interface Slot {
@@ -798,9 +976,32 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
   // depth runs a little short of length and the far boundary lands slightly
   // beyond where it should — always in the fog, and always in the direction of
   // the room you are about to be in anyway.
-  const prev = SECTIONS[(b.index - 1 + SECTION_COUNT) % SECTION_COUNT]
-  const next = SECTIONS[(b.index + 1) % SECTION_COUNT]
-  const into = lapU - STARTS[b.index] // how far into the current section
+  const inFall    = s >= FALL_START
+  const fallDepth = fallDepthAt(s)
+
+  let prev: Section
+  let next: Section
+  let into: number
+
+  if (inFall) {
+    // The shaft is one block, tiled. The room behind you is the overlook only
+    // for the first block — after that there is nothing back there either.
+    const block = Math.floor(fallDepth / FALL_BLOCK)
+    into = fallDepth - block * FALL_BLOCK
+    prev = block === 0 ? SECTIONS[SECTION_COUNT - 1] : FALL_SECTION
+    next = FALL_SECTION
+  }
+  else {
+    prev = SECTIONS[(b.index - 1 + SECTION_COUNT) % SECTION_COUNT]
+    into = lapU - STARTS[b.index] // how far into the current section
+
+    // The one place the lap does not come back round. On the last lap the room
+    // after the overlook is the shaft, so the rails visibly run out at a portal
+    // you can see before you reach it rather than at the edge of the frame.
+    next = lap === FALL_LAPS - 1 && b.index === SECTION_COUNT - 1
+      ? FALL_SECTION
+      : SECTIONS[(b.index + 1) % SECTION_COUNT]
+  }
 
   const curZ0 = -into
   const curZ1 = curZ0 + section.len
@@ -809,6 +1010,11 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
     makeSlot(section, curZ0, curZ1),
     makeSlot(next, curZ1, curZ1 + next.len),
   ]
+
+  const fall  = inFall ? smootherstep(0, FALL_ENTRY, fallDepth) : 0
+  const crack = inFall
+    ? mix(clamp01(FALL_LAPS * 0.24), 1, fall)
+    : clamp01(lapF * 0.24)
 
   return {
     s,
@@ -836,12 +1042,26 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
     name:      section.name,
     lightFail: Math.min(0.92, lapF * 0.34),
     decay:     Math.min(1, lapF * 0.30),
+    pitch:     clamp01(lapF / PITCH_LAPS),
+    inFall,
+    fall,
+    fallDepth,
+    // Wrapped: the shader only ever takes its sine, and an angle that grows to
+    // six figures over a long fall loses its mantissa on the way to the GPU.
+    twist:     fallDepth * 0.0055 % (Math.PI * 2),
+    crack,
   }
 }
 
 /** HUD label. Laps count from 1, the way the rest of the repo counts them. */
 export function labelFor (state: SwitchbackState): string {
-  const kph  = Math.round(state.speed * 3.6)
+  const kph = Math.round(state.speed * 3.6)
+
+  if (state.inFall)
+    return state.fallDepth < 45
+      ? 'THE TRACK ENDS'
+      : `THE FALL · ${Math.round(state.fallDepth)}M · ${kph} KM/H`
+
   const head = state.lap > 0 ? `LAP ${state.lap + 1} · ${state.name}` : state.name
   return `${head} · ${kph} KM/H`
 }
@@ -935,6 +1155,18 @@ export function assertRouteSane (): string[] {
         'the chain has to run past the crest, not stop at it')
   }
 
+  // The pitch-over is a pure function of one grade, so two sections that agreed
+  // before it still agree after it — but the seam into the shaft is a different
+  // formula meeting the tipped-over one, and that is worth asserting rather than
+  // discovering as a derailment on the fourth lap.
+  {
+    const before = gradeAt(FALL_START - 1e-4)
+    const after  = gradeAt(FALL_START + 1e-4)
+    if (Math.abs(before - after) > 1e-3)
+      problems.push(`the rails end with a ${((after - before) / D).toFixed(2)} deg step ` +
+        'into the shaft — the tangent is discontinuous')
+  }
+
   for (const [ label, pitch ] of [[ 'TIE_PITCH', TIE_PITCH ], [ 'BENT_PITCH', BENT_PITCH ]] as const)
     if (Math.abs(PHASE_WRAP / pitch - Math.round(PHASE_WRAP / pitch)) > 1e-9)
       problems.push(`${label} ${pitch} does not divide PHASE_WRAP`)
@@ -967,28 +1199,65 @@ export function createSwitchbackSimulation (): JourneySimulation {
   const uAtm  = [ 0, 0, 0, 0 ]
   const uSun  = [ 0, 0, 0, 0 ]
   const uUp   = [ 0, 0, 0, 0 ]
+  const uFall = [ 0, 0, 0, 0 ] // fall, over-speed, twist, crack
 
   return {
     step (dt: number) {
       const h = Math.min(dt, 0.05)
+
+      if (s >= FALL_START) {
+        // Nothing is holding it any more. No drag term and no ceiling: the shaft
+        // has no bottom in it and the speed has no limit, which is the whole of
+        // what this section is for. Everything downstream is a pure function of
+        // s, so a seek still reproduces it exactly.
+        v += G * Math.sin(-state.grade) * h
+        s += v * h
+        roll  = state.headRoll
+        state = getSwitchbackState(s, v, roll)
+        return
+      }
 
       const chain = liftAt(s)
       if (chain > 0) {
         // A chain (or a brake fin) does not accelerate you, it *takes* you: the
         // dog is either engaged or it is not. An exponential approach with a
         // half-second constant is what that sounds and looks like from inside.
-        const target = chain * (1 + state.lapF * 0.14)
-        v += (target - v) * (1 - Math.exp(-h / 0.55))
+        //
+        // But it takes you less every lap. This — not the drag and not the
+        // grades — is what actually held the ride down: the brake at the
+        // platform pinned the cart back to walking pace once a lap however fast
+        // it arrived, so no amount of tipping the descents over made the ride
+        // faster than one section's worth of runway. By the last lap the dog is
+        // not catching and the fins are not gripping, and the cart carries what
+        // it has straight through the station.
+        const grip   = Math.max(0, 1 - state.lapF * 0.3)
+        const target = chain * (1 + state.lapF * 0.5)
+        v += (target - v) * (1 - Math.exp(-h / 0.55)) * grip
       }
       else {
         const g = state.grade
-        // Drag falls off per lap: the ride is not getting faster because
-        // anything pushes it, but because less and less is slowing it down.
-        const drag = DRAG / (1 + state.lapF * 0.12)
+        // Drag falls off per lap: the ride is not getting faster because anything
+        // pushes it, but because less and less is slowing it down.
+        //
+        // It has to fall off *hard*, or the pitch-over is cosmetic. Quadratic
+        // drag sets a terminal velocity of sqrt(g sin θ / k), and at the old
+        // rate that number barely moved — the fourth lap descended at seventy-
+        // eight degrees and still ran at a hundred and fifty, which looks like a
+        // steep track being ridden slowly rather than like a railway coming
+        // apart. At this rate it stops binding altogether by the last lap, and
+        // what limits the speed there is the honest one — how much height a lap
+        // has in it. The fourth is descending at seventy-eight degrees for four
+        // hundred and ninety metres of arc, and arrives at about eighty-five
+        // percent of what falling that far would give you.
+        const drag = DRAG / (1 + state.lapF * 2.4)
         v += (-G * Math.sin(g) - drag * v * v - ROLL_RES * G * Math.cos(g)) * h
       }
 
-      v = Math.max(V_MIN, Math.min(V_MAX, v))
+      // The ceiling lifts every lap, and lifts out of the way: a railway this
+      // far over is no longer one a 26 m/s cap describes, and past the second
+      // lap the cap should not be the thing deciding the speed — the height of
+      // the drop should be. It stays only as a guard against a bad table.
+      v = Math.max(V_MIN, Math.min(V_MAX * (1 + state.lapF * 1.1), v))
       s += v * h
       roll  = state.headRoll
       state = getSwitchbackState(s, v, roll)
@@ -1034,6 +1303,18 @@ export function createSwitchbackSimulation (): JourneySimulation {
       uRide[2] = state.headRoll + state.joltX
       uRide[3] = state.chain
 
+      uFall[0] = state.fall
+      // Speed *past* what the ride was ever capable of. uCart.y already pins the
+      // shader's lens widening at 20 m/s, so this is the term that keeps saying
+      // something after the fall has left every previous number behind.
+      //
+      // Logarithmic, because the fall is unbounded and a linear map saturates
+      // fifteen seconds in — after which the picture stops acknowledging speed
+      // at exactly the point the speed becomes the only thing happening.
+      uFall[1] = clamp01(Math.log2(1 + Math.max(0, state.speed - V_MAX) / 20) / 8)
+      uFall[2] = state.twist
+      uFall[3] = state.crack
+
       uAtm[0] = state.lightFail
       uAtm[1] = state.decay
       uAtm[2] = state.grade
@@ -1049,7 +1330,7 @@ export function createSwitchbackSimulation (): JourneySimulation {
       uUp[2] = state.up[2]
       uUp[3] = state.slots[1].sky
 
-      return { uSecA, uSecB, uSecC, uBend, uCart, uRide, uAtm, uSun, uUp }
+      return { uSecA, uSecB, uSecC, uBend, uCart, uRide, uAtm, uSun, uUp, uFall }
     },
 
     label () {
@@ -1061,6 +1342,18 @@ export function createSwitchbackSimulation (): JourneySimulation {
      * stepping at the seam, which makes it the wrong thing to draw a bar from.
      */
     marks (): JourneyMarks {
+      if (state.inFall) {
+        // Each block of shaft counts as another lap, so the transport can still
+        // fast-forward through a section that has no structure left in it.
+        const block = Math.floor(state.fallDepth / FALL_BLOCK)
+        return {
+          loop:         FALL_LAPS + block,
+          section:      TYPE_FALL,
+          sectionCount: 1,
+          progress:     (state.fallDepth - block * FALL_BLOCK) / FALL_BLOCK,
+        }
+      }
+
       return {
         loop:         state.lap,
         section:      SECTIONS.indexOf(state.section),

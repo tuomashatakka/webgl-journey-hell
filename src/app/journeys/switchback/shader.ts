@@ -89,6 +89,15 @@ const COMMON = `
   uniform vec4 uSun;
   uniform vec4 uUp;
 
+  /**
+   * The fall and the fissures.
+   *   x  0..1 how far into the shaft
+   *   y  0..1 speed past everything the railway was capable of, logarithmic
+   *   z  the shaft's corkscrew, radians, wrapped
+   *   w  0..1 fissure density — grows every lap, saturates in the shaft
+   */
+  uniform vec4 uFall;
+
   const float PI = 3.14159265;
 
   // Room types. Kept in step with kinematics.ts by hand, which is the one piece
@@ -99,6 +108,10 @@ const COMMON = `
   const float T_CONCOURSE = 3.0;
   const float T_CHAPEL    = 4.0;
   const float T_OVERLOOK  = 5.0;
+
+  // The seventh room, which is not in the lap and is not a room. Past four laps
+  // the rails stop and this is what is on the other side of them.
+  const float T_FALL      = 6.0;
 
   // Half the track gauge. Narrow, because this is an ore railway that something
   // later decided to run a train of open tubs down.
@@ -238,6 +251,57 @@ const COMMON = `
   /** Distance along the track, folded, for everything that repeats. */
   float phaseAt(float z) { return z + uCart.x; }
 
+  // ---- the fissures --------------------------------------------------------
+  //
+  // One field, read twice: once by the surface, where it is a split in the wall,
+  // and once by the volumetrics, where it is the beam coming through the split.
+  // Sharing it is not an optimisation — it is the only way a beam reliably has a
+  // crack at the end of it, and two fields tuned to look alike drift apart the
+  // moment either is touched.
+
+  /**
+   * The vein field. Its zero set is the fissure; a widens it and, separately,
+   * lowers the patch threshold, so the first lap shows one split in a wall and
+   * the fourth shows a craquelure.
+   */
+  float fissure(vec2 uv, float a) {
+    float v = fbm(uv * 0.55) - 0.5;
+    float w = 0.010 + a * 0.030;
+    float seam = smoothstep(w, w * 0.15, abs(v));
+
+    // The patch term is what keeps this a set of cracks rather than a texture.
+    // Without it — or with it opened too far — the seams reach everywhere at
+    // once and the wall stops reading as broken and starts reading as red.
+    float patch = smoothstep(0.60 - a * 0.30, 0.88 - a * 0.30, fbm(uv * 0.12 + 4.7));
+    return seam * patch;
+  }
+
+  /**
+   * Where on the wall a point is, as the fissure field's coordinates.
+   *
+   * Low frequency on purpose: a crack is metres long. At the frequency this
+   * started at the field was finer than the fog could resolve, so every beam
+   * landed on top of every other one and the whole shaft turned into static.
+   */
+  vec2 fissureUV(vec3 q, float side) {
+    return vec2(phaseAt(q.z) * 0.42, q.y * 1.15 + side * 4.3);
+  }
+
+  /**
+   * The shaft's corkscrew.
+   *
+   * The rotation is an isometry and costs the sphere trace nothing. The lateral
+   * snake after it is a shear, and its slope is held at 0.07 so mapTrack's claim
+   * to be 1-Lipschitz is still true to within the 0.92 the march already steps at.
+   */
+  vec3 fallWarp(vec3 q) {
+    float a = uFall.z + q.z * 0.0125;
+    float c = cos(a), sn = sin(a);
+    q.xy = vec2(c * q.x - sn * q.y, sn * q.x + c * q.y);
+    q.x += sin(q.z * 0.032 + uFall.z * 2.0) * 2.2 * uFall.x;
+    return q;
+  }
+
   // ---- rooms ---------------------------------------------------------------
 
   /**
@@ -265,7 +329,8 @@ const COMMON = `
 
   float roomAir(vec3 q, vec4 A, vec4 B) {
     float slab = max(A.x - OVERLAP - q.z, q.z - A.y - OVERLAP);
-    return max(roomProfile(q, A.w, B.x, B.y), slab);
+    vec3 w = A.z > T_FALL - 0.5 ? fallWarp(q) : q;
+    return max(roomProfile(w, A.w, B.x, B.y), slab);
   }
 
   /**
@@ -508,6 +573,36 @@ const COMMON = `
     return min(min(leg, cap), min(diag, min(rail, stanchion)));
   }
 
+  /**
+   * THE FALL. Not a room — the inside of something that has come apart.
+   *
+   * Two things only, because at the speed this is seen at nothing smaller than
+   * a slab registers: the buckled ribs that were holding the shaft open, and the
+   * pieces of wall that are no longer in it.
+   */
+  float fallProps(vec3 q, float grime) {
+    vec3 w = fallWarp(q);
+    float zp = phaseAt(q.z);
+
+    float rad = length(w.xy);
+    float ang = atan(w.y, w.x);
+    float rib = max(abs(rad - 24.5) - 0.55, abs(latt(zp, 18.0)) - 0.5);
+    // Broken into arcs. ang * radius is arc length, which is the metric the
+    // lattice has to be measured in or the gaps pinch shut near the axis.
+    rib = max(rib, lattAbs(ang * 24.5, 21.0) - 7.0);
+
+    vec3 sl = w;
+    float cell = floor(zp / 33.0);
+    sl.z = latt(zp, 33.0);
+    float sa = hash21(vec2(cell, 3.0)) * 6.28318 + uFall.z * 3.0;
+    float cs = cos(sa), ss = sin(sa);
+    sl.xy = vec2(cs * sl.x - ss * sl.y, ss * sl.x + cs * sl.y);
+    sl.x -= 11.0 + hash21(vec2(cell, 9.0)) * 9.0;
+    float slab = sdRoundBox(sl, vec3(3.2, 0.34, 2.4), 0.12);
+
+    return min(rib, slab);
+  }
+
   float roomProps(vec3 q, vec4 A, vec4 B, vec4 C) {
     // The room's own z-slab is the outermost bound every prop shares. Handed back
     // as a distance only while it is comfortably clear of the hit epsilon.
@@ -522,9 +617,12 @@ const COMMON = `
     else if (t < T_CONCOURSE - 0.5) d = scaffoldProps(q, B.w);
     else if (t < T_CHAPEL - 0.5)    d = concourseProps(q, A.w, B.x);
     else if (t < T_OVERLOOK - 0.5)  d = chapelProps(q, A.w, B.x);
-    else                            d = overlookProps(q);
+    else if (t < T_FALL - 0.5)      d = overlookProps(q);
+    else                            d = fallProps(q, B.w);
 
-    d = min(d, ballast(q, B.y));
+    // No ballast in the shaft. There is no track for it to be under.
+    if (t < T_FALL - 0.5)
+      d = min(d, ballast(q, B.y));
 
     // Nothing may enter the swept tube. It cannot fail to clear the cart,
     // because it is defined by where the cart goes.
@@ -555,6 +653,19 @@ const COMMON = `
     return best;
   }
 
+  /**
+   * The depth at which the rails stop, or a long way off if they do not.
+   *
+   * Read off the resident slots rather than through roomAt, which is declared
+   * further down and which this does not need: the question is not "what room is
+   * at this z" but "where does the last one end", and that is one number.
+   */
+  float railEndZ() {
+    for (int i = 0; i < 3; i++)
+      if (uSecA[i].z > T_FALL - 0.5) return uSecA[i].x;
+    return 1e5;
+  }
+
   /** The whole scene, in track space, where it is honestly 1-Lipschitz. */
   float mapTrack(vec3 q) {
     float air   = 1e5;
@@ -568,8 +679,15 @@ const COMMON = `
     gMat = M_SHELL;
     float d = -air;
     d = take(props, d, M_PROP);
-    d = take(railSolid(q), d, M_RAIL);
-    d = take(tieSolid(q), d, M_TIE);
+
+    // The permanent way stops where the shaft starts. Not faded out, not buried
+    // under anything — the rails are simply not there, and the sleeper at the
+    // portal is the last sleeper. That abruptness is the whole event.
+    if (q.z < railEndZ()) {
+      d = take(railSolid(q), d, M_RAIL);
+      d = take(tieSolid(q), d, M_TIE);
+    }
+
     d = take(cartSolid(q), d, M_CART);
     return d;
   }
@@ -636,6 +754,7 @@ const SCENE = `
 
   /** The colour a room's lamps burn. */
   vec3 lampTint(float type) {
+    if (type > T_OVERLOOK + 0.5)  return vec3(1.00, 0.16, 0.10);  // the rift, and nothing else
     if (type < T_DRIFT - 0.5)     return vec3(0.70, 0.94, 0.80);  // sick fluorescent
     if (type < T_SCAFFOLD - 0.5)  return vec3(1.00, 0.72, 0.40);  // caged tungsten
     if (type < T_CONCOURSE - 0.5) return vec3(1.00, 0.84, 0.58);  // sodium work-lamp
@@ -647,7 +766,8 @@ const SCENE = `
   /** The colour the fog goes to. This is most of what makes six rooms six. */
   vec3 roomFog(float type, float grime) {
     vec3 c;
-    if (type < T_DRIFT - 0.5)          c = vec3(0.100, 0.132, 0.116);
+    if (type > T_OVERLOOK + 0.5)       c = vec3(0.032, 0.007, 0.009);
+    else if (type < T_DRIFT - 0.5)     c = vec3(0.100, 0.132, 0.116);
     else if (type < T_SCAFFOLD - 0.5)  c = vec3(0.120, 0.100, 0.076);
     else if (type < T_CONCOURSE - 0.5) c = vec3(0.017, 0.014, 0.028);
     else if (type < T_CHAPEL - 0.5)    c = vec3(0.155, 0.082, 0.094);
@@ -657,6 +777,9 @@ const SCENE = `
   }
 
   float fogDensity(float type) {
+    // Thick. Nothing in the shaft is worth resolving at range, and the fog is
+    // what keeps the scenery from strobing once the speed has no ceiling on it.
+    if (type > T_OVERLOOK + 0.5)  return 0.034;
     if (type < T_DRIFT - 0.5)     return 0.026;
     if (type < T_SCAFFOLD - 0.5)  return 0.038;
     if (type < T_CONCOURSE - 0.5) return 0.013;
@@ -675,6 +798,8 @@ const SCENE = `
    * definition; give it an ambient colour.
    */
   vec3 skyAmbient(float type, float decay) {
+    if (type > T_OVERLOOK + 0.5)
+      return vec3(0.036, 0.006, 0.008);
     if (type > T_DRIFT + 0.5 && type < T_CONCOURSE - 0.5)
       return vec3(0.020, 0.017, 0.032);
     return mix(vec3(0.66, 0.40, 0.50), vec3(0.34, 0.20, 0.27), decay * 0.7);
@@ -691,6 +816,15 @@ const SCENE = `
   vec3 skyColor(vec3 rd, float type, float decay) {
     float h = dot(rd, uUp.xyz);
     float sunDot = dot(rd, uSun.xyz);
+
+    if (type > T_OVERLOOK + 0.5) {
+      // The abyss, in liminal's key: black, with a red core where a horizon
+      // would be if the shaft had one, and nothing else in it at all.
+      float core = pow(max(0.0, 1.0 - abs(h)), 4.0);
+      vec3 c = mix(vec3(0.014, 0.004, 0.005), vec3(0.001, 0.000, 0.001),
+                   smoothstep(-0.4, 0.9, h));
+      return c + vec3(0.62, 0.035, 0.020) * core * (0.5 + uFall.x * 1.8);
+    }
 
     if (type > T_DRIFT + 0.5 && type < T_CONCOURSE - 0.5) {
       // THE SCAFFOLD VOID is not sky. It is the absence of a room, with a bruise
@@ -763,6 +897,14 @@ const SCENE = `
 
     vec3 c;
 
+    if (type > T_OVERLOOK + 0.5) {
+      // THE FALL. Rock with nothing left on it, and no light of its own — every
+      // photon in this room comes through a crack in it.
+      float grain = fbm(uvz * vec2(4.0, 1.6)) * 0.6 + fbm(uvz * 17.0) * 0.4;
+      c = mix(vec3(0.086, 0.070, 0.072), vec3(0.020, 0.014, 0.016), grain);
+      return c * (1.0 - grime * 0.4);
+    }
+
     if (type < T_DRIFT - 0.5) {
       // THE BOARDING PLATFORM. Wet institutional tile, and a floor that is the
       // same tile with the shine walked off it.
@@ -814,8 +956,25 @@ const SCENE = `
     rough = 0.85;
     emit = vec3(0.0);
 
-    if (mat < M_RAIL - 0.5)
-      return shellAlbedo(q, n, r.type, r.grime, t);
+    if (mat < M_RAIL - 0.5) {
+      vec3 c = shellAlbedo(q, n, r.type, r.grime, t);
+
+      // The fissures are lit from *behind*, so they are emission and not a dark
+      // line in the albedo. A crack you can see through is the whole point; one
+      // painted on reads as dirt, and dirt is what this railway already has.
+      if (uFall.w > 0.03 && r.bore < 50.0) {
+        float side = q.x < 0.0 ? -1.0 : 1.0;
+        float cr = fissure(fissureUV(q, side), uFall.w) * uFall.w;
+        // Faded with range. A crack network is finer than a pixel by forty
+        // metres out, and left at full strength the far wall stipples — which
+        // the volumetric beams then light up, so it reads as noise and not as
+        // distance. The fog takes over from here.
+        emit += vec3(1.55, 0.09, 0.05) * cr * (0.6 + uFall.x * 3.0)
+          * (1.0 - smoothstep(18.0, 64.0, t) * 0.6);
+        c *= 1.0 - cr * 0.65;
+      }
+      return c;
+    }
 
     if (mat < M_TIE - 0.5) {
       // Rail. Polished on the head where the wheels ride, rusted everywhere else.
@@ -1003,6 +1162,28 @@ const SCENE = `
    * pixels' taps land in the same cell, the per-cell answer is flat across it,
    * and what appears on screen is a rectangle rather than a shaft.
    */
+  /**
+   * Light coming through the fissures.
+   *
+   * Sampled on the wall the beam comes through rather than at the sample point:
+   * a crack is a thing on a surface and the shaft of light is the air in front
+   * of it. Reading the field where the sample happens to be gives fog with a
+   * pattern in it — which is a completely different and much worse effect.
+   */
+  float riftBeam(vec3 q, Room r) {
+    // A crack needs a wall to be in. The void and the overlook have none, and
+    // putting beams in them hangs the light in mid-air across an open sky.
+    if (uFall.w < 0.03 || r.bore > 50.0) return 0.0;
+
+    float wall = r.bore;
+    float side = q.x < 0.0 ? -1.0 : 1.0;
+    float f = fissure(fissureUV(q, side), uFall.w);
+
+    // The wedge: full against the wall, gone before the middle of the room.
+    float inward = smoothstep(wall * 1.05, wall * 0.12, abs(q.x));
+    return f * inward * uFall.w * (0.45 + uFall.x * 1.7);
+  }
+
   vec3 shafts(vec3 rd, float tMax) {
     vec3 acc = vec3(0.0);
     float j = hash21(gl_FragCoord.xy + 17.3) * VOL_STEP * 2.0;
@@ -1015,6 +1196,12 @@ const SCENE = `
       vec3 q = toTrack(rd * t);
 
       Room r = roomAt(q.z);
+
+      // The rift beams need no sky. The light is coming through the wall, and a
+      // sealed room is exactly where that reads hardest — so this is accumulated
+      // before the daylight branches, not inside them.
+      acc += vec3(1.00, 0.09, 0.05) * riftBeam(q, r) * w * 2.0;
+
       if (r.sky < 0.03) continue;
 
       float zp = phaseAt(q.z);
@@ -1057,7 +1244,8 @@ const SCENE = `
 
     vec3 tone;
     float rate, dens;
-    if (type < T_DRIFT - 0.5)          { tone = vec3(0.80, 0.88, 0.82); rate = 0.10; dens = 0.26; }
+    if (type > T_OVERLOOK + 0.5)       { tone = vec3(1.00, 0.34, 0.18); rate = 0.55; dens = 0.34; }
+    else if (type < T_DRIFT - 0.5)     { tone = vec3(0.80, 0.88, 0.82); rate = 0.10; dens = 0.26; }
     else if (type < T_SCAFFOLD - 0.5)  { tone = vec3(0.94, 0.86, 0.72); rate = 0.16; dens = 0.62; }
     else if (type < T_CONCOURSE - 0.5) { tone = vec3(0.58, 0.60, 0.80); rate = 0.30; dens = 0.30; }
     else if (type < T_CHAPEL - 0.5)    { tone = vec3(1.00, 0.80, 0.74); rate = 0.12; dens = 0.38; }
@@ -1068,6 +1256,7 @@ const SCENE = `
     // thing in this journey lifted whole from the Sakura pen. Everything else in
     // the air here is half a millimetre of somebody's ceiling.
     float grain = type > T_CHAPEL + 0.5 ? 1.9 : 1.0;
+    if (type > T_OVERLOOK + 0.5) grain = 2.6;
 
     tone = mix(tone, vec3(0.44, 0.42, 0.42), decay * 0.7);
 
@@ -1133,7 +1322,12 @@ const SCENE = `
     // one of its three instructions: nothing else makes 60 km/h feel like 60 km/h
     // in a picture with no motion blur in it.
     float rush = clamp(uCart.y / 20.0, 0.0, 1.0);
-    vec3 rd = normalize(uv.x * rgt + uv.y * up + mix(1.20, 0.80, rush) * fwd);
+
+    // uCart.y pins rush at twenty metres a second, which was the fastest this
+    // railway ever went. The fall goes past that by two orders of magnitude, so
+    // the lens keeps opening on a term that has no ceiling in it either.
+    vec3 rd = normalize(uv.x * rgt + uv.y * up +
+      (mix(1.20, 0.80, rush) - uFall.y * 0.30) * fwd);
 
     // --- march, in camera space, the one place the ray is straight ---
     //
@@ -1259,7 +1453,7 @@ const SCENE = `
     vec3 rushTint = near.type > T_DRIFT + 0.5 && near.type < T_CONCOURSE - 0.5
       ? hue(0.35 + tEnd * 0.02 + uCart.x * 0.004) * 1.4
       : lampTint(near.type);
-    col += rushTint * pickup * rush * 0.45;
+    col += rushTint * pickup * rush * 0.45 * (1.0 + uFall.y * 2.4);
 
     // --- inline post (no FBO in a single-pass journey) ---
 
@@ -1267,7 +1461,8 @@ const SCENE = `
     col *= 1.0 - uAtm.x * 0.28 * step(0.965, hash21(vec2(floor(iTime * 15.0), 3.0)));
 
     // Vignette, tightened by speed. The tunnel closing in is the sensation.
-    col *= 1.0 - smoothstep(0.38, 1.20, length(uv * vec2(1.0, 1.08))) * (0.40 + rush * 0.24);
+    col *= 1.0 - smoothstep(0.38, 1.20, length(uv * vec2(1.0, 1.08)))
+      * (0.40 + rush * 0.24 + uFall.y * 0.26);
 
     // Cheap bloom: the bright half of the image added back to itself.
     col += col * smoothstep(0.70, 1.7, dot(col, vec3(0.299, 0.587, 0.114))) * 0.40;

@@ -337,7 +337,10 @@ function uvFn () {
 // Every fixed piece of chrome, and what each is anchored to. An overlay that
 // moves between two timestamps is a layout bug; one that stays put is not, no
 // matter what the frame behind it did.
-const HUD_IDS = [ 'sector-title', 'back-btn', 'fullscreen-btn', 'audio-btn', 'fps-display', 'journey-transport' ]
+// #journey-transport is deliberately absent: every command here drives `?t=`,
+// and the transport hides itself in frozen mode so the seek stays a pure
+// function of the URL. A gate that can never pass is noise, so it is not one.
+const HUD_IDS = [ 'sector-title', 'back-btn', 'fullscreen-btn', 'audio-btn', 'fps-display' ]
 
 const hudFn = ids => ids.map(id => {
   const el = document.getElementById(id)

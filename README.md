@@ -32,7 +32,7 @@ app/
     foundry/                # THE FOUNDRY (seven halls, rigid-body physics)
     hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
     natatorium/             # THE NATATORIUM (flooded poolrooms, turning route + audio)
-    switchback/             # THE SWITCHBACK (dreamcore mine railway, gravity cart + audio)
+    switchback/             # THE SWITCHBACK (mine railway that tips over, then falls + audio)
     loop-line/              # THE LOOP LINE (rasterized closed circuit, six stations + audio)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
@@ -92,6 +92,12 @@ Three are not, and all three solve it differently:
   separation preserves the descent silhouette without quantising the camera onto
   every tread — and it is what lets the stair *pitch over* every traversal, since
   a single rise/run pair drives both. See `stairwell/SPEC.md`.
+* **switchback** rectifies instead: the track is always straight ahead in the
+  cart's own frame and the *world* bends around it, fitted to a quadratic in
+  depth. Grade therefore lives in the up vector rather than in the geometry,
+  which is what lets the railway tip further over on every lap — by the fourth it
+  is descending at nearly eighty degrees, and then the rails stop altogether. See
+  `switchback/SPEC.md`.
 * **natatorium** takes that idea and moves the table to the CPU. `kinematics.ts`
   owns an authored chain of sections and uploads, every frame, the affine
   transform carrying a point from the camera's current section into each

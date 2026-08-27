@@ -598,8 +598,12 @@ export class SwitchbackAudioEngine implements JourneyAudioEngine {
     const ride = state.uRide as number[] | undefined
     const atm  = state.uAtm as number[] | undefined
     const secA = state.uSecA as number[] | undefined
+    const fall = state.uFall as number[] | undefined
     if (!cart || !ride || !atm || !secA)
       return
+
+    // 0 while there is still track, 1 once there is not.
+    const inFall = fall ? fall[0] : 0
 
     const now = this.ctx.currentTime
 
@@ -649,17 +653,24 @@ export class SwitchbackAudioEngine implements JourneyAudioEngine {
     // --- continuous layers ---
     const v = Math.min(this.speed / 20, 1.0)
 
-    this.ramp(this.rollGain?.gain, 0.03 + v * v * 0.16, now, 'lastRoll')
+    // Wheels on rail, with no rail. The bed goes with the track: leaving it
+    // running through the fall is the audible version of drawing the sleepers
+    // in mid-air, and it is the one thing that would give the section away.
+    const onRail = 1 - inFall
+
+    this.ramp(this.rollGain?.gain, (0.03 + v * v * 0.16) * onRail, now, 'lastRoll')
     this.rampCut(this.rollLP?.frequency, 240 + v * 1600, now, 'lastRollCut')
 
     // Bank is v^2 * curvature, so this is the flange loading, near enough.
     const load = Math.min(Math.abs(atm[3]) / 0.45, 1.0)
-    this.ramp(this.squeal?.gain, load * load * 0.075 * v, now, 'lastSqueal')
+    this.ramp(this.squeal?.gain, load * load * 0.075 * v * onRail, now, 'lastSqueal')
 
     // Wind: speed, and how little building there is around it.
-    const open = this.secType === 2 || this.secType === 5 ? 1.0 : 0.22
-    this.ramp(this.windGain?.gain, v * v * 0.13 * open, now, 'lastWind')
-    this.rampCut(this.windLP?.frequency, 420 + v * 1400, now, 'lastWindCut')
+    // Wind: speed, and how little building there is around it. In the shaft it
+    // is the only thing left, so it opens all the way and stays there.
+    const open = this.secType === 2 || this.secType === 5 || inFall > 0.5 ? 1.0 : 0.22
+    this.ramp(this.windGain?.gain, (v * v * 0.13 + inFall * 0.17) * open, now, 'lastWind')
+    this.rampCut(this.windLP?.frequency, 420 + v * 1400 + inFall * 900, now, 'lastWindCut')
 
     // A brake run is a chain that is slower than you are. It gets no motor.
     const lifting = this.chain > 0.01 && this.chain > this.speed - 0.4

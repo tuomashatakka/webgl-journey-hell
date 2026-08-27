@@ -129,6 +129,7 @@ acceptance gates:
 - no black or blown frames anywhere in the route probe, purgatory included;
 - no discontinuity spike at a loop boundary or at the purgatory seam — the eased
   decay and the entry are both continuous in value and in first derivative;
-- every hud control, the transport bar included, remains pixel-fixed;
+- every hud control remains pixel-fixed (the transport bar is hidden under
+  `?t=`, so `hud` cannot measure it — check it by hand);
 - the simulation passes 2000 units and keeps walking, indefinitely;
 - both shader programs compile in the live route and the static export builds.
