@@ -44,10 +44,31 @@ const CRT_FS = `
   /** 0..1 — how much of the scrub treatment is mixed in. */
   uniform float uScrubMix;
 
+  /** The reception failing. x: 0..1 level, y: 1 when an overlay is bound. */
+  uniform vec2 uSignal;
+
+  /** The signal-loss caption, drawn on the CPU (lib/signalOverlay). Unit 1. */
+  uniform sampler2D uOverlay;
+
   varying vec2 vUv;
 
   float hash (vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+  }
+
+  /**
+   * The clock, quantised and wrapped, for anything that hashes on time.
+   *
+   * hash() takes sin() of a dot product, and a journey here can run for an hour.
+   * Feed that clock in unwrapped and the argument runs past what a highp float
+   * can carry, at which point sin() stops varying with it: the "noise" freezes
+   * into a constant. A constant offset does not read as noise — it reads as the
+   * picture being subtracted, and at signal-loss amplitudes it subtracts all of
+   * it. Wrapping every 512 ticks is far longer than anyone will notice a repeat
+   * over and short enough that the hash stays honest.
+   */
+  float tickAt (float rate) {
+    return floor(fract(uTime * rate / 512.0) * 512.0);
   }
 
   void main () {
@@ -73,13 +94,36 @@ const CRT_FS = `
 
       // Per-scanline horizontal displacement, hash-gated so only some lines
       // tear — a uniform shift reads as a pan, not as damage.
-      float line = floor(vUv.y * 120.0 + uTime * 90.0 * uScrub);
+      float line = floor(vUv.y * 120.0 + tickAt(90.0) * uScrub);
       float gate = step(0.62, hash(vec2(line, 3.0)));
       tear  = (hash(vec2(line, 11.0)) - 0.5) * gate * 0.09 * mix_;
       tear += band * (hash(vec2(line, 27.0)) - 0.5) * 0.16 * mix_;
 
       // Vertical roll — the picture never quite locks while it is moving.
       roll = (sin(uTime * 5.3) * 0.008 + band * 0.05) * mix_;
+    }
+
+    // --- the signal going -------------------------------------------------
+    // Deliberately a different vocabulary from the tape above. That is a
+    // transport *action* — something is being done to the picture on purpose,
+    // and it travels in the direction of the shuttle. This is reception: nothing
+    // is moving, there is simply less and less arriving.
+    float sig = uSignal.x;
+    if (sig > 0.001) {
+      // Sync tearing. Finer lines than the tape's and hash-gated per frame
+      // rather than per position, so lines drop out at random instead of
+      // crawling — a weak signal loses individual lines, it does not shuttle.
+      float sline = floor(vUv.y * 190.0);
+      float sgate = step(0.90 - sig * 0.44, hash(vec2(sline, tickAt(24.0))));
+      tear += (hash(vec2(sline, 61.0)) - 0.5) * sgate * (0.02 + sig * 0.11);
+
+      // Vertical hold: a slow slip, and every so often it lets go of a whole
+      // frame. The occasional total loss of lock is what says "weak" rather
+      // than "noisy" — a picture that only ever wobbles reads as an effect.
+      float slipT = tickAt(2.0);
+      float slip  = step(0.88 - sig * 0.30, hash(vec2(slipT, 5.0)));
+      roll += sig * 0.010 * sin(uTime * 1.7)
+        + slip * sig * hash(vec2(slipT, 9.0)) * 0.7;
     }
 
     vec2 uv = c * 0.5 + 0.5;
@@ -102,6 +146,50 @@ const CRT_FS = `
       texture2D(uTex, uv - dir).b
     );
 
+    if (sig > 0.001) {
+      // Multipath: a second, later, weaker copy of the picture offset to the
+      // right. Taken as a max rather than a sum so the ghost sits *behind* the
+      // image instead of doubling its brightness.
+      vec2 gh = vec2(0.006 + sig * 0.022, 0.0);
+      vec3 ghost = vec3(
+        texture2D(uTex, uv + gh + dir).r,
+        texture2D(uTex, uv + gh).g,
+        texture2D(uTex, uv + gh - dir).b
+      );
+      col = mix(col, max(col, ghost * 0.82), sig * 0.55);
+
+      // Chroma first, then level. The colour burst is the first thing a weak
+      // signal loses, which is why a failing picture goes grey before it goes
+      // dark rather than the other way round.
+      float luma = dot(col, vec3(0.299, 0.587, 0.114));
+      col = mix(col, vec3(luma), sig * 0.78);
+      col *= 1.0 - sig * 0.46;
+    }
+
+    // The caption, sampled at the same warped uv and through the same chromatic
+    // offset as the picture — that is the whole reason it is composited here and
+    // not in DOM. It goes in *after* the level collapse above, because a warning
+    // is generated at the receiver rather than transmitted: the tube distorts it,
+    // the failing signal does not dim it, and it stays readable at the floor.
+    if (uSignal.y > 0.5) {
+      // Curved and fringed exactly like the picture, but taking only a third of
+      // the tearing and none of the lost lock. At full amplitude the words stop
+      // being words, which loses the one thing an overlay is for — and a warning
+      // caption is generated at the receiver, so it has no reason to carry the
+      // transmission's every fault.
+      vec2 ouv = c * 0.5 + 0.5;
+      ouv.x += tear * 0.22;
+      ouv.y  = fract(ouv.y + roll * 0.30);
+
+      vec4 og = texture2D(uOverlay, ouv);
+      vec3 oc = vec3(
+        texture2D(uOverlay, ouv + dir).r,
+        og.g,
+        texture2D(uOverlay, ouv - dir).b
+      );
+      col = mix(col, oc, og.a);
+    }
+
     // --- tape damage ------------------------------------------------------
     if (mix_ > 0.001) {
       float bandPos = fract(uTime * 0.9 * -uScrub);
@@ -114,8 +202,22 @@ const CRT_FS = `
       col = mix(col, vec3(luma * 1.35 + 0.06), band * mix_);
 
       // Dropout speckle, dense inside the head-switching band.
-      float snow = hash(vUv * uRes * 0.5 + uTime * 60.0);
+      float snow = hash(vUv * uRes * 0.5 + tickAt(60.0));
       col += (snow - 0.5) * (0.10 + band * 0.55) * mix_;
+    }
+
+    if (sig > 0.001) {
+      // Snow. Last, so it lands on the caption too — it is in front of the
+      // picture, not behind it.
+      //
+      // Scaled by local brightness rather than added flat. Several of these
+      // journeys end somewhere very dark, and a flat offset on a picture whose
+      // mean is a few percent does not sit *on* the image, it replaces it: the
+      // switchback's shaft went to pure static with the journey still running
+      // underneath. A small floor keeps the black areas from being clean.
+      float lum  = dot(col, vec3(0.299, 0.587, 0.114));
+      float snow = hash(vUv * uRes * 0.7 + tickAt(30.0) * 13.0);
+      col += (snow - 0.5) * sig * (0.045 + lum * 0.85);
     }
 
     // --- tube treatment ---------------------------------------------------
@@ -146,12 +248,22 @@ export interface CrtDrawOptions {
   /** -1 rewind, 0 idle, +1 fast-forward. */
   scrub:    number;
   scrubMix: number;
+
+  /** 0..1 how far the reception has failed. See lib/signalLoss. */
+  signal: number;
 }
 
 export interface CrtPass {
 
   /** Re-allocate the capture texture. Call whenever the backing store resizes. */
   resize(w: number, h: number): void;
+
+  /**
+   * Upload the signal-loss caption, or clear it with null. The overlay only
+   * redraws a few times a second (lib/signalOverlay), so callers should only
+   * call this when it reports that it changed.
+   */
+  setOverlay(source: HTMLCanvasElement | null): void;
 
   /** Capture the current back buffer and composite the treatment over it. */
   draw(options: CrtDrawOptions): void;
@@ -224,6 +336,17 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
+  // The caption's texture. Uploaded from a 2D canvas rather than copied from the
+  // framebuffer, so unlike the capture texture above it can be — and has to be —
+  // RGBA: the alpha is what says where the caption is not.
+  const overlayTex = gl.createTexture()
+  gl.bindTexture(gl.TEXTURE_2D, overlayTex)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  let hasOverlay = false
+
   const posLoc      = gl.getAttribLocation(program, 'position')
   const loc         = (name: string) => gl.getUniformLocation(program, name)
   const uTex        = loc('uTex')
@@ -235,6 +358,8 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
   const uVignette   = loc('uVignette')
   const uScrub      = loc('uScrub')
   const uScrubMix   = loc('uScrubMix')
+  const uSignal     = loc('uSignal')
+  const uOverlay    = loc('uOverlay')
 
   let texW = 0
   let texH = 0
@@ -250,6 +375,25 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
 
   return {
     resize,
+
+    setOverlay (source) {
+      if (!source || source.width <= 0 || source.height <= 0) {
+        hasOverlay = false
+        return
+      }
+
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, overlayTex)
+
+      // A canvas is top-down and a GL texture is bottom-up. The capture texture
+      // above comes from copyTexSubImage2D and is already in GL's order, so the
+      // flip has to happen here or the caption arrives upside down.
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
+      gl.activeTexture(gl.TEXTURE0)
+      hasOverlay = true
+    },
 
     draw (o: CrtDrawOptions) {
       const canvas = gl.canvas as HTMLCanvasElement
@@ -297,6 +441,17 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
       if (uScrubMix)
         gl.uniform1f(uScrubMix, o.scrubMix)
 
+      const showOverlay = hasOverlay && o.signal > 0.001
+      if (uSignal)
+        gl.uniform2f(uSignal, o.signal, showOverlay ? 1 : 0)
+      if (uOverlay)
+        gl.uniform1i(uOverlay, 1)
+      if (showOverlay) {
+        gl.activeTexture(gl.TEXTURE1)
+        gl.bindTexture(gl.TEXTURE_2D, overlayTex)
+        gl.activeTexture(gl.TEXTURE0)
+      }
+
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
       // Hand the attribute back. The geometry path binds its own arrays each
@@ -308,6 +463,7 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
     dispose () {
       gl.deleteBuffer(buffer)
       gl.deleteTexture(tex)
+      gl.deleteTexture(overlayTex)
       gl.deleteProgram(program)
       gl.deleteShader(vs)
       gl.deleteShader(fs)
@@ -321,4 +477,17 @@ export const CRT_DEFAULTS = {
   aberration: 0.0022,
   scanline:   0.045,
   vignette:   0.22,
+} as const
+
+/**
+ * The tube switched off, for when the CRT setting is off but the pass still has
+ * to run. The signal loss is a story beat rather than a display treatment, so it
+ * does not belong behind that toggle: curvature and scanlines go, the caption and
+ * the tearing and the snow stay.
+ */
+export const CRT_BYPASS = {
+  curve:      0,
+  aberration: 0,
+  scanline:   0,
+  vignette:   0,
 } as const

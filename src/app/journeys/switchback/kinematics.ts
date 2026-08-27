@@ -1207,6 +1207,10 @@ export function createSwitchbackSimulation (): JourneySimulation {
   let s     = 0
   let v     = 9.0
   let roll  = 0
+
+  // Counted inside the simulation, not by the shell: seekSimulation replays
+  // step() from zero without anyone watching. See lib/signalLoss.
+  let signalAge = 0
   let state = getSwitchbackState(0, v, 0)
 
   if (process.env.NODE_ENV !== 'production') {
@@ -1237,6 +1241,7 @@ export function createSwitchbackSimulation (): JourneySimulation {
         // s, so a seek still reproduces it exactly.
         v += G * Math.sin(-state.grade) * h
         s += v * h
+        signalAge += h
         roll  = state.headRoll
         state = getSwitchbackState(s, v, roll)
         return
@@ -1376,6 +1381,7 @@ export function createSwitchbackSimulation (): JourneySimulation {
           section:      TYPE_FALL,
           sectionCount: 1,
           progress:     (state.fallDepth - block * FALL_BLOCK) / FALL_BLOCK,
+          signalAge,
         }
       }
 

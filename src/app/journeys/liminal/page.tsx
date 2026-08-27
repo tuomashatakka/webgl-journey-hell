@@ -17,7 +17,9 @@ import {
   useResolutionResize
 
 } from '@/hooks/use-journey-runtime'
-import { CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
+import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
+import { signalLossAt } from '@/lib/signalLoss'
+import { createSignalOverlay } from '@/lib/signalOverlay'
 import { createJourneyTransport } from '@/lib/journeyTransport'
 import type { JourneyTransport as Transport } from '@/lib/journeyTransport'
 import JourneyTransport from '@/components/JourneyTransport'
@@ -434,7 +436,8 @@ export default function LiminalJourney () {
     // The pass is optional; failing to build it means no treatment, not a dead
     // journey. Note this route already has its own fisheye/CA post pass — the
     // shared one sits on top of it for the tube geometry and the tape effect.
-    const crt = createCrtPass(gl)
+    const crt     = createCrtPass(gl)
+    const overlay = createSignalOverlay()
 
     const transport = createJourneyTransport({
       createSimulation: () => createLiminalRide(),
@@ -585,8 +588,21 @@ export default function LiminalJourney () {
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
 
-      if (currentSettings.crt)
-        crt?.draw({ time: iTime, ...CRT_DEFAULTS, scrub: ts.scrub, scrubMix: ts.scrubMix })
+      // Same contract as withJourneyShell's applyCrt: the CRT setting decides
+      // whether there is a tube, not whether the signal is allowed to fail.
+      const loss = signalLossAt(ride.marks().signalAge ?? 0)
+      if (currentSettings.crt || loss.level > 0.001) {
+        if (overlay && overlay.update(loss, canvas.width, canvas.height))
+          crt?.setOverlay(loss.level > 0.001 ? overlay.canvas : null)
+
+        crt?.draw({
+          time:     iTime,
+          ...(currentSettings.crt ? CRT_DEFAULTS : CRT_BYPASS),
+          scrub:    ts.scrub,
+          scrubMix: ts.scrubMix,
+          signal:   loss.level,
+        })
+      }
     }
 
     animationId = requestAnimationFrame(render)
@@ -596,6 +612,7 @@ export default function LiminalJourney () {
       cancelAnimationFrame(animationId)
 
       crt?.dispose()
+      overlay?.dispose()
       transportRef.current = null
 
       gl.deleteBuffer(quadBuffer)

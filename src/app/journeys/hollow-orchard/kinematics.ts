@@ -491,6 +491,9 @@ export function createHollowOrchardSimulation (): JourneySimulation {
   let z     = 0
   let state = getOrchardState(0)
 
+  // Inside the simulation, so a ?t= seek rebuilds it. See lib/signalLoss.
+  let signalAge = 0
+
   // Packed in place every frame, never reallocated.
   const uStage = [ 0, 0, 0, 0 ]
   const uWalk  = [ 0, 0, 0, 0 ]
@@ -509,6 +512,12 @@ export function createHollowOrchardSimulation (): JourneySimulation {
       // Integrate before sampling: speed is a property of where you already are.
       z    += state.speed * Math.min(dt, 0.1)
       state = getOrchardState(z)
+
+      // The stall, not merely the last stage: COMPOST on the stalling loop takes
+      // a while to actually stop, and the signal should start going as the world
+      // does rather than as it enters the room where it will.
+      if (state.loop >= STALL_LOOP && state.stageA === STAGE_COMPOST && state.speed < 0.5)
+        signalAge += dt
     },
 
     uniforms (): CustomUniforms {
@@ -569,6 +578,7 @@ export function createHollowOrchardSimulation (): JourneySimulation {
         section:      state.stageA,
         sectionCount: STAGE_COMPOST,
         progress:     state.loopZ / ORCHARD_LOOP_Z,
+        signalAge,
       }
     },
   }

@@ -242,12 +242,19 @@ export function assertStairwellRoute (): string[] {
 export function createStairwellSimulation (): JourneySimulation {
   let z = 0
 
+  // Counted here rather than by the shell: seekSimulation replays step() from
+  // zero without anyone watching, so an accumulator kept outside would not
+  // survive a ?t= and the signal loss would vanish from every screenshot.
+  let signalAge = 0
+
   return {
     step (dt) {
       if (!Number.isFinite(dt) || dt <= 0)
         return
 
       z += getWalkSpeed(z) * dt
+      if (z >= PURGATORY_START)
+        signalAge += dt
     },
 
     uniforms () {
@@ -278,6 +285,7 @@ export function createStairwellSimulation (): JourneySimulation {
         section:      state.section.id,
         sectionCount: state.inPurgatory ? 1 : STAIRWELL_SECTIONS.length,
         progress:     state.inPurgatory ? state.purgatoryProgress : state.loopProgress,
+        signalAge,
       }
     },
   }

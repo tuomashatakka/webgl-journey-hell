@@ -140,6 +140,7 @@ describe('stairwell simulation', () => {
       section:      0,
       sectionCount: 6,
       progress:     0,
+      signalAge:    0,
     })
 
     // Each purgatory circuit is another lap, so fast-forward keeps working

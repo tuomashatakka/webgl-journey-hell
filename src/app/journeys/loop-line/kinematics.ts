@@ -126,6 +126,9 @@ class LoopLineRide implements JourneySimulation {
   private roll = 0
 
   private lapF = 0
+
+  /** Inside the ride, so a ?t= seek rebuilds it. See lib/signalLoss. */
+  private signalAge = 0
   private shake = 0
   private frame: Frame | null = null
   private pose: Pose = {
@@ -168,6 +171,9 @@ class LoopLineRide implements JourneySimulation {
       this.s -= this.curve.length
       this.lap++
     }
+
+    if (this.lap >= SIGNAL_LOSS_LAP)
+      this.signalAge += h
 
     this.throwSwitchIfDue(before)
     this.updateDecay()
@@ -291,6 +297,7 @@ class LoopLineRide implements JourneySimulation {
       section:      this.span().bay.id,
       sectionCount: this.spans.length,
       progress:     this.s / this.curve.length,
+      signalAge:    this.signalAge,
     }
   }
 }
@@ -298,3 +305,11 @@ class LoopLineRide implements JourneySimulation {
 export function createLoopLineSimulation (): JourneySimulation {
   return new LoopLineRide()
 }
+
+/**
+ * The lap at which the route has stopped going anywhere and the signal starts to
+ * go with it. This journey has no ending to reach, so the count stands in for
+ * one: by here its own decay has saturated and another lap says nothing new.
+ * See lib/signalLoss.
+ */
+export const SIGNAL_LOSS_LAP = 5

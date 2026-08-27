@@ -794,6 +794,9 @@ export function createNatatoriumSimulation (): JourneySimulation {
   let dist  = 0
   let state = getNatatoriumState(0)
 
+  // Inside the simulation, so a ?t= seek rebuilds it. See lib/signalLoss.
+  let signalAge = 0
+
   if (process.env.NODE_ENV !== 'production') {
     const problems = assertRouteSane()
     for (const p of problems)
@@ -815,6 +818,8 @@ export function createNatatoriumSimulation (): JourneySimulation {
     step (dt: number) {
       dist += state.speed * Math.min(dt, 0.1)
       state = getNatatoriumState(dist)
+      if (state.lap >= SIGNAL_LOSS_LAP)
+        signalAge += dt
     },
 
     uniforms (): CustomUniforms {
@@ -880,7 +885,16 @@ export function createNatatoriumSimulation (): JourneySimulation {
         section:      SECTIONS.indexOf(state.section),
         sectionCount: SECTION_COUNT,
         progress:     state.dist % LAP_LEN / LAP_LEN,
+        signalAge,
       }
     },
   }
 }
+
+/**
+ * The lap at which the route has stopped going anywhere and the signal starts to
+ * go with it. This journey has no ending to reach, so the count stands in for
+ * one: by here its own decay has saturated and another lap says nothing new.
+ * See lib/signalLoss.
+ */
+export const SIGNAL_LOSS_LAP = 5

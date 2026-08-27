@@ -473,3 +473,50 @@ is GLSL ES 1.00 because the shell hands out both `webgl` and `webgl2` contexts.
 
 Both are suppressed under `?t=` and `?hud=0`, so `tools/journey.mjs` stays
 deterministic. The CRT pass can be switched off in Settings.
+
+## the signal going
+
+Every journey now either ends somewhere it never leaves — the stairwell's
+purgatory, the switchback's fall, liminal's abyss, the orchard's compost — or laps
+until the lapping has stopped meaning anything. All of them used to just continue
+at full picture quality, which reads as "the demo is still running" rather than as
+the end of something. `lib/signalLoss` is what marks it.
+
+Eight seconds into that state the picture starts to fail; it takes fifteen more to
+arrive; and it never recovers, settling at a weak, torn, colourless signal rather
+than at black. A warning caption fades up, and eight seconds later a dB meter
+drops in under it with the reception falling away.
+
+Three things about it are worth knowing before touching it.
+
+**The caption is composited in GL, not DOM.** `lib/crtPass` works by reading the
+canvas back buffer and drawing over it, so anything in DOM ends up flat and square
+on top of a curved, torn, fringed picture — which gives the whole effect away in
+one frame. `lib/signalOverlay` draws to a 2D canvas instead, and the pass samples
+it at the same warped uv and through the same chromatic offset as the scene. It
+takes only a third of the tearing and none of the lost vertical lock, because a
+warning is generated at the receiver rather than transmitted, and at full amplitude
+the words stop being words.
+
+**Everything is a pure function of simulation state, because `?t=` is.** The
+obvious implementation — a wall-clock accumulator in the shell — cannot work:
+`seekSimulation` replays a simulation from zero without the shell observing, so the
+loss would vanish on every seek. Instead each simulation counts its own seconds in
+its own `step` and reports them as `JourneyMarks.signalAge`; the dB trace is
+sampled from `dbAt()` per column rather than kept as a scrolling history for the
+same reason. Two `shot`s of the same `?t=` are byte-identical, graph included.
+
+**It is not behind the CRT setting.** The pass runs whenever the signal is going,
+with the tube's curvature and scanlines zeroed (`CRT_BYPASS`) if the setting is
+off. The setting governs a display treatment; this is a story beat.
+
+Which journeys, and when: the four with a persistent ending trigger on entering it;
+the four that lap forever trigger on `SIGNAL_LOSS_LAP`, a per-journey constant
+(5 everywhere) standing in for an ending they do not have.
+
+One trap, already paid for: anything that hashes on time must wrap the clock
+first (`tickAt` in `crtPass`). These journeys run for an hour, and `hash()` takes
+`sin()` of a dot product — feed it an unwrapped clock and the argument runs past
+what a highp float carries, `sin()` stops varying, and the noise freezes into a
+constant. A constant offset does not read as noise; at signal-loss amplitudes it
+subtracts the entire picture.

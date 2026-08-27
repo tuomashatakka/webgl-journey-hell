@@ -89,6 +89,10 @@ field is gated off.
 the route no longer terminates. `purgatoryLap` counts circuits and feeds the
 label; the transport treats each circuit as another lap.
 
+the route no longer terminates, but the transmission does: eight seconds into
+purgatory the signal starts to go and never comes back. that is shared, not
+authored here — see `lib/signalLoss` and the README.
+
 ## rendering and audio
 
 the route uses `withJourneyShell` with a custom raw-webgl two-pass renderer:

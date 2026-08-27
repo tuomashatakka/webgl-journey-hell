@@ -52,5 +52,18 @@ export function getSkybridgesMarks (time: number): JourneyMarks {
     section:      SKYBRIDGES_SECTIONS.indexOf(section),
     sectionCount: SKYBRIDGES_SECTIONS.length,
     progress:     z % SKYBRIDGES_LOOP_Z / SKYBRIDGES_LOOP_Z,
+
+    // No simulation to keep a counter in, and none needed: this route is a pure
+    // function of the clock, so the seconds since the signal-loss lap are too.
+    signalAge:    Math.max(0, time - SIGNAL_LOSS_LAP * SKYBRIDGES_LOOP_Z / SKYBRIDGES_SPEED),
   }
 }
+
+/**
+ * The lap at which the route has stopped going anywhere and the signal starts to
+ * go with it. This journey has no ending to reach, so the count stands in for
+ * one: by here its own decay has saturated and another lap says nothing new.
+ * See lib/signalLoss.
+ */
+export const SIGNAL_LOSS_LAP = 5
+

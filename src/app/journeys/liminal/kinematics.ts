@@ -462,6 +462,9 @@ export interface LiminalRide {
 export function createLiminalRide (): LiminalRide {
   let z = 0
 
+  // Inside the ride, so a ?t= seek rebuilds it. See lib/signalLoss.
+  let signalAge = 0
+
   return {
     get z () {
       return z
@@ -469,6 +472,8 @@ export function createLiminalRide (): LiminalRide {
 
     step (dt: number) {
       z += getWalkSpeed(z) * dt
+      if (z >= LIMINAL_ABYSS_Z)
+        signalAge += dt
     },
 
     marks (): JourneyMarks {
@@ -479,6 +484,7 @@ export function createLiminalRide (): LiminalRide {
         sectionCount: LIMINAL_SECTOR_COUNT,
         progress:     z >= LIMINAL_ABYSS_Z ? 1 : z % LIMINAL_LOOP_Z / LIMINAL_LOOP_Z,
         terminal:     z >= LIMINAL_ABYSS_Z + 200.0,
+        signalAge,
       }
     },
   }

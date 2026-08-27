@@ -54,8 +54,11 @@ import SettingsButton from './SettingsButton'
 import JourneyDebugPanel from './JourneyDebugPanel'
 import { NO_DEBUG, publishDebugState, readDebugParams, seekSimulation } from '@/lib/debugParams'
 import type { DebugParams } from '@/lib/debugParams'
-import { CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
+import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
 import type { CrtPass } from '@/lib/crtPass'
+import { signalLossAt } from '@/lib/signalLoss'
+import { createSignalOverlay } from '@/lib/signalOverlay'
+import type { SignalOverlay } from '@/lib/signalOverlay'
 import { createJourneyTransport } from '@/lib/journeyTransport'
 import type { JourneyMarks, JourneyTransport as Transport, TransportState } from '@/lib/journeyTransport'
 import JourneyTransport from './JourneyTransport'
@@ -225,6 +228,7 @@ export function withJourneyShell (
     const canvasRef   = useRef<HTMLCanvasElement>(null)
     const rendererRef = useRef<JourneyRenderer | null>(null)
     const crtRef      = useRef<CrtPass | null>(null)
+    const overlayRef  = useRef<SignalOverlay | null>(null)
     // Lazily built once per mount; useRef's initializer would run on every
     // render, so guard it instead of calling createSimulation() inline.
     const simRef = useRef<JourneySimulation | null>(null)
@@ -324,7 +328,8 @@ export function withJourneyShell (
 
       // Failing to build the CRT pass is not fatal: the journey underneath is
       // a complete image on its own, so a null pass just means no treatment.
-      crtRef.current = createCrtPass(gl)
+      crtRef.current     = createCrtPass(gl)
+      overlayRef.current = createSignalOverlay()
 
       const resize = () => {
         const d = dbgRef.current
@@ -353,6 +358,8 @@ export function withJourneyShell (
         window.removeEventListener('resize', resize)
         crtRef.current?.dispose()
         crtRef.current = null
+        overlayRef.current?.dispose()
+        overlayRef.current = null
         renderer.dispose()
         rendererRef.current = null
         // NOTE: do NOT call WEBGL_lose_context.loseContext() here. A canvas
@@ -387,10 +394,37 @@ export function withJourneyShell (
      * Runs after draw() and reads the back buffer, so no renderer has to know
      * it exists — see lib/crtPass for why it is done that way round.
      */
-    const applyCrt = useCallback((time: number, scrub: number, scrubMix: number) => {
-      if (!settingsRef.current.crt)
+    const applyCrt = useCallback((
+      time: number,
+      scrub: number,
+      scrubMix: number,
+      signalAge: number,
+    ) => {
+      const crt = crtRef.current
+      if (!crt)
         return
-      crtRef.current?.draw({ time, ...CRT_DEFAULTS, scrub, scrubMix })
+
+      const loss = signalLossAt(signalAge)
+      const tube = settingsRef.current.crt
+
+      // The CRT setting governs the *display treatment*, not whether the story
+      // beat happens — so once the signal is going the pass runs either way, and
+      // the setting only decides whether there is a tube around it.
+      if (!tube && loss.level <= 0.001)
+        return
+
+      const canvas  = canvasRef.current
+      const overlay = overlayRef.current
+      if (overlay && canvas && overlay.update(loss, canvas.width, canvas.height))
+        crt.setOverlay(loss.level > 0.001 ? overlay.canvas : null)
+
+      crt.draw({
+        time,
+        ...(tube ? CRT_DEFAULTS : CRT_BYPASS),
+        scrub,
+        scrubMix,
+        signal: loss.level,
+      })
     }, [ settingsRef ])
 
     // The ?t= path: seek once, then redraw the same instant every frame. Split
@@ -419,7 +453,10 @@ export function withJourneyShell (
         custom,
       })
 
-      applyCrt(d.t!, 0, 0)
+      // The seeked frame carries the caption too, or every screenshot of an
+      // ending would be of a journey that is somehow still receiving.
+      const frozenMarks = sim?.marks?.() ?? options.getMarks?.(d.t!) ?? null
+      applyCrt(d.t!, 0, 0, frozenMarks?.signalAge ?? 0)
 
       if (custom)
         debugStateRef.current = custom
@@ -488,8 +525,16 @@ export function withJourneyShell (
       // Re-read: the transport may have replaced the simulation outright.
       const liveSim = simRef.current
 
+      const marks = liveSim?.marks?.() ?? options.getMarks?.(iTimeRef.current) ?? null
+
       // Evaluated once and shared: the mix hears exactly what the frame shows.
       const custom = liveSim?.uniforms()
+
+      // An affordance rather than a feature: any audio engine that wants to duck
+      // itself as the signal goes can read this, and the ones that ignore it are
+      // unaffected. No engine reads it yet.
+      if (custom && marks?.signalAge)
+        custom.uSignalLoss = signalLossAt(marks.signalAge).level
 
       // Silence during a shuttle. A tape has no audio at speed either, and
       // feeding an audio graph a rewound clock makes it click.
@@ -505,9 +550,8 @@ export function withJourneyShell (
         custom,
       })
 
-      applyCrt(iTimeRef.current, ts.scrub, ts.scrubMix)
+      applyCrt(iTimeRef.current, ts.scrub, ts.scrubMix, marks?.signalAge ?? 0)
 
-      const marks       = liveSim?.marks?.() ?? options.getMarks?.(iTimeRef.current) ?? null
       const view        = transportViewRef.current
       view.mode         = ts.mode
       view.loop         = marks?.loop ?? 0

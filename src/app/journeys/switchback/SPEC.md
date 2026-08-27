@@ -137,6 +137,9 @@ abruptness is the event.
 - the wheels-on-rail bed goes with the track. leaving it running is the audible
   version of drawing sleepers in mid-air, and it is the one thing that would give
   the section away.
+- eight seconds in, the signal starts to go and never comes back. shared rather
+  than authored here — the shaft reports its seconds as `JourneyMarks.signalAge`
+  and `lib/signalLoss` does the rest.
 
 ## deterministic verification
 

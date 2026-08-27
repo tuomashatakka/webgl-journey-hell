@@ -111,6 +111,9 @@ export function createFoundrySimulation (): JourneySimulation {
   const state = createFoundryState()
   let carry = 0
 
+  // Inside the simulation, so a ?t= seek rebuilds it. See lib/signalLoss.
+  let signalAge = 0
+
   // Scratch buffers — packed in place every frame, never reallocated.
   const debris  = new Array<number>(24).fill(0)
   const debrisQ = new Array<number>(24).fill(0)
@@ -120,6 +123,8 @@ export function createFoundrySimulation (): JourneySimulation {
   return {
     step (dt: number) {
       carry = advance(state, dt, carry)
+      if (state.loop >= SIGNAL_LOSS_LAP)
+        signalAge += dt
     },
 
     uniforms () {
@@ -175,7 +180,16 @@ export function createFoundrySimulation (): JourneySimulation {
         section:      sectionFor(state).id,
         sectionCount: SECTION_COUNT,
         progress:     Math.min(1, state.z / (SECTION_LEN * SECTION_COUNT)),
+        signalAge,
       }
     },
   }
 }
+
+/**
+ * The lap at which the route has stopped going anywhere and the signal starts to
+ * go with it. This journey has no ending to reach, so the count stands in for
+ * one: by here its own decay has saturated and another lap says nothing new.
+ * See lib/signalLoss.
+ */
+export const SIGNAL_LOSS_LAP = 5

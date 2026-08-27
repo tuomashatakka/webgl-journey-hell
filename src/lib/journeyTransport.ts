@@ -49,6 +49,18 @@ export interface JourneyMarks {
 
   /** Set once the route has stopped advancing. */
   terminal?: boolean;
+
+  /**
+   * Seconds spent in the state the journey does not come back from — a
+   * persistent ending section, or enough laps that the route has stopped going
+   * anywhere. 0 while it is still a journey.
+   *
+   * Counted inside each simulation's own `step`, never by whoever is watching:
+   * `seekSimulation` replays a simulation from zero without the shell
+   * observing, so an accumulator kept out here would not survive a seek and the
+   * signal loss would vanish on every `?t=`. See lib/signalLoss.
+   */
+  signalAge?: number;
 }
 
 /** What the transport needs from whatever owns the live simulation. */
