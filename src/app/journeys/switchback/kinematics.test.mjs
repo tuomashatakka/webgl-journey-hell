@@ -61,6 +61,36 @@ describe('switchback route', () => {
     expect(byFinal).toEqual(byAuthored)
   })
 
+  /**
+   * The one test that catches a pitch-over which is steep but not *smooth*.
+   *
+   * The first version of steepen() ran descents and climbs through different
+   * formulas, so a grade crossing zero — five times a lap in the authored table
+   * — jumped instantly by tens of degrees. Every image-level check passed: the
+   * frames were not black, the route assertions held, the grades were steeper
+   * every lap and in the right order. It read as a stutter on every section
+   * boundary from the second lap on, and only a derivative sweep sees it.
+   */
+  test('turns smoothly on every lap, not just the first', () => {
+    const STEP = 0.02
+
+    const worst = lap => {
+      const base = lap * LAP_LEN
+      let max = 0
+      for (let o = 0; o < LAP_LEN; o += STEP)
+        max = Math.max(max, Math.abs(gradeAt(base + o + STEP) - gradeAt(base + o)) / STEP)
+      return max / D // degrees per metre
+    }
+
+    const first = worst(0)
+    expect(first).toBeLessThan(3)
+
+    // Within an order of magnitude of the authored lap's own rate. A jump shows
+    // up here as hundreds or thousands, never as a near miss.
+    for (const lap of [ 1, 2, 3 ])
+      expect(worst(lap)).toBeLessThan(Math.max(first, 1) * 10)
+  })
+
   test('is almost a free fall by the fourth lap', () => {
     const steepest = Math.min(...profile(PITCH_LAPS))
     expect(steepest / D).toBeLessThan(-70)

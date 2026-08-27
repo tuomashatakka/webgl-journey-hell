@@ -380,12 +380,19 @@ const V_MAX = 26
 // against, and steepening it would just make the ride steep rather than make it
 // *get* steep.
 //
-// The blend is written in angle space and keeps its ordering: a beat authored as
-// a gentle descent is still the gentlest descent on the fourth lap, it is merely
-// gentle at fifty-eight degrees. Working in slope space instead (the obvious
-// alternative) collapses that ordering — tan() runs away so fast that the
-// shallow beats stay shallow while the steep ones go vertical, and the lap loses
-// its shape entirely.
+// The map is a gain and a bias on the authored grade, in angle space. That is
+// three separate requirements met by one affine function:
+//
+//   continuity  — it cannot jump, anywhere, for any g;
+//   ordering    — a positive gain cannot reorder two grades, so the beat
+//                 authored as the gentlest descent is still the gentlest one on
+//                 the fourth lap, it is merely gentle at fifty degrees;
+//   tangents    — two sections that agreed on a grade still agree after it, so
+//                 the cyclic continuity assertRouteSane checks survives for free.
+//
+// Slope space is the obvious alternative and it fails the second: tan() runs
+// away so fast that the shallow beats stay shallow while the steep ones go
+// vertical, and the lap stops being the same lap.
 
 /** Laps over which the railway tips from its authored grades toward vertical. */
 export const PITCH_LAPS = 3
@@ -393,9 +400,13 @@ export const PITCH_LAPS = 3
 /** The steepest descent in the authored table. The scale the ramp is written against. */
 const AUTHORED_DROP = 28 * D
 
-/** What the gentlest and steepest descents become on the final lap. */
-const DROP_FLOOR = 58 * D
-const DROP_CEIL  = 86 * D
+/** What a level stretch becomes on the final lap. Nothing stays level. */
+const PITCH_BIAS = 50 * D
+
+/** ...and what the steepest authored descent becomes, which fixes the gain. */
+const DROP_CEIL = 86 * D
+
+const PITCH_GAIN = (DROP_CEIL - PITCH_BIAS) / AUTHORED_DROP - 1
 
 /**
  * How far the pitch-over has gone at an arc length, 0..1. Reads lapF rather than
@@ -407,19 +418,26 @@ export function pitchAt (s: number): number {
   return clamp01(lapFAt(s) / PITCH_LAPS)
 }
 
-/** One authored grade, tipped over by `t` of the pitch-over. */
+/**
+ * One authored grade, tipped over by t of the pitch-over.
+ *
+ * The first version of this ran descents and climbs through different formulas
+ * and gave every descent a floor of fifty-eight degrees, so a grade crossing
+ * zero — which the authored table does five times a lap — jumped instantly from
+ * level to well past a third of the way to vertical. Measured at over a thousand
+ * degrees per metre on the second lap. From inside the cart that is not a steep
+ * railway, it is a stutter, and it is on every section boundary in the journey.
+ *
+ * A gain and a bias cannot do that. Climbs still give up, but as a consequence
+ * rather than as a special case: by the last lap the bias has taken the whole
+ * profile below level and there is nothing left to lift the cart with, which is
+ * why the lap stops closing.
+ */
 function steepen (g: number, t: number): number {
   if (t <= 0)
     return g
 
-  // Climbs give up. By the last lap there is nothing left to lift the cart back
-  // up with, which is the whole reason the lap stops closing.
-  if (g >= 0)
-    return g * (1 - t)
-
-  const drop   = -g
-  const target = DROP_FLOOR + (DROP_CEIL - DROP_FLOOR) * clamp01(drop / AUTHORED_DROP)
-  return -mix(drop, target, t)
+  return Math.max(-DROP_CEIL, g * (1 + t * PITCH_GAIN) - t * PITCH_BIAS)
 }
 
 // ---------------------------------------------------------------------------
@@ -907,7 +925,14 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
   // property of the *track*, not of the ride, everywhere except that it depends
   // on the speed the track was designed for. Ours banks live, which is a small
   // lie that reads as a very good one.
-  const bank   = Math.atan2(speed * speed * curv, G)
+  //
+  // ...up to about the speed the track was designed for, and no further. v^2
+  // drives the arctangent hard into its own saturation, so at four times that
+  // speed the bank sits pinned at its limit through every turn and then snaps
+  // across the whole range in the centimetre where the curvature changes sign.
+  // That is a roll stutter at every beat boundary, and it is not the track.
+  const vBank  = Math.min(speed, V_MAX)
+  const bank   = Math.atan2(vBank * vBank * curv, G)
   const capped = Math.max(-0.85, Math.min(0.85, bank))
 
   // The rider's head lags the car. Tracked as state rather than derived so the

@@ -32,20 +32,35 @@ further over, until the last one is barely a railway at all.
   it *get* steep.
 - `pitchAt(s)` is `lapF / PITCH_LAPS`, so it arrives as a ramp across the
   overlook rather than a step at the seam.
-- `steepen(g, t)` blends in **angle space**, not slope space, and keeps its
-  ordering: a beat authored as the gentlest descent is still the gentlest descent
-  on the fourth lap, it is merely gentle at fifty-eight degrees. slope space is
-  the obvious alternative and it collapses that ordering — `tan()` runs away so
-  fast that the shallow beats stay shallow while the steep ones go vertical, and
-  the lap stops being the same lap.
-- **climbs give up**: `g * (1 - t)`. by the last lap there is nothing left to
-  lift the cart back up with, which is the whole reason the lap stops closing.
+- `steepen(g, t)` is a **gain and a bias in angle space** — one affine function
+  meeting three requirements at once:
+  - **continuity**: it cannot jump, anywhere, for any grade;
+  - **ordering**: a positive gain cannot reorder two grades, so the beat authored
+    as the gentlest descent is still the gentlest on the fourth lap, merely
+    gentle at fifty degrees;
+  - **tangents**: two sections that agreed on a grade still agree after it, so
+    the cyclic continuity `assertRouteSane` checks survives for free.
+
+  slope space is the obvious alternative and it fails the second: `tan()` runs
+  away so fast that the shallow beats stay shallow while the steep ones go
+  vertical, and the lap stops being the same lap.
+
+  the first version ran descents and climbs through *different* formulas and gave
+  every descent a floor of fifty-eight degrees, so a grade crossing zero — which
+  the authored table does five times a lap — jumped instantly from level to a
+  third of the way past vertical. **over a thousand degrees per metre on the
+  second lap.** from inside the cart that is not a steep railway, it is a
+  stutter, and it lands on every section boundary in the journey. the fix is the
+  affine form above; the guard is the sweep in the verification block below.
+- **climbs give up**, but as a consequence rather than as a special case: by the
+  last lap the bias has taken the whole profile below level and there is nothing
+  left to lift the cart with, which is why the lap stops closing.
 - **the speeds follow.** three things held the ride down and all three give up
   together: drag falls off per lap until it stops binding, the chain and the
   brake fins lose their grip so the platform no longer pins the cart back to
   walking pace once a lap, and the `V_MAX` cap lifts out of the way so the
   *height of the drop* is what decides the speed rather than a constant. peak
-  per lap: about **79, 122, 171 and 211 km/h**, which is roughly eighty-five per
+  per lap: about **78, 124, 177 and 220 km/h**, which is roughly eighty-five per
   cent of what falling the lap's own height would give you. then the fall, which
   has no number.
 
@@ -59,6 +74,17 @@ validated against. `fitBend`'s `!got2` path is what carries it: a track that
 never reaches 56 metres of depth inside its 88 metres of walk pins the far knot
 to wherever the walk actually ended, so the near half of the picture still gets
 its curve. this is a documented degradation, not an accident.
+
+## the bank
+
+the cart banks live — the resultant of gravity and the turn is held square to the
+floor — which is a small lie that reads as a very good one, but only up to about
+the speed the track was designed for. `atan2(v²·curv, G)` saturates, so at four
+times that speed the bank sits pinned at its ±0.85 limit through every turn and
+then crosses the whole range inside the centimetre where the curvature changes
+sign. that is a roll stutter on every beat boundary and it is not the track. the
+bank therefore reads `min(speed, V_MAX)`; the *ride* still gets faster, the
+picture just stops pretending the banking does.
 
 ## the fissures
 
@@ -125,6 +151,10 @@ acceptance gates:
 
 - `assertRouteSane` is empty, and the first lap's grades are all inside the
   thirty degrees the fit is honest over;
+- **the grade is smooth on every lap.** sweep `gradeAt` at 2 cm and take the
+  worst `|Δgrade|`: it must stay within an order of magnitude of the first lap's
+  own rate — about 1.5 deg/m — on every lap. this is the one number that catches
+  the failure above, and no image test does;
 - every descent is steeper on each successive lap, and their *ordering* is
   unchanged;
 - no discontinuity spike at the seam into the shaft — the tangent is continuous
