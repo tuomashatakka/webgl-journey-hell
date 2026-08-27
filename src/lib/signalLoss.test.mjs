@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   SIGNAL_GRACE,
   SIGNAL_METER_DELAY,
+  SIGNAL_METER_FADE,
   SIGNAL_PEAK,
   SIGNAL_RAMP,
   dbAt,
@@ -56,12 +57,22 @@ describe('signal loss timeline', () => {
     }
   })
 
-  test('brings the meter in after the loss has been running a while', () => {
+  test('brings the meter up with the caption, slowly', () => {
     const at = a => signalLossAt(SIGNAL_GRACE + a).meter
 
-    expect(at(SIGNAL_METER_DELAY - 0.01)).toBe(0)
-    expect(at(SIGNAL_METER_DELAY + 1.25)).toBeGreaterThan(0.2)
-    expect(at(SIGNAL_METER_DELAY + 4)).toBe(1)
+    // It arrives with the loss rather than after it, so there is no delay left
+    // to sit through — but it takes most of the ramp to become readable.
+    expect(SIGNAL_METER_DELAY).toBe(0)
+    expect(at(0)).toBe(0)
+    expect(at(0.5)).toBeGreaterThan(0)
+
+    expect(at(SIGNAL_METER_FADE * 0.5)).toBeCloseTo(0.5, 6)
+    expect(at(SIGNAL_METER_FADE - 0.01)).toBeLessThan(1)
+    expect(at(SIGNAL_METER_FADE)).toBe(1)
+
+    // A long fade was the point: half of it must still be short of a quarter.
+    expect(SIGNAL_METER_FADE).toBeGreaterThanOrEqual(10)
+    expect(at(SIGNAL_METER_FADE * 0.25)).toBeLessThan(0.25)
   })
 
   test('the readout falls, unsteadily, and settles', () => {

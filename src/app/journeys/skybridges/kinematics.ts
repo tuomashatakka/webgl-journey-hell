@@ -60,10 +60,14 @@ export function getSkybridgesMarks (time: number): JourneyMarks {
 }
 
 /**
- * The lap at which the route has stopped going anywhere and the signal starts to
- * go with it. This journey has no ending to reach, so the count stands in for
- * one: by here its own decay has saturated and another lap says nothing new.
- * See lib/signalLoss.
+ * The lap on which the sun goes off.
+ *
+ * Two rather than the five every other looping journey uses, because here the
+ * signal loss is not the point — it is the *consequence*. The star this whole
+ * run is lit by comes apart (see the blast sequence in shader.ts), and an event
+ * that only fires after nine minutes of walking is an event nobody sees. Two
+ * laps is about three and a half minutes: long enough that the run has settled
+ * into a rhythm, short enough that breaking it lands.
  */
-export const SIGNAL_LOSS_LAP = 5
+export const SIGNAL_LOSS_LAP = 2
 

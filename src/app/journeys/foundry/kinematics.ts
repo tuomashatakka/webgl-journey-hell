@@ -10,19 +10,22 @@
 import {
   advance,
   createFoundryState,
-  CUBE_SPACING,
-  cycDelta,
   decayFor,
+  LAP_ARC,
   MODE_BOARD,
   MODE_BRAKE,
   MODE_FALL,
+  MODE_OBLIVION,
   MODE_SETTLE,
   MODE_WALK,
+  OBLIVION_LOOP,
   pistonExtension,
   SECTION_COUNT,
   SECTION_LEN,
-  SPAN_CUBES,
-  SPAN_Z0
+  shaftHeadFor,
+  SPAN_ARC,
+  SPAN_TILES,
+  tileArc
 } from './physics'
 import type { FoundryState } from './physics'
 import type { JourneySimulation } from '@/components/withShaderJourney'
@@ -49,11 +52,13 @@ export const FOUNDRY_SECTIONS: FoundrySection[] = [
 ]
 
 /** Shown instead of the hall name while something drastic is happening. */
-const EVENT_FALL    = 'THE CABLE PARTS'
-const EVENT_SHOES   = 'EMERGENCY SHOES'
-const EVENT_LANDING = 'THE GATE OPENS'
-const EVENT_BOARD   = 'THE SHUTTER'
-const EVENT_SPAN    = 'THE FOLDING SPAN'
+const EVENT_FALL     = 'THE CABLE PARTS'
+const EVENT_SHOES    = 'EMERGENCY SHOES'
+const EVENT_SLIPPING = 'THE SHOES WILL NOT HOLD'
+const EVENT_LANDING  = 'THE GATE OPENS'
+const EVENT_BOARD    = 'THE SHUTTER'
+const EVENT_SPAN     = 'THE STEPPING STONES'
+const EVENT_OBLIVION = 'THE PIT HAS NO FLOOR'
 
 export function sectionFor (state: FoundryState): FoundrySection {
   const band = Math.min(
@@ -63,19 +68,26 @@ export function sectionFor (state: FoundryState): FoundrySection {
   return FOUNDRY_SECTIONS[band]
 }
 
-/** True while the walker is out over the melt on the unfolding cubes. */
+/**
+ * True while the walker is out over the melt on the tumbling plate.
+ *
+ * Measured along the route rather than in z, for the same reason stepSpan is:
+ * the crossing spends a third of its length going sideways, and in z alone the
+ * middle of it is indistinguishable from standing on the lip.
+ */
 function onSpan (state: FoundryState): boolean {
-  const first = cycDelta(SPAN_Z0 - CUBE_SPACING * 0.5, state.z)
-  const last  = cycDelta(SPAN_Z0 + (SPAN_CUBES - 0.5) * CUBE_SPACING, state.z)
-  return first <= 0 && last >= 0
+  const arc = state.dist - (state.lapEnd - LAP_ARC)
+  return arc >= tileArc(0) - 1 && arc <= tileArc(0) + SPAN_ARC + 1
 }
 
 /** The ride's own label, or '' once you are on foot. */
 function rideEvent (state: FoundryState): string {
+  if (state.mode === MODE_OBLIVION)
+    return EVENT_OBLIVION
   if (state.mode === MODE_FALL)
     return EVENT_FALL
   if (state.mode === MODE_BRAKE)
-    return EVENT_SHOES
+    return state.loop >= OBLIVION_LOOP ? EVENT_SLIPPING : EVENT_SHOES
   if (state.mode === MODE_SETTLE)
     return EVENT_LANDING
   if (state.mode === MODE_BOARD)
@@ -117,13 +129,19 @@ export function createFoundrySimulation (): JourneySimulation {
   // Scratch buffers — packed in place every frame, never reallocated.
   const debris  = new Array<number>(24).fill(0)
   const debrisQ = new Array<number>(24).fill(0)
-  const fold0   = new Array<number>(4).fill(0)
-  const fold1   = new Array<number>(4).fill(0)
+  const folds   = [
+    new Array<number>(4).fill(0),
+    new Array<number>(4).fill(0),
+    new Array<number>(4).fill(0),
+    new Array<number>(4).fill(0),
+  ]
 
   return {
     step (dt: number) {
       carry = advance(state, dt, carry)
-      if (state.loop >= SIGNAL_LOSS_LAP)
+      // The foundry's ending is a real one now, so the signal goes with it
+      // rather than on a lap count: nothing comes after MODE_OBLIVION.
+      if (state.mode === MODE_OBLIVION)
         signalAge += dt
     },
 
@@ -140,10 +158,8 @@ export function createFoundrySimulation (): JourneySimulation {
         debrisQ[o + 2] = b.qz
         debrisQ[o + 3] = b.qw
       }
-      for (let i = 0; i < 4; i++) {
-        fold0[i] = state.fold[i]
-        fold1[i] = state.fold[i + 4]
-      }
+      for (let i = 0; i < SPAN_TILES; i++)
+        folds[i >> 2][i & 3] = state.fold[i]
 
       // The camera is in the cage for every phase but the walk, which is what
       // uRide.x switches: it moves the eye into the car and lets the shader skip
@@ -153,14 +169,25 @@ export function createFoundrySimulation (): JourneySimulation {
       return {
         // Cyclic position, not total distance: the shader's world is periodic,
         // so keeping the camera inside one lap costs no precision after an hour.
-        uWalk:    [ state.z, state.smoothLoop, decayFor(state.smoothLoop), state.roll ],
-        uGait:    [ state.eyeY, state.sway, state.yaw, state.pitch ],
-        uRide:    [ riding, state.shutter, state.gate, state.modeTime ],
-        uCage:    [ state.y, state.cageV, state.cageA, state.mode ],
-        uSim:     [ state.shakeX, state.shakeY, state.spark, state.cableIntact ? 1 : 0 ],
-        uMech:    [ state.crank, pistonExtension(state.crank), state.hook, state.chain ],
-        uFold0:   fold0,
-        uFold1:   fold1,
+        uWalk: [ state.z, state.smoothLoop, decayFor(state.smoothLoop), state.roll ],
+        // The route's lateral offset rides in with the sway because the shader's
+        // only consumer of that slot is the eye's x — the two are the same
+        // number to everything downstream, and the sway alone was never it.
+        uGait: [ state.eyeY, state.sway + state.lateral, state.yaw, state.pitch ],
+        uRide: [ riding, state.shutter, state.gate, state.modeTime ],
+        uCage: [ state.y, state.cageV, state.cageA, state.mode ],
+        uSim:  [ state.shakeX, state.shakeY, state.spark, state.cableIntact ? 1 : 0 ],
+        uMech: [ state.crank, pistonExtension(state.crank), state.hook, state.chain ],
+        uFall: [
+          state.fallen,
+          state.mode === MODE_OBLIVION ? state.modeTime : 0,
+          shaftHeadFor(state.loop),
+          state.mode === MODE_OBLIVION ? 1 : 0,
+        ],
+        uFold0:   folds[0],
+        uFold1:   folds[1],
+        uFold2:   folds[2],
+        uFold3:   folds[3],
         uDebris:  debris,
         uDebrisQ: debrisQ,
       }
@@ -185,11 +212,3 @@ export function createFoundrySimulation (): JourneySimulation {
     },
   }
 }
-
-/**
- * The lap at which the route has stopped going anywhere and the signal starts to
- * go with it. This journey has no ending to reach, so the count stands in for
- * one: by here its own decay has saturated and another lap says nothing new.
- * See lib/signalLoss.
- */
-export const SIGNAL_LOSS_LAP = 5

@@ -29,7 +29,7 @@ app/
     liminal/                # THE LIMINAL JOURNEY (raymarched descent + audio)
     stairwell/              # THE STAIRWELL (six-act industrial rupture + audio)
     skybridges/             # SKYBRIDGES (collapsing glass spans over a cloud sea)
-    foundry/                # THE FOUNDRY (seven halls, rigid-body physics)
+    foundry/                # THE FOUNDRY (seven halls, rigid-body physics, terminal fall)
     hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
     natatorium/             # THE NATATORIUM (flooded poolrooms, turning route + audio)
     switchback/             # THE SWITCHBACK (mine railway that tips over, then falls + audio)

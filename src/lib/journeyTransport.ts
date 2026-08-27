@@ -103,11 +103,12 @@ export interface TransportState {
   scrubMix: number;
 }
 
-// Forward shuttle. 40 steps of 1/30s per frame is ~1.3s of journey time a
-// frame — fast enough to read as a shuttle, slow enough that the picture is
-// still legible on the way past.
+// Forward shuttle. 24 steps of 1/30s per frame is ~0.8s of journey time a
+// frame — fast enough to read as a shuttle, slow enough that you can actually
+// see what you are passing. It was half again this and the world went by as a
+// smear, which is a fast-forward you cannot navigate with.
 const FF_STEP_DT     = 1 / 30
-const FF_STEPS_FRAME = 40
+const FF_STEPS_FRAME = 24
 const SKIP_STEP_DT   = 1 / 20
 
 /** Journey-seconds a single forward move may cover before giving up. */
@@ -322,7 +323,7 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
           // Each rewind frame replays from zero, so the animation costs
           // O(frames x t). Shorten it on a long-running journey rather than
           // dropping frames on it.
-          beginBackward(target, time > 120 ? 8 : 20)
+          beginBackward(target, time > 120 ? 14 : 32)
           break
         }
 

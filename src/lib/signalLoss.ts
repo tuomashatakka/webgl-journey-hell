@@ -20,11 +20,24 @@ export const SIGNAL_GRACE = 8
 /** ...and how long it then takes to arrive, once it has started. */
 export const SIGNAL_RAMP = 15
 
-/** Seconds of *active* loss before the dB meter appears. */
-export const SIGNAL_METER_DELAY = 8
+/**
+ * Seconds of *active* loss before the dB meter appears.
+ *
+ * Zero: the readout comes up with the caption, not after it. The two are one
+ * instrument panel, and a panel that arrives in two instalments reads as two
+ * separate events rather than as one receiver giving up.
+ */
+export const SIGNAL_METER_DELAY = 0
 
-/** How long the meter takes to fade in once it is due. */
-const METER_FADE = 2.5
+/**
+ * How long the meter takes to fade in once it is due.
+ *
+ * Long — most of the ramp. It is doing the work the delay used to do: the
+ * readout is *there* from the first frame of the loss and simply cannot be read
+ * yet, which is a slower and much less announced arrival than waiting eight
+ * seconds and then cutting it in over two.
+ */
+export const SIGNAL_METER_FADE = 12
 
 /**
  * Never 1.
@@ -100,7 +113,7 @@ export function signalLossAt (signalAge: number): SignalLoss {
 
   return {
     level: SIGNAL_PEAK * smootherstep(0, SIGNAL_RAMP, age),
-    meter: smootherstep(SIGNAL_METER_DELAY, SIGNAL_METER_DELAY + METER_FADE, age),
+    meter: smootherstep(SIGNAL_METER_DELAY, SIGNAL_METER_DELAY + SIGNAL_METER_FADE, age),
     db:    dbAt(age),
     age,
   }

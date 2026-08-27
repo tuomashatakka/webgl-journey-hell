@@ -66,8 +66,11 @@ const COMMON = `
   uniform vec4 uMech;          // crank, pistonExtension, hookAngle, chainAngle
   uniform vec4 uDebris[6];     // xz = cage-frame position, y = world height, w = scale
   uniform vec4 uDebrisQ[6];    // orientation quaternion
-  uniform vec4 uFold0;         // fold coordinate of span cubes 0..3
-  uniform vec4 uFold1;         // fold coordinate of span cubes 4..7
+  uniform vec4 uFall;          // metresFallen, oblivionSeconds, shaftHead, inOblivion
+  uniform vec4 uFold0;         // fold coordinate of span tiles 0..3
+  uniform vec4 uFold1;         // fold coordinate of span tiles 4..7
+  uniform vec4 uFold2;         // fold coordinate of span tiles 8..11
+  uniform vec4 uFold3;         // fold coordinate of span tiles 12..15
 
   const float PI = 3.14159265359;
 
@@ -83,19 +86,23 @@ const COMMON = `
   // --- the hoist shaft (mirrors physics.ts) ---------------------------------
   const float LIFT_Z = 18.0;
   const float SHAFT_R = 3.0;
-  const float SHAFT_HEAD = 128.0;
+  // Shaft head is not a constant any more: the cable parts higher up every run,
+  // so the head goes with it and arrives as a uniform. See liftTopFor.
   const float PIT_Y = -3.0;
   const float CAGE_R = 1.5;
   const float CAGE_H = 2.6;
 
-  // --- the folding span (mirrors physics.ts) --------------------------------
-  const float SPAN_Z0 = 220.0;
-  const float CUBE_SP = 4.0;
-  const float CUBE_H = 1.2;
-  const float PANEL_T = 0.07;
-  const float SPAN_MID = 234.0;  // centre of the cut in the furnace floor
-  const float SPAN_HALF = 16.0;  // half-length of that cut
+  // --- the stepping stones (mirrors physics.ts) -----------------------------
+  const float SPAN_Z0 = 219.0;
+  const float TILE_H = 1.2;      // plate half-size
+  const float TILE = 2.4;        // step between tiles — they share an edge
+  const float PLATE_T = 0.09;    // plate half-thickness
+  const float SPAN_MID = 229.8;  // centre of the cut in the furnace floor
+  const float SPAN_HALF = 13.0;  // half-length of that cut
   const float MELT_Y = -30.0;
+
+  // --- oblivion (mirrors physics.ts) ----------------------------------------
+  const float OB_PERIOD = 64.0;  // vertical period of the shaft with no bottom
 
   // --- deployment ------------------------------------------------------------
   const float DEPLOY_SIGHT = 20.0; // metres ahead at which a mechanism wakes up
@@ -160,6 +167,51 @@ const COMMON = `
   float gateOpen() { return uRide.z; }
   // Free fall reads as weightlessness: the cage's acceleration approaches -g.
   float weightless() { return smoothstep(-6.0, -9.2, cageA()); }
+  float oblivion() { return uFall.w; }
+  float fallen() { return uFall.x; }
+
+  // ========================== THE DECAY ====================================
+  //
+  // The lap used to come apart by *bending*: a low-frequency sin/cos pushed
+  // through the sample point, so the corridor snaked and breathed. It read as
+  // wind. Nothing that only leans ever reads as damage, which is why four laps
+  // of it never felt like four laps.
+  //
+  // The liminal journey has the model for what damage actually looks like:
+  // there the world cracks open along a vein field and the distance function
+  // itself begins to boil, so surfaces come apart instead of swaying. This is
+  // that, in a foundry — the plate splits, and what is behind the plate is the
+  // same melt that is under the span.
+
+  /**
+   * liminal/shaders.ts getFloorCrack(): a signed noise whose zero set is the
+   * crack, widened by the decay, and gated by a much lower-frequency mask so the
+   * breakage arrives in patches rather than everywhere at once.
+   */
+  float crackField(vec3 p, float dec) {
+    float d = clamp(dec * 0.62, 0.0, 0.80);
+    if (d < 0.05) return 0.0;
+    float veins = sin(p.x * 3.5 + cos(p.z * 4.5)) * cos(p.z * 3.1 + sin(p.y * 4.0));
+    float edge = smoothstep(mix(0.004, 0.11, d), 0.0, abs(veins));
+    float patch = smoothstep(0.1, 0.5,
+      sin(p.x * 0.35) * cos(p.z * 0.45) * sin(p.y * 0.25) + d * 0.35);
+    return edge * patch * d;
+  }
+
+  /**
+   * High-frequency corruption of the field itself.
+   *
+   * The amplitude has to stay well under the march's STEP_K, or it overshoots
+   * the first hit and punches holes through the world instead of roughening it.
+   * A guard keeps it off the walker's immediate surroundings too: this is a
+   * corridor with a camera *inside* it, and a boiling field at arm's length is
+   * a face full of static rather than a place coming apart.
+   */
+  float fieldBoil(vec3 p, float dec) {
+    if (dec < 0.02) return 0.0;
+    return sin(p.x * 21.0 + iTime * 27.0) * sin(p.y * 33.0) * sin(p.z * 15.0)
+      * 0.030 * dec;
+  }
 
   // --- the loop's coordinate system ----------------------------------------
   // The walk is unbounded but the world is not: everything is a function of the
@@ -227,7 +279,7 @@ const COMMON = `
     if (i < 3.5) return vec2(2.6, 3.9);   // coolant tier
     if (i < 4.5) return vec2(4.2, 6.4);   // gearworks
     if (i < 5.5) return vec2(2.1, 3.0);   // brake run
-    return vec2(5.0, 8.0);                // furnace floor
+    return vec2(7.8, 8.0);                // furnace floor — wide, for the crossing
   }
 
   // Per-hall rib and lamp cadence, in metres. Every spacing divides SEC_LEN, so
@@ -497,7 +549,7 @@ const COMMON = `
 
   float shaftInterior(vec3 p, float dz) {
     return min(SHAFT_R - max(abs(p.x), abs(dz)),
-               min(p.y - PIT_Y, SHAFT_HEAD - p.y));
+               min(p.y - PIT_Y, uFall.z - p.y));
   }
 
   // Everything solid in the shaft that is not the cage: guide rails the shoes
@@ -640,80 +692,199 @@ const COMMON = `
     return length(vec2(p.x - whip, dz - whip * 0.6)) - 0.035;
   }
 
-  // ======================= THE FOLDING SPAN ================================
-  // The furnace floor is cut away over the melt. The only walkway is a line of
-  // cubes that unfold their six faces about hinge edges — panels swinging out
-  // along all three axes to lay a floor a moment before it is stood on, then
-  // closing again behind. Each cube's fold coordinate is a damped hinge
-  // integrated on the CPU (physics.ts), so the panels overshoot and settle
-  // instead of easing, and they ring when a boot lands on them.
+  // ====================== THE STEPPING STONES ==============================
+  // The furnace floor is cut away over the melt, and the only way across is a
+  // single steel plate that lays itself out ahead of you.
+  //
+  // It is *one* plate. Tile i is not a separate object: it is tile (i-1) rotated
+  // a half turn about the edge the two of them share, so the thing tumbles end
+  // over end across the gap and the tile under your boots is the hinge for the
+  // next one. f = 0 has it stowed flat on its predecessor, f = 0.5 standing
+  // vertical, f = 1 landed. The fold coordinate is a damped hinge integrated on
+  // the CPU (physics.ts), so it overshoots and settles instead of easing, and it
+  // rings when a boot lands on it.
+  //
+  // The route turns by flipping about a *side* edge rather than the leading one,
+  // which is the whole reason the crossing can go left and right at all — and
+  // why every step is exactly one tile wide.
 
-  /** Fold coordinate of span cube 'i', unpacked from the two vec4 slots. */
+  /** Fold coordinate of span tile 'i', unpacked from the four vec4 slots. */
   float foldAt(int i) {
-    if (i == 0) return uFold0.x;
-    if (i == 1) return uFold0.y;
-    if (i == 2) return uFold0.z;
-    if (i == 3) return uFold0.w;
-    if (i == 4) return uFold1.x;
-    if (i == 5) return uFold1.y;
-    if (i == 6) return uFold1.z;
-    return uFold1.w;
+    if (i < 4) {
+      if (i == 0) return uFold0.x;
+      if (i == 1) return uFold0.y;
+      if (i == 2) return uFold0.z;
+      return uFold0.w;
+    }
+    if (i < 8) {
+      if (i == 4) return uFold1.x;
+      if (i == 5) return uFold1.y;
+      if (i == 6) return uFold1.z;
+      return uFold1.w;
+    }
+    if (i < 12) {
+      if (i == 8) return uFold2.x;
+      if (i == 9) return uFold2.y;
+      if (i == 10) return uFold2.z;
+      return uFold2.w;
+    }
+    if (i == 12) return uFold3.x;
+    if (i == 13) return uFold3.y;
+    if (i == 14) return uFold3.z;
+    return uFold3.w;
   }
 
   /**
-   * One hinged face. 'q' is the sample relative to the hinge edge, with the
-   * hinge running along local Z. At a = 0 the panel stands vertical (closed
-   * cube); at a = -PI/2 it lies flat, extending the walkway.
+   * Grid coordinate of tile 'i', in steps of TILE. Identical literals to
+   * SPAN_IX / SPAN_IZ in physics.ts — the walker follows a spline through these
+   * exact points, so a disagreement here is a walk into the melt.
    */
-  float foldPanel(vec3 q, float a) {
-    q.xy = rot(-a) * q.xy;
-    return sdBox(q - vec3(0.0, CUBE_H, 0.0), vec3(PANEL_T, CUBE_H, CUBE_H));
+  vec2 tileGrid(int i) {
+    if (i < 8) {
+      if (i <= 0) return vec2( 0.0, 0.0);
+      if (i == 1) return vec2( 0.0, 1.0);
+      if (i == 2) return vec2( 0.0, 2.0);
+      if (i == 3) return vec2(-1.0, 2.0);
+      if (i == 4) return vec2(-2.0, 2.0);
+      if (i == 5) return vec2(-2.0, 3.0);
+      if (i == 6) return vec2(-2.0, 4.0);
+      return vec2(-1.0, 4.0);
+    }
+    if (i == 8) return vec2( 0.0, 4.0);
+    if (i == 9) return vec2( 1.0, 4.0);
+    if (i == 10) return vec2( 2.0, 4.0);
+    if (i == 11) return vec2( 2.0, 5.0);
+    if (i == 12) return vec2( 2.0, 6.0);
+    if (i == 13) return vec2( 2.0, 7.0);
+    if (i == 14) return vec2( 2.0, 8.0);
+    return vec2( 2.0, 9.0);
   }
 
-  /** A single cube of the span, centred at the origin, unfolded by 'f' (0..1). */
-  float mapCube(vec3 q, float f) {
-    float a = -f * PI * 0.5;
-
-    // Base plate: the face you actually stand on. Always present.
-    float d = sdBox(q - vec3(0.0, -CUBE_H, 0.0), vec3(CUBE_H, PANEL_T, CUBE_H));
-
-    // Four side faces, hinged on the base plate's four edges and swinging out
-    // along ±X and ±Z — the "all axes" fold.
-    d = min(d, foldPanel(vec3(q.x - CUBE_H, q.y + CUBE_H, q.z), a));
-    d = min(d, foldPanel(vec3(-q.x - CUBE_H, q.y + CUBE_H, q.z), a));
-    d = min(d, foldPanel(vec3(q.z - CUBE_H, q.y + CUBE_H, q.x), a));
-    d = min(d, foldPanel(vec3(-q.z - CUBE_H, q.y + CUBE_H, q.x), a));
-
-    // Lid: the Y-axis fold. Hinged on the +X top edge, it swings through a
-    // half turn — from lying closed across the top, up through vertical, to
-    // flat again on the far side — opening the cube into an overhead canopy.
-    // foldPanel measures its panel from +Y, so the extra quarter turn starts it
-    // pointing along -X.
-    d = min(d, foldPanel(vec3(q.x - CUBE_H, q.y - CUBE_H, q.z), -f * PI + PI * 0.5));
-
-    return d;
+  /** World (x, z) of tile 'i'. */
+  vec2 tileAt(int i) {
+    vec2 g = tileGrid(i);
+    return vec2(g.x * TILE, SPAN_Z0 + g.y * TILE);
   }
 
   /**
-   * The eight cubes of the span. Each is rejected by a bounding sphere first,
-   * so a ray typically pays for one or two cubes rather than all eight.
+   * Tile 'i', drawn where the flip has actually got it to.
+   *
+   * The hinge is the shared edge — the midpoint of the two centres — and the
+   * rotation runs in the plane containing the step direction and Y. One box, not
+   * six: at f = 1 the (u, y) frame is unrotated and the plate lies in its own
+   * place, at f = 0 it has swung a full PI and is lying on its predecessor.
+   */
+  float mapTile(vec3 q, vec2 stepDir, float f) {
+    // Sample relative to the hinge, which is half a step back along the arrival
+    // direction — i.e. exactly the edge tile (i-1) is on the other side of.
+    vec2 rel = vec2(q.x, q.z) + stepDir * TILE_H;
+    float u = dot(rel, stepDir);
+    float w = dot(rel, vec2(-stepDir.y, stepDir.x));
+
+    vec2 r = rot((1.0 - f) * PI) * vec2(u, q.y);
+    // Plate, plus a stiffening rib down its underside so the silhouette reads as
+    // a machined deck rather than as a sheet of paper when it stands vertical.
+    float plate = sdBox(vec3(r.x - TILE_H, r.y, w), vec3(TILE_H, PLATE_T, TILE_H));
+    float rib = sdBox(vec3(r.x - TILE_H, r.y + PLATE_T * 2.4, w),
+                      vec3(TILE_H * 0.82, PLATE_T * 1.7, PLATE_T * 2.0));
+    return min(plate, rib);
+  }
+
+
+  /**
+   * The sixteen tiles. Each is rejected against a cheap bound first, so a ray
+   * pays for the two or three that are actually near it — and because a tile is
+   * one box rather than a six-panel cube, sixteen of these cost less than the
+   * eight cubes they replace.
    */
   float mapSpan(vec3 p, float zc) {
     float d = 1e9;
-    for (int i = 0; i < 8; i++) {
-      float dzi = cycd(zc - (SPAN_Z0 + float(i) * CUBE_SP));
-      vec3 q = vec3(p.x, p.y - CUBE_H, dzi);
-      // The unfolded net reaches ~2 cube-halves past the body diagonal.
-      float bound = length(q) - CUBE_H * 3.4;
-      if (bound < 0.5) d = min(d, mapCube(q, foldAt(i)));
+    // Tile 0 arrives along the walk, off the lip of the hall plate.
+    vec2 prev = tileAt(0) - vec2(0.0, TILE);
+    for (int i = 0; i < 16; i++) {
+      vec2 c = tileAt(i);
+      vec3 q = vec3(p.x - c.x, p.y, cycd(zc - c.y));
+      // A flipped tile sweeps a half-disc of radius 2·TILE_H about its hinge.
+      float bound = length(q) - TILE_H * 2.7;
+      if (bound < 0.4) d = min(d, mapTile(q, normalize(c - prev), foldAt(i)));
       else d = min(d, bound);
+      prev = c;
     }
     return d;
+  }
+
+  // ============================= OBLIVION ==================================
+  //
+  // Past the pit there is no shaft, no landing and no bottom — only the machine
+  // that the foundry was always feeding, running in the dark on either side of
+  // the cage. Gear rims and piston rods come through the fall close enough to
+  // take the cage apart and keep missing it.
+  //
+  // The world here is periodic in Y with period OB_PERIOD, and the cage's own
+  // height wraps inside it (see physics.ts). That is not a shortcut, it is the
+  // only way a fall with no end stays representable: an unbounded y is a float
+  // that runs out of mantissa in a few minutes, and it would do it while the
+  // camera is the only thing in shot.
+
+  /** One toothed rim, axis along local X, spinning at 'sp'. */
+  float obGear(vec3 a, float R, float sp) {
+    a.yz = rot(sp) * a.yz;
+    float rim = max(sdCylX(a, R, 0.16), -sdCylX(a, R - 0.55, 1.0));
+    // Teeth: a radial comb standing proud of the rim, cut square.
+    float teeth = abs(mod(atan(a.z, a.y) * 13.0 / PI + 0.5, 1.0) - 0.5) - 0.26;
+    float ring = max(sdCylX(a, R + 0.34, 0.13), teeth * 0.30);
+    float spoke = max(sdCylX(a, R, 0.09),
+                      abs(mod(atan(a.z, a.y) * 3.0 / PI + 0.5, 1.0) - 0.5) * 0.9 - 0.10);
+    return min(min(rim, ring), min(spoke, sdCylX(a, 0.22, 0.30)));
+  }
+
+  float mapOblivion(vec3 p) {
+    gMat = 3.0; gWear = 0.55; gGlow = 0.0;
+    // The cage never leaves the shaft's z, so everything is still placed against
+    // it — it is only the floor of the world that has gone.
+    float dz = cycd(cyc(p.z) - LIFT_Z);
+
+    // Everything is placed against the *cage*, and the cage's y wraps, so the
+    // machine is laid out in a band that repeats every OB_PERIOD. The fall is
+    // going nowhere and it is meant to look like it.
+    float band = floor(p.y / OB_PERIOD);
+    float ly = p.y - (band + 0.5) * OB_PERIOD;
+    float side = mod(band, 2.0) * 2.0 - 1.0;
+    float spin = uFall.x * 0.09 + iTime * 2.2;
+
+    // Two gear rims per band, on opposite walls, cutting through the fall line.
+    float d = obGear(vec3(p.x - side * 3.5, ly - 9.0, dz), 2.9, spin);
+    d = min(d, obGear(vec3(p.x + side * 3.9, ly + 11.5, dz - 1.4), 3.6, -spin * 0.72));
+    d = min(d, obGear(vec3(p.x - side * 4.4, ly - 24.0, dz + 1.1), 2.2, spin * 1.9));
+
+    // Piston rods reciprocating across the shaft. uMech.y is the exact
+    // slider-crank displacement the flywheel is already driving upstairs.
+    for (int k = 0; k < 3; k++) {
+      float fk = float(k);
+      float py = ly + 26.0 - fk * 19.0;
+      float ph = uMech.y + sin(fk * 2.1 + spin * 0.5) * 0.6;
+      float reach = 2.2 + ph * 1.7;
+      vec3 rp = vec3(abs(p.x) - reach, py, dz - 0.6 + fk * 0.9);
+      d = min(d, sdCylX(rp, 0.16, 2.6));
+      d = min(d, sdBox(vec3(rp.x - 2.4, rp.y, rp.z), vec3(0.34, 0.46, 0.46)));
+    }
+
+    // Cage and contents. Nothing else: there is no wall to fall past.
+    float cm;
+    float cage = mapCage(p, dz, cm);
+    if (cage < d) { d = cage; gMat = cm; gWear = 0.70; gGlow = step(3.5, cm) * step(cm, 4.5); }
+    float deb = mapDebris(p, dz);
+    if (deb < d) { d = deb; gMat = 2.0; gWear = 0.85; gGlow = 0.0; }
+
+    // The machine is coming apart too, at the rate everything else does.
+    return d + fieldBoil(p, decay()) * 0.6;
   }
 
   // ============================== THE MAP ==================================
 
   float mapScene(vec3 p) {
+    if (oblivion() > 0.5) return mapOblivion(p);
+
     float zc = cyc(p.z);
     float dzl = cycd(zc - LIFT_Z);
     gMat = 0.0; gWear = 0.4; gGlow = 0.0;
@@ -724,19 +895,16 @@ const COMMON = `
       float a, b, t, tf;
       secBlend(zc, a, b, t, tf);
 
-      // --- per-loop decay: the corridor snakes, breathes and closes in ------
-      // Guarded to leave the walker's immediate surroundings alone, otherwise at
-      // high iterations the walls fold through the camera.
+      // --- per-loop decay: the corridor splits and boils ---------------------
+      // Not displacement. See crackField/fieldBoil: the plate comes apart along
+      // a vein field and the field itself corrupts, which is damage rather than
+      // weather. The guard keeps both off the walker's immediate surroundings —
+      // at high iterations an unguarded version puts the breakage inside the
+      // camera, and a corridor that is cracking open two metres away is far
+      // worse than one you are standing in the middle of.
       vec3 pw = p;
       float dec = decay();
-      if (dec > 0.005) {
-        float guard = smoothstep(1.2, 8.0, abs(p.z - walkZ()));
-        float snake = sin(p.z * 0.055 + iTime * 1.1) * dec * 1.6;
-        float wx = sin(p.z * 1.7 + iTime * 2.0) * cos(p.y * 1.4) * 0.42 * dec;
-        float wy = cos(p.z * 1.5 + iTime * 1.5) * sin(p.x * 1.2) * 0.34 * dec;
-        pw.x += (snake + wx) * guard;
-        pw.y += wy * guard;
-      }
+      float guard = dec > 0.005 ? smoothstep(1.2, 7.0, abs(p.z - walkZ())) : 0.0;
 
       vec2 pr = mix(secProfile(a), secProfile(b), t);
       float squeeze = 1.0 - dec * 0.18;
@@ -745,6 +913,16 @@ const COMMON = `
 
       float wear;
       float hall = mapHall(pw, zc, W, H, a, wear);
+      // The plate splits open. Subtracting the crack field pulls the surface
+      // back along its own veins, so the split is a hole in the wall with the
+      // melt behind it rather than a line drawn on the wall.
+      // This field is positive *inside*, so a groove cut into the wall is a
+      // larger value, not a smaller one — the opposite sign to liminal's, whose
+      // field is the usual outside-positive kind.
+      if (guard > 0.0) {
+        hall += crackField(p, dec) * 0.55 * guard;
+        hall += fieldBoil(p, dec) * guard;
+      }
       // The shaft's interior unions with the hall's, opening the ceiling above
       // the landing. Far from it the shaft is deeply negative and does nothing.
       d = max(hall, d);
@@ -784,6 +962,12 @@ const COMMON = `
       // non-Lipschitz for a few metres either side of a boundary; shorten the
       // step to absorb it.
       if (t > 0.02 && t < 0.995) d *= 0.78;
+      // The cracks do the same thing, harder: a term that *adds* to a
+      // positive-inside field is an over-estimate of the distance to the wall,
+      // and over-estimates are exactly what a sphere trace cannot survive. It
+      // steps straight through the plate and the corridor fills with holes. The
+      // step has to come down with the decay, and this is what it costs.
+      if (dec > 0.05) d *= mix(1.0, 0.60, min(1.0, dec * 1.2));
     }
 
     // --- the shaft's own fittings, the cage, and what is loose in it --------
@@ -830,9 +1014,62 @@ const COMMON = `
     return p.xy;
   }
 
+  /**
+   * Triplanar blend weights, sharpened.
+   *
+   * surfUV picks one axis and stops, which is right up until a surface faces
+   * two of them at once — and every rivet head, gear tooth and rounded box
+   * corner in this shader does. The pick then swaps abruptly across the corner
+   * and the texture visibly shears. Blending three projections costs three
+   * evaluations instead of one, and it is the difference between a material and
+   * a decal. The exponent keeps the blend narrow so flat faces stay crisp.
+   */
+  vec3 triWeights(vec3 n) {
+    vec3 w = pow(abs(n), vec3(6.0));
+    return w / max(w.x + w.y + w.z, 1e-4);
+  }
+
+  /**
+   * Detail fade.
+   *
+   * The finest layers are around a millimetre of feature at a metre's range, and
+   * past a few metres a pixel covers many of them — evaluating them there is
+   * paying full price for aliasing. This is the shader's stand-in for a mip
+   * chain, which a procedural material does not otherwise get.
+   */
+  float detailFade(float dist) {
+    return 1.0 - smoothstep(3.0, 16.0, dist);
+  }
+
   /** Anisotropic rolling grain — the direction the plate came off the mill. */
   float grain(vec2 uv) {
     return vnoise(vec2(uv.x * 1.6, uv.y * 42.0)) * 0.6 + vnoise(uv * 7.0) * 0.4;
+  }
+
+  /**
+   * The micro layer: orange-peel under the mill scale, at two scales an order of
+   * magnitude apart. This is the one that stops a surface reading as "shaded
+   * geometry" at conversational distance — real steel is never smooth at 5 mm,
+   * and the eye knows it even when it cannot name what it is looking at.
+   */
+  float micro(vec2 uv) {
+    return vnoise(uv * 96.0) * 0.62 + vnoise(uv * 310.0) * 0.38;
+  }
+
+  /**
+   * The macro layer: broad corrosion blooms metres across, drifting slowly out
+   * of the low frequencies. Wear alone is one octave of noise and it tiles to
+   * the eye; this breaks the repeat at the scale a whole wall is read at.
+   */
+  float bloom(vec2 uv) {
+    return fbm(uv * 0.16) * 0.7 + fbm(uv * 0.44 + 11.3) * 0.3;
+  }
+
+  /** Runs of pale efflorescence and dried coolant, following gravity. */
+  float salting(vec3 p, vec3 n) {
+    float run = fbm(vec2(p.x * 3.1 + p.z * 3.1, p.y * 0.12 - 4.0));
+    return (1.0 - abs(n.y)) * smoothstep(0.58, 0.86, run) *
+      smoothstep(0.30, 0.70, fbm(vec2(p.x * 0.7, p.z * 0.7)));
   }
 
   /** Corrosion: sparse deep pits scattered through the broad rust blooms. */
@@ -862,9 +1099,16 @@ const COMMON = `
       smoothstep(0.42, 0.95, fbm(vec2(p.x * 2.6 + p.z * 2.6, p.y * 0.22)));
   }
 
-  /** Raised diamond tread on the walking surfaces. */
+  /**
+   * Raised diamond tread on the walking surfaces.
+   *
+   * Scaled to real deck plate: the raised pattern on industrial floor plate is
+   * 60–90 mm across, not the third of a metre this used to draw. At that
+   * frequency it aliases hard past a few metres, which is what detailFade is
+   * for — the tread is a near-field layer and nothing else.
+   */
   float treadPlate(vec2 uv) {
-    vec2 q = uv * 3.4;
+    vec2 q = uv * 17.0;
     vec2 a = fract(vec2(q.x + q.y, q.x - q.y) * 0.5) - 0.5;
     return smoothstep(0.36, 0.18, max(abs(a.x), abs(a.y)));
   }
@@ -873,29 +1117,59 @@ const COMMON = `
    * The height field, per material. Everything the eye reads as "machined" or
    * "corroded" or "walked on" is this function plus the gradient of it.
    */
-  float matHeight(vec3 p, vec3 n, float mat, float wear) {
-    vec2 uv = surfUV(p, n);
+  /** The height field on one planar projection. */
+  float matHeightUV(vec2 uv, float mat, float wear, float lod) {
     if (mat < 0.5) {
-      // Structural plate: welded, riveted, pitted, and treaded where you walk.
+      // Structural plate: welded, riveted, pitted, treaded where you walk, and
+      // orange-peeled everywhere.
       float h = weldSeam(uv) * 0.9 + rivets(uv) * 0.7 + grain(uv) * 0.10;
       h -= pitting(uv) * smoothstep(0.4, 0.9, wear) * 1.4;
-      h += treadPlate(uv) * step(0.72, n.y) * 1.1;
+      h += bloom(uv) * 0.22 + micro(uv) * 0.07 * lod;
       return h;
     }
     if (mat < 1.5)
-      // Painted frame: a smooth film, broken where it has chipped to primer.
-      return grain(uv) * 0.20 - smoothstep(0.42, 0.72, wear) * 0.9;
+      // Painted frame: a smooth film, broken where it has chipped to primer,
+      // and orange-peeled the way a sprayed film always is.
+      return grain(uv) * 0.20 - smoothstep(0.42, 0.72, wear) * 0.9
+        + micro(uv) * 0.05 * lod;
     if (mat < 2.5)
-      // Offcut: hot-rolled scale, coarse and scabby.
-      return fbm(uv * 14.0) * 1.1;
+      // Offcut: hot-rolled scale, coarse and scabby, flaking at the edges.
+      return fbm(uv * 14.0) * 1.1 + micro(uv) * 0.12 * lod;
     if (mat < 3.5)
-      // Machined: fine turning grooves plus the odd score.
-      return sin(uv.y * 210.0) * 0.10 + vnoise(uv * 40.0) * 0.10;
+      // Machined: fine turning grooves, the odd score, and the tool's own
+      // chatter under both.
+      return sin(uv.y * 210.0) * 0.10 + vnoise(uv * 40.0) * 0.10
+        + sin(uv.y * 1180.0) * 0.022 * lod + micro(uv) * 0.03 * lod;
     if (mat < 5.5)
-      // Rail steel: worn smooth on the running face, pitted off it.
-      return grain(uv) * 0.35 - pitting(uv) * 0.7;
-    // Span panel: brushed plate, with the hinge seams standing proud.
-    return grain(uv) * 0.30 + weldSeam(uv * 1.7) * 0.5;
+      // Rail steel: worn glassy on the running face, pitted off it.
+      return grain(uv) * 0.35 - pitting(uv) * 0.7 + micro(uv) * 0.04 * lod;
+    // Span plate: brushed deck, hinge seams proud, tread where boots land.
+    return grain(uv) * 0.30 + weldSeam(uv * 1.7) * 0.5
+      + treadPlate(uv) * 0.55 * lod + micro(uv) * 0.06 * lod;
+  }
+
+  /**
+   * The height field, per material, triplanar-blended.
+   *
+   * Everything the eye reads as "machined" or "corroded" or "walked on" is this
+   * function plus the gradient of it, so it carries three scales at once: the
+   * bloom that a whole wall is read at, the plate/weld/rivet layer a step away,
+   * and the micro layer that only exists within arm's reach — the last of these
+   * faded out with distance, because past a few metres it is nothing but noise
+   * in a pixel that cannot resolve it.
+   */
+  float matHeight(vec3 p, vec3 n, float mat, float wear, float lod) {
+    if (lod < 0.02) return matHeightUV(surfUV(p, n), mat, wear, 0.0);
+    vec3 w = triWeights(n);
+    float h = 0.0;
+    if (w.y > 0.002) h += w.y * matHeightUV(p.xz, mat, wear, lod);
+    if (w.x > 0.002) h += w.x * matHeightUV(p.zy, mat, wear, lod);
+    if (w.z > 0.002) h += w.z * matHeightUV(p.xy, mat, wear, lod);
+    // Tread is the one layer that is not a property of the material but of which
+    // way the surface faces: it is raised on the plate you walk on and nowhere
+    // else, so it goes on after the blend rather than inside it.
+    if (mat < 0.5) h += treadPlate(p.xz) * step(0.72, n.y) * 1.1 * lod;
+    return h;
   }
 
   /**
@@ -903,15 +1177,32 @@ const COMMON = `
    * onto the surface. Four extra field evaluations, but only at the hit point —
    * the march itself never pays for them.
    */
-  vec3 bumpNormal(vec3 p, vec3 n, float mat, float wear, float amp) {
-    vec2 e = vec2(0.03, 0.0);
-    float h0 = matHeight(p, n, mat, wear);
-    vec3 g = vec3(matHeight(p + e.xyy, n, mat, wear),
-                  matHeight(p + e.yxy, n, mat, wear),
-                  matHeight(p + e.yyx, n, mat, wear)) - h0;
-    g = clamp(g / e.x, -9.0, 9.0);
+  vec3 bumpNormal(vec3 p, vec3 n, float mat, float wear, float amp, float lod) {
+    vec2 e = vec2(0.02, 0.0);
+    float h0 = matHeight(p, n, mat, wear, lod);
+    vec3 g = vec3(matHeight(p + e.xyy, n, mat, wear, lod),
+                  matHeight(p + e.yxy, n, mat, wear, lod),
+                  matHeight(p + e.yyx, n, mat, wear, lod)) - h0;
+    g = clamp(g / e.x, -12.0, 12.0);
     g -= n * dot(n, g);
     return normalize(n - g * amp);
+  }
+
+  /**
+   * Cavity from the same height field: how far below its neighbours a point sits.
+   *
+   * This is what a normal map cannot do. A perturbed normal tells the light
+   * which way a pit faces; it says nothing about the fact that a pit is a hole
+   * with less of the room visible from inside it. Darkening the crevices and
+   * killing the specular in them is most of what separates "bumpy" from "worn",
+   * and it costs one extra evaluation because h0 is already in hand.
+   */
+  float cavity(vec3 p, vec3 n, float mat, float wear, float lod) {
+    float h0 = matHeight(p, n, mat, wear, lod);
+    float hw = (matHeight(p + vec3(0.06, 0.0, 0.0), n, mat, wear, lod) +
+                matHeight(p + vec3(0.0, 0.06, 0.0), n, mat, wear, lod) +
+                matHeight(p + vec3(0.0, 0.0, 0.06), n, mat, wear, lod)) / 3.0;
+    return clamp(0.5 + (h0 - hw) * 1.6, 0.0, 1.0);
   }
 
   // ============================ SHADING ====================================
@@ -931,7 +1222,7 @@ const COMMON = `
   float secLampPower(float i) {
     if (i > 1.5 && i < 2.5) return 6.2;  // few lamps, so each must carry further
     if (i > 4.5 && i < 5.5) return 2.1;  // brake run: dense lamps, dial each down
-    if (i > 5.5) return 2.6;             // furnace floor is half-lit by the melt
+    if (i > 5.5) return 4.8;             // furnace floor: wide hall, lamps far out
     return 3.4;
   }
 
@@ -1018,10 +1309,13 @@ const COMMON = `
   vec3 furnaceLight(vec3 p, vec3 n, vec3 albedo, float zc) {
     float near = 1.0 - smoothstep(SPAN_HALF, SPAN_HALF + 16.0, abs(cycd(zc - SPAN_MID)));
     if (near < 0.01) return vec3(0.0);
-    float up = max(dot(n, vec3(0.0, -1.0, 0.0)), 0.0) * 0.8 + 0.2;
+    // The melt is an enormous area source in an enclosure, so it does not only
+    // light what faces down into it — the whole cut glows. Undersides still take
+    // most of it; the walkway takes enough to be walkable.
+    float up = max(dot(n, vec3(0.0, -1.0, 0.0)), 0.0) * 0.75 + 0.30;
     float depth = clamp((p.y - MELT_Y) / 34.0, 0.0, 1.0);
     float flick = 0.85 + 0.15 * fbm(vec2(p.z * 0.4, iTime * 1.7));
-    return albedo * up * near * (1.0 - depth * 0.75) * flick * vec3(1.30, 0.44, 0.10);
+    return albedo * up * near * (1.0 - depth * 0.55) * flick * vec3(1.30, 0.44, 0.10);
   }
 
   vec3 shadeSurface(vec3 p, vec3 nGeo, vec3 rd, float dist, float zc, float dzl,
@@ -1041,10 +1335,17 @@ const COMMON = `
     }
 
     vec2 uv = surfUV(p, nGeo);
-    vec3 n = bumpNormal(p, nGeo, mat, wear, 0.045);
+    float lod = detailFade(dist);
+    vec3 n = bumpNormal(p, nGeo, mat, wear, 0.045 + 0.030 * lod, lod);
+    float cav = mix(1.0, cavity(p, nGeo, mat, wear, lod), 0.55 + 0.45 * lod);
     // Plate is rolled along the hall, so the grain runs with +Z on the walls and
     // ceiling and across the floor.
     vec3 tang = abs(nGeo.y) > 0.7 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 0.0, 1.0);
+
+    // Broad corrosion blooms, metres across. Layered *under* the per-material
+    // wear so the same wall is not the same wall twice thirty metres apart.
+    float macro = bloom(uv);
+    wear = clamp(wear * 0.72 + macro * 0.55, 0.0, 1.0);
 
     vec3 albedo; float rough;
     if (mat < 0.5) {
@@ -1054,7 +1355,7 @@ const COMMON = `
       albedo = mix(vec3(0.085, 0.090, 0.100), vec3(0.24, 0.115, 0.055), rust);
       albedo = mix(albedo, vec3(0.20, 0.21, 0.23), weldSeam(uv) * 0.55);
       albedo *= 1.0 - streaks(p, nGeo) * 0.35;
-      albedo *= 1.0 + treadPlate(uv) * step(0.72, nGeo.y) * 0.55;
+      albedo *= 1.0 + treadPlate(uv) * step(0.72, nGeo.y) * 0.45 * lod;
       albedo *= 0.85 + 0.30 * grain(uv);
       rough = mix(0.68, 0.94, rust);
     } else if (mat < 1.5) {
@@ -1085,10 +1386,24 @@ const COMMON = `
       albedo = mix(albedo, vec3(0.26, 0.13, 0.06), pitting(uv) * 0.8);
       rough = mix(0.52, 0.20, pol);
     } else {
-      // Span panel: pale machined plate, brushed, with the hinge seams worn.
+      // Span plate: pale machined deck, brushed, hinge seams worn bright, and
+      // scorched along the edges that have spent this long over a melt.
       albedo = vec3(0.40, 0.42, 0.48) * (0.86 + 0.28 * grain(uv));
-      rough = 0.34;
+      albedo = mix(albedo, vec3(0.19, 0.10, 0.07),
+                  smoothstep(0.45, 0.85, fbm(uv * 2.2)) * 0.7);
+      albedo *= 1.0 + treadPlate(uv) * 0.32 * lod;
+      rough = mix(0.30, 0.62, macro);
     }
+
+    // Dried coolant and efflorescence run down every vertical face. Pale, matte,
+    // and the only thing in the palette that is not steel or rust.
+    float salt = salting(p, nGeo);
+    albedo = mix(albedo, vec3(0.42, 0.44, 0.43), salt * 0.55);
+    rough = mix(rough, 0.96, salt * 0.7);
+
+    // Cavity: crevices hold less light and no highlight at all.
+    albedo *= 0.55 + 0.45 * cav;
+    rough = mix(rough, min(1.0, rough + 0.25), 1.0 - cav);
 
     vec3 col = albedo * vec3(0.13, 0.145, 0.185);         // cool ambient bounce
     if (p.y < CEIL_MAX)
@@ -1111,8 +1426,65 @@ const COMMON = `
         * vec3(3.4, 2.6, 1.5);
     }
 
-    // Fresnel rim keeps the metal from flattening out at grazing angles.
-    col += vec3(0.10, 0.11, 0.14) * pow(1.0 - max(dot(n, -rd), 0.0), 4.0) * (1.0 - rough);
+    // Fresnel rim keeps the metal from flattening out at grazing angles, and the
+    // cavity term occludes it: a rim highlight that survives inside a pit is the
+    // single most plastic-looking thing a metal shader can do.
+    col += vec3(0.10, 0.11, 0.14) * pow(1.0 - max(dot(n, -rd), 0.0), 4.0)
+      * (1.0 - rough) * cav;
+
+    // What is behind the plate, once the plate has split.
+    //
+    // A mix, not an add. The additive version of this term is the one that blows
+    // the whole frame out the moment the decay saturates — liminal makes exactly
+    // this choice and it is the reason its abyss stays legible.
+    float crack = crackField(p, decay());
+    if (crack > 0.001) {
+      vec3 core = vec3(2.2, 0.42, 0.05) * (0.75 + 0.55 * fbm(vec2(p.y * 2.0, iTime * 1.4)));
+      col = mix(col, core, clamp(crack * 1.4, 0.0, 1.0));
+    }
+    return col;
+  }
+
+  /**
+   * Oblivion has no lamps, no hall and no shaft, so none of the corridor's
+   * lighting applies. What is left is the cage's own dome lamp, whatever the
+   * shoes are still throwing off the rails above, and a red that comes up from
+   * underneath and never gets any closer.
+   */
+  vec3 shadeOblivion(vec3 p, vec3 nGeo, vec3 rd, float dist, float dzl) {
+    float mat = gMat, wear = gWear;
+    if (mat > 3.5 && mat < 4.5)
+      return mix(vec3(0.06, 0.06, 0.07), vec3(1.0, 0.76, 0.42) * 2.6, gGlow);
+
+    vec2 uv = surfUV(p, nGeo);
+    float lod = detailFade(dist);
+    vec3 n = bumpNormal(p, nGeo, mat, wear, 0.045 + 0.030 * lod, lod);
+    float cav = mix(1.0, cavity(p, nGeo, mat, wear, lod), 0.55 + 0.45 * lod);
+
+    // Everything down here is the same scorched machine steel.
+    float turn = 0.5 + 0.5 * sin(uv.y * 210.0);
+    vec3 albedo = mix(vec3(0.22, 0.215, 0.235), vec3(0.36, 0.34, 0.34), turn);
+    albedo = mix(albedo, vec3(0.30, 0.13, 0.05), smoothstep(0.42, 0.86, bloom(uv)));
+    albedo *= 0.55 + 0.45 * cav;
+
+    vec3 col = albedo * vec3(0.055, 0.050, 0.062);
+    col += domeLight(p, n, albedo, 0.4, rd, dzl);
+
+    // The updraft. Lit from below by something that is always the same distance
+    // away, which is the only way a fall with no end can be lit at all.
+    float up = max(dot(n, vec3(0.0, -1.0, 0.0)), 0.0) * 0.85 + 0.15;
+    float flick = 0.80 + 0.20 * fbm(vec2(p.y * 0.5, iTime * 2.1));
+    col += albedo * up * flick * vec3(1.05, 0.26, 0.05);
+
+    if (spark() > 0.01) {
+      vec3 sp = vec3(sign(p.x) * 1.90, cageY() + 0.1, 0.0);
+      vec3 sd = sp - vec3(p.x, p.y, dzl);
+      float sdist = length(sd);
+      col += albedo * max(dot(n, sd / max(sdist, 0.001)), 0.0)
+        / (1.0 + sdist * sdist * 0.10) * spark() * vec3(3.4, 2.6, 1.5);
+    }
+
+    col += vec3(0.14, 0.06, 0.05) * pow(1.0 - max(dot(n, -rd), 0.0), 4.0) * cav;
     return col;
   }
 
@@ -1154,7 +1526,11 @@ const COMMON = `
     vec3 upv = cross(fwd, right);
 
     // The fall widens the lens; nothing sells speed like the frame opening up.
-    float fov = 1.20 - 0.16 * weightless();
+    // In oblivion the cage reaches terminal velocity and its *acceleration* goes
+    // back to nought, so weightless() lets go exactly when the fall is fastest —
+    // down there the lens has to read the speed itself.
+    float fov = 1.20 - 0.16 * weightless()
+      - oblivion() * 0.13 * smoothstep(8.0, 44.0, abs(uCage.y));
     vec3 rd = normalize(uv.x * right + uv.y * upv + fov * fwd);
 
     float dist = 0.0, hit = -1.0;
@@ -1180,13 +1556,25 @@ const COMMON = `
       + vec3(0.34, 0.10, 0.02) * pow(max(-rd.y, 0.0), 2.0)
         * (1.0 - smoothstep(SPAN_HALF, SPAN_HALF + 20.0, abs(cycd(zc - SPAN_MID))));
 
+    if (oblivion() > 0.5) {
+      // No sky, no melt, no horizon. Only a red that is always the same distance
+      // below and a dark that closes much faster than the halls' ever did.
+      col = vec3(0.008, 0.006, 0.009)
+        + vec3(0.40, 0.07, 0.015) * pow(max(-rd.y, 0.0), 3.0);
+    }
+
     if (hit > 0.0) {
       vec3 n = calcNormal(p);
-      col = shadeSurface(p, n, rd, dist, zc, dzl, pr.x * squeeze, pr.y * squeeze, sa);
-      float fogDen = mix(0.038, 0.022, riding()) + dec * 0.012;
-      vec3 fogCol = mix(vec3(0.030, 0.026, 0.030), vec3(0.045, 0.016, 0.012), dec);
-      float fog = 1.0 - exp(-dist * fogDen);
-      col = mix(col, fogCol, fog);
+      if (oblivion() > 0.5) {
+        col = mix(shadeOblivion(p, n, rd, dist, dzl), vec3(0.020, 0.008, 0.008),
+                  1.0 - exp(-dist * 0.085));
+      } else {
+        col = shadeSurface(p, n, rd, dist, zc, dzl, pr.x * squeeze, pr.y * squeeze, sa);
+        float fogDen = mix(0.038, 0.022, riding()) + dec * 0.012;
+        vec3 fogCol = mix(vec3(0.030, 0.026, 0.030), vec3(0.045, 0.016, 0.012), dec);
+        float fog = 1.0 - exp(-dist * fogDen);
+        col = mix(col, fogCol, fog);
+      }
     }
 
     // --- spark shower off the guide rails while the shoes are biting --------
@@ -1234,6 +1622,16 @@ const COMMON = `
       col.b = mix(col.b, col.b * 0.80 + lum0 * 0.16, fr);
     }
 
+    // Oblivion grades hard toward the thing underneath it, and the picture gets
+    // noisier the longer the fall runs — which is the ramp the signal loss then
+    // takes over from. See lib/signalLoss.
+    float ob = oblivion();
+    if (ob > 0.5) {
+      float deep = clamp(fallen() / 900.0, 0.0, 1.0);
+      col = mix(col, vec3(col.r * 1.35, col.g * 0.52, col.b * 0.44), 0.45 + deep * 0.35);
+      col *= 1.0 - deep * 0.30;
+    }
+
     float lum = dot(col, vec3(0.299, 0.587, 0.114));
     col += col * smoothstep(0.75, 1.7, lum) * 0.5;                  // pseudo-bloom
     col = pow(clamp(col, 0.0, 1.8), vec3(0.90));
@@ -1244,7 +1642,8 @@ const COMMON = `
     col *= 1.0 - smoothstep(0.42, 1.05, length(uv)) * (0.65 + 0.12 * dec); // vignette
     // Sensor grain, heavier under acceleration and as the foundry comes apart.
     col += (hash21(gl_FragCoord.xy + fract(iTime) * 91.7) - 0.5)
-           * (0.025 + 0.050 * dec + 0.12 * wrap + 0.04 * clamp(abs(cageA()) / 40.0, 0.0, 1.0));
+           * (0.025 + 0.050 * dec + 0.12 * wrap + 0.04 * clamp(abs(cageA()) / 40.0, 0.0, 1.0)
+              + ob * 0.10 * clamp(fallen() / 600.0, 0.0, 1.0));
 
     gl_FragColor = vec4(col, 1.0);
   }
@@ -1255,7 +1654,7 @@ export const foundryFrag = `
 #define RM_STEPS 96
 #define MAX_DIST 90.0
 #define STEP_K 0.72
-#define FBM_OCTAVES 3
+#define FBM_OCTAVES 4
 #define SPARK_LAYERS 14
 ${COMMON}`
 

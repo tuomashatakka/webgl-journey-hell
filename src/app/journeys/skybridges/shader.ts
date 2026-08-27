@@ -17,6 +17,32 @@ const COMMON = `
   uniform float uHeavy;        // 1.0 = heavyEffects on (see-through refraction march)
   uniform sampler2D uEnv;      // equirectangular environment map (unit 0)
   uniform float uEnvLoaded;    // 1.0 once uEnv's image has uploaded
+  uniform float uSignalLoss;   // 0..SIGNAL_PEAK, how far the signal has gone
+
+  // ========================= THE SUN GOES OFF ==============================
+  //
+  // The signal does not fail because the transmitter fails. It fails because
+  // the star this whole journey is lit by comes apart, and the last thing the
+  // camera does is watch it happen — which is why the reception failure and the
+  // event share one clock. lib/signalLoss ramps over fifteen seconds; that ramp
+  // is the detonation, and the picture going is the consequence rather than the
+  // subject.
+  //
+  // Every stage below is keyed off this one number, so the whole sequence seeks
+  // exactly like everything else does.
+  //
+  //   0.00-0.10  the flash        — the disc swells, the colour burns to white
+  //   0.10-0.45  the shockfront   — a luminous wavefront crosses the whole sky
+  //   0.45-1.00  the aftermath    — a ragged cooling coal, and an ember sky
+  //
+  // The light arrives before the wave, because it does.
+  const float SIGNAL_PEAK = 0.86;
+  float blast() { return clamp(uSignalLoss / SIGNAL_PEAK, 0.0, 1.0); }
+
+  /** Angular radius of the shockfront, radians. Nought until the flash is out. */
+  float blastFront(float b) {
+    return smoothstep(0.10, 1.0, b) * 3.4;
+  }
 
   const float PI = 3.14159265359;
   const float SEG = 9.0;         // Z length of each main-deck segment
@@ -172,6 +198,42 @@ const COMMON = `
     float inv = 1.0 / max(s, 0.001);
     gBg = bg*inv; gKeyDir = normalize(kd); gKeyCol = kc*inv; gGlassTint = gt*inv;
     gRough = ro*inv; gDisp = di*inv; gBloom = bl*inv; gFogDen = fd*inv;
+
+    // The detonation is applied to the *key light*, not to the sky. Every pane
+    // of glass, every rail, every window across the whole run takes its
+    // highlight and its tint from gKeyCol — so rewriting it here is what puts
+    // the event on the bridge you are standing on rather than only on the
+    // backdrop behind it. This is the whole reason the effect goes in here.
+    float b = blast();
+    if (b > 0.0) {
+      // Flash: white-hot, and far brighter than anything in the palette. Then it
+      // cools through everything a fire cools through and settles at ember.
+      vec3 flash  = vec3(1.60, 1.52, 1.42);
+      vec3 ember  = vec3(1.10, 0.30, 0.10);
+      // 'lit' is a step — the sun is a fire now and stays one. The *brightness*
+      // is a pulse, and the difference matters: a step here multiplies every
+      // surface in the scene by six for the rest of the run and the whole frame
+      // sits blown out with nothing readable in it. The flash is a moment.
+      float lit   = smoothstep(0.0, 0.09, b);
+      float cool  = smoothstep(0.16, 0.85, b);
+      // Squared by multiplication, never by pow(): GLSL leaves pow(x, y)
+      // undefined for negative x, and every one of these arguments is negative
+      // for the first half of the sequence. It returns NaN, the NaN reaches the
+      // colour, and the whole frame comes out black — which is exactly what it
+      // did, and exactly what a screenshot of an exploding sun cannot tell you
+      // apart from a very dark exploding sun.
+      float pk = (b - 0.045) * 14.0;
+      float pulse = exp(-pk * pk);
+      vec3 blown  = mix(flash, ember, cool);
+      gKeyCol = mix(gKeyCol, blown, lit) * (1.0 + 6.0 * pulse + 0.20 * lit * (1.0 - cool));
+
+      // The sky loses its own colour and takes the fire's.
+      gBg = mix(gBg, mix(vec3(0.34, 0.24, 0.15), vec3(0.10, 0.030, 0.024), cool), lit);
+      gGlassTint = mix(gGlassTint, vec3(1.00, 0.72, 0.55), lit * 0.8);
+      gBloom = mix(gBloom, 0.95, lit * (1.0 - cool * 0.4));
+      // Ash. The air stops being clear about a second after the flash.
+      gFogDen = mix(gFogDen, 0.052, smoothstep(0.05, 0.55, b));
+    }
   }
 
   // --- collapse-behind -----------------------------------------------------
@@ -471,6 +533,48 @@ const COMMON = `
     float aur = sin(rd.x * 3.0 + iTime * 0.8) * 0.5 + 0.5;
     col += vec3(0.3, 1.0, 0.6) * aur * smoothstep(0.15, 0.6, up) * gHelix * 0.2;
     col = mix(col, vec3(0.88, 0.91, 1.0), gSky * (0.20 + up * 0.22));
+
+    // --- the star comes apart -------------------------------------------
+    float b = blast();
+    if (b > 0.001) {
+      // Angle off the sun, which is the only coordinate the whole event needs.
+      float ang = acos(clamp(dot(rd, gKeyDir), -1.0, 1.0));
+      float cool = smoothstep(0.16, 0.85, b);
+
+      // The disc. It swells by two orders of magnitude in the first tenth of
+      // the sequence and then hangs there, burning down.
+      float rad = mix(0.0045, 0.30, smoothstep(0.0, 0.16, b)) * (1.0 + 0.10 * cool);
+      // Ragged, not round: the edge is torn by low-frequency noise that keeps
+      // turning, so it reads as material rather than as a light source.
+      float tear = fbm(vec2(atan(rd.y - gKeyDir.y, rd.x - gKeyDir.x) * 2.4, iTime * 0.35)) - 0.5;
+      float edge = rad * (1.0 + tear * 0.55 * smoothstep(0.10, 0.5, b));
+      float disc = smoothstep(edge, edge * 0.55, ang);
+
+      // Convective cells crawling over the surface as it cools to slag.
+      float cell = fbm(rd.xy * 26.0 + vec2(iTime * 0.22, -iTime * 0.16));
+      vec3 core = mix(vec3(3.2, 3.0, 2.7), mix(vec3(2.2, 0.62, 0.12),
+        vec3(0.70, 0.11, 0.04), cell), cool);
+      col = mix(col, core, disc);
+
+      // Filaments thrown clear of the disc, dragged out radially.
+      float fil = fbm(vec2(atan(rd.y - gKeyDir.y, rd.x - gKeyDir.x) * 7.0, ang * 5.0 - iTime * 0.3));
+      col += mix(vec3(1.3, 0.80, 0.32), vec3(0.60, 0.11, 0.03), cool)
+        * smoothstep(0.62, 1.0, fil) * smoothstep(edge * 3.2, edge, ang) * (1.0 - cool * 0.6);
+
+      // The shockfront. One luminous ring, expanding from the sun across the
+      // entire sky and out past the horizon behind you — which is what makes it
+      // an event you are inside rather than a picture you are looking at.
+      float front = blastFront(b);
+      // Narrow and not very bright in absolute terms: the scene it crosses is a
+      // daylit one whose whites already sit near 1.0, and a front authored in
+      // the star's own units blows every pane of glass on the bridge to paper.
+      float ring = smoothstep(0.16, 0.0, abs(ang - front));
+      col += mix(vec3(1.5, 1.2, 0.9), vec3(0.75, 0.24, 0.09), cool) * ring * (1.0 - cool * 0.55);
+      // Everything the front has already passed is scorched.
+      float passed = smoothstep(front + 0.20, front - 0.30, ang);
+      col = mix(col, mix(col, mix(vec3(0.62, 0.27, 0.11), vec3(0.13, 0.035, 0.028), cool),
+        0.80), passed);
+    }
     return col;
   }
 
@@ -569,6 +673,21 @@ const COMMON = `
 
   void mainScene(out vec3 outCol) {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+
+    // The wave hits the camera. One shove and a hard ring-down — a shockfront is
+    // a single overpressure edge, not a rumble, and drawing it as a rumble is
+    // what makes most versions of this read as a stock earthquake.
+    {
+      float b = blast();
+      if (b > 0.001) {
+        float hk = (b - 0.30) * 22.0;
+        float hit = exp(-hk * hk);
+        float ring = exp(-max(0.0, b - 0.30) * 22.0) * sin(b * 620.0);
+        uv += vec2(hit * 0.085 + ring * 0.020, ring * 0.030 - hit * 0.045);
+        // ...and the air over a burning sky does not stay still afterwards.
+        uv += (fbm(uv * 7.0 + iTime * 0.7) - 0.5) * smoothstep(0.10, 0.6, b) * 0.020;
+      }
+    }
     setupAtmosphere();
 
     float z = playerZ();
@@ -642,6 +761,36 @@ const COMMON = `
     col *= mix(vec3(1.0), vec3(1.02, 1.03, 1.06), gSky);
     float edge = smoothstep(0.45, 0.98, length(uv));
     col = mix(col, mix(col, vec3(dot(col, vec3(0.33))), 0.25), edge * attention * 0.35);
+
+    // --- what the detonation does to the camera itself --------------------
+    float b = blast();
+    if (b > 0.001) {
+      float cool = smoothstep(0.16, 0.85, b);
+
+      // The flash. A brief, total white-out — the sensor has no headroom for a
+      // star at this range and neither would an eye. It is over in about a
+      // second and everything after it is the recovery.
+      float white = smoothstep(0.0, 0.035, b) * (1.0 - smoothstep(0.035, 0.14, b));
+      col = mix(col, vec3(1.7), white * 0.96);
+
+      // Then the sensor comes back wrong: bleached, then burnt down to ember,
+      // with the highlights permanently blooming afterwards.
+      // Bleached, then burnt down to ember — but *not* dimmed. A burning sky is
+      // a bright thing, and the signal loss on top of this is already taking
+      // most of the level out; dimming here as well left a black screen with a
+      // caption on it instead of a world ending.
+      col = mix(col, vec3(dot(col, vec3(0.299, 0.587, 0.114))) * vec3(1.45, 0.66, 0.44),
+                cool * 0.70);
+
+      // The pressure wave arrives after the light does, and it arrives *here*.
+      // A single hard shove through the frame, not a rumble: the geometry is
+      // authored in GLSL so the camera cannot be shaken from the CPU, and this
+      // is the honest place to do it.
+      float hk = (b - 0.30) * 26.0;
+      float hit = exp(-hk * hk);
+      col += (hash21(gl_FragCoord.xy + fract(iTime) * 57.3) - 0.5) * hit * 0.55;
+      col *= 1.0 + hit * 0.9;
+    }
     outCol = col;
   }
 

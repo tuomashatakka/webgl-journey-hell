@@ -445,7 +445,18 @@ export function withJourneyShell (
       if (d.pointer)
         pointerRef.current = { x: d.pointer[0], y: d.pointer[1] }
 
-      const custom = sim?.uniforms()
+      // The seeked frame carries the caption too, or every screenshot of an
+      // ending would be of a journey that is somehow still receiving — and it
+      // carries uSignalLoss for the same reason. Read *before* the draw: a
+      // journey whose world reacts to the failing signal (skybridges' sun) would
+      // otherwise render the moment before the event at every ?t= after it, and
+      // the seek would silently disagree with the live run.
+      const frozenMarks = sim?.marks?.() ?? options.getMarks?.(d.t!) ?? null
+
+      let custom = sim?.uniforms()
+      if (frozenMarks?.signalAge)
+        (custom ??= {}).uSignalLoss = signalLossAt(frozenMarks.signalAge).level
+
       renderer.draw({
         time:    d.t!,
         pointer: pointerRef.current,
@@ -453,9 +464,6 @@ export function withJourneyShell (
         custom,
       })
 
-      // The seeked frame carries the caption too, or every screenshot of an
-      // ending would be of a journey that is somehow still receiving.
-      const frozenMarks = sim?.marks?.() ?? options.getMarks?.(d.t!) ?? null
       applyCrt(d.t!, 0, 0, frozenMarks?.signalAge ?? 0)
 
       if (custom)
@@ -528,13 +536,17 @@ export function withJourneyShell (
       const marks = liveSim?.marks?.() ?? options.getMarks?.(iTimeRef.current) ?? null
 
       // Evaluated once and shared: the mix hears exactly what the frame shows.
-      const custom = liveSim?.uniforms()
+      let custom = liveSim?.uniforms()
 
-      // An affordance rather than a feature: any audio engine that wants to duck
-      // itself as the signal goes can read this, and the ones that ignore it are
-      // unaffected. No engine reads it yet.
-      if (custom && marks?.signalAge)
-        custom.uSignalLoss = signalLossAt(marks.signalAge).level
+      // How far the signal has gone, as a uniform.
+      //
+      // The CRT pass degrades the *picture* and knows nothing about the world in
+      // it, so a journey that wants its own world to react has to be told — and
+      // skybridges does: its sun goes off. Note the `??=`: a journey with no
+      // simulation has no uniforms object of its own, and before this it simply
+      // never received the value.
+      if (marks?.signalAge)
+        (custom ??= {}).uSignalLoss = signalLossAt(marks.signalAge).level
 
       // Silence during a shuttle. A tape has no audio at speed either, and
       // feeding an audio graph a rewound clock makes it click.

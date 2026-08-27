@@ -231,3 +231,49 @@ climbs (120–180, 330–360), bank into helix (420–480).
 - `src/app/journeys/skybridges/page.tsx` — wires `envMapUrl`.
 - `src/lib/shaderQuad.ts`, `src/components/withShaderJourney.tsx` — uniforms
   plumbing (`uEnv`, `uEnvLoaded`, `uHeavy`).
+
+---
+
+## 7. The sun goes off
+
+The run laps forever, so like every other looping journey it borrows a lap count
+as its ending. Unlike the others, the signal loss here is not the point — it is
+the *consequence*. The star this whole run is lit by comes apart, and the picture
+failing is what that does to a camera pointed at it.
+
+`SIGNAL_LOSS_LAP = 2` (≈3½ minutes), not the 5 used elsewhere: an event nobody
+reaches is not an event.
+
+The whole sequence is keyed off one number, `uSignalLoss / SIGNAL_PEAK`, so it
+seeks exactly like everything else. Light arrives before the wave, because it
+does.
+
+| b | beat |
+| --- | --- |
+| 0.00–0.10 | **the flash** — the disc swells two orders of magnitude, the frame whites out for about a second |
+| 0.10–0.45 | **the shockfront** — a luminous ring crosses the whole sky and out past the horizon behind you; the wave then hits the camera as a single shove and a hard ring-down |
+| 0.45–1.00 | **the aftermath** — a ragged cooling coal with convective cells and filaments, an ember sky, ash in the air |
+
+**It is applied to the key light, not to the sky.** Every pane of glass, rail and
+window on the run takes its highlight and tint from `gKeyCol`, so rewriting that
+in `setupAtmosphere` puts the event on the bridge you are standing on rather than
+only on the backdrop. `gBg`, `gGlassTint`, `gBloom` and `gFogDen` go with it.
+
+Three things this got wrong first, all worth keeping written down:
+
+- **the brightness must be a pulse, not a step.** `lit` is a step — the sun is a
+  fire now and stays one — but a *step* on the intensity multiplies every surface
+  in the scene by six for the rest of the run, and the frame sits blown out with
+  nothing readable in it.
+- **the sky terms are authored in the scene's exposure, not the star's.** This is
+  a daylit run whose whites already sit near 1.0. A shockfront written in the
+  star's own units turns every pane of glass to paper.
+- **never `pow(x, 2.0)` on a signed argument.** GLSL leaves `pow` undefined for
+  negative *x*; these gaussians are all centred mid-sequence, so the argument is
+  negative for the first half of it. It returns NaN, the NaN reaches the colour,
+  and the frame comes out black — which a screenshot cannot tell apart from a
+  very dark exploding sun. Square by multiplication.
+
+`uSignalLoss` reaches the shader through `withJourneyShell`, on **both** the live
+and the `?t=` paths. This journey has no simulation, so it had no uniforms object
+of its own and previously never received the value at all.

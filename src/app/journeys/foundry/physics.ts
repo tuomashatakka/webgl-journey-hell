@@ -106,6 +106,30 @@ export const SHAFT_R = 3.0
 export const SHAFT_HEAD_Y = 128
 export const LIFT_TOP = 120
 
+/** Metres further up the shaft the cable parts on each successive run. */
+const LIFT_RISE = 26
+
+/**
+ * Where this run starts.
+ *
+ * The drop is meant to get longer every time, and moving the *brake* down alone
+ * cannot do that: a lower trip point buys free-fall metres and gives them
+ * straight back as braking seconds, so the drop as a whole comes out flat or
+ * shorter. The shaft has to get taller as well.
+ *
+ * Which means the shaft is no longer a constant the shader can bake in — the
+ * head goes up with the cage, and it travels as a uniform (uFall.z). Anything
+ * that draws the shaft has to ask, not assume.
+ */
+export function liftTopFor (loop: number): number {
+  return LIFT_TOP + Math.min(loop, OBLIVION_LOOP) * LIFT_RISE
+}
+
+/** Head of the shaft for that run — the ceiling the cage hangs just under. */
+export function shaftHeadFor (loop: number): number {
+  return liftTopFor(loop) + (SHAFT_HEAD_Y - LIFT_TOP)
+}
+
 /**
  * Height at which the emergency shoes bite. Sized against brakeForce() so the
  * cage comes to a stand a few metres short of the landing: the wedges take
@@ -113,6 +137,24 @@ export const LIFT_TOP = 120
  * is any real retardation at all, and the stop itself needs another 22 m.
  */
 export const LIFT_BRAKE_Y = 44
+
+/** Metres lower the trip gear fires on each successive run. */
+const BRAKE_DROP = 5
+
+/**
+ * Where the shoes bite on this run.
+ *
+ * The guide rails are scored a little flatter by every arrival, so the trip gear
+ * has less to catch on and fires later: the drop gets longer and the stop gets
+ * harder, run on run. Lap 0 stops with two thirds of the shaft to spare; lap 2
+ * has barely the stopping distance it needs. Lap OBLIVION_LOOP the gear fires at
+ * the original height and the shoes cannot hold at all — see cageForce.
+ */
+export function brakeYFor (loop: number): number {
+  if (loop >= OBLIVION_LOOP)
+    return LIFT_BRAKE_Y
+  return LIFT_BRAKE_Y - loop * BRAKE_DROP
+}
 
 /** Landing level — the cage floor comes to rest flush with the hall's. */
 export const LANDING_Y = 0
@@ -146,6 +188,59 @@ export const MODE_WALK = 3
 /** Back in the cage at the end of the lap; the shutter is coming down. */
 export const MODE_BOARD = 4
 
+/** Past the pit, with nothing below it. There is no phase after this one. */
+export const MODE_OBLIVION = 5
+
+// --- the last run -----------------------------------------------------------
+
+/**
+ * The run on which the shoes stop being able to hold it — the fourth, which the
+ * HUD labels LOOP 4 (the counter is zero-based).
+ *
+ * Three arrivals have polished the rails flat. On this one the trip gear still
+ * fires at the height it always did, the wedges still seat, and they still throw
+ * the same shower off the rails — they simply have nothing left to grip, and the
+ * pit they were supposed to stop short of has no floor in it.
+ */
+export const OBLIVION_LOOP = 3
+
+/** Seconds the shoes go on grabbing before there is nothing left of them. */
+const OBLIVION_GRIP = 11
+
+/**
+ * Clamp force of one full grab, newtons — well above the nominal brakeForce().
+ *
+ * The shoes are not sliding on this run, they are *jamming*: the wedges drive
+ * into a rail they can no longer seat against and momentarily weld to it, which
+ * is a far harder bite than the designed friction stop and exactly why they tear
+ * themselves off doing it. Without this the failure is over in a second — there
+ * is only 47 m between the trip point and the pit, and nominal friction spends
+ * all of it without ever getting the cage below terminal.
+ */
+const OBLIVION_BITE = 118000
+
+/** Rate of the stick-slip grab, rad/s: bite, tear free, bite again. */
+const OBLIVION_CHATTER = 6.1
+
+/** What fraction of a full clamp one of those grabs is worth. */
+const OBLIVION_HOLD = 1.0
+
+/** ½ρCdA down there. Terminal velocity works out at about 46 m/s. */
+const OBLIVION_DRAG = 4.2
+
+/**
+ * Vertical period of the oblivion shaft.
+ *
+ * The fall never ends, and a `y` that never stops falling is a float that runs
+ * out of mantissa in about four minutes — the world would start quantising
+ * around the camera while it is the only thing on screen. So the shaft is made
+ * periodic instead and `y` wraps inside one period, exactly the way `z` already
+ * wraps inside one lap of the halls. Nothing on screen changes when it does;
+ * `fallen` keeps the real number for anything that needs to know how far down
+ * this has gone.
+ */
+export const OBLIVION_PERIOD = 64
+
 const CAGE_MASS       = 900 // kg, cage + occupant + offcuts
 const CAGE_DRAG       = 1.15 // ½ρCdA, quadratic drag coefficient
 const CREEP_SPEED     = 8 // m/s, governed lowering rate once the shoes hold
@@ -154,24 +249,80 @@ const BUFFER_K        = 260000 // N/m, hydraulic buffer stiffness
 const BUFFER_C        = 34000 // N·s/m
 const BUFFER_POWER    = 1.6 // >1 = progressively stiffer as it compresses
 
-// --- the folding span (mirrored by the shader) ------------------------------
+// --- the stepping stones (mirrored by the shader) ---------------------------
+//
+// The furnace floor is cut away over the melt and the only way across is a
+// single steel plate that lays itself out ahead of you, one tile at a time.
+//
+// It is one plate, not a line of them. Each tile arrives by rotating a half
+// turn about the edge it shares with the tile before it — the thing tumbles end
+// over end across the gap, and the tile you are standing on is the hinge for
+// the next one. That is the whole reason the route is on a grid and every step
+// is exactly one tile: edge-adjacency is what makes the flip possible, and a
+// flip about a *side* edge instead of the leading one is how the path turns.
 
-/** Cubes in the span that bridges the gap over the melt. */
-export const SPAN_CUBES = 8
-export const CUBE_SPACING = 4.0 // metres between cube centres
-export const CUBE_HALF = 1.2 // cube half-size; faces are 2 x CUBE_HALF square
+/** Tiles in the span. */
+export const SPAN_TILES = 16
 
-/** Cyclic position of the first cube's centre, in the furnace-floor hall. */
-export const SPAN_Z0 = SECTION_LEN * 6 + 4
+/** Plate half-size. The step between tiles is 2× this — they share an edge. */
+export const TILE_HALF = 1.2
+export const TILE = TILE_HALF * 2
+
+/** Cyclic position of tile 0's centre, in the furnace-floor hall. */
+export const SPAN_Z0 = 219
+
+/**
+ * The route, in grid steps of TILE. Lateral first, then forward.
+ *
+ * Read it as moves and it is: forward, forward, hard left twice out to the wall,
+ * forward twice, then four tiles straight across the hall, and five more up the
+ * far side to the lip. It starts on the centreline and finishes against the
+ * opposite wall, which is the shape the crossing is meant to have — you are not
+ * bridging the gap, you are being walked around it.
+ *
+ * Invariant, asserted by the tests: consecutive entries differ by exactly one
+ * step in exactly one axis, and `iz` never decreases.
+ */
+const SPAN_IX = [ 0, 0, 0, -1, -2, -2, -2, -1, 0, 1, 2, 2, 2, 2, 2, 2 ]
+const SPAN_IZ = [ 0, 1, 2, 2, 2, 3, 4, 4, 4, 4, 4, 5, 6, 7, 8, 9 ]
+
+/** Metres of walking across the span, and how much of that is forward travel. */
+export const SPAN_ARC = (SPAN_TILES - 1) * TILE
+export const SPAN_Z_RUN = SPAN_IZ[SPAN_TILES - 1] * TILE
+
+/**
+ * The lateral legs buy no forward progress, so a lap is this much longer to walk
+ * than it is round. Everything that measures the lap in *distance walked* has to
+ * use LAP_ARC; everything that measures it in *where you are* still uses
+ * CYCLE_LEN. Conflating the two is what would make the walk drift off the tiles.
+ */
+export const SPAN_EXTRA = SPAN_ARC - SPAN_Z_RUN
+export const LAP_ARC = CYCLE_LEN + SPAN_EXTRA
+
+/**
+ * Half-width of the furnace-floor hall, and how far the decay closes it in.
+ *
+ * These live here rather than only in the shader's secProfile because the span
+ * has to *fit* in the hall it crosses, on every lap — the tiles reach
+ * |ix|·TILE + TILE_HALF from the centreline and the walls come in as the world
+ * decays. Getting that wrong walks the route through the wall, so the
+ * relationship is asserted by the tests instead of being eyeballed.
+ */
+export const FURNACE_HALF_W = 7.8
+export const MAX_SQUEEZE = 0.18
+
+/** Widest the route ever gets from the centreline, plate edge included. */
+export const SPAN_HALF_W =
+  Math.max(...SPAN_IX.map(Math.abs)) * TILE + TILE_HALF
 
 /** Molten surface far below the span. */
 export const MELT_Y = -30
 
-const UNFOLD_LEAD = 14 // metres of warning before you reach a cube
-const REFOLD_LAG  = 5 // metres behind you before it closes again
-const HINGE_K     = 46 // hinge stiffness — higher snaps the panels open
-const HINGE_C     = 7.5 // hinge damping — lower leaves them ringing
-const HINGE_KICK  = 0.42 // hinge rate injected by a footfall landing on a panel
+const UNFOLD_LEAD = 14 // metres of warning before you reach a tile
+const REFOLD_LAG  = 5 // metres behind you before it folds away again
+const HINGE_K     = 46 // hinge stiffness — higher snaps the plate over
+const HINGE_C     = 7.5 // hinge damping — lower leaves it ringing
+const HINGE_KICK  = 0.42 // hinge rate injected by a footfall landing on a tile
 
 export interface DebrisBody {
 
@@ -213,11 +364,21 @@ export interface FoundryState {
 
   // --- the walker ---------------------------------------------------------
 
-  /** Total distance walked, metres. The clock for the corridor. */
+  /**
+   * Total distance walked, metres. The clock for the corridor.
+   *
+   * Not the same number as `z` once the span turns: see routeAt.
+   */
   dist: number
 
   /** Position within the current lap, 0..CYCLE_LEN. */
   z: number
+
+  /** Lateral offset from the hall centreline — nought except on the span. */
+  lateral: number
+
+  /** Which way the route is facing, radians about +Z. */
+  head: number
 
   /** Distance at which this lap's walk ends, back at the cage. */
   lapEnd: number
@@ -257,8 +418,16 @@ export interface FoundryState {
 
   // --- the cage -----------------------------------------------------------
 
-  /** Cage floor height, metres. */
+  /**
+   * Cage floor height, metres.
+   *
+   * In MODE_OBLIVION this wraps inside OBLIVION_PERIOD, because that shaft is
+   * periodic and the fall is not going to stop.
+   */
   y: number
+
+  /** Metres fallen past the pit. Unwrapped, and only ever counts up. */
+  fallen: number
 
   /** Cage vertical velocity, m/s (negative = falling). */
   cageV: number
@@ -317,6 +486,140 @@ export function cycDelta (to: number, from: number): number {
 function smoothstep (a: number, b: number, x: number): number {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
   return t * t * (3 - 2 * t)
+}
+
+// --- the route --------------------------------------------------------------
+//
+// Until the span the route *is* the hall centreline and distance walked is the
+// same number as distance travelled. Across the span it is not, and the walker
+// has to actually follow the tiles or it walks off them into the melt.
+//
+// The route is a uniform cubic B-spline through the tile centres. Three
+// properties earn it:
+//
+//   • It rounds the ninety-degree corners. A polyline would put a step change
+//     in the lateral velocity at every turn — the camera would snap sideways —
+//     and this repo has already been bitten once by a discontinuity in an
+//     authored curve that no screenshot could see. A cubic B-spline is C², so
+//     the heading is C¹ and there is nothing to jitter.
+//   • The corner it cuts is one sixth of a step, 0.4 m, and the tiles are 1.2 m
+//     to the edge. The rounding stays on the plate.
+//   • Its derivative is a *quadratic* B-spline over the forward differences,
+//     and every forward difference in `iz` is 0 or +TILE. Non-negative basis
+//     over non-negative differences: `z` cannot go backwards. That is a
+//     structural guarantee rather than a tuning result.
+//
+// The control sequence is extended straight at both ends, which is what makes
+// it join the centreline with matching value *and* tangent instead of stepping
+// 0.4 m sideways at the lip.
+
+/** Arc position at which tile 0's centre is reached. */
+const SPAN_A0 = SPAN_Z0 - WALK_START
+
+/** Metres over which the route eases back to the centreline after the span. */
+const RETURN_RUN = 22
+
+/** Lateral offset the span leaves you at. */
+const SPAN_X_END = SPAN_IX[SPAN_TILES - 1] * TILE
+
+/** Lateral offset of tile `i`'s centre. */
+export function tileX (i: number): number {
+  return SPAN_IX[Math.min(SPAN_TILES - 1, Math.max(0, i))] * TILE
+}
+
+/** Cyclic z of tile `i`'s centre. */
+export function tileZ (i: number): number {
+  return SPAN_Z0 + SPAN_IZ[Math.min(SPAN_TILES - 1, Math.max(0, i))] * TILE
+}
+
+/** Arc position at which tile `i` is stood on. */
+export function tileArc (i: number): number {
+  return SPAN_A0 + i * TILE
+}
+
+/** Control point `k`, with the sequence continued straight past both ends. */
+function ctlX (k: number): number {
+  if (k < 0)
+    return 0
+  return tileX(k)
+}
+function ctlZ (k: number): number {
+  if (k < 0)
+    return SPAN_Z0 + k * TILE
+  if (k >= SPAN_TILES)
+    return tileZ(SPAN_TILES - 1) + (k - (SPAN_TILES - 1)) * TILE
+  return tileZ(k)
+}
+
+export interface RoutePoint {
+
+  /** Lateral offset from the hall centreline, and cyclic-lap forward position. */
+  x: number
+  z: number
+
+  /** d/d(arc) of both — the heading, unnormalised. */
+  dx: number
+  dz: number
+}
+
+/**
+ * Where `a` metres of walking into the lap puts you, and which way you are
+ * facing. `a` is measured from the boarding point; `z` is returned unwrapped so
+ * callers can wrap it themselves.
+ */
+export function routeAt (a: number, out: RoutePoint): RoutePoint {
+  if (a <= SPAN_A0) {
+    out.x  = 0
+    out.z  = WALK_START + a
+    out.dx = 0
+    out.dz = 1
+    return out
+  }
+
+  if (a >= SPAN_A0 + SPAN_ARC) {
+    // Off the far end and drifting back to the centreline. smootherstep has zero
+    // derivative at both ends, so this leaves the span with the lateral velocity
+    // the span left off with — nought — and arrives at the centreline the same
+    // way. Nothing to feel at either join.
+    const b = a - (SPAN_A0 + SPAN_ARC)
+    const t = Math.min(1, Math.max(0, b / RETURN_RUN))
+    out.x   = SPAN_X_END * (1 - t * t * t * (t * (t * 6 - 15) + 10))
+    out.z   = WALK_START + a - SPAN_EXTRA
+    out.dx  = -SPAN_X_END * 30 * t * t * (t - 1) * (t - 1) / RETURN_RUN
+    out.dz  = 1
+    return out
+  }
+
+  const u  = (a - SPAN_A0) / TILE
+  const k  = Math.floor(u)
+  const f  = u - k
+  const f2 = f * f
+  const f3 = f2 * f
+
+  const b0 = (1 - 3 * f + 3 * f2 - f3) / 6
+  const b1 = (4 - 6 * f2 + 3 * f3) / 6
+  const b2 = (1 + 3 * f + 3 * f2 - 3 * f3) / 6
+  const b3 = f3 / 6
+
+  const g0 = (-3 + 6 * f - 3 * f2) / 6
+  const g1 = (-12 * f + 9 * f2) / 6
+  const g2 = (3 + 6 * f - 9 * f2) / 6
+  const g3 = 3 * f2 / 6
+
+  const x0 = ctlX(k - 1),
+    x1     = ctlX(k),
+    x2     = ctlX(k + 1),
+    x3     = ctlX(k + 2)
+  const z0 = ctlZ(k - 1),
+    z1     = ctlZ(k),
+    z2     = ctlZ(k + 1),
+    z3     = ctlZ(k + 2)
+
+  out.x  = b0 * x0 + b1 * x1 + b2 * x2 + b3 * x3
+  out.z  = b0 * z0 + b1 * z1 + b2 * z2 + b3 * z3
+  out.dx = (g0 * x0 + g1 * x1 + g2 * x2 + g3 * x3) / TILE
+  out.dz = (g0 * z0 + g1 * z1 + g2 * z2 + g3 * z3) / TILE
+  return out
 }
 
 /**
@@ -394,7 +697,9 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
     shutter:      0,
     dist:         WALK_START,
     z:            WALK_START,
-    lapEnd:       WALK_START + CYCLE_LEN,
+    lateral:      0,
+    head:         0,
+    lapEnd:       WALK_START + LAP_ARC,
     loop:         0,
     smoothLoop:   0,
     v:            0,
@@ -413,6 +718,7 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
     shakeX:       0,
     shakeY:       0,
     y:            LIFT_TOP,
+    fallen:       0,
     cageV:        -2,
     cageA:        0,
     cableIntact:  false,
@@ -427,8 +733,8 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
     hookOmega:    0,
     chain:        0.12,
     chainOmega:   0,
-    fold:         new Array<number>(SPAN_CUBES).fill(0),
-    foldOmega:    new Array<number>(SPAN_CUBES).fill(0),
+    fold:         new Array<number>(SPAN_TILES).fill(0),
+    foldOmega:    new Array<number>(SPAN_TILES).fill(0),
   }
 }
 
@@ -561,7 +867,7 @@ function collideWithCage (b: DebrisBody, cageY: number, cageV: number): number {
  * simply held there for the rest of the lap.
  */
 function cageForce (s: FoundryState, dt: number): number {
-  if (s.mode !== MODE_FALL && s.mode !== MODE_BRAKE) {
+  if (s.mode !== MODE_FALL && s.mode !== MODE_BRAKE && s.mode !== MODE_OBLIVION) {
     s.y     = LANDING_Y
     s.cageV = 0
     s.spark *= Math.exp(-dt * 3.5)
@@ -572,9 +878,27 @@ function cageForce (s: FoundryState, dt: number): number {
   const speed = Math.abs(s.cageV)
   force -= Math.sign(s.cageV) * CAGE_DRAG * speed * speed // quadratic aero drag
 
+  if (s.mode === MODE_OBLIVION) {
+    // Gravity and the air, and nothing else.
+    //
+    // The air is thicker than the shaft's was — this is not a clean rectangular
+    // hoistway any more, it is a machine, and the cage is tumbling through it
+    // broadside. That is a tuning decision as much as a physical one: at the
+    // shaft's own drag the terminal velocity is 88 m/s and the gear rims strobe
+    // past too fast to read as gear rims.
+    // There is no rail left to clamp, no landing to arrive at and no buffer to
+    // compress. The fall runs out at terminal velocity and then simply keeps
+    // going at it — and that it *stops getting faster* is the worst part of it:
+    // the last thing that was still changing stops changing.
+    force += Math.sign(s.cageV) * CAGE_DRAG * speed * speed
+    force -= Math.sign(s.cageV) * OBLIVION_DRAG * speed * speed
+    s.spark *= Math.exp(-dt * 1.2)
+    return force
+  }
+
   if (s.mode === MODE_FALL) {
     s.spark *= Math.exp(-dt * 3.5)
-    if (s.y <= LIFT_BRAKE_Y) {
+    if (s.y <= brakeYFor(s.loop)) {
       s.mode         = MODE_BRAKE
       s.modeTime     = 0
       s.brakeEngaged = 0
@@ -584,6 +908,35 @@ function cageForce (s: FoundryState, dt: number): number {
 
   // ---- MODE_BRAKE ----
   s.brakeEngaged += dt
+
+  if (s.loop >= OBLIVION_LOOP) {
+    // The shoes fire, and go on firing, and it makes no difference.
+    //
+    // Three arrivals have polished the guide rails, so the wedges cannot seat
+    // against anything: they bite, tear free, and bite again with less behind
+    // them each time. `grab` is the chatter — a hard clamp for a fraction of a
+    // second, then nothing — and `grip` is what is left of the shoes, which is
+    // less every second. Early on the two together very nearly cancel gravity,
+    // so the cage hangs there shrieking and throwing a wall of sparks and
+    // *almost* holds. Then it does not.
+    const seat = Math.min(1, s.brakeEngaged / 0.30)
+    const grip = Math.max(0, 1 - s.brakeEngaged / OBLIVION_GRIP)
+    // Never all the way to nothing between grabs: the shoes stay in contact and
+    // shriek the whole way down, they just stop being able to hold.
+    const grab = 0.30 + 0.70 * Math.max(0, Math.sin(s.brakeEngaged * OBLIVION_CHATTER)) ** 2
+    const f    = OBLIVION_BITE * seat * grip * grab * OBLIVION_HOLD
+
+    const needed = -CAGE_MASS * s.cageV / dt - force
+    force += Math.sign(needed) * Math.min(f, Math.abs(needed))
+    s.spark = Math.min(1, f * speed / 240000 + grip * grab * 0.35)
+
+    // The pit floor is not there this time.
+    if (s.y < PIT_Y) {
+      s.mode     = MODE_OBLIVION
+      s.modeTime = 0
+    }
+    return force
+  }
 
   // The impulse the shoes would have to supply to zero the velocity this step,
   // after every other force is accounted for. Friction can deliver up to `f` of
@@ -657,6 +1010,20 @@ function stepCage (s: FoundryState, dt: number): number {
   s.cageV += accel * dt
   s.y += s.cageV * dt
   s.cageA = (s.cageV - prevV) / dt
+
+  // The oblivion shaft is periodic, so `y` is allowed to wrap inside it once
+  // it has fallen a full period — see OBLIVION_PERIOD for why it has to. The
+  // debris are carried in world height rather than in the cage's frame, so they
+  // have to be lifted by exactly the same amount or the wrap would leave the
+  // whole contents of the cage behind in a place that no longer exists.
+  if (s.mode === MODE_OBLIVION) {
+    s.fallen -= s.cageV * dt
+    while (s.y < PIT_Y - OBLIVION_PERIOD) {
+      s.y += OBLIVION_PERIOD
+      for (let i = 0; i < s.debris.length; i++)
+        s.debris[i].py += OBLIVION_PERIOD
+    }
+  }
 
   // ---- debris: free bodies colliding with the moving cage ----
   // Bodies move after the cage, so their contacts see this step's cage state.
@@ -778,12 +1145,20 @@ function stepMechanisms (s: FoundryState, dt: number): void {
   s.chain += s.chainOmega * dt
 }
 
-/** Index of the span cube nearest the walker, or -1 if the span is elsewhere. */
-function cubeUnderfoot (s: FoundryState): number {
+/**
+ * Index of the span tile under the walker, or -1 if they are on hall plate.
+ *
+ * Two dimensions, not one: the route turns, so several tiles share a `z` and
+ * only the lateral coordinate tells them apart. A z-only test would have the
+ * walker riding the ring of the wrong tile all the way across the hall.
+ */
+function tileUnderfoot (s: FoundryState): number {
   let best  = -1
-  let bestD = CUBE_SPACING * 0.5 + 0.4
-  for (let i = 0; i < SPAN_CUBES; i++) {
-    const d = Math.abs(cycDelta(SPAN_Z0 + i * CUBE_SPACING, s.z))
+  let bestD = TILE_HALF + 0.4
+  for (let i = 0; i < SPAN_TILES; i++) {
+    const dz = Math.abs(cycDelta(tileZ(i), s.z))
+    const dx = Math.abs(tileX(i) - s.lateral)
+    const d  = Math.max(dx, dz) // square plates, so Chebyshev is the honest metric
     if (d < bestD) {
       bestD = d
       best  = i
@@ -793,21 +1168,26 @@ function cubeUnderfoot (s: FoundryState): number {
 }
 
 /**
- * The folding span: the furnace floor is cut away over the melt, and the only
- * walkway is a line of cubes that unfold their six faces about hinge edges.
+ * The stepping stones: the furnace floor is cut away over the melt, and the only
+ * walkway is a plate that tumbles across it ahead of you.
  *
- * Each cube is a hinged mechanism, not an animation. Its faces share one fold
- * coordinate integrated as a damped second-order hinge driven toward an open or
- * closed target — so the panels *overshoot and settle* when they slam open, the
- * path visibly springs into place a moment before it is needed, and a boot
- * landing on a panel sets it ringing under you.
+ * Each tile is a hinged mechanism, not an animation. Its fold coordinate is a
+ * damped second-order hinge driven toward 0 (stowed flat on its predecessor) or
+ * 1 (landed in its own place), so it *overshoots and settles* when it slams
+ * over, the path visibly springs into position a moment before it is needed, and
+ * a boot landing on a tile sets it ringing under you.
+ *
+ * Measured in distance *along the route*, not in z: the lateral legs of the
+ * crossing buy no forward progress at all, and keying the deployment off z would
+ * throw the whole far side of the hall open the instant you reached that z.
  */
 function stepSpan (s: FoundryState, dt: number): void {
   const walking = s.mode === MODE_WALK
-  for (let i = 0; i < SPAN_CUBES; i++) {
-    const ahead = cycDelta(SPAN_Z0 + i * CUBE_SPACING, s.z)
-    // Unfold well before you arrive, refold once you are safely past. With
-    // nobody out on the walk the span has no reason to be open at all.
+  const arc     = s.dist - (s.lapEnd - LAP_ARC)
+  for (let i = 0; i < SPAN_TILES; i++) {
+    const ahead = tileArc(i) - arc
+    // Flip it over well before you arrive, fold it away once you are safely
+    // past. With nobody out on the walk the plate has no reason to be out at all.
     const target = walking && ahead < UNFOLD_LEAD && ahead > -REFOLD_LAG ? 1 : 0
     const acc    = HINGE_K * (target - s.fold[i]) - HINGE_C * s.foldOmega[i]
     s.foldOmega[i] += acc * dt
@@ -855,13 +1235,22 @@ function stepRide (s: FoundryState, impactSum: number): void {
  * folding span the spring's rest length is the panel you are standing on, so the
  * mechanism's ring shows up in your eyes.
  */
+const scratchRoute: RoutePoint = { x: 0, z: 0, dx: 0, dz: 1 }
+
 function stepWalker (s: FoundryState, dt: number): void {
   // Stepping out of the cage accelerates you to a pace; stepping back into it
   // at the end of the lap brings you to a stand inside it.
   const target = s.mode === MODE_WALK ? WALK_SPEED : 0
   s.v += (target - s.v) * Math.min(1, dt * (target > 0 ? 1.4 : 4.0))
   s.dist += s.v * dt
-  s.z = cyclic(s.dist)
+
+  // Where that distance has actually put you. Off the span this is the identity
+  // and `z` is just `dist`; on it the route turns, and the two part company by
+  // as much as SPAN_EXTRA over the crossing.
+  const r   = routeAt(s.dist - (s.lapEnd - LAP_ARC), scratchRoute)
+  s.z       = cyclic(r.z)
+  s.lateral = r.x
+  s.head    = Math.atan2(r.dx, r.dz)
 
   const decay = decayFor(s.smoothLoop)
 
@@ -876,15 +1265,15 @@ function stepWalker (s: FoundryState, dt: number): void {
     s.bobV -= HEEL_KICK * (0.85 + 0.30 * hash11(n) + decay * 0.55 * hash11(n * 3.7))
     s.swayV += SWAY_KICK * s.foot * (0.9 + 0.2 * hash11(n * 1.7))
 
-    const cube = cubeUnderfoot(s)
-    if (cube >= 0)
-      s.foldOmega[cube] -= HINGE_KICK
+    const tile = tileUnderfoot(s)
+    if (tile >= 0)
+      s.foldOmega[tile] -= HINGE_KICK
   }
 
   // ---- leg spring and sway spring ----
-  const cube   = cubeUnderfoot(s)
-  // Standing on the span you ride the panel: its hinge ring is your ground.
-  const ground = cube >= 0 ? (s.fold[cube] - 1) * 0.10 : 0
+  const tile   = tileUnderfoot(s)
+  // Standing on the span you ride the plate: its hinge ring is your ground.
+  const ground = tile >= 0 ? (s.fold[tile] - 1) * 0.10 : 0
 
   s.bobV += (LEG_K * (ground - s.bob) - LEG_C * s.bobV) * dt
   s.bob += s.bobV * dt
@@ -893,9 +1282,17 @@ function stepWalker (s: FoundryState, dt: number): void {
 
   // ---- camera pose, all of it read off the gait ----
   s.eyeY  = LANDING_Y + EYE_HEIGHT + s.bob + s.tremor * 0.6 + Math.sin(s.dist * 0.65) * 0.006
-  s.yaw   = s.sway * 0.85 + Math.sin(s.dist * 0.013) * 0.045
-  s.pitch = -0.05 + s.bobV * 0.022 - s.tremorV * 0.010
-  s.roll  = -s.sway * 0.50 + s.tremor * 0.40
+  // You face the way the route goes. `head` is C¹ in distance walked (the route
+  // is a cubic B-spline and its speed never reaches zero), so the four turns out
+  // on the span arrive as turns rather than as cuts.
+  s.yaw   = s.head + s.sway * 0.85 + Math.sin(s.dist * 0.013) * 0.045
+  // ...and look down when you are crossing sideways. Nobody walks a two-metre
+  // plate over a melt staring straight ahead, and a level gaze on the lateral
+  // legs of the span points at nothing but the far wall — the walkway you are
+  // actually standing on falls below the bottom of the frame.
+  s.pitch = -0.05 + s.bobV * 0.022 - s.tremorV * 0.010 - Math.abs(s.head) * 0.30
+  // ...and lean into them, a little, the way anyone does.
+  s.roll  = -s.sway * 0.50 + s.tremor * 0.40 - s.head * 0.10
 
   const jolt = Math.min(1, Math.abs(s.tremorV) * 0.45)
   s.shakeX   = jolt * Math.sin(s.dist * 41.3 + s.crank * 5.1)
@@ -907,7 +1304,7 @@ function beginNextDrop (s: FoundryState): void {
   s.mode         = MODE_FALL
   s.modeTime     = 0
   s.gate         = 0
-  s.y            = LIFT_TOP
+  s.y            = liftTopFor(s.loop + 1)
   s.cageV        = -2
   s.cageA        = 0
   s.cableIntact  = false
@@ -919,12 +1316,20 @@ function beginNextDrop (s: FoundryState): void {
 
   // Snap to the exact boarding point before opening the next lap, so the metre
   // or so of overshoot walking into the cage does not accumulate lap on lap.
-  s.dist   = s.lapEnd
-  s.z      = cyclic(s.dist)
-  s.lapEnd = s.dist + CYCLE_LEN
+  //
+  // `z` is *not* cyclic(dist) any more and has not been since the span learned
+  // to turn: a lap is LAP_ARC of walking but only CYCLE_LEN of ground, so
+  // wrapping the distance would land every lap SPAN_EXTRA further down the
+  // loading bay than the last one. The boarding point is a fixed place in the
+  // world, so it is written as one.
+  s.dist    = s.lapEnd
+  s.z       = WALK_START
+  s.lateral = 0
+  s.head    = 0
+  s.lapEnd  = s.dist + LAP_ARC
 
   const rand = mulberry32((Math.floor(s.dist * 977) ^ 0x9e3779b9) >>> 0)
-  s.debris   = spawnDebris(rand, LIFT_TOP)
+  s.debris   = spawnDebris(rand, s.y)
 }
 
 /**
@@ -941,9 +1346,10 @@ function beginNextDrop (s: FoundryState): void {
 function stepPhase (s: FoundryState, dt: number): void {
   s.modeTime += dt
 
-  if (s.mode === MODE_FALL)
+  if (s.mode === MODE_FALL || s.mode === MODE_OBLIVION)
     // The shutter rattles back up once the cable has gone, which is how you
-    // find out you are already falling.
+    // find out you are already falling. In oblivion it is long since up, and
+    // there is no transition out of that phase to write: it is the last one.
     s.shutter = Math.max(0, s.shutter - dt / REOPEN_TIME)
   else if (s.mode === MODE_SETTLE) {
     s.gate = Math.min(1, s.gate + dt / GATE_TIME)
