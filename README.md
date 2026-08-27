@@ -39,6 +39,7 @@ components/
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
   ShaderPreviewLayer.tsx    # ONE shared WebGL canvas for all card previews
   withJourneyShell.tsx      # the route: context, resize, pointer, HUD, ?t= seeking
+  JourneyTransport.tsx      # the VHS transport bar (rewind / skip / fast-forward)
   withShaderJourney.tsx     # a journey that is one fragment shader (six of them)
   withGeometryJourney.tsx   # a journey that is actual triangles (loop-line)
 hooks/
@@ -84,11 +85,13 @@ Most journeys are a straight `+Z` scroll with the scenery changing around them.
 Three are not, and all three solve it differently:
 
 * **stairwell** keeps each act in section-local space. Its CPU simulation owns a
-  500-unit, six-act route and uploads section progress, transition, traversal and
-  rupture state; the two-pass WebGL renderer only ever sees the current act and
-  its successor. The visible treads use a stepped height field, while the camera
-  and handrails follow the matching continuous slope. That separation preserves
-  the descent silhouette without quantising the camera onto every tread.
+  500-unit, six-act route and uploads section progress, transition, traversal,
+  rupture and purgatory state; the two-pass WebGL renderer only ever sees the
+  current act and its successor. The visible treads use a stepped height field,
+  while the camera and handrails follow the matching continuous slope. That
+  separation preserves the descent silhouette without quantising the camera onto
+  every tread — and it is what lets the stair *pitch over* every traversal, since
+  a single rise/run pair drives both. See `stairwell/SPEC.md`.
 * **natatorium** takes that idea and moves the table to the CPU. `kinematics.ts`
   owns an authored chain of sections and uploads, every frame, the affine
   transform carrying a point from the camera's current section into each
@@ -386,6 +389,10 @@ and takes a factory returning anything with `{ draw, dispose }`. Pick the path:
      once per capped frame, its `uniforms()` go straight to the shader and its
      `label()` drives the HUD. Use this whenever speed varies by section, because
      then position is an *integral* and has no closed form.
+   * `marks()` on the simulation — or `getMarks(time)` in the options, for a
+     journey with no simulation at all. Which lap, which section, how far
+     through: the transport controls navigate by *structure* rather than by the
+     clock when a journey supplies it. See `lib/journeyTransport.ts`.
    * `createAudioEngine()` — a Web Audio engine (see `hooks/use-audio-engine.ts`).
      Passing it is what renders the mute button; its optional `update(time, state)`
      is fed the same uniforms the shader is drawn with, so sound and geometry stay
@@ -424,3 +431,39 @@ bun install
 bun run dev      # http://localhost:3000
 bun run build
 ```
+
+
+## the transport, and the CRT
+
+Every journey carries a tape deck: `⏮ ◀◀ ▶▶ ⏭` and a VHS-style position bar
+(`components/JourneyTransport`), driven by `lib/journeyTransport`.
+
+The hard part is that a journey is an *integrator*, not a timeline — `z += speed(z)
+* dt`, with speed depending on where you already are — so a time cannot be jumped
+to, only replayed. `seekSimulation` (`lib/debugParams`) already established the
+replay; the transport establishes which `t` to replay to. Forward and backward are
+therefore asymmetric on purpose:
+
+* **forward** — the destination is not known in advance, so the live simulation is
+  stepped fast while `marks()` is watched for the index to change.
+* **backward** — the destination *is* known, because time only ever starts at
+  zero. Every boundary the journey has crossed was crossed while being watched, so
+  an append-only log of "the time lap N began" is complete for every lap at or
+  below the current one. Rewinding reads the log and replays a fresh simulation.
+
+Rewind lands on exactly the timestamp it left from, because the seek divides `t`
+into equal steps rather than stepping until it overshoots.
+
+`lib/crtPass` is the one post-process every journey shares: tube curvature,
+chromatic offset, aperture mask, vignette, and the tape treatment the transport
+plays over the top. It does **not** re-plumb the renderers to draw into an FBO —
+every journey already finishes its frame on the default framebuffer, so the pass
+copies that back buffer into a texture mid-frame and draws over it. Nothing
+upstream knows it exists. Two constraints worth knowing before touching it: the
+capture texture must be `RGB`, not `RGBA` (the shell asks for `alpha: false`
+contexts, and copying into a format that needs a component the read buffer lacks
+is a silent `INVALID_OPERATION` that leaves every journey black), and the shader
+is GLSL ES 1.00 because the shell hands out both `webgl` and `webgl2` contexts.
+
+Both are suppressed under `?t=` and `?hud=0`, so `tools/journey.mjs` stays
+deterministic. The CRT pass can be switched off in Settings.

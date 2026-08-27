@@ -195,7 +195,7 @@
 
 #fullscreen-btn {
     position: absolute;
-    bottom: 20px;
+    bottom: 84px;
     left: 20px;
     background: rgba(0, 0, 0, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.25);
@@ -216,7 +216,7 @@
 }
 #fps-display {
     position: absolute;
-    bottom: 20px;
+    bottom: 84px;
     right: 20px;
     color: rgba(255, 255, 255, 0.45);
     font-family: monospace;
@@ -349,7 +349,7 @@
 
 #audio-btn {
     position: absolute;
-    bottom: 20px;
+    bottom: 84px;
     left: 170px;
     height: 32px;
     background: rgba(0, 0, 0, 0.6);
@@ -373,7 +373,7 @@
 
 #settings-btn {
     position: absolute;
-    bottom: 20px;
+    bottom: 84px;
     left: 325px;
     background: rgba(0, 0, 0, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.25);
@@ -866,4 +866,164 @@ html, body {
     background: #fff;
     color: #000;
     border-color: #fff;
+}
+
+
+/* ---- the transport (components/JourneyTransport) ----------------------- */
+/*
+ * A tape deck pinned to the bottom of every journey. The rest of the HUD is
+ * hand-placed absolutes stacking left-to-right along the bottom edge, so this
+ * takes the edge for itself and the others sit on the row above it (bottom:
+ * 84px rather than 20px). They stay pixel-fixed, which is what the `hud`
+ * acceptance check in tools/journey.mjs measures.
+ */
+
+#journey-transport {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 12;
+    padding: 8px 20px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    font-family: monospace;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+}
+
+.jt-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.jt-buttons {
+    display: flex;
+    gap: 6px;
+    flex: none;
+}
+
+.jt-btn {
+    width: 38px;
+    height: 26px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    font-family: monospace;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    outline: none;
+    transition: all 0.15s ease;
+}
+.jt-btn:hover {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+}
+.jt-btn:focus-visible {
+    border-color: var(--accent, #fff);
+    box-shadow: 0 0 0 1px var(--accent, #fff);
+}
+.jt-btn:active {
+    transform: translateY(1px);
+}
+
+.jt-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+}
+
+.jt-state {
+    flex: none;
+    display: flex;
+    gap: 12px;
+    align-items: baseline;
+    font-size: 10px;
+    letter-spacing: 2px;
+}
+
+.jt-mode {
+    color: var(--accent, #fff);
+    /* Fixed width so the readout does not shove the counter about as the
+       transport changes state — the same reason the rest of the HUD is
+       hand-placed rather than flowed. */
+    min-width: 62px;
+    text-align: right;
+}
+
+.jt-counter {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.jt-track {
+    position: relative;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.09);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    overflow: hidden;
+}
+
+.jt-fill {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--accent, #fff);
+    opacity: 0.75;
+    /* Sampled at 60ms; the transition is what makes that read as continuous.
+       While shuttling it is switched off — there the bar is meant to jump. */
+    transition: width 90ms linear;
+}
+
+.jt-tick {
+    position: absolute;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.75);
+}
+
+/* Shuttling: kill the smoothing, flash the readout, tint the tape. */
+#journey-transport[data-mode="ff"] .jt-fill,
+#journey-transport[data-mode="rew"] .jt-fill,
+#journey-transport[data-mode="flash"] .jt-fill {
+    transition: none;
+}
+#journey-transport:not([data-mode="play"]) .jt-mode {
+    animation: jtBlink 0.28s steps(1) infinite;
+}
+#journey-transport:not([data-mode="play"]) .jt-track {
+    border-color: var(--accent, #fff);
+}
+
+@keyframes jtBlink {
+    0%, 49% { opacity: 1; }
+    50%, 100% { opacity: 0.25; }
+}
+
+@media (max-width: 620px) {
+    .jt-label {
+        display: none;
+    }
+}
+
+/* ---- index page: the gear lives at the foot of the document ------------ */
+/*
+ * #settings-btn is absolutely positioned for the journey HUD row, so on the
+ * index page it would ignore its place in the DOM entirely. Scope it back into
+ * flow here rather than forking the component.
+ */
+.index-footer #settings-btn {
+    position: static;
+    display: block;
+    margin: 18px auto 0;
 }

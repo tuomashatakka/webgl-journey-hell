@@ -26,6 +26,7 @@ import {
 } from './physics'
 import type { FoundryState } from './physics'
 import type { JourneySimulation } from '@/components/withShaderJourney'
+import type { JourneyMarks } from '@/lib/journeyTransport'
 
 
 export interface FoundrySection {
@@ -162,6 +163,19 @@ export function createFoundrySimulation (): JourneySimulation {
 
     label () {
       return labelFor(state)
+    },
+
+    /**
+     * One lap of the seven-hall ring. `state.z` is already cyclic — the shader's
+     * world is periodic — so it doubles as the position within the lap.
+     */
+    marks (): JourneyMarks {
+      return {
+        loop:         state.loop,
+        section:      sectionFor(state).id,
+        sectionCount: SECTION_COUNT,
+        progress:     Math.min(1, state.z / (SECTION_LEN * SECTION_COUNT)),
+      }
     },
   }
 }

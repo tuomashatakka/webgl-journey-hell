@@ -71,6 +71,7 @@
 
 import type { JourneySimulation } from '@/components/withShaderJourney'
 import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { JourneyMarks } from '@/lib/journeyTransport'
 
 
 const D = Math.PI / 180
@@ -1053,6 +1054,19 @@ export function createSwitchbackSimulation (): JourneySimulation {
 
     label () {
       return labelFor(state)
+    },
+
+    /**
+     * `s`, not `lapF`: lapF deliberately ramps across THE OVERLOOK rather than
+     * stepping at the seam, which makes it the wrong thing to draw a bar from.
+     */
+    marks (): JourneyMarks {
+      return {
+        loop:         state.lap,
+        section:      SECTIONS.indexOf(state.section),
+        sectionCount: SECTION_COUNT,
+        progress:     state.s % LAP_LEN / LAP_LEN,
+      }
     },
   }
 }

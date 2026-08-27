@@ -144,6 +144,32 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
           </p>
         </fieldset>
 
+        {/* Shared CRT post pass */}
+        <fieldset className="settings-group">
+          <legend className="settings-label">CRT DISPLAY</legend>
+
+          <p className="settings-description">
+            Tube curvature, chromatic offset and aperture mask over every journey — and the
+            tape treatment the transport controls play during a fast-forward or rewind.
+          </p>
+
+          <p className="settings-toggle-container">
+            <label className="settings-switch-label">
+              <input
+                type="checkbox"
+                id="crt-checkbox"
+                checked={ settings.crt }
+                onChange={ () => onChange({ ...settings, crt: !settings.crt }) } />
+
+              <span className="settings-custom-checkbox" />
+
+              <span className="settings-switch-text">
+                {settings.crt ? 'CRT DISPLAY: ENABLED' : 'CRT DISPLAY: BYPASSED'}
+              </span>
+            </label>
+          </p>
+        </fieldset>
+
         {/* Device-orientation look controls */}
         <fieldset className="settings-group">
           <legend className="settings-label">GYROSCOPE LOOK</legend>

@@ -29,6 +29,9 @@ export interface GraphicsSettings {
 
   /** Add device-orientation tilt to the shared journey camera controls. */
   gyroscope: boolean;
+
+  /** The shared CRT pass: tube curvature, chromatic offset, aperture mask, VHS scrub. */
+  crt: boolean;
 }
 
 const STORAGE_KEY = 'journey-graphics-settings-v1'
@@ -43,6 +46,7 @@ export const DEFAULT_SETTINGS: GraphicsSettings = {
   contrast:     1.0,
   maxFrameRate: 60,
   gyroscope:    true,
+  crt:          true,
 }
 
 /** Allowed discrete choices surfaced in the settings UI. */
@@ -60,6 +64,7 @@ function coerce (parsed: Partial<GraphicsSettings> | null | undefined): Graphics
     contrast:     typeof p.contrast === 'number' ? p.contrast : DEFAULT_SETTINGS.contrast,
     maxFrameRate: typeof p.maxFrameRate === 'number' ? p.maxFrameRate : DEFAULT_SETTINGS.maxFrameRate,
     gyroscope:    typeof p.gyroscope === 'boolean' ? p.gyroscope : DEFAULT_SETTINGS.gyroscope,
+    crt:          typeof p.crt === 'boolean' ? p.crt : DEFAULT_SETTINGS.crt,
   }
 }
 

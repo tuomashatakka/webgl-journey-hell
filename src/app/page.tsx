@@ -10,8 +10,6 @@ export const metadata: Metadata = {
 
 export default function IndexPage () {
   return <main className="index-page">
-    <SettingsButton />
-
     <header className="index-header">
       <p className="index-sigil" aria-hidden>
         𖤐𖤐𖤐𖤐𖤐
@@ -28,6 +26,7 @@ export default function IndexPage () {
 
     <footer className="index-footer">
       <span>{`// ${process.env.NODE_ENV === 'production' ? 'live' : 'dev'} — hover a tile to wake it, stills stand in where it can't`}</span>
+      <SettingsButton />
     </footer>
   </main>
 }

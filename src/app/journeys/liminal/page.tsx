@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import { vsQuad, fsScene, fsPost } from './shaders'
-import { getKinematicState, getWalkSpeed } from './kinematics'
+import { createLiminalRide, getKinematicState } from './kinematics'
 import { useSettings } from '@/components/SettingsProvider'
 import { Settings as SettingsIcon } from 'lucide-react'
 import Link from 'next/link'
@@ -17,6 +17,11 @@ import {
   useResolutionResize
 
 } from '@/hooks/use-journey-runtime'
+import { CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
+import { createJourneyTransport } from '@/lib/journeyTransport'
+import type { JourneyTransport as Transport } from '@/lib/journeyTransport'
+import JourneyTransport from '@/components/JourneyTransport'
+import type { TransportView } from '@/components/JourneyTransport'
 
 
 class CyberLiminalAudioEngine {
@@ -284,6 +289,21 @@ class CyberLiminalAudioEngine {
 export default function LiminalJourney () {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
+  // Assigned by the render effect below. This journey builds its own GL and its
+  // own loop, so the transport is wired by hand here rather than inherited from
+  // withJourneyShell the way every other route gets it.
+  const transportRef     = useRef<Transport | null>(null)
+  const transportViewRef = useRef<TransportView>({
+    mode:         'play',
+    loop:         0,
+    section:      0,
+    sectionCount: 1,
+    progress:     0,
+    time:         0,
+    label:        '',
+    hasMarks:     false,
+  })
+
   // Settings come from the global provider (single source of truth, persisted there).
   const { settings, setSettings }             = useSettings()
   const [ isSettingsOpen, setIsSettingsOpen ] = useState(false)
@@ -407,10 +427,33 @@ export default function LiminalJourney () {
 
     let animationId: number
     let lastSector      = ''
-    let currentZ        = 0.0
+    let ride            = createLiminalRide()
     let lastTime        = 0.0
     let accumulatedTime = 0.0
-    let lastDrawTime    = 0.0
+
+    // The pass is optional; failing to build it means no treatment, not a dead
+    // journey. Note this route already has its own fisheye/CA post pass — the
+    // shared one sits on top of it for the tube geometry and the tape effect.
+    const crt = createCrtPass(gl)
+
+    const transport = createJourneyTransport({
+      createSimulation: () => createLiminalRide(),
+
+      adopt: (sim, time) => {
+        ride            = sim as ReturnType<typeof createLiminalRide>
+        accumulatedTime = time
+      },
+
+      current: () => ({ sim: ride, time: accumulatedTime }),
+
+      advance: dt => {
+        accumulatedTime += dt
+        ride.step(dt)
+      },
+    })
+    transportRef.current = transport
+
+    let lastDrawTime     = 0.0
 
     const render = (time: number) => {
       animationId = requestAnimationFrame(render)
@@ -441,11 +484,24 @@ export default function LiminalJourney () {
       // Apply scaled dt for speed settings, adapting velocity in a frequency-safe manner
       const scaledDt = dt * speedMultiplier
 
-      // Accumulate player Z based on frame-rate independent walk speed
-      const speed = getWalkSpeed(currentZ)
-      currentZ += speed * scaledDt
+      // Log the position before moving, so every boundary crossed has a time to
+      // rewind to; then let the transport move if it is shuttling.
+      transport.observe(accumulatedTime, ride.marks())
 
-      audio.engineRef.current?.updateState(currentZ)
+      const ts        = transport.tick(dt)
+      const scrubbing = ts.mode !== 'play'
+
+      // The transport does its own integration while shuttling, so the normal
+      // step stands down for the duration.
+      if (!scrubbing) {
+        ride.step(scaledDt)
+        accumulatedTime += scaledDt
+      }
+
+      const currentZ = ride.z
+
+      if (!scrubbing)
+        audio.engineRef.current?.updateState(currentZ)
 
       const state            = getKinematicState(currentZ)
       const currentIteration = state.loop
@@ -471,10 +527,18 @@ export default function LiminalJourney () {
         setGlitchKey(prev => prev + 1)
       }
 
-      // Accumulate dynamic waves and light shader speed securely
-      accumulatedTime += scaledDt
-
       const iTime = accumulatedTime
+
+      transportViewRef.current = {
+        mode:         ts.mode,
+        loop:         state.loop,
+        section:      state.sector,
+        sectionCount: 7,
+        progress:     currentZ >= 2000.0 ? 1 : currentZ % 500.0 / 500.0,
+        time:         iTime,
+        label:        sector,
+        hasMarks:     true,
+      }
 
       // --- PASS 1: Raymarch to FBO ---
       gl.bindFramebuffer(gl.FRAMEBUFFER, fbo)
@@ -520,6 +584,9 @@ export default function LiminalJourney () {
         gl.uniform1f(postBrightnessLoc, currentSettings.brightness)
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+
+      if (currentSettings.crt)
+        crt?.draw({ time: iTime, ...CRT_DEFAULTS, scrub: ts.scrub, scrubMix: ts.scrubMix })
     }
 
     animationId = requestAnimationFrame(render)
@@ -527,6 +594,9 @@ export default function LiminalJourney () {
     return () => {
       window.removeEventListener('resize', resize)
       cancelAnimationFrame(animationId)
+
+      crt?.dispose()
+      transportRef.current = null
 
       gl.deleteBuffer(quadBuffer)
       gl.deleteTexture(tex)
@@ -556,6 +626,10 @@ export default function LiminalJourney () {
     </button>
 
     <aside id="fps-display">{renderRes.w}×{renderRes.h} · {fps} FPS</aside>
+
+    <JourneyTransport
+      getView={ () => ({ ...transportViewRef.current }) }
+      onAction={ action => transportRef.current?.request(action) } />
 
     <SettingsView
       isOpen={ isSettingsOpen }

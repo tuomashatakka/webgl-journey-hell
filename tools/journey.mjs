@@ -337,7 +337,7 @@ function uvFn () {
 // Every fixed piece of chrome, and what each is anchored to. An overlay that
 // moves between two timestamps is a layout bug; one that stays put is not, no
 // matter what the frame behind it did.
-const HUD_IDS = [ 'sector-title', 'back-btn', 'fullscreen-btn', 'audio-btn', 'fps-display' ]
+const HUD_IDS = [ 'sector-title', 'back-btn', 'fullscreen-btn', 'audio-btn', 'fps-display', 'journey-transport' ]
 
 const hudFn = ids => ids.map(id => {
   const el = document.getElementById(id)

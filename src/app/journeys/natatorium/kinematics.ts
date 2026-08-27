@@ -28,6 +28,7 @@
 
 import type { JourneySimulation } from '@/components/withShaderJourney'
 import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { JourneyMarks } from '@/lib/journeyTransport'
 
 
 export function smoothstep (edge0: number, edge1: number, x: number): number {
@@ -870,6 +871,16 @@ export function createNatatoriumSimulation (): JourneySimulation {
 
     label () {
       return labelFor(state)
+    },
+
+    /** One lap of SECTIONS, walked over and over. `dist` is total, so fold it. */
+    marks (): JourneyMarks {
+      return {
+        loop:         state.lap,
+        section:      SECTIONS.indexOf(state.section),
+        sectionCount: SECTION_COUNT,
+        progress:     state.dist % LAP_LEN / LAP_LEN,
+      }
     },
   }
 }

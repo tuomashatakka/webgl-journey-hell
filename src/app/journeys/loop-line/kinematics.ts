@@ -57,6 +57,7 @@ import type { CustomUniforms } from '@/lib/shaderQuad'
 import type { BaySpan, Circuits } from './stations'
 import { DECAY_BAY, SWITCH_LAP, getCircuits, spanAt } from './stations'
 import type { Frame } from '@/lib/curve'
+import type { JourneyMarks } from '@/lib/journeyTransport'
 
 
 const G = 9.81
@@ -281,6 +282,16 @@ class LoopLineRide implements JourneySimulation {
     const bay = this.span().bay
     const kmh = Math.round(this.speed * 3.6)
     return `LAP ${this.lap + 1} · ${bay.name} · ${kmh} KM/H`
+  }
+
+  /** One lap of the circuit; the bays are its sections. */
+  marks (): JourneyMarks {
+    return {
+      loop:         this.lap,
+      section:      this.span().bay.id,
+      sectionCount: this.spans.length,
+      progress:     this.s / this.curve.length,
+    }
   }
 }
 

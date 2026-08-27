@@ -16,6 +16,7 @@
 
 import type { JourneySimulation } from '@/components/withShaderJourney'
 import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { JourneyMarks } from '@/lib/journeyTransport'
 
 
 export function smoothstep (edge0: number, edge1: number, x: number): number {
@@ -559,6 +560,16 @@ export function createHollowOrchardSimulation (): JourneySimulation {
 
     label () {
       return labelFor(state)
+    },
+
+    /** Twelve stages on one 660-unit loop; STAGE_COMPOST is the last, so it is also the count. */
+    marks (): JourneyMarks {
+      return {
+        loop:         state.loop,
+        section:      state.stageA,
+        sectionCount: STAGE_COMPOST,
+        progress:     state.loopZ / ORCHARD_LOOP_Z,
+      }
     },
   }
 }

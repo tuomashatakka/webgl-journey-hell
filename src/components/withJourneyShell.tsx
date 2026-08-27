@@ -54,6 +54,12 @@ import SettingsButton from './SettingsButton'
 import JourneyDebugPanel from './JourneyDebugPanel'
 import { NO_DEBUG, publishDebugState, readDebugParams, seekSimulation } from '@/lib/debugParams'
 import type { DebugParams } from '@/lib/debugParams'
+import { CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
+import type { CrtPass } from '@/lib/crtPass'
+import { createJourneyTransport } from '@/lib/journeyTransport'
+import type { JourneyMarks, JourneyTransport as Transport, TransportState } from '@/lib/journeyTransport'
+import JourneyTransport from './JourneyTransport'
+import type { TransportView } from './JourneyTransport'
 
 
 const MAX_DPR = 2
@@ -83,6 +89,13 @@ export interface JourneySimulation {
 
   /** Optional HUD section label derived from simulation state, not time. */
   label?(): string;
+
+  /**
+   * Optional structural position — which lap, which section, how far through.
+   * Implementing it is what makes the transport controls move by *structure*
+   * rather than by the clock; see lib/journeyTransport.
+   */
+  marks?(): JourneyMarks;
 
   /** Optional teardown for anything the simulation allocated. */
   dispose?(): void;
@@ -133,6 +146,14 @@ export interface ShaderJourneyOptions {
    * provides a `label`, that takes precedence over `getSectionName`.
    */
   createSimulation?: () => JourneySimulation;
+
+  /**
+   * Structural position for a journey whose motion is authored in GLSL and has
+   * no simulation at all (skybridges). Same contract as JourneySimulation.marks,
+   * evaluated from the accumulated shader time rather than integrated state.
+   * Ignored when a simulation supplies marks of its own.
+   */
+  getMarks?: (time: number) => JourneyMarks;
 
   /**
    * Optional per-mount audio engine. Built lazily on the first unmute (an
@@ -203,6 +224,7 @@ export function withJourneyShell (
 
     const canvasRef   = useRef<HTMLCanvasElement>(null)
     const rendererRef = useRef<JourneyRenderer | null>(null)
+    const crtRef      = useRef<CrtPass | null>(null)
     // Lazily built once per mount; useRef's initializer would run on every
     // render, so guard it instead of calling createSimulation() inline.
     const simRef = useRef<JourneySimulation | null>(null)
@@ -222,6 +244,44 @@ export function withJourneyShell (
 
     // Latest settings for the (stable) frame callback + resize, without re-registering.
     const settingsRef = useLatestRef(settings)
+
+    // --- transport ---
+    // The host is four closures over the refs above: the transport owns the
+    // *policy* (which t to move to) and nothing else, so it stays testable and
+    // the shell keeps sole ownership of the live simulation and clock.
+    const transportRef = useRef<Transport | null>(null)
+    if (!transportRef.current)
+      transportRef.current = createJourneyTransport({
+        createSimulation: () => options.createSimulation?.() ?? null,
+
+        adopt: (sim, time) => {
+          simRef.current?.dispose?.()
+          simRef.current   = (sim as JourneySimulation | null)
+          iTimeRef.current = time
+        },
+
+        current: () => ({ sim: simRef.current, time: iTimeRef.current }),
+
+        marksAt: options.getMarks,
+
+        advance: dt => {
+          iTimeRef.current += dt
+          simRef.current?.step(dt, iTimeRef.current)
+        },
+      })
+
+    // Written every frame, sampled by the transport bar on its own slow
+    // interval — same reasoning as JourneyDebugPanel.
+    const transportViewRef = useRef<TransportView>({
+      mode:         'play',
+      loop:         0,
+      section:      0,
+      sectionCount: 1,
+      progress:     0,
+      time:         0,
+      label:        '',
+      hasMarks:     false,
+    })
 
     // Resize is stored here so the resolution setting can re-trigger it. Keyed
     // on the debug overrides too, since those arrive one render after mount.
@@ -262,6 +322,10 @@ export function withJourneyShell (
       if (!renderer)
         return // could not be built — leave the canvas blank
 
+      // Failing to build the CRT pass is not fatal: the journey underneath is
+      // a complete image on its own, so a null pass just means no treatment.
+      crtRef.current = createCrtPass(gl)
+
       const resize = () => {
         const d = dbgRef.current
 
@@ -287,6 +351,8 @@ export function withJourneyShell (
 
       return () => {
         window.removeEventListener('resize', resize)
+        crtRef.current?.dispose()
+        crtRef.current = null
         renderer.dispose()
         rendererRef.current = null
         // NOTE: do NOT call WEBGL_lose_context.loseContext() here. A canvas
@@ -316,6 +382,17 @@ export function withJourneyShell (
     // One draw per (capped) frame, on the shared loop. Stable callback reading refs.
     type ManagerType = { deltaTime: number }
 
+    /**
+     * Composite the CRT treatment over the frame the renderer just presented.
+     * Runs after draw() and reads the back buffer, so no renderer has to know
+     * it exists — see lib/crtPass for why it is done that way round.
+     */
+    const applyCrt = useCallback((time: number, scrub: number, scrubMix: number) => {
+      if (!settingsRef.current.crt)
+        return
+      crtRef.current?.draw({ time, ...CRT_DEFAULTS, scrub, scrubMix })
+    }, [ settingsRef ])
+
     // The ?t= path: seek once, then redraw the same instant every frame. Split
     // out of onFrame because it shares nothing with the live path but the draw
     // call — it does not integrate, does not tween the pan, and does not touch
@@ -342,6 +419,8 @@ export function withJourneyShell (
         custom,
       })
 
+      applyCrt(d.t!, 0, 0)
+
       if (custom)
         debugStateRef.current = custom
 
@@ -366,7 +445,7 @@ export function withJourneyShell (
         fps:      fpsRef.current,
         uniforms: debugStateRef.current,
       })
-    }, [ fpsRef, journeyName, pointerRef, sampleFrame, settingsRef ])
+    }, [ applyCrt, fpsRef, journeyName, pointerRef, sampleFrame, settingsRef ])
 
     const onFrame = useCallback((manager: ManagerType) => {
       const renderer = rendererRef.current
@@ -381,20 +460,41 @@ export function withJourneyShell (
         return
       }
 
-      const dt = manager.deltaTime * settingsRef.current.speed
-      iTimeRef.current += dt
+      // Log where we are *before* moving, so every boundary the journey has
+      // ever crossed has a recorded time to rewind to.
+      const transport = transportRef.current!
+      transport.observe(iTimeRef.current,
+                        sim?.marks?.() ?? options.getMarks?.(iTimeRef.current) ?? null)
+
+      // The transport does its own integration while shuttling, so the normal
+      // step is skipped for the duration — otherwise a rewind would be fighting
+      // a forward frame every frame.
+      const ts: TransportState = transport.tick(manager.deltaTime)
+      const scrubbing          = ts.mode !== 'play'
 
       // Input is tweened on the *real* delta — panning shouldn't slow down or
       // speed up with the time-scale setting.
       updatePan(manager.deltaTime)
 
-      // Step the simulation before the draw so the frame renders the state the
-      // integrator just produced, not last frame's.
-      sim?.step(dt, iTimeRef.current)
+      if (!scrubbing) {
+        const dt = manager.deltaTime * settingsRef.current.speed
+        iTimeRef.current += dt
+
+        // Step the simulation before the draw so the frame renders the state
+        // the integrator just produced, not last frame's.
+        sim?.step(dt, iTimeRef.current)
+      }
+
+      // Re-read: the transport may have replaced the simulation outright.
+      const liveSim = simRef.current
 
       // Evaluated once and shared: the mix hears exactly what the frame shows.
-      const custom = sim?.uniforms()
-      audioRef.current?.update?.(iTimeRef.current, custom)
+      const custom = liveSim?.uniforms()
+
+      // Silence during a shuttle. A tape has no audio at speed either, and
+      // feeding an audio graph a rewound clock makes it click.
+      if (!scrubbing)
+        audioRef.current?.update?.(iTimeRef.current, custom)
       if (custom)
         debugStateRef.current = custom
 
@@ -405,8 +505,20 @@ export function withJourneyShell (
         custom,
       })
 
-      const getLabel = sim?.label
-        ? () => sim.label!()
+      applyCrt(iTimeRef.current, ts.scrub, ts.scrubMix)
+
+      const marks       = liveSim?.marks?.() ?? options.getMarks?.(iTimeRef.current) ?? null
+      const view        = transportViewRef.current
+      view.mode         = ts.mode
+      view.loop         = marks?.loop ?? 0
+      view.section      = marks?.section ?? 0
+      view.sectionCount = marks?.sectionCount ?? 1
+      view.progress     = marks?.progress ?? 0
+      view.time         = iTimeRef.current
+      view.hasMarks     = marks !== null
+
+      const getLabel = liveSim?.label
+        ? () => liveSim.label!()
         : options.getSectionName
           ? () => options.getSectionName!(iTimeRef.current)
           : null
@@ -418,6 +530,7 @@ export function withJourneyShell (
           setSectionGlitchKey(value => value + 1)
         }
       }
+      transportViewRef.current.label = sectionNameRef.current
 
       sampleFrame()
 
@@ -435,7 +548,7 @@ export function withJourneyShell (
         })
       // NOTE: audio.isMuted is deliberately absent — reading it here would
       // re-register the frame callback on every toggle. audioRef is stable.
-    }, [ audioRef, dbgRef, drawFrozen, journeyName, pointerRef, sampleFrame, settingsRef, updatePan ])
+    }, [ applyCrt, audioRef, dbgRef, drawFrozen, journeyName, pointerRef, sampleFrame, settingsRef, updatePan ])
     useFrameLoop(onFrame)
 
     const containerStyle = options.accent
@@ -481,6 +594,14 @@ export function withJourneyShell (
       }
 
       {dbg.hud && <SettingsButton />}
+
+      {/* Frozen ?t= mode gets no transport: the driver's whole contract is that
+          the frame is a pure function of the URL. */}
+      {dbg.hud && dbg.t === null &&
+          <JourneyTransport
+            getView={ () => ({ ...transportViewRef.current }) }
+            onAction={ action => transportRef.current?.request(action) } />
+      }
 
       {dbg.debug &&
           <JourneyDebugPanel

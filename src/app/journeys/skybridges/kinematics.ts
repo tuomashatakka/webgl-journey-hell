@@ -1,3 +1,6 @@
+import type { JourneyMarks } from '@/lib/journeyTransport'
+
+
 export interface SkybridgesSection {
   id:     number;
   name:   string;
@@ -32,4 +35,22 @@ export function getSkybridgesSection (time: number): SkybridgesSection {
 
 export function getSkybridgesSectionName (time: number): string {
   return getSkybridgesSection(time).name
+}
+
+
+/**
+ * Where the route is, for the transport controls. This journey has no
+ * simulation — its walk is a constant speed authored in GLSL — so the shell
+ * takes this through getMarks rather than through JourneySimulation.
+ */
+export function getSkybridgesMarks (time: number): JourneyMarks {
+  const z       = time * SKYBRIDGES_SPEED
+  const section = getSkybridgesSection(time)
+
+  return {
+    loop:         Math.floor(z / SKYBRIDGES_LOOP_Z),
+    section:      SKYBRIDGES_SECTIONS.indexOf(section),
+    sectionCount: SKYBRIDGES_SECTIONS.length,
+    progress:     z % SKYBRIDGES_LOOP_Z / SKYBRIDGES_LOOP_Z,
+  }
 }

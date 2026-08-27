@@ -7,7 +7,7 @@ function scalar (state: CustomUniforms | undefined, name: string): number {
   return typeof value === 'number' ? value : 0
 }
 
-function audioTargets (section: number, rupture: number, finale: number) {
+function audioTargets (section: number, rupture: number, finale: number, purgatory: number) {
   let wind = 0.24 + rupture * 0.18
   if (section === 1)
     wind = 0.72
@@ -19,6 +19,13 @@ function audioTargets (section: number, rupture: number, finale: number) {
     machine = 0.5
   else if (section === 0)
     machine = 0.32
+
+  // The residue takes the weather and the machinery with it. What is left is
+  // the sub — purgatory has nothing in it that could be making a noise, so
+  // fading these rather than substituting something is the honest mix.
+  const alive = 1 - purgatory
+  wind *= alive
+  machine *= alive * alive
 
   return { finale, machine, wind }
 }
@@ -48,18 +55,25 @@ class StairwellAudioEngine implements JourneyAudioEngine {
     if (!this.ctx || this.muted)
       return
 
-    const section = scalar(state, 'uSection')
-    const rupture = scalar(state, 'uRupture')
-    const finale  = scalar(state, 'uFinale')
-    const now     = this.ctx.currentTime
-    const targets = audioTargets(section, rupture, finale)
+    const section   = scalar(state, 'uSection')
+    const rupture   = scalar(state, 'uRupture')
+    const finale    = scalar(state, 'uFinale')
+    const purgatory = scalar(state, 'uPurgatory')
+    const now       = this.ctx.currentTime
+    const targets   = audioTargets(section, rupture, finale, purgatory)
 
     this.wind?.gain.setTargetAtTime(targets.wind, now, 0.7)
     this.machine?.gain.setTargetAtTime(targets.machine, now, 0.45)
-    this.impact?.gain.setTargetAtTime(section === 3 ? 0.7 : 0.22 + finale * 0.55, now, 0.35)
-    this.lowOsc?.frequency.setTargetAtTime(34 + section * 4 - finale * 15, now, 0.8)
+    this.impact?.gain.setTargetAtTime(
+      (section === 3 ? 0.7 : 0.22 + finale * 0.55) * (1 - purgatory * 0.62), now, 0.35)
+
+    // Detuned flat as the residue takes hold — the one voice that survives, and
+    // it goes out of tune with itself rather than getting louder.
+    this.lowOsc?.frequency.setTargetAtTime(
+      34 + section * 4 - finale * 15 - purgatory * 9, now, 0.8)
     this.motorOsc?.frequency.setTargetAtTime(58 + section * 13 + rupture * 9, now, 0.5)
-    this.pulseOsc?.frequency.setTargetAtTime(0.7 + section * 0.18 + finale * 2.2, now, 0.4)
+    this.pulseOsc?.frequency.setTargetAtTime(
+      0.7 + section * 0.18 + finale * 2.2 - purgatory * 0.45, now, 0.4)
   }
 
   destroy (): void {

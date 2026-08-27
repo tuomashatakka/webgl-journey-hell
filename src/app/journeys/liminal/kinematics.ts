@@ -1,3 +1,15 @@
+import type { JourneyMarks } from '@/lib/journeyTransport'
+
+
+/** One traversal. The literals below predate this constant; it is not a rename. */
+export const LIMINAL_LOOP_Z = 500.0
+
+/** Where the fourth traversal stops being a traversal. */
+export const LIMINAL_ABYSS_Z = 2000.0
+
+/** Six sectors plus the abyss. Drives the transport bar's tick marks. */
+export const LIMINAL_SECTOR_COUNT = 7
+
 export function smoothstep (edge0: number, edge1: number, x: number): number {
   const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
   return t * t * (3 - 2 * t)
@@ -430,4 +442,44 @@ export function getWalkSpeed (z: number): number {
     return mix(pieceSpeed(state.setpieceA), pieceSpeed(state.setpieceB), state.blend)
 
   return 8.2 // standard speed
+}
+
+
+/**
+ * The route as a replayable object.
+ *
+ * This journey predates withJourneyShell and integrates its walk inline in the
+ * render loop (see page.tsx). The transport controls need to *replay* that walk
+ * to an arbitrary time, which an inline `currentZ += speed * dt` cannot do — so
+ * the integration lives here instead, and the loop drives this.
+ */
+export interface LiminalRide {
+  readonly z: number;
+  step(dt: number): void;
+  marks(): JourneyMarks;
+}
+
+export function createLiminalRide (): LiminalRide {
+  let z = 0
+
+  return {
+    get z () {
+      return z
+    },
+
+    step (dt: number) {
+      z += getWalkSpeed(z) * dt
+    },
+
+    marks (): JourneyMarks {
+      const state = getKinematicState(z)
+      return {
+        loop:         state.loop,
+        section:      state.sector,
+        sectionCount: LIMINAL_SECTOR_COUNT,
+        progress:     z >= LIMINAL_ABYSS_Z ? 1 : z % LIMINAL_LOOP_Z / LIMINAL_LOOP_Z,
+        terminal:     z >= LIMINAL_ABYSS_Z + 200.0,
+      }
+    },
+  }
 }
