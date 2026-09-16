@@ -60,6 +60,17 @@ export interface MeshBuilder {
 
   /** Append a tube swept along `path` with `radialSegments` sides and radius r. Each path entry is [x,y,z, upx,upy,upz]. */
   tube(path: number[][], radius: number, radialSegments: number): void;
+
+  /**
+   * Append one vertex with an explicit normal and uv and return its index, for
+   * callers that build smooth-shaded or texture-mapped surfaces themselves.
+   * `tri`/`quad` compute a flat normal and give all three corners one uv, which
+   * is right for a box and wrong for a swept road that wants arc length in `v`.
+   */
+  vertex(px: number, py: number, pz: number, nx: number, ny: number, nz: number, u: number, v: number): number;
+
+  /** Append one triangle by vertex indices from `vertex`. */
+  face(a: number, b: number, c: number): void;
   readonly vertexCount: number;
   readonly indexCount:  number;
 
@@ -183,6 +194,16 @@ export function createMeshBuilder (): MeshBuilder {
     quad (a, b, c, d) {
       this.tri(a[0], a[1], a[2], b[0], b[1], b[2], c[0], c[1], c[2])
       this.tri(a[0], a[1], a[2], c[0], c[1], c[2], d[0], d[1], d[2])
+    },
+
+    vertex (px, py, pz, nx, ny, nz, u, v) {
+      const idx = vLen / VERTEX_FLOATS | 0
+      pushVert(px, py, pz, nx, ny, nz, u, v, 0, 0, 0, 0)
+      return idx
+    },
+
+    face (a, b, c) {
+      pushIdx(a, b, c)
     },
 
     box (cx, cy, cz, hx, hy, hz) {
@@ -457,43 +478,67 @@ export interface Mesh {
 }
 
 
+/** One vertex attribute of a custom layout: `size` floats at `offset` floats into the vertex. */
+export interface AttribSpec {
+  location: number;
+  size:     number;
+  offset:   number;
+}
+
+/** The standard interleaved layout: position(3) normal(3) uv(2) shard(4). */
+export const STANDARD_LAYOUT: AttribSpec[] = [
+  { location: 0, size: 3, offset: 0 },
+  { location: 1, size: 3, offset: 3 },
+  { location: 2, size: 2, offset: 6 },
+  { location: 3, size: 4, offset: 8 },
+]
+
 /**
  * Attribute locations are fixed by layout(location=N) in the shader:
  *   0 aPos vec3, 1 aNormal vec3, 2 aUv vec2, 3 aShard vec4,
  *   4 iXform vec4 (divisor 1), 5 iParams vec4 (divisor 1)
+ *
+ * `instanceVec4s` is how many consecutive vec4 instance attributes to bind from
+ * location 4 up; the default two is the (xform, params) pair every loop-line
+ * prop uses. A prop that also has to carry the road frame it sits on asks for
+ * four, and then `setInstances` expects 16 floats per instance.
  */
 export function createMesh (
-  gl: WebGL2RenderingContext, builder: MeshBuilder,
+  gl: WebGL2RenderingContext, builder: MeshBuilder, instanceVec4s = 2,
 ): Mesh {
-  const vao   = gl.createVertexArray()!
-  const vbo   = gl.createBuffer()!
-  const ibo   = gl.createBuffer()!
-  const vData = builder.vertices()
-  const iData = builder.indices()
+  return createMeshFromArrays(
+    gl, builder.vertices(), builder.indices(), STANDARD_LAYOUT, VERTEX_FLOATS, instanceVec4s,
+  )
+}
+
+/**
+ * The same drawable over a caller-owned vertex format. A swept road wants its
+ * spine position, the level frame, and its profile offsets per vertex so the
+ * vertex shader can roll it live; that does not fit position/normal/uv/shard,
+ * so it packs its own floats and describes them here.
+ */
+export function createMeshFromArrays (
+  gl: WebGL2RenderingContext,
+  vData: Float32Array,
+  iData: Uint32Array,
+  layout: AttribSpec[],
+  vertexFloats: number,
+  instanceVec4s = 2,
+): Mesh {
+  const vao = gl.createVertexArray()!
+  const vbo = gl.createBuffer()!
+  const ibo = gl.createBuffer()!
 
   gl.bindVertexArray(vao)
 
-  // Interleaved VBO: position(3) normal(3) uv(2) shard(4) = 12 floats × 4 = 48 bytes.
   gl.bindBuffer(gl.ARRAY_BUFFER, vbo)
   gl.bufferData(gl.ARRAY_BUFFER, vData, gl.STATIC_DRAW)
 
-  const STRIDE = VERTEX_FLOATS * 4
-
-  // layout(location = 0) aPos vec3
-  gl.enableVertexAttribArray(0)
-  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, STRIDE, 0)
-
-  // layout(location = 1) aNormal vec3
-  gl.enableVertexAttribArray(1)
-  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, STRIDE, 12)
-
-  // layout(location = 2) aUv vec2
-  gl.enableVertexAttribArray(2)
-  gl.vertexAttribPointer(2, 2, gl.FLOAT, false, STRIDE, 24)
-
-  // layout(location = 3) aShard vec4
-  gl.enableVertexAttribArray(3)
-  gl.vertexAttribPointer(3, 4, gl.FLOAT, false, STRIDE, 32)
+  const STRIDE = vertexFloats * 4
+  for (const a of layout) {
+    gl.enableVertexAttribArray(a.location)
+    gl.vertexAttribPointer(a.location, a.size, gl.FLOAT, false, STRIDE, a.offset * 4)
+  }
 
   // Uint32 IBO — WebGL2 supports 32-bit indices natively, no extension needed.
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo)
@@ -501,7 +546,8 @@ export function createMesh (
 
   gl.bindVertexArray(null)
 
-  // Lazily-created instance VBO with two vec4 attributes (divisor 1 each).
+  // Lazily-created instance VBO with `instanceVec4s` vec4 attributes (divisor 1 each).
+  const instanceStride                = instanceVec4s * 16
   let instanceVBO: WebGLBuffer | null = null
   let instanceCap                     = 0
 
@@ -538,15 +584,12 @@ export function createMesh (
 
         gl.bindVertexArray(vao)
 
-        // layout(location = 4) iXform vec4
-        gl.enableVertexAttribArray(4)
-        gl.vertexAttribPointer(4, 4, gl.FLOAT, false, 32, 0)
-        gl.vertexAttribDivisor(4, 1)
-
-        // layout(location = 5) iParams vec4
-        gl.enableVertexAttribArray(5)
-        gl.vertexAttribPointer(5, 4, gl.FLOAT, false, 32, 16)
-        gl.vertexAttribDivisor(5, 1)
+        // layout(location = 4) iXform vec4, 5 iParams vec4, then any extra.
+        for (let i = 0; i < instanceVec4s; i++) {
+          gl.enableVertexAttribArray(4 + i)
+          gl.vertexAttribPointer(4 + i, 4, gl.FLOAT, false, instanceStride, i * 16)
+          gl.vertexAttribDivisor(4 + i, 1)
+        }
 
         gl.bindVertexArray(null)
       }

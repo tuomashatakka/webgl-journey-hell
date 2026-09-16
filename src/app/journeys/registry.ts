@@ -4,6 +4,7 @@ import { foundryPreviewFrag } from './foundry/shader'
 import { hollowOrchardPreviewFrag } from './hollow-orchard/shader'
 import { loopLinePreviewFrag } from './loop-line/shader'
 import { natatoriumPreviewFrag } from './natatorium/shader'
+import { scenicRoutePreviewFrag } from './scenic-route/shader'
 import { skybridgesPreviewFrag } from './skybridges/shader'
 import { switchbackPreviewFrag } from './switchback/shader'
 
@@ -194,6 +195,17 @@ export const JOURNEYS: Journey[] = [
     gradient:      [ '#cfc4ff', '#0d0b14' ],
     poster:        '/journeys/loop-line.jpg',
     previewShader: loopLinePreviewFrag,
+    status:        'live',
+  },
+  {
+    slug:          'scenic-route',
+    title:         'THE SCENIC ROUTE',
+    tagline:       'Seven miles of the prettiest road in the county. It goes off the cliff at the end, and something down there has its mouth open.',
+    tags:          [ 'geometry', 'rasterized', 'driving', 'coaster', 'sea', 'body-horror', 'simulated', 'loop' ],
+    accent:        '#ffb054',
+    gradient:      [ '#f2c27a', '#061a26' ],
+    poster:        '/journeys/scenic-route.jpg',
+    previewShader: scenicRoutePreviewFrag,
     status:        'live',
   },
 ]

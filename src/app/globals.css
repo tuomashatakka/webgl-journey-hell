@@ -193,6 +193,29 @@
   color: #b39dff;
 }
 
+/* THE SCENIC ROUTE: a dashboard readout — condensed, amber, backlit. */
+.scenic-route-sector-title {
+  font-family: 'Helvetica Neue', 'Arial Narrow', Arial, sans-serif;
+  font-weight: 600;
+  font-size: clamp(0.9rem, 2vw, 1.4rem);
+  letter-spacing: 0.22em;
+  color: #ffd9a3;
+  text-transform: uppercase;
+  padding: 0.3em 1.1em 0.26em;
+  background: linear-gradient(180deg, rgba(38, 22, 6, 0.55), rgba(12, 7, 3, 0.78));
+  border-top: 1px solid rgba(255, 176, 84, 0.85);
+  border-bottom: 1px solid rgba(255, 176, 84, 0.35);
+  text-shadow: 0 0 14px rgba(255, 176, 84, 0.55);
+}
+
+.scenic-route-sector-title::before {
+  color: #8a4a12;
+}
+
+.scenic-route-sector-title::after {
+  color: #ffb054;
+}
+
 #fullscreen-btn {
     position: absolute;
     bottom: 84px;
