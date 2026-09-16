@@ -71,8 +71,9 @@ await context.addInitScript(settings => {
 for (const { slug, section, t } of shots) {
   const page = await context.newPage()
   // A shot may name its instant: ?t= seeks the simulation and freezes there,
-  // so the section is reached at once instead of driven to at 4x.
-  await page.goto(`${BASE}/journeys/${slug}${t !== undefined ? `?t=${t}` : ''}`, { waitUntil: 'load' })
+  // so the section is reached at once instead of driven to at 4x. ?t= implies
+  // the debug overlay; a poster wants the chrome and not the panel.
+  await page.goto(`${BASE}/journeys/${slug}${t !== undefined ? `?t=${t}&debug=0` : ''}`, { waitUntil: 'load' })
   await page.waitForSelector('#gl-canvas')
 
   const deadline = Date.now() + 240_000
