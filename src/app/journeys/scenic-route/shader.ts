@@ -107,6 +107,10 @@ vec3 shade (vec3 n, vec3 v, vec3 l, vec3 albedo, float rough, float metal, vec3 
   vec3 f0 = mix(vec3(0.04), albedo, metal);
   vec3 F = F_Schlick(VoH, f0);
   vec3 spec = D_GGX(NoH, a) * V_Smith(NoV, NoL, a) * F;
+  // Grass and gravel are not microfacet surfaces at this scale: the GGX sheen
+  // at grazing angles toward a low sun paints whole fields white. Fade the
+  // specular out with roughness; the sea (0.09) and paint keep all of theirs.
+  spec *= mix(1.0, 0.08, smoothstep(0.55, 0.95, rough));
   vec3 kd = (1.0 - F) * (1.0 - metal);
   return (kd * albedo / PI + spec) * lc * NoL;
 }
@@ -122,11 +126,11 @@ const atmosphereChunk = /* glsl */`
 const float R_E   = 6371e3;
 const float R_A   = 6471e3;
 const vec3  K_R   = vec3(5.5e-6, 13.0e-6, 22.4e-6);
-const float K_M   = 21e-6;
+const float K_M   = 12.6e-6;
 const float H_R   = 8000.0;
 const float H_M   = 1200.0;
 const float G_M   = 0.758;
-const float I_SUN = 22.0;
+const float I_SUN = 20.0;
 
 vec2 rsi (vec3 r0, vec3 rd, float sr) {
   float b = dot(rd, r0);
@@ -360,8 +364,35 @@ void main () {
 `
 
 /**
- * Per-fragment lighting shared by every world material: sun through the BRDF,
- * sky ambient at the normal, then fog toward the sky in the view direction.
+ * The sun shadow, received. One 2048² depth map fitted ahead of the camera,
+ * hardware-compared through sampler2DShadow with a 3×3 tap, and a normal offset
+ * that grows as the light grazes — the two biases learnopengl and MJP agree on.
+ * Off entirely in the cave, where uShadowOn is zero.
+ */
+const shadowChunk = /* glsl */`
+uniform highp sampler2DShadow uShadowMap;
+uniform mat4  uShadowMat;    // world -> [0,1]^3 in light space
+uniform float uShadowOn;
+uniform vec2  uShadowTexel;
+float shadowAt (vec3 p, vec3 n, vec3 l) {
+  if (uShadowOn < 0.5) return 1.0;
+  float NoL = clamp(dot(n, l), 0.0, 1.0);
+  vec3 pp = p + n * (0.25 + 1.4 * (1.0 - NoL));
+  vec4 sc = uShadowMat * vec4(pp, 1.0);
+  vec3 uvz = sc.xyz / sc.w;
+  if (uvz.x <= 0.0 || uvz.x >= 1.0 || uvz.y <= 0.0 || uvz.y >= 1.0 || uvz.z >= 1.0) return 1.0;
+  float sum = 0.0;
+  for (int i = -1; i <= 1; i++)
+    for (int j = -1; j <= 1; j++)
+      sum += texture(uShadowMap, vec3(uvz.xy + vec2(float(i), float(j)) * uShadowTexel, uvz.z - 0.0006));
+  return sum / 9.0;
+}
+`
+
+/**
+ * Per-fragment lighting shared by every world material: sun through the BRDF
+ * and the shadow map, sky ambient at the normal, then fog toward the sky in
+ * the view direction.
  */
 const lightingChunk = /* glsl */`
 uniform vec3  uCamPos;
@@ -370,10 +401,10 @@ uniform vec4  uEnv;        // (exposure EV, sky weight, fog density, water level
 uniform vec3  uFogCol;
 uniform float uTime;
 
-vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float ao) {
+vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float ao, float shadow) {
   vec3 v = normalize(uCamPos - p);
   vec3 sunCol = sunRadiance();
-  vec3 col = shade(n, v, uSunDir, albedo, rough, metal, sunCol);
+  vec3 col = shade(n, v, uSunDir, albedo, rough, metal, sunCol) * shadow;
   // Sky ambient: radiance at the normal stands in for hemisphere irradiance.
   vec3 amb = skyLookup(n) * (0.6 + 0.4 * n.y) * ao;
   col += albedo * (1.0 - metal) * amb;
@@ -389,9 +420,315 @@ vec3 applyFog (vec3 col, vec3 p) {
   vec3 d = p - uCamPos;
   float dist = length(d);
   vec3 rd = d / max(dist, 1e-3);
-  vec3 fogCol = mix(uFogCol, skyLookup(vec3(rd.x, max(rd.y, 0.015), rd.z)), uEnv.y);
+  vec3 sky = skyLookup(vec3(rd.x, max(rd.y, 0.015), rd.z));
+  // The sky LUT carries the Mie peak; fog in-scatter toward the sun must not.
+  // Cap the in-scatter at a few times the zenith luminance, keeping the hue,
+  // or every surface in the sun's quarter washes to white.
+  vec3 zen = skyLookup(vec3(0.0, 1.0, 0.0));
+  const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+  float cap = 3.0 * dot(zen, LUMA);
+  sky *= min(1.0, cap / max(dot(sky, LUMA), 1e-4));
+  vec3 fogCol = mix(uFogCol, sky, uEnv.y);
   float f = 1.0 - exp(-dist * uEnv.z);
   return mix(col, fogCol, f);
+}
+`
+
+/** Depth only, for the shadow pass. Any vertex shader, no colour. */
+export const depthFrag = /* glsl */`#version 300 es
+precision highp float;
+void main () {}
+`
+
+/** The standard interleaved layout (lib/mesh), un-instanced: terrain, the sea. */
+export const meshVert = /* glsl */`#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aUv;
+uniform mat4 uViewProj;
+out vec3 vWorld;
+out vec3 vNormal;
+out vec2 vUv;
+void main () {
+  vWorld = aPos;
+  vNormal = aNormal;
+  vUv = aUv;
+  gl_Position = uViewProj * vec4(aPos, 1.0);
+}
+`
+
+/**
+ * The land: grass in field patches, soil on the worn ground, rock on anything
+ * steep, sand at the water line. Detail fades to its mean with distance rather
+ * than to zero — the natatorium moiré lesson — and every term is a function of
+ * world position, so two chunks never disagree at a seam.
+ */
+export const terrainFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec2 vUv;
+uniform vec4 uRide;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+void main () {
+  vec3 p = vWorld;
+  vec3 n = normalize(vNormal);
+  float dist = length(p - uCamPos);
+  float lod = clamp(dist / 260.0, 0.0, 1.0);
+
+  // Fields: patches of different greens and a few harvested to gold, on a
+  // large-scale noise quantised into parcels.
+  float parcel = fbm(p.xz * 0.0024 + 11.0);
+  float par2 = fbm(p.xz * 0.0071 + 4.0);
+  vec3 g1 = vec3(0.09, 0.17, 0.045);
+  vec3 g2 = vec3(0.16, 0.22, 0.06);
+  vec3 g3 = vec3(0.34, 0.27, 0.10);
+  vec3 grass = mix(g1, g2, smoothstep(0.42, 0.58, parcel));
+  grass = mix(grass, g3, smoothstep(0.62, 0.7, par2) * smoothstep(0.52, 0.58, parcel));
+  // Blade-scale detail, fading to its mean.
+  float blades = vnoise(p.xz * 1.7) * 0.6 + vnoise(p.xz * 6.3) * 0.4;
+  grass *= mix(0.72 + blades * 0.56, 1.0, lod);
+
+  vec3 soil = vec3(0.21, 0.15, 0.095) * (0.8 + 0.4 * vnoise(p.xz * 0.9));
+  vec3 rock = vec3(0.30, 0.285, 0.26) * (0.6 + 0.6 * fbm3(p * 0.11));
+  rock = mix(rock, rock * vec3(0.85, 0.8, 0.75), smoothstep(0.3, 0.7, fbm3(p * 0.021 + 5.0)));
+  vec3 sand = vec3(0.44, 0.39, 0.29) * (0.85 + 0.3 * vnoise(p.xz * 2.2));
+
+  float slope = 1.0 - n.y;
+  float rockW = smoothstep(0.22, 0.48, slope + (fbm3(p * 0.06) - 0.5) * 0.18);
+  float soilW = smoothstep(0.08, 0.2, slope) * (1.0 - rockW) * 0.7;
+  // Sand only where the land meets the sea; the valley floor is below sea
+  // level and must not read as a beach.
+  float sandW = smoothstep(4.0, 0.5, p.y) * smoothstep(330.0, 420.0, p.x) * (1.0 - rockW * 0.6);
+  vec3 albedo = mix(grass, soil, soilW);
+  albedo = mix(albedo, rock, rockW);
+  albedo = mix(albedo, sand, sandW);
+  float rough = mix(0.92, 0.75, rockW) ;
+
+  // Rock faces get shading from their own relief.
+  vec3 nn = n;
+  if (rockW > 0.01) {
+    float e = 0.6;
+    float h0 = fbm3(p * 0.35);
+    float hx = fbm3((p + vec3(e, 0, 0)) * 0.35) - h0;
+    float hy = fbm3((p + vec3(0, e, 0)) * 0.35) - h0;
+    float hz = fbm3((p + vec3(0, 0, e)) * 0.35) - h0;
+    vec3 g = vec3(hx, hy, hz) / e;
+    g -= n * dot(g, n);
+    nn = normalize(n - g * 0.9 * rockW * (1.0 - lod));
+  }
+
+  float sh = shadowAt(p, nn, uSunDir);
+  // A little ambient occlusion from slope: ground under a steep face sees less sky.
+  float ao = 0.75 + 0.25 * n.y;
+  vec3 col = lightSurface(p, nn, albedo, rough, 0.0, ao, sh);
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
+}
+`
+
+/**
+ * The sea, placeholder edition: a Fresnel reflection of the sky over a deep
+ * body colour, with a small animated normal so the sun glitters. Gerstner and
+ * the maw arrive in phase 4.
+ */
+export const seaFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec2 vUv;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+void main () {
+  vec3 p = vWorld;
+  float dist = length(p - uCamPos);
+  float lod = clamp(dist / 600.0, 0.0, 1.0);
+  // Two octave bands of moving noise stand in for the swell until Gerstner
+  // lands: a long one for the sky reflection, a short one for the glitter.
+  vec2 q1 = p.xz * 0.045 + vec2(uTime * 0.09, uTime * 0.05);
+  vec2 q2 = p.xz * 0.31 + vec2(-uTime * 0.35, uTime * 0.22);
+  float e = 0.25;
+  float h0 = fbm(q1) + 0.35 * fbm(q2);
+  float hx = fbm(q1 + vec2(e, 0.0)) + 0.35 * fbm(q2 + vec2(e * 6.9, 0.0)) - h0;
+  float hz = fbm(q1 + vec2(0.0, e)) + 0.35 * fbm(q2 + vec2(0.0, e * 6.9)) - h0;
+  float flat_ = 1.0 - lod * 0.85;
+  vec3 n = normalize(vec3(-hx * 2.6 * flat_, e, -hz * 2.6 * flat_));
+
+  // Water, not plastic: f0 0.02, a body colour that is lit through, and the
+  // sky mirrored by Fresnel alone. The sun keeps its GGX glitter path.
+  vec3 v = normalize(uCamPos - p);
+  float NoV = max(dot(n, v), 0.0);
+  vec3 F = F_Schlick(NoV, vec3(0.02));
+  vec3 rdir = reflect(-v, n);
+  rdir.y = max(rdir.y, 0.02);
+  vec3 refl = skyLookup(rdir);
+  vec3 body = vec3(0.02, 0.10, 0.12);
+  float sh = shadowAt(p, vec3(0.0, 1.0, 0.0), uSunDir);
+  vec3 sunCol = sunRadiance();
+  vec3 under = body * (skyLookup(vec3(0.0, 1.0, 0.0)) * 0.8 + sunCol * max(uSunDir.y, 0.0) * 0.25 * sh);
+  vec3 glitter = shade(n, v, uSunDir, vec3(0.0), 0.09, 0.0, sunCol) * sh;
+  vec3 col = under * (1.0 - F) + refl * F + glitter;
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
+}
+`
+
+/**
+ * Props: one unit mesh per kind, instanced. iXform is (pos.xyz, yaw), iParams
+ * (scale, seed, sway, spare). A rotor spins about its local z when uSpin is set;
+ * a canopy sways with its own seed. Material is per set, a uniform.
+ */
+export const propVert = /* glsl */`#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aUv;
+layout(location = 4) in vec4 iXform;
+layout(location = 5) in vec4 iParams;
+uniform mat4  uViewProj;
+uniform float uTime;
+uniform float uSpin;
+out vec3 vWorld;
+out vec3 vNormal;
+out vec2 vUv;
+out float vSeed;
+out vec3 vCentre;
+void main () {
+  vec3 p = aPos * iParams.x;
+  vec3 n = aNormal;
+  // Where a canopy's fake sphere is centred: the crown, scaled with the tree.
+  vCentre = iXform.xyz + vec3(0.0, 5.9 * iParams.x, 0.0);
+  if (uSpin != 0.0) {
+    float a = uTime * uSpin + iParams.y * 6.2831853;
+    mat2 R = mat2(cos(a), -sin(a), sin(a), cos(a));
+    p.xy = R * p.xy;
+    n.xy = R * n.xy;
+  }
+  mat2 Y = mat2(cos(iXform.w), -sin(iXform.w), sin(iXform.w), cos(iXform.w));
+  p.xz = Y * p.xz;
+  n.xz = Y * n.xz;
+  vec3 w = iXform.xyz + p;
+  // Wind: a lean that grows with height, phased by seed.
+  float lift = max(p.y - 1.5, 0.0);
+  w.x += iParams.z * sin(uTime * 1.1 + iParams.y * 9.0) * lift * 0.03;
+  w.z += iParams.z * cos(uTime * 0.8 + iParams.y * 5.0) * lift * 0.02;
+  vWorld = w;
+  vNormal = n;
+  vUv = aUv;
+  vSeed = iParams.y;
+  gl_Position = uViewProj * vec4(w, 1.0);
+}
+`
+
+/** Leaf mask for the crossed canopy quads: an ellipse eaten by noise. */
+const leafChunk = /* glsl */`
+float leafMask (vec2 uv, float seed) {
+  vec2 c = (uv - vec2(0.5, 0.52)) * vec2(1.0, 0.92);
+  float edge = 0.46 - length(c);
+  float holes = fbm(uv * 5.5 + seed * 13.0) - 0.5;
+  return edge * 8.0 + holes * 1.4;
+}
+`
+
+/** Prop materials by uMaterial, shared by every set. */
+export const propFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec2 vUv;
+in float vSeed;
+in vec3 vCentre;
+uniform int uMaterial;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+${leafChunk}
+void main () {
+  vec3 p = vWorld;
+  vec3 n = normalize(vNormal);
+  if (dot(n, uCamPos - p) < 0.0) n = -n;
+  // A canopy quad is lit as the sphere it stands in for, so the crown rounds
+  // toward the sun instead of reading as a cardboard cutout.
+  if (uMaterial == 5)
+    n = normalize(mix(n, normalize(p - vCentre), 0.8));
+  vec3 albedo; float rough = 0.85; float metal = 0.0;
+  float det = 0.82 + 0.36 * fbm3(p * 3.1);
+  if (uMaterial == 0)      { albedo = vec3(0.36, 0.28, 0.18); }                                 // wood
+  else if (uMaterial == 1) { albedo = vec3(0.15, 0.11, 0.08); rough = 0.8; }                    // creosote
+  else if (uMaterial == 2) { albedo = vec3(0.58, 0.46, 0.20); rough = 0.95; det = 0.7 + 0.6 * fbm3(p * 9.0); }  // hay
+  else if (uMaterial == 3) { albedo = vec3(0.42, 0.09, 0.07); rough = 0.7; }                    // barn wall
+  else if (uMaterial == 4) { albedo = vec3(0.34, 0.35, 0.37); rough = 0.45; metal = 0.6; }      // barn roof
+  else if (uMaterial == 5) {                                                                     // canopy
+    if (leafMask(vUv, vSeed) < 0.0) discard;
+    albedo = mix(vec3(0.08, 0.17, 0.045), vec3(0.2, 0.26, 0.06), vnoise(vUv * 9.0 + vSeed)) * (0.75 + 0.6 * vUv.y);
+    rough = 0.9;
+  }
+  else if (uMaterial == 6) { albedo = vec3(0.22, 0.17, 0.12); rough = 0.92; }                   // trunk
+  else if (uMaterial == 7) { albedo = vec3(0.86, 0.87, 0.88); rough = 0.42; det = 1.0; }        // turbine
+  else                     { albedo = vec3(0.55, 0.56, 0.58); rough = 0.35; metal = 0.9; det = 0.9 + 0.2 * fbm3(p * 2.0); } // steel
+  albedo *= det;
+  float sh = shadowAt(p, n, uSunDir);
+  vec3 col = lightSurface(p, n, albedo, rough, metal, 1.0, sh);
+  // Leaves are lit through: a wrapped sun term keeps the shade side of a crown
+  // green rather than black, and the sky fills it from every side.
+  if (uMaterial == 5) {
+    float wrap = 0.5 + 0.5 * dot(n, uSunDir);
+    col += albedo * (sunRadiance() * (0.16 * wrap * sh) + skyLookup(vec3(0.0, 1.0, 0.0)) * 0.35);
+  }
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
+}
+`
+
+/** Prop depth for the shadow pass: only the canopy needs its mask. */
+export const propDepthFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec2 vUv;
+in float vSeed;
+uniform int uMaterial;
+${noiseChunk}
+${leafChunk}
+void main () {
+  if (uMaterial == 5 && leafMask(vUv, vSeed) < 0.0) discard;
+}
+`
+
+/** The coast guardrail: a galvanised band swept with the road, rolled by the same LUT. */
+export const railFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec4 vAux;
+in float vSection;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+void main () {
+  vec3 n = normalize(vNormal);
+  if (dot(n, uCamPos - vWorld) < 0.0) n = -n;
+  // Corrugation along the band, and a post every four metres darkening it.
+  float corr = 0.9 + 0.2 * sin(vAux.z * 12.0);
+  vec3 albedo = vec3(0.56, 0.57, 0.6) * corr * (0.85 + 0.3 * fbm3(vWorld * 1.7));
+  float sh = shadowAt(vWorld, n, uSunDir);
+  vec3 col = lightSurface(vWorld, n, albedo, 0.38, 0.9, 1.0, sh);
+  col = applyFog(col, vWorld);
+  fragColor = vec4(col, 1.0);
 }
 `
 
@@ -408,11 +745,14 @@ out vec4 fragColor;
 ${brdfChunk}
 ${noiseChunk}
 ${skyLookupChunk}
+${shadowChunk}
 ${lightingChunk}
 void main () {
   float s = vAux.x;
   float r = vAux.y;
   vec3 n = normalize(vNormal);
+  // Two-sided: the corkscrew shows its underside from across the helix.
+  if (dot(n, uCamPos - vWorld) < 0.0) n = -n;
   float lapF = uRide.y;
 
   // Aggregate: two scales of noise, tyre-polished toward the wheel tracks.
@@ -444,7 +784,8 @@ void main () {
   albedo = mix(albedo, gravel, shoulder);
   rough = mix(rough, 0.95, shoulder);
 
-  vec3 col = lightSurface(vWorld, n, albedo, rough, 0.0, 1.0);
+  float sh = shadowAt(vWorld, n, uSunDir);
+  vec3 col = lightSurface(vWorld, n, albedo, rough, 0.0, 1.0, sh);
   col = applyFog(col, vWorld);
   fragColor = vec4(col, 1.0);
 }

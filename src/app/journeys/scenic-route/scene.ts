@@ -2,18 +2,20 @@
 //
 // A WebGL2 rasterizer behind components/withGeometryJourney, following
 // loop-line's shape: everything built once at construction, a frame that is a
-// handful of draws and a post chain, nothing uploaded per frame but uniforms.
+// few dozen draws and a post chain, nothing uploaded per frame but uniforms.
 //
 // ---------------------------------------------------------------------------
 // The frame
 // ---------------------------------------------------------------------------
 //
 //   1. sky LUT      — 128×65 lat-long, full single scattering, into a texture.
-//   2. world        — into a multisampled target: the swept road (rolled live by
-//                     the bank LUT), then the terrain, city, sea, maw and tube as
-//                     the phases land.
-//   3. sky dome     — a fullscreen triangle at far depth, filling what is left.
-//   4. resolve → bright → blur ×2 → composite (exposure, ACES, speed blur).
+//   2. shadow       — the sun's depth map, an orthographic box fitted ahead of
+//                     the camera; skipped where the section has no sky.
+//   3. world        — into a multisampled target: the swept road (rolled live by
+//                     the bank LUT), the terrain chunks in range, the far field,
+//                     the sea; the city, maw and tube as the phases land.
+//   4. sky dome     — a fullscreen triangle at far depth, filling what is left.
+//   5. resolve → bright → blur ×2 → composite (exposure, ACES, speed blur).
 //
 // lib/crtPass then reads the back buffer and adds the tube and the signal loss
 // without knowing any of this exists.
@@ -30,7 +32,7 @@
 
 import { createGlProgram } from '@/lib/glProgram'
 import type { GlProgram } from '@/lib/glProgram'
-import { createMeshFromArrays } from '@/lib/mesh'
+import { createMesh, createMeshFromArrays } from '@/lib/mesh'
 import type { Mesh } from '@/lib/mesh'
 import { invert, lookAt, multiply, perspective } from '@/lib/mat4'
 import type { Mat4 } from '@/lib/mat4'
@@ -38,18 +40,29 @@ import { SWEEP_FLOATS, SWEEP_LAYOUT, finishSweep, sweepProfile } from '@/lib/swe
 import type { ProfilePoint } from '@/lib/sweep'
 import type { JourneyRenderer } from '@/components/withJourneyShell'
 import type { QuadFrameUniforms } from '@/lib/shaderQuad'
-import { BANK_STEP, bankGainAt, getRoute, lookAt as lookParamsAt, sectionWeights, SECTION_COUNT } from './course'
+import { BANK_STEP, SECTION_COUNT, bankGainAt, getRoute, lookAt as lookParamsAt, sectionWeights } from './course'
 import type { LookParams } from './course'
+import { buildFarMesh, buildNearChunks, buildSeaQuad, buildSpineIndex } from './geometry'
+import { buildProps } from './props'
+import type { PropSet } from './props'
 import {
   blurFrag,
   brightFrag,
   compositeFrag,
+  depthFrag,
+  meshVert,
   postVert,
+  propDepthFrag,
+  propFrag,
+  propVert,
+  railFrag,
   roadFrag,
+  seaFrag,
   skyDomeFrag,
   skyLutFrag,
   skyVert,
-  sweepVert
+  sweepVert,
+  terrainFrag
 
 } from './shader'
 
@@ -63,8 +76,24 @@ const SKY_H = 65
 /** Bank LUT texture width; rows wrap. */
 const BANK_TEX_W = 1024
 
-/** Linear exposure at 0 EV. The scatter model's radiances want lifting a touch. */
+/** Linear exposure at 0 EV. */
 const EXPOSURE_BASE = 0.9
+
+/** The sun's depth map: size, and the half-width of the box it covers. */
+const SHADOW_SIZE  = 2048
+const SHADOW_HALF  = 170
+const SHADOW_DEPTH = 900
+
+/** Beyond this the fog has closed and a terrain chunk contributes nothing. */
+const CULL_DIST = 1700
+
+interface Drawable {
+  mesh:   Mesh;
+  cx:     number;
+  cy:     number;
+  cz:     number;
+  radius: number;
+}
 
 function makeTex (
   gl: WebGL2RenderingContext, w: number, h: number,
@@ -80,17 +109,44 @@ function makeTex (
   return t
 }
 
+/** Column-major orthographic projection into [-1,1]^3, right-handed. */
+function ortho (out: Mat4, half: number, near: number, far: number): Mat4 {
+  out.fill(0)
+  out[0]  = 1 / half
+  out[5]  = 1 / half
+  out[10] = -2 / (far - near)
+  out[14] = -(far + near) / (far - near)
+  out[15] = 1
+  return out
+}
+
+/** The [-1,1] -> [0,1] remap the shadow lookup wants, as a matrix. */
+const BIAS: Mat4 = new Float32Array([
+  0.5, 0, 0, 0,
+  0, 0.5, 0, 0,
+  0, 0, 0.5, 0,
+  0.5, 0.5, 0.5, 1,
+])
+
 export function createScenicRouteScene (
   gl: WebGL2RenderingContext,
   canvas: HTMLCanvasElement,
 ): JourneyRenderer | null {
-  const skyLutP  = createGlProgram(gl, postVert, skyLutFrag)
-  const skyDomeP = createGlProgram(gl, skyVert, skyDomeFrag)
-  const roadP    = createGlProgram(gl, sweepVert, roadFrag)
-  const brightP  = createGlProgram(gl, postVert, brightFrag)
-  const blurP    = createGlProgram(gl, postVert, blurFrag)
-  const compP    = createGlProgram(gl, postVert, compositeFrag)
-  if (!skyLutP || !skyDomeP || !roadP || !brightP || !blurP || !compP)
+  const skyLutP    = createGlProgram(gl, postVert, skyLutFrag)
+  const skyDomeP   = createGlProgram(gl, skyVert, skyDomeFrag)
+  const roadP      = createGlProgram(gl, sweepVert, roadFrag)
+  const roadDepthP = createGlProgram(gl, sweepVert, depthFrag)
+  const terrainP   = createGlProgram(gl, meshVert, terrainFrag)
+  const meshDepthP = createGlProgram(gl, meshVert, depthFrag)
+  const seaP       = createGlProgram(gl, meshVert, seaFrag)
+  const propP      = createGlProgram(gl, propVert, propFrag)
+  const propDepthP = createGlProgram(gl, propVert, propDepthFrag)
+  const railP      = createGlProgram(gl, sweepVert, railFrag)
+  const brightP    = createGlProgram(gl, postVert, brightFrag)
+  const blurP      = createGlProgram(gl, postVert, blurFrag)
+  const compP      = createGlProgram(gl, postVert, compositeFrag)
+  if (!skyLutP || !skyDomeP || !roadP || !roadDepthP || !terrainP || !meshDepthP || !seaP ||
+    !propP || !propDepthP || !railP || !brightP || !blurP || !compP)
     return null
 
   const route = getRoute()
@@ -112,8 +168,6 @@ export function createScenicRouteScene (
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
   // --- the sky LUT -----------------------------------------------------------
-  // Half float when the context can render to it (every desktop and any iOS
-  // since 15); otherwise RGBA8 and the exposure eats the banding.
   const floatExt = gl.getExtension('EXT_color_buffer_float')
   const skyTex   = floatExt
     ? makeTex(gl, SKY_W, SKY_H, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR)
@@ -124,6 +178,25 @@ export function createScenicRouteScene (
   const skyFbo = gl.createFramebuffer()
   gl.bindFramebuffer(gl.FRAMEBUFFER, skyFbo)
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, skyTex, 0)
+
+  // --- the shadow map --------------------------------------------------------
+  // A depth texture with hardware compare, LINEAR so the compare is bilinear.
+  const shadowTex = gl.createTexture()
+  gl.bindTexture(gl.TEXTURE_2D, shadowTex)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
+                gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL)
+
+  const shadowFbo = gl.createFramebuffer()
+  gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo)
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowTex, 0)
+  gl.drawBuffers([ gl.NONE ])
+  gl.readBuffer(gl.NONE)
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
   // --- the road --------------------------------------------------------------
@@ -158,6 +231,40 @@ export function createScenicRouteScene (
   }))
   const roadMesh: Mesh = createMeshFromArrays(
     gl, roadArrays.vertices, roadArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
+  )
+
+  // --- the land ----------------------------------------------------------------
+  const spine              = buildSpineIndex(route, [ 0, 1, 3 ])
+  const chunks: Drawable[] = buildNearChunks(spine).map(c => ({
+    mesh: createMesh(gl, c.builder), cx: c.cx, cy: c.cy, cz: c.cz, radius: c.radius,
+  }))
+  const far     = buildFarMesh(spine)
+  const farMesh = createMesh(gl, far.builder)
+  const seaMesh = createMesh(gl, buildSeaQuad())
+
+  // --- the props ---------------------------------------------------------------
+  const props: { set: PropSet; mesh: Mesh }[] = buildProps(route, spine).map(set => {
+    const mesh = createMesh(gl, set.builder, 2)
+    mesh.setInstances(gl, set.instances)
+    return { set, mesh }
+  })
+
+  // --- the coast guardrail -----------------------------------------------------
+  // A band on the sea side of section IV, swept like the road so the bank LUT
+  // rolls it with the surface it guards.
+  const railArrays = finishSweep(sweepProfile(route.curve, {
+    s0:      route.spans[3].s0 + 6,
+    s1:      route.spans[3].s1 - 4,
+    step:    2.0,
+    profile: (s: number): ProfilePoint[] => {
+      lookParamsAt(route, s, w, look)
+
+      const e = -(look.roadHalf + 0.6)
+      return [[ e, 0.78 ], [ e - 0.06, 0.6 ], [ e, 0.42 ]]
+    },
+  }))
+  const railMesh: Mesh = createMeshFromArrays(
+    gl, railArrays.vertices, railArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
   )
 
   // --- post targets ------------------------------------------------------------
@@ -237,6 +344,10 @@ export function createScenicRouteScene (
   const view: Mat4                       = new Float32Array(16)
   const viewProj: Mat4                   = new Float32Array(16)
   const invViewProj: Mat4                = new Float32Array(16)
+  const lightProj: Mat4                  = new Float32Array(16)
+  const lightView: Mat4                  = new Float32Array(16)
+  const lightVP: Mat4                    = new Float32Array(16)
+  const shadowMat: Mat4                  = new Float32Array(16)
   const eye: [number, number, number]    = [ 0, 0, 0 ]
   const target: [number, number, number] = [ 0, 0, 1 ]
   const upv: [number, number, number]    = [ 0, 1, 0 ]
@@ -252,6 +363,48 @@ export function createScenicRouteScene (
 
   const vec = (c: QuadFrameUniforms['custom'], k: string, d: number[]): number[] =>
     (c?.[k] as number[] | undefined) ?? d
+
+  /** The bank LUT on unit 0 for any program that sweeps. */
+  const bindBank = (prog: GlProgram, gain: number) => {
+    gl.activeTexture(gl.TEXTURE0)
+    gl.bindTexture(gl.TEXTURE_2D, bankTex)
+    prog.uniform1i('uBankLut', 0)
+    gl.uniform2i(prog.loc('uBankInfo'), route.bankTable.length, 0)
+    prog.uniform1f('uBankStep', BANK_STEP)
+    prog.uniform1f('uBankGain', gain)
+  }
+
+  /** Everything a lit world program shares: sky, shadow, camera, sun, fog. */
+  const bindLit = (
+    prog: GlProgram, camPos: number[], sun: number[], env: number[], fogCol: number[],
+    time: number, shadowOn: number,
+  ) => {
+    gl.activeTexture(gl.TEXTURE1)
+    gl.bindTexture(gl.TEXTURE_2D, skyTex)
+    prog.uniform1i('uSky', 1)
+    gl.activeTexture(gl.TEXTURE2)
+    gl.bindTexture(gl.TEXTURE_2D, shadowTex)
+    prog.uniform1i('uShadowMap', 2)
+    prog.uniformMatrix4fv('uShadowMat', shadowMat)
+    prog.uniform1f('uShadowOn', shadowOn)
+    prog.uniform2f('uShadowTexel', 1 / SHADOW_SIZE, 1 / SHADOW_SIZE)
+    prog.uniform3f('uCamPos', camPos[0], camPos[1], camPos[2])
+    prog.uniform3f('uSunDir', sun[0], sun[1], sun[2])
+    prog.uniform4f('uEnv', env[0], env[1], env[2], env[3])
+    prog.uniform3f('uFogCol', fogCol[0], fogCol[1], fogCol[2])
+    prog.uniform1f('uTime', time)
+  }
+
+  /** Chunk culling: sphere against distance and against being fully behind. */
+  const visible = (d: Drawable, camPos: number[], fx: number, fy: number, fz: number): boolean => {
+    const dx   = d.cx - camPos[0]
+    const dy   = d.cy - camPos[1]
+    const dz   = d.cz - camPos[2]
+    const dist = Math.hypot(dx, dy, dz)
+    if (dist - d.radius > CULL_DIST)
+      return false
+    return !(dist > d.radius && (dx * fx + dy * fy + dz * fz) / dist < -0.35)
+  }
 
   return {
     draw ({ time, pointer, heavy, custom }: QuadFrameUniforms) {
@@ -269,7 +422,7 @@ export function createScenicRouteScene (
       const flt     = vec(custom, 'uFloat', [ 0, 0, 0, 3.4 ])
       const isHeavy = (heavy ?? 1) > 0.5
 
-      // Pointer look: yaw about the camera's up, pitch about its right.
+      // Pointer look: yaw about the camera's up, pitch toward it.
       const px  = pointer?.x ?? 0
       const py  = pointer?.y ?? 0
       const yaw = px * 0.6
@@ -278,15 +431,9 @@ export function createScenicRouteScene (
       const rz  = camFwd[0] * camUp[1] - camFwd[1] * camUp[0]
       const cy  = Math.cos(yaw)
       const sy  = Math.sin(yaw)
-      // Rotate forward about up by yaw (Rodrigues, up ⟂ forward).
-      let fx = camFwd[0] * cy + rx * sy
-      let fy = camFwd[1] * cy + ry * sy
-      let fz = camFwd[2] * cy + rz * sy
-      // Pitch toward up.
-      fx += camUp[0] * py * 0.45
-      fy += camUp[1] * py * 0.45
-      fz += camUp[2] * py * 0.45
-
+      let fx = camFwd[0] * cy + rx * sy + camUp[0] * py * 0.45
+      let fy = camFwd[1] * cy + ry * sy + camUp[1] * py * 0.45
+      let fz = camFwd[2] * cy + rz * sy + camUp[2] * py * 0.45
       const fl = Math.hypot(fx, fy, fz) || 1
       fx /= fl
       fy /= fl
@@ -302,8 +449,7 @@ export function createScenicRouteScene (
       upv[1]    = camUp[1]
       upv[2]    = camUp[2]
 
-      // The lens widens with speed — a little, the way a dashcam's does not but
-      // a rider's attention does.
+      // The lens widens with speed — a little, the way a rider's attention does.
       const fov = FOV_BASE * (1 + Math.min(ride[0], 60) / 60 * 0.14)
       perspective(proj, fov, w / Math.max(1, h), 0.1, 4000)
       lookAt(view, eye, target, upv)
@@ -312,6 +458,7 @@ export function createScenicRouteScene (
 
       const bankGain = bankGainAt(ride[1])
       const exposure = EXPOSURE_BASE * Math.pow(2, env[0])
+      const shadowOn = env[1] > 0.05 && sun[1] > 0.005 ? 1 : 0
 
       gl.disable(gl.BLEND)
 
@@ -326,7 +473,65 @@ export function createScenicRouteScene (
       gl.uniform2i(skyLutP.loc('uSteps'), isHeavy ? 10 : 5, isHeavy ? 4 : 2)
       drawQuad(skyLutP)
 
-      // --- 2. the world ---
+      // --- 2. the shadow map ---
+      // An orthographic box centred ahead of the camera and looking down the
+      // sun. The box follows the camera, so the map is always spent where the
+      // picture is.
+      if (shadowOn) {
+        const cxs = camPos[0] + fx * 70
+        const cys = camPos[1] + fy * 70
+        const czs = camPos[2] + fz * 70
+        eye[0]    = cxs + sun[0] * SHADOW_DEPTH * 0.5
+        eye[1]    = cys + sun[1] * SHADOW_DEPTH * 0.5
+        eye[2]    = czs + sun[2] * SHADOW_DEPTH * 0.5
+        target[0] = cxs
+        target[1] = cys
+        target[2] = czs
+        upv[0]    = 0
+        upv[1]    = 1
+        upv[2]    = 0
+        lookAt(lightView, eye, target, upv)
+        ortho(lightProj, SHADOW_HALF, 1, SHADOW_DEPTH)
+        multiply(lightVP, lightProj, lightView)
+        multiply(shadowMat, BIAS, lightVP)
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo)
+        gl.viewport(0, 0, SHADOW_SIZE, SHADOW_SIZE)
+        gl.enable(gl.DEPTH_TEST)
+        gl.depthFunc(gl.LEQUAL)
+        gl.depthMask(true)
+        gl.colorMask(false, false, false, false)
+        gl.clear(gl.DEPTH_BUFFER_BIT)
+
+        roadDepthP.use()
+        roadDepthP.uniformMatrix4fv('uViewProj', lightVP)
+        bindBank(roadDepthP, bankGain)
+        roadMesh.draw(gl)
+
+        meshDepthP.use()
+        meshDepthP.uniformMatrix4fv('uViewProj', lightVP)
+        for (const c of chunks) {
+          const d = Math.hypot(c.cx - cxs, c.cy - cys, c.cz - czs)
+          if (d - c.radius < SHADOW_HALF * 1.5)
+            c.mesh.draw(gl)
+        }
+
+        propDepthP.use()
+        propDepthP.uniformMatrix4fv('uViewProj', lightVP)
+        propDepthP.uniform1f('uTime', time)
+        for (const { set, mesh } of props) {
+          propDepthP.uniform1i('uMaterial', set.material)
+          propDepthP.uniform1f('uSpin', set.spin)
+          mesh.drawInstanced(gl, set.count)
+        }
+
+        // The rail casts too; same vertex shader as the road, uniforms retained.
+        roadDepthP.use()
+        railMesh.draw(gl)
+        gl.colorMask(true, true, true, true)
+      }
+
+      // --- 3. the world ---
       gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
       gl.viewport(0, 0, w, h)
       gl.enable(gl.DEPTH_TEST)
@@ -335,30 +540,61 @@ export function createScenicRouteScene (
       gl.clearColor(fogCol[0], fogCol[1], fogCol[2], 1)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+      // The land.
+      gl.enable(gl.CULL_FACE)
+      gl.cullFace(gl.BACK)
+      terrainP.use()
+      terrainP.uniformMatrix4fv('uViewProj', viewProj)
+      bindLit(terrainP, camPos, sun, env, fogCol, time, shadowOn)
+      terrainP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+      for (const c of chunks)
+        if (visible(c, camPos, fx, fy, fz))
+          c.mesh.draw(gl)
+      farMesh.draw(gl)
+
+      // The sea, seen from above and, in the fall, from the wrong side.
+      gl.disable(gl.CULL_FACE)
+      seaP.use()
+      seaP.uniformMatrix4fv('uViewProj', viewProj)
+      bindLit(seaP, camPos, sun, env, fogCol, time, shadowOn)
+      seaMesh.draw(gl)
+
       // The road is two-sided: a corkscrew shows its underside from across the
       // helix, and a missing ribbon there reads as a hole in the world.
       gl.disable(gl.CULL_FACE)
       roadP.use()
       roadP.uniformMatrix4fv('uViewProj', viewProj)
-      gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, bankTex)
-      roadP.uniform1i('uBankLut', 0)
-      gl.uniform2i(roadP.loc('uBankInfo'), route.bankTable.length, 0)
-      roadP.uniform1f('uBankStep', BANK_STEP)
-      roadP.uniform1f('uBankGain', bankGain)
-      gl.activeTexture(gl.TEXTURE1)
-      gl.bindTexture(gl.TEXTURE_2D, skyTex)
-      roadP.uniform1i('uSky', 1)
-      roadP.uniform3f('uCamPos', camPos[0], camPos[1], camPos[2])
-      roadP.uniform3f('uSunDir', sun[0], sun[1], sun[2])
-      roadP.uniform4f('uEnv', env[0], env[1], env[2], env[3])
-      roadP.uniform3f('uFogCol', fogCol[0], fogCol[1], fogCol[2])
-      roadP.uniform1f('uTime', time)
+      bindBank(roadP, bankGain)
+      bindLit(roadP, camPos, sun, env, fogCol, time, shadowOn)
       roadP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
       roadP.uniform1f('uRoadHalf', flt[3])
       roadMesh.draw(gl)
 
-      // --- 3. the sky dome ---
+      railP.use()
+      railP.uniformMatrix4fv('uViewProj', viewProj)
+      bindBank(railP, bankGain)
+      bindLit(railP, camPos, sun, env, fogCol, time, shadowOn)
+      railMesh.draw(gl)
+
+      // The props, a draw per set.
+      propP.use()
+      propP.uniformMatrix4fv('uViewProj', viewProj)
+      propP.uniform1f('uTime', time)
+      bindLit(propP, camPos, sun, env, fogCol, time, shadowOn)
+      for (const { set, mesh } of props) {
+        if (set.twoSided)
+          gl.disable(gl.CULL_FACE)
+        else {
+          gl.enable(gl.CULL_FACE)
+          gl.cullFace(gl.BACK)
+        }
+        propP.uniform1i('uMaterial', set.material)
+        propP.uniform1f('uSpin', set.spin)
+        mesh.drawInstanced(gl, set.count)
+      }
+      gl.disable(gl.CULL_FACE)
+
+      // --- 4. the sky dome ---
       gl.depthMask(false)
       skyDomeP.use()
       skyDomeP.uniformMatrix4fv('uInvViewProj', invViewProj)
@@ -370,17 +606,16 @@ export function createScenicRouteScene (
       gl.activeTexture(gl.TEXTURE1)
       gl.bindTexture(gl.TEXTURE_2D, skyTex)
       skyDomeP.uniform1i('uSky', 1)
-      // skyVert puts the quad at the far plane, so LEQUAL against the cleared
-      // depth fills exactly the pixels nothing opaque claimed.
       drawQuad(skyDomeP)
       gl.depthMask(true)
 
-      // --- 4. resolve ---
+      // --- 5. resolve ---
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msaaFbo)
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFbo)
       gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
 
       gl.disable(gl.DEPTH_TEST)
+      gl.disable(gl.CULL_FACE)
 
       const bw = Math.max(1, w >> 1)
       const bh = Math.max(1, h >> 1)
@@ -408,7 +643,7 @@ export function createScenicRouteScene (
         drawQuad(blurP)
       }
 
-      // --- 5. composite ---
+      // --- 6. composite ---
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, w, h)
       compP.use()
@@ -431,13 +666,21 @@ export function createScenicRouteScene (
       gl.deleteTexture(bankTex)
       gl.deleteTexture(skyTex)
       gl.deleteFramebuffer(skyFbo)
+      gl.deleteTexture(shadowTex)
+      gl.deleteFramebuffer(shadowFbo)
       roadMesh.dispose(gl)
-      skyLutP.dispose()
-      skyDomeP.dispose()
-      roadP.dispose()
-      brightP.dispose()
-      blurP.dispose()
-      compP.dispose()
+      railMesh.dispose(gl)
+      for (const c of chunks)
+        c.mesh.dispose(gl)
+      farMesh.dispose(gl)
+      seaMesh.dispose(gl)
+      for (const { mesh } of props)
+        mesh.dispose(gl)
+      for (const p of [
+        skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP,
+        propP, propDepthP, railP, brightP, blurP, compP,
+      ])
+        p.dispose()
     },
   }
 }
