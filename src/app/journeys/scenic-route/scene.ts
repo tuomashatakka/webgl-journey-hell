@@ -48,9 +48,12 @@ import type { Jaw } from './maw'
 import { buildProps } from './props'
 import type { PropSet } from './props'
 import { bendGainAt, buildCity } from './city'
+import { DIAL, SPEEDO, TACHO, buildCockpit, dialNormal, dialPoint, drawDialFaces, needleAngle } from './cockpit'
 import {
   blurFrag,
   brightFrag,
+  cockpitFrag,
+  cockpitVert,
   compositeFrag,
   depthFrag,
   jawFrag,
@@ -155,6 +158,7 @@ export function createScenicRouteScene (
   const jawDepthP   = createGlProgram(gl, jawVert, depthFrag)
   const tubeP       = createGlProgram(gl, sweepVert, tubeFrag)
   const waterP      = createGlProgram(gl, sweepVert, waterFrag)
+  const cockpitP    = createGlProgram(gl, cockpitVert, cockpitFrag)
   const propP       = createGlProgram(gl, propVert, propFrag)
   const propDepthP  = createGlProgram(gl, propVert, propDepthFrag)
   const railP       = createGlProgram(gl, sweepVert, railFrag)
@@ -165,7 +169,7 @@ export function createScenicRouteScene (
   const compP       = createGlProgram(gl, postVert, compositeFrag)
   if (!skyLutP || !skyDomeP || !roadP || !roadDepthP || !terrainP || !meshDepthP || !seaP ||
     !propP || !propDepthP || !railP || !towerP || !towerDepthP || !brightP || !blurP || !compP ||
-    !mawP || !jawP || !jawDepthP || !tubeP || !waterP)
+    !mawP || !jawP || !jawDepthP || !tubeP || !waterP || !cockpitP)
     return null
 
   const route = getRoute()
@@ -319,6 +323,26 @@ export function createScenicRouteScene (
   const railMesh: Mesh = createMeshFromArrays(
     gl, railArrays.vertices, railArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
   )
+
+  // --- the cockpit -----------------------------------------------------------------
+  const cockpit    = buildCockpit()
+  const cabinMesh  = createMesh(gl, cockpit.cabin)
+  const wheelMesh  = createMesh(gl, cockpit.wheel)
+  const speedoMesh = createMesh(gl, cockpit.speedo)
+  const tachoMesh  = createMesh(gl, cockpit.tacho)
+  const dialTex    = gl.createTexture()
+  gl.bindTexture(gl.TEXTURE_2D, dialTex)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, drawDialFaces())
+  gl.generateMipmap(gl.TEXTURE_2D)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+
+  const carMat: Mat4 = new Float32Array(16)
+  const dialN        = dialNormal()
+  const speedoPivot  = dialPoint(SPEEDO.u, SPEEDO.v)
+  const tachoPivot   = dialPoint(TACHO.u, TACHO.v)
 
   // --- post targets ------------------------------------------------------------
   const quad = gl.createBuffer()
@@ -482,10 +506,13 @@ export function createScenicRouteScene (
       const fogCol  = vec(custom, 'uFogCol', [ 0.6, 0.65, 0.7, 0 ])
       const flt     = vec(custom, 'uFloat', [ 0, 0, 0, 3.4 ])
       const car     = vec(custom, 'uCar', [ 0, 1, 0, 0 ])
+      const loop    = vec(custom, 'uLoop', [ 0, 0, 0, 0 ])
       const isHeavy = (heavy ?? 1) > 0.5
       carPos   = vec(custom, 'uCarPos', camPos)
       carFwd   = vec(custom, 'uCarFwd', camFwd)
       carRight = vec(custom, 'uCarRight', [ 1, 0, 0 ])
+
+      const carUp = vec(custom, 'uCarUp', [ 0, 1, 0 ])
       lights   = car[3]
 
       // Pointer look: yaw about the camera's up, pitch toward it.
@@ -792,6 +819,61 @@ export function createScenicRouteScene (
       compP.uniform1f('uSpeedBlur', Math.max(0, Math.min(1, (ride[0] - 36) / 24)))
       compP.uniform1f('uTime', time)
       drawQuad(compP)
+
+      // --- 7. the cockpit ---
+      // Straight onto the back buffer after the composite, with its own depth,
+      // so the world's speed blur never smears the dashboard. The car's frame
+      // is the model matrix: columns right, up, forward, position.
+      carMat.set([
+        carRight[0], carRight[1], carRight[2], 0,
+        carUp[0], carUp[1], carUp[2], 0,
+        carFwd[0], carFwd[1], carFwd[2], 0,
+        carPos[0], carPos[1], carPos[2], 1,
+      ])
+      gl.enable(gl.DEPTH_TEST)
+      gl.depthFunc(gl.LEQUAL)
+      gl.depthMask(true)
+      gl.clear(gl.DEPTH_BUFFER_BIT)
+      gl.enable(gl.CULL_FACE)
+      gl.cullFace(gl.BACK)
+      cockpitP.use()
+      cockpitP.uniformMatrix4fv('uViewProj', viewProj)
+      cockpitP.uniformMatrix4fv('uCarMat', carMat)
+      bindLit(cockpitP, camPos, sun, env, fogCol, time, shadowOn)
+      gl.activeTexture(gl.TEXTURE3)
+      gl.bindTexture(gl.TEXTURE_2D, dialTex)
+      cockpitP.uniform1i('uDial', 3)
+      cockpitP.uniform4f('uDialRect', DIAL.cx, DIAL.cy, DIAL.cz, DIAL.w / 2)
+      cockpitP.uniform1f('uExposure', exposure)
+
+      // Warning lamps come on by lap: check engine, oil, temperature, then the
+      // reception lamp with the signal loss; the red ones blink.
+      const lapF = ride[1]
+      cockpitP.uniform4f('uLamps',
+                         lapF > 0.9 ? 1 : 0,
+                         lapF > 1.9 ? 1 : 0,
+                         lapF > 2.4 ? 1 : 0,
+                         loop[2] >= 3 ? 1 : 0,
+      )
+      cockpitP.uniform1f('uBlink', 0.55 + 0.45 * Math.sign(Math.sin(time * 5.5)))
+      cockpitP.uniform1f('uAngle', 0)
+      cockpitP.uniform3f('uPivot', 0, 0, 0)
+      cockpitP.uniform3f('uAxis', 0, 1, 0)
+      gl.disable(gl.CULL_FACE)
+      cabinMesh.draw(gl)
+      // The wheel by steer: a lock and a half each way over the steer range.
+      cockpitP.uniform3f('uPivot', cockpit.wheelCentre.x, cockpit.wheelCentre.y, cockpit.wheelCentre.z)
+      cockpitP.uniform3f('uAxis', cockpit.wheelAxis.x, cockpit.wheelAxis.y, cockpit.wheelAxis.z)
+      cockpitP.uniform1f('uAngle', -car[2] * 2.6)
+      wheelMesh.draw(gl)
+      // Needles by reading.
+      cockpitP.uniform3f('uAxis', dialN.x, dialN.y, dialN.z)
+      cockpitP.uniform3f('uPivot', speedoPivot.x, speedoPivot.y, speedoPivot.z)
+      cockpitP.uniform1f('uAngle', needleAngle(SPEEDO, ride[0] * 3.6))
+      speedoMesh.draw(gl)
+      cockpitP.uniform3f('uPivot', tachoPivot.x, tachoPivot.y, tachoPivot.z)
+      cockpitP.uniform1f('uAngle', needleAngle(TACHO, car[0] * 7800))
+      tachoMesh.draw(gl)
     },
 
     dispose () {
@@ -810,6 +892,11 @@ export function createScenicRouteScene (
       seaMesh.dispose(gl)
       patchMesh.dispose(gl)
       headMesh.dispose(gl)
+      cabinMesh.dispose(gl)
+      wheelMesh.dispose(gl)
+      speedoMesh.dispose(gl)
+      tachoMesh.dispose(gl)
+      gl.deleteTexture(dialTex)
       tubeMesh.dispose(gl)
       waterMesh.dispose(gl)
       for (const { mesh } of jaws)
@@ -820,7 +907,7 @@ export function createScenicRouteScene (
       for (const p of [
         skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP,
         propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP,
-        mawP, jawP, jawDepthP, tubeP, waterP,
+        mawP, jawP, jawDepthP, tubeP, waterP, cockpitP,
       ])
         p.dispose()
     },

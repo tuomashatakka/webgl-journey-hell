@@ -74,7 +74,7 @@ export const SIGNAL_LOSS_LAP = 3
 const G = 9.81
 
 /** Eye height above the road surface. A low seat in a low car. */
-export const CAM_H = 1.18
+export const CAM_H = 1.3
 
 /** Hard clamp on the integration step. A backgrounded tab must not teleport. */
 const MAX_STEP = 0.05
@@ -402,6 +402,7 @@ export class ScenicRide implements JourneySimulation {
     const sunEl  = sunElevationAt(this.lapF)
     const lights = Math.max(1 - look.sky, smootherstep(7 * Math.PI / 180, 2 * Math.PI / 180, sunEl))
     o.uCar       = [ this.rpmDisp / RPM_MAX, this.gear + 1, this.steer, lights ]
+    o.uSignal    = [ this.signalAge, this.lap ]
 
     sunDirection(this.lapF, this.sun)
     o.uSun = [ this.sun[0], this.sun[1], this.sun[2], sunEl ]
