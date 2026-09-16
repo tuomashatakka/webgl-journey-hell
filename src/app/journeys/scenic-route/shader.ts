@@ -735,11 +735,13 @@ void main () {
 
 /** Leaf mask for the crossed canopy quads: an ellipse eaten by noise. */
 const leafChunk = /* glsl */`
+// Holes torn in a crown lobe's skin, on its spherical uv: the lobe reads as
+// clumps of leaves with sky between them, not as a smooth green ball. Negative
+// is a hole.
 float leafMask (vec2 uv, float seed) {
-  vec2 c = (uv - vec2(0.5, 0.52)) * vec2(1.0, 0.92);
-  float edge = 0.46 - length(c);
-  float holes = fbm(uv * 5.5 + seed * 13.0) - 0.5;
-  return edge * 8.0 + holes * 1.4;
+  float holes = fbm(uv * vec2(7.0, 4.5) + seed * 13.0) - 0.44;
+  holes += (fbm(uv * vec2(19.0, 12.0) + seed * 7.0) - 0.5) * 0.25;
+  return holes;
 }
 `
 
@@ -766,7 +768,7 @@ void main () {
   // A canopy quad is lit as the sphere it stands in for, so the crown rounds
   // toward the sun instead of reading as a cardboard cutout.
   if (uMaterial == 5)
-    n = normalize(mix(n, normalize(p - vCentre), 0.8));
+    n = normalize(mix(n, normalize(p - vCentre), 0.45));
   vec3 albedo; float rough = 0.85; float metal = 0.0;
   float det = 0.82 + 0.36 * fbm3(p * 3.1);
   if (uMaterial == 0)      { albedo = vec3(0.36, 0.28, 0.18); }                                 // wood
@@ -782,7 +784,10 @@ void main () {
   else if (uMaterial == 6) { albedo = vec3(0.22, 0.17, 0.12); rough = 0.92; }                   // trunk
   else if (uMaterial == 7) { albedo = vec3(0.86, 0.87, 0.88); rough = 0.42; det = 1.0; }        // turbine
   else if (uMaterial == 8) { albedo = vec3(0.55, 0.56, 0.58); rough = 0.35; metal = 0.9; det = 0.9 + 0.2 * fbm3(p * 2.0); } // steel
-  else                     { albedo = vec3(0.5, 0.49, 0.46); rough = 0.85; det = 0.85 + 0.3 * fbm3(p * 0.7); }               // concrete
+  else if (uMaterial == 9) { albedo = vec3(0.5, 0.49, 0.46); rough = 0.85; det = 0.85 + 0.3 * fbm3(p * 0.7); }               // concrete
+  else if (uMaterial == 10) { albedo = vec3(0.04, 0.05, 0.06); rough = 0.12; metal = 0.5; det = 1.0; }                        // glass
+  else if (uMaterial == 11) { albedo = vec3(0.27, 0.25, 0.23); rough = 0.95; det = 0.6 + 0.8 * fbm3(p * 0.9); }              // rock
+  else                     { albedo = vec3(0.84, 0.83, 0.78); rough = 0.55; det = 0.94 + 0.12 * fbm3(p * 4.0); }              // paint
   albedo *= det;
   float sh = shadowAt(p, n, uSunDir);
   vec3 col = lightSurface(p, n, albedo, rough, metal, 1.0, sh);
