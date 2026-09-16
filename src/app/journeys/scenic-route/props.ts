@@ -15,7 +15,7 @@ import type { MeshBuilder } from '@/lib/mesh'
 import { levelFrame, newFrame } from '@/lib/sweep'
 import { lookAt, SECTION_COUNT } from './course'
 import type { LookParams, Route } from './course'
-import { terrainHeight } from './geometry'
+import { buildSpineIndex, spineHits, terrainHeight } from './geometry'
 import type { SpineIndex } from './geometry'
 
 
@@ -419,15 +419,18 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
     rotors.add(x - Math.sin(yaw) * HUB_Z, y - 0.5 + HUB_Y, z + Math.cos(yaw) * HUB_Z, yaw, 1, hash(i * 5), 0)
   }
 
-  // Piers under the elevated downtown road, wherever it is off the ground.
+  // Piers under the elevated downtown road, wherever it is off the ground and
+  // no lower turn of the helix passes beneath: a column through a road deck
+  // is not a pier.
   const piers = new Instances()
+  const roads = buildSpineIndex(route, [ 1, 2, 3 ], 32)
   {
     const span = route.spans[2]
     for (let s = span.s0 + 10; s < span.s1 - 6; s += 21) {
       const f      = levelFrame(route.curve, s, pl.frame)
       const ground = terrainHeight(idx, f.pos.x, f.pos.z)
       const height = f.pos.y - 0.7 - ground
-      if (height > 2.5)
+      if (height > 2.5 && !spineHits(roads, f.pos.x, f.pos.z, 6, ground - 2, f.pos.y - 2, s))
         piers.add(f.pos.x, ground - 0.4, f.pos.z, yawOf(f.forward.x, f.forward.z), 1, hash(s), 0, height + 0.4)
     }
   }

@@ -47,10 +47,10 @@ export interface PanVector {
 export interface PanControlOptions {
 
   /**
-   * Mirror the horizontal axis. Defaults to **true**: every journey steers
-   * *away* from the pointer, so that pushing the pointer right swings the world
-   * right and the camera looks left, the way dragging a scene around works.
-   * Pass `false` for the look-toward-the-pointer reading.
+   * Mirror the horizontal axis. Defaults to **false**: `x` is positive when the
+   * pointer is on the right, and every journey looks *toward* the pointer, so
+   * pushing the pointer right turns the camera right. Journeys build their own
+   * camera basis, so each one's yaw sign is checked against this convention.
    */
   invertX?: boolean;
 
@@ -138,7 +138,7 @@ function tiltAxis (deg: number): number {
 }
 
 export function createPanControl (options: PanControlOptions = {}): PanControl {
-  const invertX                      = options.invertX === false ? 1 : -1
+  const invertX                      = options.invertX ? -1 : 1
   const invertY                      = options.invertY ? -1 : 1
   const useGyro                      = options.gyroscope !== false
   const getRect                      = options.getRect
@@ -200,23 +200,23 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
     switch (angle) {
       case 90:
         ax = dBeta
-        ay = -dGamma
+        ay = dGamma
         break
       case 180:
         ax = -dGamma
-        ay = -dBeta
+        ay = dBeta
         break
       case 270:
         ax = -dBeta
-        ay = dGamma
+        ay = -dGamma
         break
       default:
         ax = dGamma
-        ay = dBeta
+        ay = -dBeta
     }
 
-    // Tilting the top of the device away from you looks down, so `ay` (which
-    // grows as the device is pulled upright) drives the view up.
+    // The device is a window: tilting its top away from you (beta falling from
+    // the upright pose) points its back at the sky, so that drives the view up.
     gyroRaw.x = invertX * tiltAxis(ax)
     gyroRaw.y = invertY * tiltAxis(ay)
   }

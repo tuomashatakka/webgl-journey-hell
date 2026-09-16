@@ -82,6 +82,11 @@ const SILENT_ENGINE: JourneyAudioEngine = { toggleMute: () => true, destroy: () 
  * `step` receives the settings-scaled delta — the same time base that feeds
  * iTime — so the speed control slows the simulation and the shader together.
  */
+/** Title plus the live detail, the way the transport bar shows them. */
+function hudLabel (label: string, detail?: string): string {
+  return detail ? `${label} · ${detail}` : label
+}
+
 export interface JourneySimulation {
 
   /** Advance by `dt` seconds. `time` is the accumulated shader time. */
@@ -92,6 +97,13 @@ export interface JourneySimulation {
 
   /** Optional HUD section label derived from simulation state, not time. */
   label?(): string;
+
+  /**
+   * Optional live detail (speed, altitude) shown after the label in the
+   * transport bar only. Kept out of `label` so the section title does not
+   * re-animate every time the number changes.
+   */
+  detail?(): string;
 
   /**
    * Optional structural position — which lap, which section, how far through.
@@ -420,7 +432,7 @@ export function withJourneyShell (
 
       crt.draw({
         time,
-        ...(tube ? CRT_DEFAULTS : CRT_BYPASS),
+        ...tube ? CRT_DEFAULTS : CRT_BYPASS,
         scrub,
         scrubMix,
         signal: loss.level,
@@ -474,6 +486,7 @@ export function withJourneyShell (
         sectionNameRef.current = label
         setSectionName(label)
       }
+      transportViewRef.current.label = hudLabel(label, sim?.detail?.())
 
       sampleFrame()
 
@@ -482,7 +495,7 @@ export function withJourneyShell (
       publishDebugState({
         journey:  journeyName,
         time:     d.t!,
-        label,
+        label:    transportViewRef.current.label,
         seeking:  true,
         ready:    true,
         width:    canvasRef.current?.width ?? 0,
@@ -586,7 +599,7 @@ export function withJourneyShell (
           setSectionGlitchKey(value => value + 1)
         }
       }
-      transportViewRef.current.label = sectionNameRef.current
+      transportViewRef.current.label = hudLabel(sectionNameRef.current, liveSim?.detail?.())
 
       sampleFrame()
 
@@ -594,7 +607,7 @@ export function withJourneyShell (
         publishDebugState({
           journey:  journeyName,
           time:     iTimeRef.current,
-          label:    sectionNameRef.current,
+          label:    transportViewRef.current.label,
           seeking:  false,
           ready:    true,
           width:    canvasRef.current?.width ?? 0,

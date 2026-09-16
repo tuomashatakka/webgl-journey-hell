@@ -867,7 +867,9 @@ export const fsScene = `
             camZ + 15.0
         );
 
-        ta.xy += vec2(uPointer.x * 6.8, uPointer.y * 5.5);
+        // The camera faces +z with right = cross(fwd, Y) = -x, so a pointer on
+        // the right moves the target toward -x.
+        ta.xy += vec2(-uPointer.x * 6.8, uPointer.y * 5.5);
 
         // Continuous fall pitch driven by fallAmt (keeps the up-vector stable, no straight-down snap)
         ta.y -= fallAmt * 22.0;

@@ -101,6 +101,9 @@ const SHADOW_DEPTH = 900
 /** Beyond this the fog has closed and a terrain chunk contributes nothing. */
 const CULL_DIST = 1700
 
+/** How far below the tube spine the sea bed is dug out: past the deepest cave floor. */
+const TRENCH_DEPTH = 20
+
 interface Drawable {
   mesh:   Mesh;
   cx:     number;
@@ -268,6 +271,10 @@ export function createScenicRouteScene (
     const f = Math.min(1, Math.max(0, (s - (seam - 50)) / 44))
     return 16 * (1 - f * f * (3 - 2 * f))
   })
+  // Under the sea the bed is dug out beneath the throat and the river, to
+  // below the cave floor, so it cannot show through the vault.
+  spine.trench             = buildSpineIndex(route, [ 5, 6 ], 32, () => -TRENCH_DEPTH)
+
   const chunks: Drawable[] = buildNearChunks(spine).map(c => ({
     mesh: createMesh(gl, c.builder), cx: c.cx, cy: c.cy, cz: c.cz, radius: c.radius,
   }))

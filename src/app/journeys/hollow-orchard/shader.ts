@@ -669,7 +669,7 @@ const SCENE = `
     uv *= 1.0 + r2 * (0.09 + 0.16 * uWalk.w);
 
     float fall  = uCam.z;
-    float yaw   = uLook.x + uPointer.x * 0.42;
+    float yaw   = uLook.x - uPointer.x * 0.42; // right = cross(fwd, Y) is -x facing +z: negative yaw turns right
     float pitch = uLook.y + uPointer.y * 0.26;
 
     // The camera rides the bent centreline, so its world x carries pathX. gRo is

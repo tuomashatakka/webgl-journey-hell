@@ -130,8 +130,14 @@ export function naturalHeight (x: number, z: number): number {
 // --- nearest spine -------------------------------------------------------------
 
 export interface SpineIndex {
-  cell: number;
-  grid: Map<number, number[]>; // cell key -> [x, y, z, s, x, y, z, s, ...]
+  cell:    number;
+  grid:    Map<number, number[]>; // cell key -> [x, y, z, s, x, y, z, s, ...]
+  /**
+   * Spines that run under the sea bed (the throat, the river). The bed is dug
+   * out beneath them, seaward of the cliff, so it cannot slice through the
+   * cave; the stored height is already the trench floor.
+   */
+  trench?: SpineIndex;
 }
 
 /**
@@ -188,9 +194,46 @@ export function nearestSpine (idx: SpineIndex, x: number, z: number): typeof nea
   return near
 }
 
+/**
+ * Does any spine sample pass within `r` metres horizontally of (x, z) with its
+ * height inside [y0, y1], other than the stretch within `sExclude` ± 40 m? The
+ * clearance test for everything that stands near the road: a pier must not
+ * land on the deck below it, a post must not stand in a crossing road.
+ */
+export function spineHits (idx: SpineIndex, x: number, z: number, r: number, y0: number, y1: number, sExclude = -1e9): boolean {
+  const cx = Math.floor(x / idx.cell)
+  const cz = Math.floor(z / idx.cell)
+  for (let i = -1; i <= 1; i++)
+    for (let j = -1; j <= 1; j++) {
+      const arr = idx.grid.get((cx + i) * 73856093 ^ (cz + j) * 19349663)
+      if (!arr)
+        continue
+      for (let k = 0; k < arr.length; k += 4) {
+        if (Math.abs(arr[k + 3] - sExclude) < 40)
+          continue
+        if (arr[k + 1] < y0 || arr[k + 1] > y1)
+          continue
+        if (Math.hypot(arr[k] - x, arr[k + 2] - z) < r)
+          return true
+      }
+    }
+  return false
+}
+
 /** The land with the road pressed into it. */
 export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
-  const h = naturalHeight(x, z)
+  let h     = naturalHeight(x, z)
+  const cx  = cliffX(z)
+  const sea = smoothstep(cx - 9, cx - 1, x)
+
+  if (idx.trench && sea > 0) {
+    const t = nearestSpine(idx.trench, x, z)
+    if (t.d < 44) {
+      const w = (1 - smoothstep(14, 44, t.d)) * sea
+      h += (Math.min(h, t.y) - h) * w
+    }
+  }
+
   const n = nearestSpine(idx, x, z)
   // A wide embankment: the incline climbs well above the natural hill and
   // must stand on land, not float over it.
@@ -200,8 +243,7 @@ export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
   let w = 1 - smoothstep(10, 60, n.d)
   // The embankment stops at the cliff: the sea side keeps its drop and its
   // seabed, or the corridor would lay a shelf over the water.
-  const cx = cliffX(z)
-  w *= 1 - smoothstep(cx - 9, cx - 1, x)
+  w *= 1 - sea
   return h + (n.y - 0.28 - h) * w
 }
 

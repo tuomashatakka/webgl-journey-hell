@@ -207,7 +207,7 @@ export class ScenicRide implements JourneySimulation {
     // The driver, gravity, drag. In the cave the current is the driver: a
     // buoyant car eases to the water's speed and gravity along the tangent is
     // weighted out, because the water is doing the falling for it.
-    const surge = 1 + 0.12 * Math.sin(this.s * 0.021 + 1.3) * this.floatW
+    const surge = 1 + 0.12 * Math.sin(this.travelled * 0.021 + 1.3) * this.floatW
     let a       = p.throttle * (p.vTarget * surge - this.v) / p.tau
     a          -= p.gW * G * Math.sin(this.grade)
     a          -= p.cD * this.v * this.v
@@ -282,15 +282,19 @@ export class ScenicRide implements JourneySimulation {
       (fb.forward.y - fa.forward.y) * f.up.y +
       (fb.forward.z - fa.forward.z) * f.up.z) / 2
 
-    // The water: heave and roll from a small wave field on (s, t), and a slow
-    // yaw drift on the eddies. Weighted in by floatW so the car settles into
-    // the current rather than snapping onto it.
+    // The water: heave and roll from a small wave field on (distance, t), and
+    // a slow yaw drift on the eddies. Weighted in by floatW so the car settles
+    // into the current rather than snapping onto it. The phases run on the
+    // distance travelled, not on s: the float weight is still one half at the
+    // lap seam, and a phase on s would wrap there with the loop and snap the
+    // roll and the yaw by up to their full amplitude.
     const t     = this.time
     const fw    = this.floatW
-    this.floatH = fw * (0.16 * Math.sin(s * 0.35 - t * 1.6) + 0.08 * Math.sin(s * 0.83 + t * 2.3 + 1.7))
+    const d     = this.travelled
+    this.floatH = fw * (0.16 * Math.sin(d * 0.35 - t * 1.6) + 0.08 * Math.sin(d * 0.83 + t * 2.3 + 1.7))
 
-    const floatRoll = fw * 0.11 * Math.sin(s * 0.27 + t * 1.1)
-    this.floatYaw   = fw * 0.34 * Math.sin(s * 0.011 + 2.1)
+    const floatRoll = fw * 0.11 * Math.sin(d * 0.27 + t * 1.1)
+    this.floatYaw   = fw * 0.34 * Math.sin(d * 0.011 + 2.1)
 
     // The car frame: level frame rolled by the authored bank (+ the water).
     this.bank = bankAt(route, s, this.lapF) + floatRoll
@@ -419,8 +423,11 @@ export class ScenicRide implements JourneySimulation {
 
   label (): string {
     const span = spanAt(this.route, this.s)
-    const kmh  = Math.round(this.v * 3.6)
-    return `LAP ${this.lap + 1} · ${span.section.name} · ${kmh} KM/H`
+    return `LAP ${this.lap + 1} · ${span.section.name}`
+  }
+
+  detail (): string {
+    return `${Math.round(this.v * 3.6)} KM/H`
   }
 
   /** One lap of the loop; the seven sections are its sections. */

@@ -241,6 +241,7 @@ describe('scenic route — the ride', () => {
     expect(m.sectionCount).toBe(7)
     expect(m.loop).toBe(0)
     expect(sim.label()).toContain(SECTIONS[m.section].name)
-    expect(sim.label()).toMatch(/^LAP 1 · .* · \d+ KM\/H$/)
+    expect(sim.label()).toMatch(/^LAP 1 · [A-Z ]+$/)
+    expect(sim.detail()).toMatch(/^\d+ KM\/H$/)
   })
 })

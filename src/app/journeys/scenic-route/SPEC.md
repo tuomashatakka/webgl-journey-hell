@@ -468,3 +468,24 @@ plan above. The plan is kept as written; this is the record.
 * The mirror shows the sky behind, never the road.
 * The far sea is flat; the Gerstner patch is 1040 m square around the mouth.
 * No stalactites or dripping geometry in the cave; drips are sound only.
+
+## Revision 2 — the punch list
+
+Review after the first ship (2026-09-17). Each item names the cause found and
+the fix taken; the order is the order of the commits.
+
+| # | Complaint | Cause | Fix |
+|---|-----------|-------|-----|
+| 1 | Section title re-animates whenever the speed changes | `label()` carried the km/h; the shell re-keys the title on any label change | Shell gains `detail?()`, shown only in the transport bar; the title is `LAP n · NAME` |
+| 2 | Horizontal pan the wrong way round here and in some other journeys | The shared control mirrored x by default and half the journeys build `right = cross(fwd, Y)` (screen right is −x facing +z), the other half `cross(Y, fwd)` — so one half looked toward the pointer and the other away | `invertX` defaults to false (x positive on the right, look toward the pointer); the yaw sign is flipped in hollow-orchard, natatorium, liminal and loop-line. Gyro pitch follows the window model: top tilted away looks up |
+| 3 | Lap seam not smooth | Float heave, roll and yaw phases ran on `s`, which wraps at the seam while the float weight is still ½: the yaw snapped by 0.3 rad | Phases run on `travelled` |
+| 4 | Route passes below the sea bed | Seaward of the cliff the corridor pull is gated off, so the −28 m seabed slices the throat and the undertow where they dive below it; the sea hole along the whole gullet showed that seabed from the fall | A trench index for the tube sections pulls the seabed below the cave floor; the sea hole is limited to where the tube actually pierces the surface |
+| 5 | Road through posts and buildings | Piers under the helix land on the loop below; towers lean toward the road with the lap gain and their tops reach the deck; tower clearance only looked at section II | Piers skip any lower deck; tower clearance against sections I–III, lean capped so the top stays off the deck; every prop is filtered against the whole route in 3D |
+| 6 | Trees are two crossed planes | Canopy was two quads | Canopy is three noise-displaced ellipsoid lobes with the leaf mask, plus a tapered trunk and branches |
+| 7 | Barn floats on one side, buried on the other; no detail | One terrain sample at the centre | Four-corner sampling, a plinth down to the lowest corner, doors, windows, trim, ridge, overhang |
+| 8 | Fence rails do not meet | Panels were instanced per 2.5 m with their own height and yaw | The fence is one strip mesh: posts on the ground, rails joining post to post; telegraph wires the same way |
+| 9 | Turbine rotors spin about a blade tip | Blades were boxes centred at y 15 rotated about their own centre | Blades radiate from the hub and are rotated about the origin |
+| 10 | Fish entry too obvious, not frightening | The head sat on the surface, jaws open from the start | Head submerged until the car is over the lip, rising with proximity; jaws shut then opening through the fall; darker wet skin; surface bulge and foam ring; eyes lit |
+| 11 | Fall not immersive enough | Camera only followed the tangent | Shake and roll flutter growing with the fall, lens punch, look-down blend, wheel jitter, wind already in the mix |
+| 12 | Cockpit blocky | Boxes only | Bevelled dash profile, hooded binnacle, vents, stalks, door cards, seats, rounded wheel rim with hub and horn pad |
+| 13 | Spec's open items | — | Peristalsis, road cracks and rail loss by lap, stalactites, a rear pass for the mirror, a wider Gerstner patch |

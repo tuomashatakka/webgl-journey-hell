@@ -516,9 +516,11 @@ export function createLoopLineScene (
       // Pointer look: yaw the forward vector about world up and pitch it about
       // the camera's right. Applied here rather than in the simulation because
       // where the rider is looking must not change where the train is.
-      const px  = pointer?.x ?? 0
-      const py  = pointer?.y ?? 0
-      const yaw = px * 0.55
+      const px = pointer?.x ?? 0
+      const py = pointer?.y ?? 0
+      // A positive rotation about world up turns left; the pointer on the right
+      // must turn right.
+      const yaw = -px * 0.55
       const cy  = Math.cos(yaw)
       const sy  = Math.sin(yaw)
       let fx = camFwd[0] * cy + camFwd[2] * sy

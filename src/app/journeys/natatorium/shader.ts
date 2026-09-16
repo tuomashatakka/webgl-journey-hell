@@ -1463,7 +1463,7 @@ const SCENE = `
   void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
 
-    float yaw   = uCam.w + uPointer.x * 0.45;
+    float yaw   = uCam.w - uPointer.x * 0.45; // right = cross(fwd, Y): negative yaw turns toward the pointer
     float pitch = uLook.x + uPointer.y * 0.28;
     float roll  = uLook.y;
 

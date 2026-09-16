@@ -15,7 +15,7 @@ import type { MeshBuilder } from '@/lib/mesh'
 import { levelFrame, newFrame } from '@/lib/sweep'
 import { signedCurvature } from './course'
 import type { Route } from './course'
-import { PLAZA, PLAZA_Y, buildSpineIndex, nearestSpine, terrainHeight } from './geometry'
+import { PLAZA, buildSpineIndex, nearestSpine, terrainHeight } from './geometry'
 import type { SpineIndex } from './geometry'
 
 
@@ -59,8 +59,14 @@ function unitBox (): MeshBuilder {
   return b
 }
 
+/** The largest lap gain the bend is ever drawn with: `bendGainAt(3)`. */
+const BEND_GAIN_MAX = bendGainAt(3)
+
 export function buildCity (route: Route, land: SpineIndex): TowerSet {
   const downtown       = buildSpineIndex(route, [ 2 ], 32)
+  // Clearance is against every road near the plaza, not only the helix: the
+  // incline arrives across the north edge and the coast road leaves south.
+  const roads          = buildSpineIndex(route, [ 1, 2, 3 ], 32)
   const frame          = newFrame()
   const data: number[] = []
   const helix          = { x: 360, z: 685 }
@@ -72,6 +78,14 @@ export function buildCity (route: Route, land: SpineIndex): TowerSet {
     const y = terrainHeight(land, x, z) - 0.4
     data.push(x, y, z, yaw, w, h, d, seed, dirX, dirZ, k, twist)
   }
+
+  /**
+   * The bend leans the top toward the road by k·h² per unit gain. Cap k so the
+   * top never crosses into the deck at the last lap's gain: the tower may lean
+   * to `room` metres short of the road's edge and no further.
+   */
+  const leanCap = (k: number, h: number, room: number) =>
+    Math.min(k, Math.max(0, room) / Math.max(1, h * h * BEND_GAIN_MAX))
 
   /** Bend parameters from the nearest stretch of road. */
   const bendFor = (x: number, z: number, seed: number) => {
@@ -90,9 +104,9 @@ export function buildCity (route: Route, land: SpineIndex): TowerSet {
   }
 
   // The core: what the helix wraps.
-  add(helix.x, helix.z, 24, 24, 128, 0.2, 1, 0, 0, 0.0006, 0.35)
-  add(helix.x - 22, helix.z + 14, 10, 12, 62, 0.9, 2, 0.7, -0.7, 0.0011, -0.2)
-  add(helix.x + 20, helix.z - 16, 11, 10, 54, -0.4, 3, -0.7, 0.7, 0.0011, 0.25)
+  add(helix.x, helix.z, 24, 24, 128, 0.2, 1, 0, 0, leanCap(0.0006, 128, 45 - 12 - 3.2 - 4), 0.35)
+  add(helix.x - 22, helix.z + 14, 10, 12, 62, 0.9, 2, 0.7, -0.7, leanCap(0.0011, 62, 10), -0.2)
+  add(helix.x + 20, helix.z - 16, 11, 10, 54, -0.4, 3, -0.7, 0.7, leanCap(0.0011, 54, 10), 0.25)
 
   // The grid over the plaza.
   const step = 30
@@ -111,16 +125,19 @@ export function buildCity (route: Route, land: SpineIndex): TowerSet {
       const w         = 12 + hash(seed + 2) * 14
       const d         = 12 + hash(seed + 6) * 14
       const b         = bendFor(x, z, seed)
-      const clearance = 3.2 + 8 + Math.max(w, d) * 0.5
-      if (b.d < clearance)
+      const road      = nearestSpine(roads, x, z)
+      const half      = Math.max(w, d) * 0.5
+      const clearance = 3.2 + 8 + half
+      if (road.d < clearance)
         continue
 
       // Taller toward the centre, and never up into an overhead road.
       const centre = 1 - Math.min(1, Math.hypot(x - PLAZA.x, z - PLAZA.z) / (PLAZA.r0 + 30))
-      let h = 22 + hash(seed + 7) * 40 + centre * 55
-      if (b.d < 26)
-        h = Math.min(h, Math.max(14, b.roadY - PLAZA_Y - 7))
-      add(x, z, w, d, h, (hash(seed + 8) - 0.5) * 0.5, seed, b.dx, b.dz, b.k, b.twist)
+      const base   = terrainHeight(land, x, z)
+      let h        = 22 + hash(seed + 7) * 40 + centre * 55
+      if (road.d < 26 + half)
+        h = Math.min(h, Math.max(14, road.y - base - 7))
+      add(x, z, w, d, h, (hash(seed + 8) - 0.5) * 0.5, seed, b.dx, b.dz, leanCap(b.k, h, road.d - clearance), b.twist)
     }
 
   return {
