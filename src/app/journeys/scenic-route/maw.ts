@@ -238,11 +238,19 @@ function smooth01 (x: number): number {
 }
 
 export interface Tube {
-  tube:  SweepArrays;
+
+  /** The throat from the mouth to where it is under the sea: rises and sinks with the head. */
+  front: SweepArrays;
+
+  /** The rest, fixed: the seam between the two is under water while the head moves. */
+  back:  SweepArrays;
   water: SweepArrays;
   s0:    number;
   s1:    number;
 }
+
+/** Metres past the mouth where the front part of the tube hands over to the fixed part. */
+export const TUBE_SPLIT = 74
 
 /**
  * The tube's ring sits high on the spine: the car rides the water near the
@@ -260,16 +268,24 @@ function tubeRing (R: number): ProfilePoint[] {
 }
 
 export function buildTube (route: Route): Tube {
-  const g    = route.spans[5]
-  const u    = route.spans[6]
-  const s0   = g.s0
-  const s1   = u.s1 - 18
-  const tube = finishSweep(sweepProfile(route.curve, {
-    s0:      s0 - 2,
+  const g       = route.spans[5]
+  const u       = route.spans[6]
+  const s0      = g.s0
+  const s1      = u.s1 - 18
+  const profile = (s: number) => tubeRing(tubeRadius(s - s0, s))
+  const front   = finishSweep(sweepProfile(route.curve, {
+    s0:     s0 - 2,
+    s1:     s0 + TUBE_SPLIT + 2.5,
+    step:   2.5,
+    closed: true,
+    profile,
+  }))
+  const back = finishSweep(sweepProfile(route.curve, {
+    s0:     s0 + TUBE_SPLIT,
     s1,
-    step:    2.5,
-    closed:  true,
-    profile: s => tubeRing(tubeRadius(s - s0, s)),
+    step:   2.5,
+    closed: true,
+    profile,
   }))
   const water = finishSweep(sweepProfile(route.curve, {
     s0:      s0 + 60,
@@ -280,7 +296,7 @@ export function buildTube (route: Route): Tube {
       return [[ -r, 0 ], [ r, 0 ]]
     },
   }))
-  return { tube, water, s0, s1 }
+  return { front, back, water, s0, s1 }
 }
 
 export function buildMaw (route: Route): Maw {

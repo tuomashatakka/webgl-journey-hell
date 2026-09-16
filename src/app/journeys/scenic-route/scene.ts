@@ -36,13 +36,13 @@ import { createMesh, createMeshFromArrays } from '@/lib/mesh'
 import type { Mesh } from '@/lib/mesh'
 import { invert, lookAt, multiply, perspective } from '@/lib/mat4'
 import type { Mat4 } from '@/lib/mat4'
-import { SWEEP_FLOATS, SWEEP_LAYOUT, finishSweep, sweepProfile } from '@/lib/sweep'
+import { SWEEP_FLOATS, SWEEP_LAYOUT, finishSweep, levelFrame, newFrame, sweepProfile } from '@/lib/sweep'
 import type { ProfilePoint } from '@/lib/sweep'
 import type { JourneyRenderer } from '@/components/withJourneyShell'
 import type { QuadFrameUniforms } from '@/lib/shaderQuad'
 import { BANK_STEP, SECTION_COUNT, bankGainAt, getRoute, lookAt as lookParamsAt, sectionWeights } from './course'
 import type { LookParams } from './course'
-import { SEA_PATCH, buildFarMesh, buildNearChunks, buildSeaPatch, buildSeaQuad, buildSpineIndex, nearestSpine } from './geometry'
+import { SEA_PATCH, buildFarMesh, buildNearChunks, buildSeaPatch, buildSeaQuad, buildSpineIndex } from './geometry'
 import { FLESH_END, ROCK_START, buildMaw, buildTube, jawAngleAt } from './maw'
 import type { Jaw } from './maw'
 import { buildProps } from './props'
@@ -100,6 +100,12 @@ const SHADOW_DEPTH = 900
 
 /** Beyond this the fog has closed and a terrain chunk contributes nothing. */
 const CULL_DIST = 1700
+
+/** How far the fish's head and lips sit under the sea before it surfaces. */
+const HEAD_DROP = 95
+
+/** Jaw angle (rad, lower jaw's share) that shuts the mouth before the car is off the lip. */
+const JAW_SHUT = 1.0
 
 /** How far below the tube spine the sea bed is dug out: past the deepest cave floor. */
 const TRENCH_DEPTH = 20
@@ -280,17 +286,16 @@ export function createScenicRouteScene (
   }))
   const far     = buildFarMesh(spine)
   const farMesh = createMesh(gl, far.builder)
-  // The sea has a hole where the fish is: no water plane cutting through the
-  // mouth or the throat.
-  const gullet    = buildSpineIndex(route, [ 5 ], 32)
+  // The sea is whole: where the fish surfaces, seaVert drops the surface
+  // inside the mouth's footprint and heaps a bow wave around it.
   const seaMesh   = createMesh(gl, buildSeaQuad())
-  const patchMesh = createMesh(gl, buildSeaPatch(
-    SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.half, SEA_PATCH.cells,
-    (x, z) => nearestSpine(gullet, x, z).d < 54,
-  ))
+  const patchMesh = createMesh(gl, buildSeaPatch(SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.half, SEA_PATCH.cells))
 
   // --- the maw -------------------------------------------------------------------
   const maw      = buildMaw(route)
+  const mouthF   = levelFrame(route.curve, maw.s0, newFrame())
+  const mouthLen = Math.hypot(mouthF.forward.x, mouthF.forward.z) || 1
+  const mouthDir = [ mouthF.forward.x / mouthLen, mouthF.forward.z / mouthLen ]
   const headMesh = createMeshFromArrays(
     gl, maw.head.vertices, maw.head.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
   )
@@ -298,7 +303,8 @@ export function createScenicRouteScene (
     jaw, mesh: createMesh(gl, jaw.builder),
   }))
   const tube      = buildTube(route)
-  const tubeMesh  = createMeshFromArrays(gl, tube.tube.vertices, tube.tube.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
+  const tubeFront = createMeshFromArrays(gl, tube.front.vertices, tube.front.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
+  const tubeBack  = createMeshFromArrays(gl, tube.back.vertices, tube.back.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
   const waterMesh = createMeshFromArrays(gl, tube.water.vertices, tube.water.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
 
   // --- the props ---------------------------------------------------------------
@@ -504,16 +510,18 @@ export function createScenicRouteScene (
       const h = canvas.height
       resize(w, h)
 
-      const camPos  = vec(custom, 'uCamPos', [ 0, 0, 0 ])
-      const camFwd  = vec(custom, 'uCamFwd', [ 0, 0, 1 ])
-      const camUp   = vec(custom, 'uCamUp', [ 0, 1, 0 ])
-      const ride    = vec(custom, 'uRide', [ 0, 0, 0, 0 ])
-      const sun     = vec(custom, 'uSun', [ 0, 0.2, 1, 0.2 ])
-      const env     = vec(custom, 'uEnv', [ 0, 1, 0.001, -1e4 ])
-      const fogCol  = vec(custom, 'uFogCol', [ 0.6, 0.65, 0.7, 0 ])
-      const flt     = vec(custom, 'uFloat', [ 0, 0, 0, 3.4 ])
-      const car     = vec(custom, 'uCar', [ 0, 1, 0, 0 ])
-      const loop    = vec(custom, 'uLoop', [ 0, 0, 0, 0 ])
+      const camPos = vec(custom, 'uCamPos', [ 0, 0, 0 ])
+      const camFwd = vec(custom, 'uCamFwd', [ 0, 0, 1 ])
+      const camUp  = vec(custom, 'uCamUp', [ 0, 1, 0 ])
+      const ride   = vec(custom, 'uRide', [ 0, 0, 0, 0 ])
+      const sun    = vec(custom, 'uSun', [ 0, 0.2, 1, 0.2 ])
+      const env    = vec(custom, 'uEnv', [ 0, 1, 0.001, -1e4 ])
+      const fogCol = vec(custom, 'uFogCol', [ 0.6, 0.65, 0.7, 0 ])
+      const flt    = vec(custom, 'uFloat', [ 0, 0, 0, 3.4 ])
+      const car    = vec(custom, 'uCar', [ 0, 1, 0, 0 ])
+      const loop   = vec(custom, 'uLoop', [ 0, 0, 0, 0 ])
+      // (fall weight, fish risen, jaws open, shake); without a sim the fish is up and open.
+      const fall    = vec(custom, 'uFall', [ 0, 1, 1, 0 ])
       const isHeavy = (heavy ?? 1) > 0.5
       carPos   = vec(custom, 'uCarPos', camPos)
       carFwd   = vec(custom, 'uCarFwd', camFwd)
@@ -550,7 +558,7 @@ export function createScenicRouteScene (
       upv[2]    = camUp[2]
 
       // The lens widens with speed — a little, the way a rider's attention does.
-      const fov = FOV_BASE * (1 + Math.min(ride[0], 60) / 60 * 0.14)
+      const fov = FOV_BASE * (1 + Math.min(ride[0], 60) / 60 * 0.14 + fall[0] * 0.2)
       perspective(proj, fov, w / Math.max(1, h), 0.1, 4000)
       lookAt(view, eye, target, upv)
       multiply(viewProj, proj, view)
@@ -558,7 +566,10 @@ export function createScenicRouteScene (
 
       const bankGain = bankGainAt(ride[1])
       const bendGain = bendGainAt(ride[1])
-      const jawAngle = jawAngleAt(ride[1])
+      // Shut until the car is off the edge, then open by lap; the whole head
+      // sits under the sea until the car comes along the headland.
+      const jawAngle = jawAngleAt(ride[1]) * fall[2] - JAW_SHUT * (1 - fall[2])
+      const headDrop = -HEAD_DROP * (1 - fall[1])
       const seaRise  = Math.min(ride[1], 3) * 0.45
       const exposure = EXPOSURE_BASE * Math.pow(2, env[0])
       const shadowOn = env[1] > 0.05 && sun[1] > 0.005 ? 1 : 0
@@ -638,11 +649,14 @@ export function createScenicRouteScene (
         roadDepthP.use()
         railMesh.draw(gl)
         roadDepthP.uniform1f('uBankGain', 0)
+        roadDepthP.uniform3f('uOffset', 0, headDrop, 0)
         headMesh.draw(gl)
+        roadDepthP.uniform3f('uOffset', 0, 0, 0)
         roadDepthP.uniform1f('uBankGain', bankGain)
 
         jawDepthP.use()
         jawDepthP.uniformMatrix4fv('uViewProj', lightVP)
+        jawDepthP.uniform3f('uOffset', 0, headDrop, 0)
         for (const { jaw, mesh } of jaws) {
           jawDepthP.uniform3f('uHinge', jaw.hinge.x, jaw.hinge.y, jaw.hinge.z)
           jawDepthP.uniform3f('uAxis', jaw.axis.x, jaw.axis.y, jaw.axis.z)
@@ -686,6 +700,7 @@ export function createScenicRouteScene (
       gl.disable(gl.CULL_FACE)
       mawP.use()
       mawP.uniformMatrix4fv('uViewProj', viewProj)
+      mawP.uniform3f('uOffset', 0, headDrop, 0)
       bindBank(mawP, 0)
       bindLit(mawP, camPos, sun, env, fogCol, time, shadowOn)
       mawP.uniform1f('uMouthS', maw.s0)
@@ -693,6 +708,7 @@ export function createScenicRouteScene (
 
       jawP.use()
       jawP.uniformMatrix4fv('uViewProj', viewProj)
+      jawP.uniform3f('uOffset', 0, headDrop, 0)
       bindLit(jawP, camPos, sun, env, fogCol, time, shadowOn)
       for (const { jaw, mesh } of jaws) {
         jawP.uniform3f('uHinge', jaw.hinge.x, jaw.hinge.y, jaw.hinge.z)
@@ -708,7 +724,10 @@ export function createScenicRouteScene (
       bindLit(tubeP, camPos, sun, env, fogCol, time, shadowOn)
       tubeP.uniform1f('uMouthS', tube.s0)
       tubeP.uniform2f('uFleshRock', FLESH_END, ROCK_START)
-      tubeMesh.draw(gl)
+      tubeP.uniform3f('uOffset', 0, headDrop, 0)
+      tubeFront.draw(gl)
+      tubeP.uniform3f('uOffset', 0, 0, 0)
+      tubeBack.draw(gl)
 
       waterP.use()
       waterP.uniformMatrix4fv('uViewProj', viewProj)
@@ -721,6 +740,9 @@ export function createScenicRouteScene (
       seaP.uniformMatrix4fv('uViewProj', viewProj)
       bindLit(seaP, camPos, sun, env, fogCol, time, shadowOn)
       seaP.uniform1f('uSeaRise', seaRise)
+      seaP.uniform3f('uMouth', maw.mouth.x, maw.mouth.y, maw.mouth.z)
+      seaP.uniform2f('uMouthDir', mouthDir[0], mouthDir[1])
+      seaP.uniform1f('uRise', fall[1])
       seaP.uniform4f('uPatch', SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.half, 0)
       seaP.uniform1f('uWaveScale', 1)
       patchMesh.draw(gl)
@@ -871,7 +893,7 @@ export function createScenicRouteScene (
       // The wheel by steer: a lock and a half each way over the steer range.
       cockpitP.uniform3f('uPivot', cockpit.wheelCentre.x, cockpit.wheelCentre.y, cockpit.wheelCentre.z)
       cockpitP.uniform3f('uAxis', cockpit.wheelAxis.x, cockpit.wheelAxis.y, cockpit.wheelAxis.z)
-      cockpitP.uniform1f('uAngle', -car[2] * 2.6)
+      cockpitP.uniform1f('uAngle', -car[2] * 2.6 + fall[3] * 0.09 * Math.sin(time * 31.0))
       wheelMesh.draw(gl)
       // Needles by reading.
       cockpitP.uniform3f('uAxis', dialN.x, dialN.y, dialN.z)
@@ -904,7 +926,8 @@ export function createScenicRouteScene (
       speedoMesh.dispose(gl)
       tachoMesh.dispose(gl)
       gl.deleteTexture(dialTex)
-      tubeMesh.dispose(gl)
+      tubeFront.dispose(gl)
+      tubeBack.dispose(gl)
       waterMesh.dispose(gl)
       for (const { mesh } of jaws)
         mesh.dispose(gl)

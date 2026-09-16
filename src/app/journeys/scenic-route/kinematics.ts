@@ -153,6 +153,13 @@ export class ScenicRide implements JourneySimulation {
   private heave = 0
   private heaveV = 0
   private headRoll = 0
+  private fallW = 0
+  private rise = 0
+  private jawOpen = 0
+  private shake = 0
+
+  /** Where the mouth is: the eyes go there through the fall. */
+  private readonly mouth: [ number, number, number ]
   private lookYaw = 0
   private steer = 0
 
@@ -190,6 +197,9 @@ export class ScenicRide implements JourneySimulation {
 
   constructor () {
     this.route = getRoute()
+
+    const m    = this.route.curve.pointAtDistance(this.route.spans[5].s0)
+    this.mouth = [ m.x, m.y, m.z ]
     this.updatePose(0)
   }
 
@@ -272,6 +282,21 @@ export class ScenicRide implements JourneySimulation {
     // the throat and falls away over the culvert, like everything else here.
     sectionWeights(route, s, this.w)
     this.floatW = this.w[DECAY_SECTION]
+
+    // The fall: its section weight, less the water once the car is in it.
+    const coast = route.spans[3]
+    const fall  = route.spans[4]
+    const under = route.spans[DECAY_SECTION]
+    this.fallW  = this.w[4] * (1 - this.floatW)
+
+    // The fish surfaces as the car comes along the headland and is up before
+    // the lip; it sinks back under once the car is in the river. The mouth
+    // stays shut until the car is off the edge, then gapes through the fall.
+    const up     = smootherstep(coast.s0 + (coast.s1 - coast.s0) * 0.45, fall.s0 + 15, s)
+    const down   = 1 - smootherstep(under.s0, under.s0 + 60, s)
+    this.rise    = Math.min(up, down)
+    this.jawOpen = smootherstep(fall.s0 + (fall.s1 - fall.s0) * 0.2, fall.s1 - 8, s)
+    this.shake   = this.fallW * Math.min(1, this.v / 40)
 
     // Signed curvature and its vertical twin, from the tangent's rate of turn.
     this.curv = signedCurvature(curve, s, 1.0)
@@ -362,21 +387,40 @@ export class ScenicRide implements JourneySimulation {
     this.carRight[1] = ry
     this.carRight[2] = rz
 
-    // The camera: head roll about the tangent, then the eye offset, then yaw.
-    const tmp = this.tmp
-    rotate(ux, uy, uz, fx, fy, fz, this.headRoll, tmp)
+    // The camera: head roll about the tangent (with the fall's flutter), then
+    // the eye offset (with the fall's shake), then yaw.
+    const tmp     = this.tmp
+    const flutter = this.fallW * 0.05 * Math.sin(t * 9.1) * (0.6 + 0.4 * Math.sin(t * 2.3))
+    rotate(ux, uy, uz, fx, fy, fz, this.headRoll + flutter, tmp)
 
     const cux = tmp[0]
     const cuy = tmp[1]
     const cuz = tmp[2]
 
-    const lift     = CAM_H + this.heave + this.floatH + bump
-    const side     = this.sway * 0.06
+    const jx       = this.shake * 0.022 * (Math.sin(t * 37.1) + 0.6 * Math.sin(t * 23.7))
+    const jy       = this.shake * 0.018 * (Math.sin(t * 29.3 + 1.7) + 0.5 * Math.sin(t * 41.9))
+    const lift     = CAM_H + this.heave + this.floatH + bump + jy
+    const side     = this.sway * 0.06 + jx
     this.camPos[0] = car[0] + ux * lift + rx * side
     this.camPos[1] = car[1] + uy * lift + ry * side
     this.camPos[2] = car[2] + uz * lift + rz * side
 
     rotate(fx, fy + bump * 2.5, fz, cux, cuy, cuz, this.lookYaw + this.floatYaw, tmp)
+
+    // Off the edge the eyes go to the mouth: the gaze blends from the car's
+    // heading toward the thing the car is falling into, and shivers with it.
+    let mx = this.mouth[0] - this.camPos[0]
+    let my = this.mouth[1] - this.camPos[1]
+    let mz = this.mouth[2] - this.camPos[2]
+    const ml = Math.hypot(mx, my, mz) || 1
+    mx      /= ml
+    my      /= ml
+    mz      /= ml
+
+    const gaze = this.fallW * 0.75 * Math.min(1, ml / 25)
+    tmp[0]     = tmp[0] * (1 - gaze) + mx * gaze + cux * jx * 0.6
+    tmp[1]     = tmp[1] * (1 - gaze) + my * gaze
+    tmp[2]     = tmp[2] * (1 - gaze) + mz * gaze + cuz * jx * 0.6
 
     const fl       = Math.hypot(tmp[0], tmp[1], tmp[2]) || 1
     this.camFwd[0] = tmp[0] / fl
@@ -417,6 +461,7 @@ export class ScenicRide implements JourneySimulation {
     o.uEnv    = [ look.exposure + this.lapF * 0.55, look.sky, look.fogDensity, water ]
     o.uFogCol = [ look.fog[0], look.fog[1], look.fog[2], look.surface ]
     o.uFloat  = [ this.floatW, this.floatH, this.floatYaw, look.roadHalf ]
+    o.uFall   = [ this.fallW, this.rise, this.jawOpen, this.shake ]
 
     return o
   }

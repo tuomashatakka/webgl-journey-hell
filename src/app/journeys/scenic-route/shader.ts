@@ -343,6 +343,7 @@ layout(location = 1) in vec4 aRight;   // level right xyz, r
 layout(location = 2) in vec4 aUp;      // level up xyz, u
 layout(location = 3) in vec4 aAux;     // normal2d (r,u), edge param, section
 uniform mat4 uViewProj;
+uniform vec3 uOffset;   // whole-mesh translation: the fish rising out of the sea
 ${bankChunk}
 out vec3 vWorld;
 out vec3 vNormal;
@@ -354,7 +355,7 @@ void main () {
   // Positive bank rolls the right side down: up leans toward right.
   vec3 R = aRight.xyz * c - aUp.xyz * sn;
   vec3 U = aUp.xyz * c + aRight.xyz * sn;
-  vec3 world = aSpine.xyz + R * aRight.w + U * aUp.w;
+  vec3 world = aSpine.xyz + R * aRight.w + U * aUp.w + uOffset;
   vWorld = world;
   vNormal = normalize(R * aAux.x + U * aAux.y);
   vAux = vec4(aSpine.w, aRight.w, aUp.w, aAux.z);
@@ -409,7 +410,7 @@ uniform float uLights;     // headlights, 0..1
 vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) {
   if (uLights <= 0.001) return vec3(0.0);
   vec3 sum = vec3(0.0);
-  vec3 lampCol = vec3(1.0, 0.86, 0.66) * 1800.0 * uLights;
+  vec3 lampCol = vec3(1.0, 0.86, 0.66) * 1400.0 * uLights;
   for (int i = 0; i < 2; i++) {
     float side = i == 0 ? -0.78 : 0.78;
     vec3 lp = uCarPos + uCarFwd * 1.9 + uCarRight * side + vec3(0.0, -0.45, 0.0);
@@ -420,7 +421,10 @@ vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) 
     if (cone <= 0.0) continue;
     sum += shade(n, v, l, albedo, rough, metal, lampCol) * cone / d2;
   }
-  return sum;
+  // A soft knee: a wall a few metres off in the gullet or the cave would
+  // otherwise take thirty times the light of the road and burn to white.
+  float lum = dot(sum, vec3(0.2126, 0.7152, 0.0722));
+  return sum / (1.0 + lum / 2.2);
 }
 
 vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float ao, float shadow) {
@@ -589,9 +593,13 @@ uniform float uTime;
 uniform float uWaveScale;
 uniform float uSeaRise;
 uniform vec4  uPatch;      // centre.x, centre.z, half size, unused
+uniform vec3  uMouth;      // where the fish's mouth is
+uniform vec2  uMouthDir;   // the throat's heading from it, in xz
+uniform float uRise;       // how far the fish has surfaced, 0..1
 out vec3 vWorld;
 out vec3 vNormal;
 out vec2 vUv;
+out float vFoam;
 const vec4 W0 = vec4(0.94, 0.34, 0.85, 58.0);   // dir.x, dir.z, amplitude, wavelength
 const vec4 W1 = vec4(0.62, -0.78, 0.45, 29.0);
 const vec4 W2 = vec4(-0.24, 0.97, 0.26, 16.0);
@@ -622,6 +630,19 @@ void main () {
     wave(W3, aPos.xz, uTime, amp, P, N);
   }
   P.y += uSeaRise;
+  // The fish: while it is under, the sea is whole. As it surfaces the water
+  // heaps into a bow wave around the head and, in the last part of the rise,
+  // the surface inside the mouth's footprint and along the throat drops away
+  // so no water plane crosses the gullet the car falls into.
+  vec2 rm = P.xz - uMouth.xz;
+  float along = clamp(dot(rm, uMouthDir), 0.0, 78.0);
+  float dSeg = length(rm - uMouthDir * along);
+  float pit = (1.0 - smoothstep(38.0, 52.0, dSeg)) * smoothstep(0.7, 1.0, uRise);
+  P.y -= 90.0 * pit;
+  float ring = (dSeg - 58.0) / 16.0;
+  float bulge = exp(-ring * ring) * (5.0 + 2.5 * sin(uTime * 1.7 + dSeg * 0.35 + rm.x * 0.05)) * smoothstep(0.3, 0.95, uRise);
+  P.y += bulge;
+  vFoam = bulge / 7.0 + pit * 2.0;
   vWorld = P;
   vNormal = normalize(N);
   vUv = aUv;
@@ -639,6 +660,7 @@ precision highp float;
 in vec3 vWorld;
 in vec3 vNormal;
 in vec2 vUv;
+in float vFoam;
 out vec4 fragColor;
 ${brdfChunk}
 ${noiseChunk}
@@ -678,6 +700,7 @@ void main () {
   // Foam where the surface pinches: a steep Gerstner normal.
   float steep = 1.0 - normalize(vNormal).y;
   float foam = smoothstep(0.1, 0.3, steep) * (0.5 + 0.5 * vnoise(p.xz * 0.8 + uTime * 0.3)) * (1.0 - lod);
+  foam = max(foam, clamp(vFoam, 0.0, 1.0) * (0.55 + 0.45 * vnoise(p.xz * 0.5 - uTime * 0.4)));
   col = mix(col, vec3(0.7, 0.72, 0.7) * (skyLookup(vec3(0.0, 1.0, 0.0)) * 0.5 + sunCol * 0.15 * sh), foam);
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
@@ -933,8 +956,8 @@ void main () {
 const mawMaterialChunk = /* glsl */`
 vec3 skinAlbedo (vec3 p, float belly) {
   float scales = vnoise(p.xz * 0.9 + p.y * 0.4) * 0.5 + vnoise(p.xy * 2.3 + p.z) * 0.5;
-  vec3 dark = vec3(0.045, 0.075, 0.07);
-  vec3 pale = vec3(0.42, 0.42, 0.36);
+  vec3 dark = vec3(0.028, 0.045, 0.045);
+  vec3 pale = vec3(0.28, 0.28, 0.24);
   vec3 c = mix(dark, pale, belly);
   c *= 0.75 + 0.5 * scales;
   c += vec3(0.02, 0.05, 0.03) * fbm3(p * 0.06);
@@ -942,7 +965,7 @@ vec3 skinAlbedo (vec3 p, float belly) {
 }
 vec3 fleshAlbedo (vec3 p) {
   float veins = fbm3(p * 0.35);
-  vec3 c = mix(vec3(0.3, 0.05, 0.045), vec3(0.5, 0.12, 0.1), veins);
+  vec3 c = mix(vec3(0.19, 0.035, 0.03), vec3(0.34, 0.08, 0.07), veins);
   c *= 0.7 + 0.6 * vnoise(p.xz * 1.7 + p.y);
   return c;
 }
@@ -978,18 +1001,18 @@ void main () {
   if (!gl_FrontFacing) {
     float belly = smoothstep(-0.2, -0.95, sin(ang));
     albedo = skinAlbedo(p, belly);
-    rough = 0.32;
+    rough = 0.18;
     // Eyes: two, high on the sides, a little back from the lip.
     float side = abs(cos(ang));
     // One eye each side: angles 0.35 (right, a little up) and pi - 0.35 (left).
     float dAng = min(abs(ang - 0.35), abs(ang - (PI - 0.35)));
     vec2 eyeUv = vec2(t - 24.0, dAng * 30.0);
     float eye = length(eyeUv);
-    float eyeW = smoothstep(7.5, 6.0, eye) * step(0.4, side);
-    float pupil = smoothstep(3.2, 2.4, eye);
+    float eyeW = smoothstep(9.0, 7.4, eye) * step(0.4, side);
+    float pupil = smoothstep(3.6, 2.6, eye);
     albedo = mix(albedo, vec3(0.9, 0.75, 0.2), eyeW);
     albedo = mix(albedo, vec3(0.01), pupil);
-    emit = vec3(1.0, 0.7, 0.15) * eyeW * (1.0 - pupil) * 1.6;
+    emit = vec3(1.0, 0.7, 0.15) * eyeW * (1.0 - pupil) * 2.6;
     rough = mix(rough, 0.08, eyeW);
   } else {
     albedo = fleshAlbedo(p);
@@ -1043,12 +1066,12 @@ void main () {
 
   // Flesh: ribs every few metres, glistening.
   float rib = 0.5 + 0.5 * sin(vAux.x * 1.6 + fbm3(p * 0.2) * 3.0);
-  vec3 fleshCol = fleshAlbedo(p) * (0.8 + 0.4 * rib);
+  vec3 fleshCol = fleshAlbedo(p) * (0.55 + 0.4 * rib);
   vec3 nFlesh = normalize(n + vec3(0.0, 0.0, 0.0) + (fbm3(p * 0.6) - 0.5) * 0.3);
 
   vec3 albedo = mix(rock, fleshCol, flesh);
   vec3 nn = normalize(mix(nRock, nFlesh, flesh));
-  float rough = mix(0.85, 0.2, flesh);
+  float rough = mix(0.85, 0.42, flesh);
   // Wet below and near the waterline (u near zero and below).
   float wet = smoothstep(2.5, -1.0, vAux.z);
   rough = mix(rough, 0.18, wet * (1.0 - flesh));
@@ -1109,6 +1132,7 @@ uniform mat4  uViewProj;
 uniform vec3  uHinge;
 uniform vec3  uAxis;
 uniform float uJaw;
+uniform vec3  uOffset;
 out vec3 vWorld;
 out vec3 vNormal;
 out vec2 vUv;
@@ -1117,7 +1141,7 @@ vec3 rotAxis (vec3 v, vec3 k, float a) {
   return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c);
 }
 void main () {
-  vec3 p = uHinge + rotAxis(aPos - uHinge, uAxis, uJaw);
+  vec3 p = uHinge + uOffset + rotAxis(aPos - uHinge, uAxis, uJaw);
   vec3 n = rotAxis(aNormal, uAxis, uJaw);
   vWorld = p;
   vNormal = n;
