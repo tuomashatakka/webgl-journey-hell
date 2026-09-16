@@ -34,6 +34,7 @@ app/
     natatorium/             # THE NATATORIUM (flooded poolrooms, turning route + audio)
     switchback/             # THE SWITCHBACK (mine railway that tips over, then falls + audio)
     loop-line/              # THE LOOP LINE (rasterized closed circuit, six stations + audio)
+    scenic-route/           # THE SCENIC ROUTE (rasterized coaster road, seven sections, cockpit + audio)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
@@ -41,7 +42,7 @@ components/
   withJourneyShell.tsx      # the route: context, resize, pointer, HUD, ?t= seeking
   JourneyTransport.tsx      # the VHS transport bar (rewind / skip / fast-forward)
   withShaderJourney.tsx     # a journey that is one fragment shader (six of them)
-  withGeometryJourney.tsx   # a journey that is actual triangles (loop-line)
+  withGeometryJourney.tsx   # a journey that is actual triangles (loop-line, scenic-route)
 hooks/
   use-pan-control.ts        # pointer + gyroscope view panning (tweened)
   use-journey-runtime.ts    # settings ref, display filter, resize, FPS, fullscreen

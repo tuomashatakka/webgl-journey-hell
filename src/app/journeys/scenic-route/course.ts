@@ -209,7 +209,7 @@ export const SECTIONS: Section[] = [
     throttle:   1,
     gW:         0.0,
     cD:         0.0060,
-    exposure:   1.0,
+    exposure:   1.3,
     sky:        0,
     fog:        [ 0.02, 0.05, 0.06 ],
     fogDensity: 0.008,

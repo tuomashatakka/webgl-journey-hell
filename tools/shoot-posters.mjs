@@ -27,6 +27,7 @@ const SHOTS = [
   { slug: 'stairwell', section: /PROTEAN WEATHER BRIDGE/ },
   { slug: 'skybridges', section: /THE ASCENT/ },
   { slug: 'foundry', section: /FURNACE FLOOR|GEARWORKS/ },
+  { slug: 'scenic-route', section: /THE FALL/, t: 103.2 },
   { slug: 'hollow-orchard', section: /THE NURSERY/ },
   { slug: 'natatorium', section: /TILE CORRIDOR/ },
   { slug: 'switchback', section: /THE BOARDING PLATFORM/ },
@@ -67,9 +68,11 @@ await context.addInitScript(settings => {
   localStorage.setItem('journey-graphics-settings-v1', JSON.stringify(settings))
 }, SETTINGS)
 
-for (const { slug, section } of shots) {
+for (const { slug, section, t } of shots) {
   const page = await context.newPage()
-  await page.goto(`${BASE}/journeys/${slug}`, { waitUntil: 'load' })
+  // A shot may name its instant: ?t= seeks the simulation and freezes there,
+  // so the section is reached at once instead of driven to at 4x.
+  await page.goto(`${BASE}/journeys/${slug}${t !== undefined ? `?t=${t}` : ''}`, { waitUntil: 'load' })
   await page.waitForSelector('#gl-canvas')
 
   const deadline = Date.now() + 240_000

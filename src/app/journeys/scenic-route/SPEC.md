@@ -394,3 +394,77 @@ the ones this repo has been bitten by:
 * **scan spikes only at authored events** — the impact at the mouth and the
   culvert's daylight — and never at a section boundary;
 * **loop-line's probe is byte-identical** before and after the `lib/` additions.
+
+## As shipped
+
+What the implementation settled on where it differs from, or fills in, the
+plan above. The plan is kept as written; this is the record.
+
+### Files
+
+| file | holds |
+| --- | --- |
+| `course.ts` | sections, the closed curve, spans, bank LUT and gain, section weights, speed and look params, the sun |
+| `kinematics.ts` | `ScenicRide`: the speed model, gearbox, pose, float dynamics, uniforms, `uSignal` |
+| `geometry.ts` | height field, coastline, spine index with per-section lift, corridor pull, near/far terrain, sea quad and fine sea patch |
+| `props.ts` | instanced units: fence panels, telegraph poles, hay bales, barn, trees, turbines, piers |
+| `city.ts` | downtown: unit-box towers with bend parameters per instance, `bendGainAt` |
+| `maw.ts` | the head (closed-profile sweep along the gullet), hinged jaws with baked teeth, the tube (throat into cave) and its water strip |
+| `cockpit.ts` | the cabin in the car's frame, dial faces on a Canvas2D, needle meshes |
+| `audio.ts` | synthesised engine, tyres, wind, radio, gullet, cave; follows the uniform map |
+| `shader.ts` | every GLSL program: sky LUT and dome, sweep/mesh/prop/tower/jaw/cockpit vertex shaders, all materials, post |
+| `scene.ts` | the renderer: sky LUT → shadow map → world → dome → resolve/bloom/composite → cockpit |
+| `kinematics.test.mjs` | sixteen tests: derivative sweeps of bank, curvature, speed; lap timing; signal loss |
+| `lib/sweep.ts`, `lib/mesh.ts` | the level-frame profile sweep and the custom-layout mesh path; invariants in `tools/verify-geometry.ts` |
+
+### Constants that moved
+
+* **Bank.** `BANK_GAIN` stays 4 (×5 at lap 1, ×10 from lap 2.25) so the helix
+  reaches a full roll by lap 3 as planned, but the ground sections' knots were
+  cut to 2–3° (county), 5–6° (incline), 3–6° (coast) so a lap-3 straight is
+  still a road and not a barrel roll.
+* **Fog and exposure.** County fog density 0.0008; gullet exposure 0.9 EV at
+  density 0.012; undertow 1.3 EV at 0.008. The plan's red gullet at 2.2 EV was
+  a saturated wash: with no sky the walls are lit only by the fog floor and the
+  headlamps, and exposure cannot invent detail.
+* **Mie.** `K_M` 21e-6 → 12.6e-6 and `I_SUN` 22 → 20. The full Nishita Mie peak
+  at 12° elevation paints the sun's whole quarter of the horizon white; fog
+  in-scatter is additionally capped at three times the zenith luminance.
+* **Specular.** GGX specular fades with roughness (`mix(1, 0.08, smoothstep(0.55, 0.95, rough))`).
+  Grass is not a microfacet surface at this scale; without the fade every field
+  toward the low sun went white.
+* **Corridor.** The terrain pull widened from 8–26 m to 10–60 m so the incline
+  stands on an embankment, gated to zero past the cliff line so it never lays
+  a shelf over the sea, and lifted 16 m over the cave with a fall to zero over
+  the last 50 m before the seam: the tube comes out of a hillside portal.
+* **Headlamps.** Two lamps, 1800 in sun-radiance units with a +30 m² soft near
+  term, a cone from 0.6 to 0.86 in the cosine. 420 was invisible in a 20 m
+  tube; 6500 blew the near walls out.
+* **Jaw.** 0.42 rad at lap 0, +0.13 per lap, the lower jaw taking the whole
+  angle and the upper 35% of it the other way.
+* **Downtown bend.** `bendGainAt(lapF) = 1 + 0.8·lapF` — 1, 1.8, 2.6 at the lap
+  boundaries, per the decay table. Lean is capped at 36% of a tower's height.
+
+### Things learned the hard way
+
+* The sweep's front face is the profile's *left* normal. A ring walked
+  clockwise in (r, u) therefore faces inward — right for the tube, and for the
+  head it means the front is the mouth and the back is the skin. Materials by
+  `gl_FrontFacing` are written that way round.
+* The sea plane cut through the mouth and the throat; the fine sea patch has a
+  hole wherever the gullet spine is within 54 m.
+* A camera banked toward the sea sees the road's own gravel verge nearly
+  edge-on, apex at the vanishing point, glare-washed. It looked like a missing
+  sea for a long time. Painting the terrain magenta and the sea green settled it.
+* Both eyes landed on one side of the head: `abs(ang) − 0.35` is symmetric
+  about the wrong axis. Eyes are at profile angles 0.35 and π − 0.35.
+* `uSun.w` is the sun's elevation in radians; the tower lights read it as
+  degrees and came on at noon. The scene now derives degrees from the vector.
+
+### Known gaps
+
+* Peristalsis is not animated (the tube is static; ribs are in the material).
+* No guardrail cull by lap; no cracks or potholes by lap on the road surface.
+* The mirror shows the sky behind, never the road.
+* The far sea is flat; the Gerstner patch is 1040 m square around the mouth.
+* No stalactites or dripping geometry in the cave; drips are sound only.
