@@ -172,6 +172,33 @@ describe('scenic route — the ride', () => {
     expect(times[2] - times[1]).toBeLessThan(times[1] - times[0])
   })
 
+  test('the float does not snap at the lap seam', () => {
+    // The float phases run on distance travelled, not on s: s wraps at the
+    // seam while the water weight is still one half, and phases on s snapped
+    // the yaw by 0.3 rad there. The worst step of heave and yaw over lap 1
+    // and its seam into lap 2 must be a step, not a jump.
+    const sim = new ScenicRide()
+    const dt  = 1 / 60
+    let t      = 0
+    let prev   = null
+    let worstH = 0
+    let worstY = 0
+    while (sim.state.lap < 2 && t < 900) {
+      t += dt
+      sim.step(dt, t)
+
+      const u = sim.uniforms().uFloat
+      if (prev && sim.state.lap >= 1) {
+        worstH = Math.max(worstH, Math.abs(u[1] - prev[1]))
+        worstY = Math.max(worstY, Math.abs(u[2] - prev[2]))
+      }
+      prev = u
+    }
+    expect(sim.state.lap).toBe(2)
+    expect(worstH).toBeLessThan(0.06)
+    expect(worstY).toBeLessThan(0.01)
+  })
+
   test('speed climbs monotonically through the fall and settles in the river', () => {
     const sim  = new ScenicRide()
     const dt   = 1 / 60

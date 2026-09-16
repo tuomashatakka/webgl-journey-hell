@@ -19,6 +19,7 @@ import { lookAt, SECTION_COUNT } from './course'
 import type { LookParams, Route } from './course'
 import { buildSpineIndex, spineHits, terrainHeight } from './geometry'
 import type { SpineIndex } from './geometry'
+import { ROCK_START, tubeRadius } from './maw'
 
 
 export const PROP_FLOATS = 8
@@ -277,6 +278,30 @@ function lobe (
 // ---------------------------------------------------------------------------
 // the units
 // ---------------------------------------------------------------------------
+
+/** A unit stalactite: a ring at the origin, a waist, the tip a metre down. */
+function stalactite (): MeshBuilder {
+  const b               = createMeshBuilder()
+  const segs            = 8
+  const rim: number[]   = []
+  const waist: number[] = []
+  for (let i = 0; i <= segs; i++) {
+    const a  = i / segs * Math.PI * 2
+    const nx = Math.cos(a)
+    const nz = Math.sin(a)
+    const j  = 0.85 + 0.3 * hash(i * 7.3)
+    rim.push(b.vertex(nx * 0.26 * j, 0, nz * 0.26 * j, nx, 0.3, nz, i / segs, 0))
+    waist.push(b.vertex(nx * 0.15 * j, -0.45, nz * 0.15 * j, nx, 0.2, nz, i / segs, 0.5))
+  }
+
+  const tip = b.vertex(0, -1, 0, 0, -1, 0, 0.5, 1)
+  for (let i = 0; i < segs; i++) {
+    b.face(rim[i], waist[i], waist[i + 1])
+    b.face(rim[i], waist[i + 1], rim[i + 1])
+    b.face(waist[i], tip, waist[i + 1])
+  }
+  return b
+}
 
 function telegraphPole (): MeshBuilder {
   const b = createMeshBuilder()
@@ -706,6 +731,30 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
     }
   }
 
+  // Stalactites from the cave vault: on the rock part of the tube, hung from
+  // the upper third of the ring, embedded a little so the root is in the rock.
+  const drips = new Instances()
+  {
+    const g  = route.spans[5]
+    const u  = route.spans[6]
+    const s0 = g.s0 + ROCK_START * 0.9
+    for (let s = s0; s < u.s1 - 70; s += 4) {
+      const n = 1 + Math.floor(hash(s * 1.7) * 2.6)
+      for (let k = 0; k < n; k++) {
+        const a  = Math.PI * (0.3 + 0.4 * hash(s * 3.1 + k * 17)) // top of the ring
+        const R  = tubeRadius(s - g.s0, s)
+        const r  = Math.cos(a) * R * 1.15
+        const uu = Math.sin(a) * R + 0.42 * R - 0.4
+        const f  = levelFrame(route.curve, s, pl.frame)
+        const sc = 1.2 + hash(s * 5.3 + k) * 4.5
+        drips.add(
+          f.pos.x + f.right.x * r + f.up.x * uu, f.pos.y + f.right.y * r + f.up.y * uu,
+          f.pos.z + f.right.z * r + f.up.z * uu, hash(s + k) * Math.PI * 2, sc, hash(s * 0.7 + k), 0,
+        )
+      }
+    }
+  }
+
   const set = (
     name: string, builder: MeshBuilder, material: number, inst: Instances,
     twoSided = false, spin = 0,
@@ -735,5 +784,6 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
     set('towers', turbineTower(), MAT.TURBINE, towers),
     set('rotors', turbineRotor(), MAT.TURBINE, rotors, true, 1.35),
     set('piers', pier(), MAT.CONCRETE, piers),
+    set('stalactites', stalactite(), MAT.ROCK, drips),
   ]
 }

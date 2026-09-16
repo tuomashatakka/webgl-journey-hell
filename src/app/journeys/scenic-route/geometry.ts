@@ -31,10 +31,11 @@
 // only on the sections that run on the ground — the fall, the throat and the
 // cave are elsewhere, and downtown is the plaza.
 
-import { createMeshBuilder } from '@/lib/mesh'
+import { VERTEX_FLOATS, createMeshBuilder } from '@/lib/mesh'
 import type { MeshBuilder } from '@/lib/mesh'
 import { hash2 } from '@/lib/rng'
 import type { Route } from './course'
+import { tubeRadius } from './maw'
 
 
 // --- noise ---------------------------------------------------------------------
@@ -130,14 +131,15 @@ export function naturalHeight (x: number, z: number): number {
 // --- nearest spine -------------------------------------------------------------
 
 export interface SpineIndex {
-  cell:    number;
-  grid:    Map<number, number[]>; // cell key -> [x, y, z, s, x, y, z, s, ...]
+  cell:  number;
+  grid:  Map<number, number[]>; // cell key -> [x, y, z, s, x, y, z, s, ...]
   /**
-   * Spines that run under the sea bed (the throat, the river). The bed is dug
-   * out beneath them, seaward of the cliff, so it cannot slice through the
-   * cave; the stored height is already the trench floor.
+   * The tube's spine (the throat and the river) and where it starts. A
+   * heightfield cannot tunnel: wherever the land would pass through the tube
+   * it is carved away per fragment instead, from a signed distance to the
+   * tube's wall that `carveAt` writes into every terrain vertex.
    */
-  trench?: SpineIndex;
+  tube?: { idx: SpineIndex; s0: number };
 }
 
 /**
@@ -220,21 +222,32 @@ export function spineHits (idx: SpineIndex, x: number, z: number, r: number, y0:
   return false
 }
 
+/**
+ * Signed distance-like value from (x, h, z) to the tube's wall: negative
+ * inside the tube (the terrain fragment is discarded there), positive outside,
+ * +1 far away. The tube's ring is 1.15 R wide and runs from 0.58 R below the
+ * spine to 1.42 R above it.
+ */
+export function carveAt (idx: SpineIndex, x: number, h: number, z: number): number {
+  if (!idx.tube)
+    return 1
+
+  const n = nearestSpine(idx.tube.idx, x, z)
+  if (n.d > 60)
+    return 1
+
+  const R  = tubeRadius(n.s - idx.tube.s0, n.s)
+  const dr = n.d / (R * 1.15 + 1.0) - 1
+  const du = Math.abs(h - (n.y + 0.42 * R)) / (R + 1.0) - 1
+  return Math.max(dr, du)
+}
+
 /** The land with the road pressed into it. */
 export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
-  let h     = naturalHeight(x, z)
+  const h   = naturalHeight(x, z)
   const cx  = cliffX(z)
   const sea = smoothstep(cx - 9, cx - 1, x)
-
-  if (idx.trench && sea > 0) {
-    const t = nearestSpine(idx.trench, x, z)
-    if (t.d < 44) {
-      const w = (1 - smoothstep(14, 44, t.d)) * sea
-      h += (Math.min(h, t.y) - h) * w
-    }
-  }
-
-  const n = nearestSpine(idx, x, z)
+  const n   = nearestSpine(idx, x, z)
   // A wide embankment: the incline climbs well above the natural hill and
   // must stand on land, not float over it.
   if (n.d > 60)
@@ -248,6 +261,13 @@ export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
 }
 
 // --- chunks --------------------------------------------------------------------
+
+/** The carve value goes into the shard attribute's x, which the terrain does not otherwise use. */
+function writeCarve (b: MeshBuilder, carve: number[]): void {
+  const v = b.vertices()
+  for (let i = 0; i < carve.length; i++)
+    v[i * VERTEX_FLOATS + 8] = carve[i]
+}
 
 export interface TerrainChunk {
   builder: MeshBuilder;
@@ -271,7 +291,8 @@ export function buildTerrainChunk (
   const ids = new Int32Array(n * n)
   let minY = Infinity
   let maxY = -Infinity
-  const e   = cell * 0.5
+  const e               = cell * 0.5
+  const carve: number[] = []
 
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) {
@@ -288,9 +309,11 @@ export function buildTerrainChunk (
       ny /= l
       nz /= l
       ids[j * n + i] = b.vertex(x, h, z, nx, ny, nz, x, z)
+      carve.push(carveAt(idx, x, h, z))
       minY = Math.min(minY, h)
       maxY = Math.max(maxY, h)
     }
+  writeCarve(b, carve)
 
   for (let j = 0; j < cells; j++)
     for (let i = 0; i < cells; i++) {
@@ -329,13 +352,14 @@ export function buildNearChunks (idx: SpineIndex): TerrainChunk[] {
 }
 
 export function buildFarMesh (idx: SpineIndex): TerrainChunk {
-  const b      = createMeshBuilder()
-  const cells  = FAR.size / FAR.cell
-  const n      = cells + 1
-  const ids    = new Int32Array(n * n)
-  const nearX1 = NEAR.x0 + NEAR.nx * NEAR.size
-  const nearZ1 = NEAR.z0 + NEAR.nz * NEAR.size
-  const inside = (x: number, z: number) =>
+  const b               = createMeshBuilder()
+  const carve: number[] = []
+  const cells           = FAR.size / FAR.cell
+  const n               = cells + 1
+  const ids             = new Int32Array(n * n)
+  const nearX1          = NEAR.x0 + NEAR.nx * NEAR.size
+  const nearZ1          = NEAR.z0 + NEAR.nz * NEAR.size
+  const inside          = (x: number, z: number) =>
     x > NEAR.x0 + 1 && x < nearX1 - 1 && z > NEAR.z0 + 1 && z < nearZ1 - 1
 
   for (let j = 0; j < n; j++)
@@ -348,7 +372,9 @@ export function buildFarMesh (idx: SpineIndex): TerrainChunk {
       const hz       = naturalHeight(x, z + e) - naturalHeight(x, z - e)
       const l        = Math.hypot(hx, 2 * e, hz) || 1
       ids[j * n + i] = b.vertex(x, h, z, -hx / l, 2 * e / l, -hz / l, x, z)
+      carve.push(carveAt(idx, x, h, z))
     }
+  writeCarve(b, carve)
   for (let j = 0; j < cells; j++)
     for (let i = 0; i < cells; i++) {
       const x = FAR.x0 + i * FAR.cell
@@ -371,22 +397,22 @@ export function buildFarMesh (idx: SpineIndex): TerrainChunk {
 /** The sea surface: one big quad at sea level east of the valley. */
 /** A fine square of sea for the waves, centred where the fall lands. */
 export function buildSeaPatch (
-  cx: number, cz: number, half: number, cells: number,
+  cx: number, cz: number, halfX: number, halfZ: number, cells: number,
   skip?: (x: number, z: number) => boolean,
 ): MeshBuilder {
   const b   = createMeshBuilder()
   const ids = new Int32Array((cells + 1) * (cells + 1))
   for (let j = 0; j <= cells; j++)
     for (let i = 0; i <= cells; i++) {
-      const x                  = cx - half + 2 * half * (i / cells)
-      const z                  = cz - half + 2 * half * (j / cells)
+      const x                  = cx - halfX + 2 * halfX * (i / cells)
+      const z                  = cz - halfZ + 2 * halfZ * (j / cells)
       ids[j * (cells + 1) + i] = b.vertex(x, SEA_LEVEL, z, 0, 1, 0, x, z)
     }
   for (let j = 0; j < cells; j++)
     for (let i = 0; i < cells; i++) {
       if (skip) {
-        const x = cx - half + 2 * half * ((i + 0.5) / cells)
-        const z = cz - half + 2 * half * ((j + 0.5) / cells)
+        const x = cx - halfX + 2 * halfX * ((i + 0.5) / cells)
+        const z = cz - halfZ + 2 * halfZ * ((j + 0.5) / cells)
         if (skip(x, z))
           continue
       }
@@ -401,7 +427,12 @@ export function buildSeaPatch (
   return b
 }
 
-export const SEA_PATCH = { x: 640, z: 190, half: 520, cells: 110 }
+/**
+ * The waved patch: from just east of the valley's below-sea-level strip (a
+ * patch any further west would lay a lake on the hillside) out past the
+ * fish, and the length of the coast. 200 cells is an 8 m grid.
+ */
+export const SEA_PATCH = { x: 915, z: 200, halfX: 785, halfZ: 800, cells: 200 }
 
 export function buildSeaQuad (): MeshBuilder {
   const b  = createMeshBuilder()
@@ -423,7 +454,7 @@ export function buildSeaQuad (): MeshBuilder {
   // Cells fully under the fine patch are left out; the patch's wave amplitude
   // fades to zero before its edge so the two meet flat.
   const inPatch = (x: number, z: number) =>
-    Math.abs(x - SEA_PATCH.x) < SEA_PATCH.half && Math.abs(z - SEA_PATCH.z) < SEA_PATCH.half
+    Math.abs(x - SEA_PATCH.x) < SEA_PATCH.halfX && Math.abs(z - SEA_PATCH.z) < SEA_PATCH.halfZ
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) {
       const xa = x0 + (x1 - x0) * (i / n)

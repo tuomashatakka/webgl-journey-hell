@@ -406,15 +406,15 @@ plan above. The plan is kept as written; this is the record.
 | --- | --- |
 | `course.ts` | sections, the closed curve, spans, bank LUT and gain, section weights, speed and look params, the sun |
 | `kinematics.ts` | `ScenicRide`: the speed model, gearbox, pose, float dynamics, uniforms, `uSignal` |
-| `geometry.ts` | height field, coastline, spine index with per-section lift, corridor pull, near/far terrain, sea quad and fine sea patch |
-| `props.ts` | instanced units: fence panels, telegraph poles, hay bales, barn, trees, turbines, piers |
+| `geometry.ts` | height field, coastline, spine index with per-section lift, corridor pull, near/far terrain with a per-vertex carve value for the tube, sea quad and fine sea patch |
+| `props.ts` | instanced units and world-space strips: fence rails post to post, telegraph poles and wires, hay bales, the house on its plinth, lobed trees, turbines with rotors about the hub, piers, stalactites |
 | `city.ts` | downtown: unit-box towers with bend parameters per instance, `bendGainAt` |
 | `maw.ts` | the head (closed-profile sweep along the gullet), hinged jaws with baked teeth, the tube (throat into cave) and its water strip |
-| `cockpit.ts` | the cabin in the car's frame, dial faces on a Canvas2D, needle meshes |
+| `cockpit.ts` | the cabin in the car's frame: moulded dash, binnacle, centre stack, door cards, wheel with spokes; dial faces on a Canvas2D, needle meshes |
 | `audio.ts` | synthesised engine, tyres, wind, radio, gullet, cave; follows the uniform map |
 | `shader.ts` | every GLSL program: sky LUT and dome, sweep/mesh/prop/tower/jaw/cockpit vertex shaders, all materials, post |
-| `scene.ts` | the renderer: sky LUT → shadow map → world → dome → resolve/bloom/composite → cockpit |
-| `kinematics.test.mjs` | sixteen tests: derivative sweeps of bank, curvature, speed; lap timing; signal loss |
+| `scene.ts` | the renderer: sky LUT → shadow map → rear world pass into the mirror → world → dome → resolve/bloom/composite → cockpit |
+| `kinematics.test.mjs` | seventeen tests: derivative sweeps of bank, curvature, speed; lap timing; lap-seam continuity of the float; signal loss |
 | `lib/sweep.ts`, `lib/mesh.ts` | the level-frame profile sweep and the custom-layout mesh path; invariants in `tools/verify-geometry.ts` |
 
 ### Constants that moved
@@ -423,8 +423,8 @@ plan above. The plan is kept as written; this is the record.
   reaches a full roll by lap 3 as planned, but the ground sections' knots were
   cut to 2–3° (county), 5–6° (incline), 3–6° (coast) so a lap-3 straight is
   still a road and not a barrel roll.
-* **Fog and exposure.** County fog density 0.0008; gullet exposure 0.9 EV at
-  density 0.012; undertow 1.3 EV at 0.008. The plan's red gullet at 2.2 EV was
+* **Fog and exposure.** County fog density 0.0008; gullet exposure 0.8 EV at
+  density 0.011; undertow 1.3 EV at 0.008. The plan's red gullet at 2.2 EV was
   a saturated wash: with no sky the walls are lit only by the fog floor and the
   headlamps, and exposure cannot invent detail.
 * **Mie.** `K_M` 21e-6 → 12.6e-6 and `I_SUN` 22 → 20. The full Nishita Mie peak
@@ -437,9 +437,11 @@ plan above. The plan is kept as written; this is the record.
   stands on an embankment, gated to zero past the cliff line so it never lays
   a shelf over the sea, and lifted 16 m over the cave with a fall to zero over
   the last 50 m before the seam: the tube comes out of a hillside portal.
-* **Headlamps.** Two lamps, 1800 in sun-radiance units with a +30 m² soft near
-  term, a cone from 0.6 to 0.86 in the cosine. 420 was invisible in a 20 m
-  tube; 6500 blew the near walls out.
+* **Headlamps.** Two lamps, 1600 in sun-radiance units with a +30 m² soft near
+  term, a cone from 0.6 to 0.86 in the cosine, and a luminance knee at
+  0.2·2^−EV so a wall three metres off caps at the same film value as the
+  road. 420 was invisible in a 20 m tube; 6500 blew the near walls out; a knee
+  at 0.55 read as a cream wash, because the ACES fit puts 0.5 at 0.8 sRGB.
 * **Jaw.** 0.42 rad at lap 0, +0.13 per lap, the lower jaw taking the whole
   angle and the upper 35% of it the other way.
 * **Downtown bend.** `bendGainAt(lapF) = 1 + 0.8·lapF` — 1, 1.8, 2.6 at the lap
@@ -451,8 +453,13 @@ plan above. The plan is kept as written; this is the record.
   clockwise in (r, u) therefore faces inward — right for the tube, and for the
   head it means the front is the mouth and the back is the skin. Materials by
   `gl_FrontFacing` are written that way round.
-* The sea plane cut through the mouth and the throat; the fine sea patch has a
-  hole wherever the gullet spine is within 54 m.
+* The sea plane cut through the mouth and the throat. A funnel dropped into the
+  sea comes back up through the tube wherever the ceiling goes under, so the
+  hole is a fragment discard along the mouth's straight segment, sized to where
+  the plane actually cuts the throat (28–110 m) and kept inside the head's skin.
+* A height field cannot tunnel. Terrain inside the tube is discarded per
+  fragment from a signed carve value carried in the otherwise unused shard
+  attribute; a trench pulled into the seabed fought the cliff gate.
 * A camera banked toward the sea sees the road's own gravel verge nearly
   edge-on, apex at the vanishing point, glare-washed. It looked like a missing
   sea for a long time. Painting the terrain magenta and the sea green settled it.
@@ -463,11 +470,12 @@ plan above. The plan is kept as written; this is the record.
 
 ### Known gaps
 
-* Peristalsis is not animated (the tube is static; ribs are in the material).
-* No guardrail cull by lap; no cracks or potholes by lap on the road surface.
-* The mirror shows the sky behind, never the road.
-* The far sea is flat; the Gerstner patch is 1040 m square around the mouth.
-* No stalactites or dripping geometry in the cave; drips are sound only.
+The five gaps listed at the first ship (peristalsis, rail loss and potholes by
+lap, a mirror that shows the road, stalactites, a wider Gerstner patch) closed
+in Revision 2. Left open: the sea hole follows a straight segment from the
+mouth, which holds because the throat is straight for its first 130 m; the
+mirror is a second world pass at 320×96 and costs about one frame in a hundred
+and twenty.
 
 ## Revision 2 — the punch list
 
@@ -479,7 +487,7 @@ the fix taken; the order is the order of the commits.
 | 1 | Section title re-animates whenever the speed changes | `label()` carried the km/h; the shell re-keys the title on any label change | Shell gains `detail?()`, shown only in the transport bar; the title is `LAP n · NAME` |
 | 2 | Horizontal pan the wrong way round here and in some other journeys | The shared control mirrored x by default and half the journeys build `right = cross(fwd, Y)` (screen right is −x facing +z), the other half `cross(Y, fwd)` — so one half looked toward the pointer and the other away | `invertX` defaults to false (x positive on the right, look toward the pointer); the yaw sign is flipped in hollow-orchard, natatorium, liminal and loop-line. Gyro pitch follows the window model: top tilted away looks up |
 | 3 | Lap seam not smooth | Float heave, roll and yaw phases ran on `s`, which wraps at the seam while the float weight is still ½: the yaw snapped by 0.3 rad | Phases run on `travelled` |
-| 4 | Route passes below the sea bed | Seaward of the cliff the corridor pull is gated off, so the −28 m seabed slices the throat and the undertow where they dive below it; the sea hole along the whole gullet showed that seabed from the fall | A trench index for the tube sections pulls the seabed below the cave floor; the sea hole is limited to where the tube actually pierces the surface |
+| 4 | Route passes below the sea bed | Seaward of the cliff the corridor pull is gated off, so the −28 m seabed slices the throat and the undertow where they dive below it; the sea plane cut the throat too | A height field cannot tunnel: terrain inside the tube is discarded per fragment from a carve value stored per vertex; the sea hole is a discard sized to where the plane cuts the throat |
 | 5 | Road through posts and buildings | Piers under the helix land on the loop below; towers lean toward the road with the lap gain and their tops reach the deck; tower clearance only looked at section II | Piers skip any lower deck; tower clearance against sections I–III, lean capped so the top stays off the deck; every prop is filtered against the whole route in 3D |
 | 6 | Trees are two crossed planes | Canopy was two quads | Canopy is three noise-displaced ellipsoid lobes with the leaf mask, plus a tapered trunk and branches |
 | 7 | Barn floats on one side, buried on the other; no detail | One terrain sample at the centre | Four-corner sampling, a plinth down to the lowest corner, doors, windows, trim, ridge, overhang |
@@ -488,4 +496,6 @@ the fix taken; the order is the order of the commits.
 | 10 | Fish entry too obvious, not frightening | The head sat on the surface, jaws open from the start | Head submerged until the car is over the lip, rising with proximity; jaws shut then opening through the fall; darker wet skin; surface bulge and foam ring; eyes lit |
 | 11 | Fall not immersive enough | Camera only followed the tangent | Shake and roll flutter growing with the fall, lens punch, look-down blend, wheel jitter, wind already in the mix |
 | 12 | Cockpit blocky | Boxes only | Bevelled dash profile, hooded binnacle, vents, stalks, door cards, seats, rounded wheel rim with hub and horn pad |
-| 13 | Spec's open items | — | Peristalsis, road cracks and rail loss by lap, stalactites, a rear pass for the mirror, a wider Gerstner patch |
+| 13 | Spec's open items | — | Peristalsis on the flesh, potholes and rail loss by lap, stalactites, a rear world pass into the mirror, a 1570 × 1600 m Gerstner patch |
+| 14 | Gullet walls a cream wash | The headlamp knee capped luminance at 0.55 before the exposure: 0.32 in the gullet, which the ACES fit puts at 0.8 sRGB, flat across the whole near wall | Knee at 0.2·2^−EV; lamps 1600 so the road keeps its light |
+| 15 | White plane at the end of the throat | The sea's 90 m funnel came back up through the tube where the ceiling goes under; every displaced surface must | The pit is a fragment discard, no displaced surface |

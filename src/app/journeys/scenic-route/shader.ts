@@ -344,6 +344,7 @@ layout(location = 2) in vec4 aUp;      // level up xyz, u
 layout(location = 3) in vec4 aAux;     // normal2d (r,u), edge param, section
 uniform mat4 uViewProj;
 uniform vec3 uOffset;   // whole-mesh translation: the fish rising out of the sea
+uniform vec4 uPulse;    // peristalsis: amplitude, time, mouth s, flesh end (0 amplitude for anything but the throat)
 ${bankChunk}
 out vec3 vWorld;
 out vec3 vNormal;
@@ -356,8 +357,17 @@ void main () {
   vec3 R = aRight.xyz * c - aUp.xyz * sn;
   vec3 U = aUp.xyz * c + aRight.xyz * sn;
   vec3 world = aSpine.xyz + R * aRight.w + U * aUp.w + uOffset;
-  vWorld = world;
   vNormal = normalize(R * aAux.x + U * aAux.y);
+  // Peristalsis: the flesh squeezes in rings that travel down the throat,
+  // dying out where the rock begins. The front faces point inward, so a
+  // positive push along the normal is a constriction.
+  if (uPulse.x > 0.0) {
+    float t = aSpine.w - uPulse.z;
+    float live = 1.0 - smoothstep(uPulse.w * 0.7, uPulse.w * 1.35, t);
+    float ring = 0.5 + 0.5 * sin(t * 0.32 - uPulse.y * 2.4 + aAux.x * 1.2);
+    world += vNormal * uPulse.x * ring * ring * live;
+  }
+  vWorld = world;
   vAux = vec4(aSpine.w, aRight.w, aUp.w, aAux.z);
   vSection = aAux.w;
   gl_Position = uViewProj * vec4(world, 1.0);
@@ -410,7 +420,7 @@ uniform float uLights;     // headlights, 0..1
 vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) {
   if (uLights <= 0.001) return vec3(0.0);
   vec3 sum = vec3(0.0);
-  vec3 lampCol = vec3(1.0, 0.86, 0.66) * 1400.0 * uLights;
+  vec3 lampCol = vec3(1.0, 0.86, 0.66) * 1600.0 * uLights;
   for (int i = 0; i < 2; i++) {
     float side = i == 0 ? -0.78 : 0.78;
     vec3 lp = uCarPos + uCarFwd * 1.9 + uCarRight * side + vec3(0.0, -0.45, 0.0);
@@ -423,8 +433,15 @@ vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) 
   }
   // A soft knee: a wall a few metres off in the gullet or the cave would
   // otherwise take thirty times the light of the road and burn to white.
+  // The knee sits under the exposure: the lamps light what they light at
+  // the same brightness on the film whether the room is a dusk road or a
+  // red throat that the exposure has opened up for.
+  // On film the cap is 0.2 linear, a lit wall that reads as lit and not as a
+  // sheet of paper: the ACES fit puts 0.5 at 0.8 sRGB, which is where the
+  // gullet went cream with the old 0.55.
   float lum = dot(sum, vec3(0.2126, 0.7152, 0.0722));
-  return sum / (1.0 + lum / 2.2);
+  float cap = 0.2 * exp2(-uEnv.x);
+  return sum / (1.0 + lum / cap);
 }
 
 vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float ao, float shadow) {
@@ -478,14 +495,17 @@ precision highp float;
 layout(location = 0) in vec3 aPos;
 layout(location = 1) in vec3 aNormal;
 layout(location = 2) in vec2 aUv;
+layout(location = 3) in vec4 aShard;   // x: signed distance to the tube's wall, negative inside
 uniform mat4 uViewProj;
 out vec3 vWorld;
 out vec3 vNormal;
 out vec2 vUv;
+out float vCarve;
 void main () {
   vWorld = aPos;
   vNormal = aNormal;
   vUv = aUv;
+  vCarve = aShard.x;
   gl_Position = uViewProj * vec4(aPos, 1.0);
 }
 `
@@ -501,6 +521,7 @@ precision highp float;
 in vec3 vWorld;
 in vec3 vNormal;
 in vec2 vUv;
+in float vCarve;
 uniform vec4 uRide;
 out vec4 fragColor;
 ${brdfChunk}
@@ -509,6 +530,8 @@ ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
 void main () {
+  // The heightfield cannot tunnel: inside the tube it is simply not there.
+  if (vCarve < 0.0) discard;
   vec3 p = vWorld;
   vec3 n = normalize(vNormal);
   float dist = length(p - uCamPos);
@@ -592,7 +615,7 @@ uniform mat4  uViewProj;
 uniform float uTime;
 uniform float uWaveScale;
 uniform float uSeaRise;
-uniform vec4  uPatch;      // centre.x, centre.z, half size, unused
+uniform vec4  uPatch;      // centre.x, centre.z, half size x, half size z
 uniform vec3  uMouth;      // where the fish's mouth is
 uniform vec2  uMouthDir;   // the throat's heading from it, in xz
 uniform float uRise;       // how far the fish has surfaced, 0..1
@@ -600,6 +623,7 @@ out vec3 vWorld;
 out vec3 vNormal;
 out vec2 vUv;
 out float vFoam;
+out float vPit;
 const vec4 W0 = vec4(0.94, 0.34, 0.85, 58.0);   // dir.x, dir.z, amplitude, wavelength
 const vec4 W1 = vec4(0.62, -0.78, 0.45, 29.0);
 const vec4 W2 = vec4(-0.24, 0.97, 0.26, 16.0);
@@ -621,7 +645,7 @@ void wave (vec4 w, vec2 xz, float t, float amp, inout vec3 P, inout vec3 N) {
 void main () {
   vec3 P = aPos;
   vec3 N = vec3(0.0, 1.0, 0.0);
-  vec2 rel = abs(aPos.xz - uPatch.xy) / max(uPatch.z, 1.0);
+  vec2 rel = abs(aPos.xz - uPatch.xy) / max(uPatch.zw, vec2(1.0));
   float amp = uWaveScale * (1.0 - smoothstep(0.78, 1.0, max(rel.x, rel.y)));
   if (amp > 0.0) {
     wave(W0, aPos.xz, uTime, amp, P, N);
@@ -634,15 +658,27 @@ void main () {
   // heaps into a bow wave around the head and, in the last part of the rise,
   // the surface inside the mouth's footprint and along the throat drops away
   // so no water plane crosses the gullet the car falls into.
+  // The throat's ceiling is above sea level for the first 110 m from the
+  // mouth (measured in maw.ts terms: it dips under at t = 120), all of it
+  // under the head's skin; the pit runs that far and narrows with the throat.
   vec2 rm = P.xz - uMouth.xz;
-  float along = clamp(dot(rm, uMouthDir), 0.0, 78.0);
+  float alongB = clamp(dot(rm, uMouthDir), 0.0, 78.0);
+  float dB = length(rm - uMouthDir * alongB);
+  float ring = (dB - 58.0) / 16.0;
+  float bulge = exp(-ring * ring) * (5.0 + 2.5 * sin(uTime * 1.7 + dB * 0.35 + rm.x * 0.05)) * smoothstep(0.3, 0.95, uRise);
+  // The pit is a hole, not a funnel: a displaced surface that goes from above
+  // the throat to below it has to cross the tube somewhere along the axis,
+  // and did, as a white plane at the end of the gullet. seaFrag discards it.
+  // The plane cuts the throat from 28 m behind the mouth to 110 m, where the
+  // ceiling goes under; the hole is sized to that cut (half width 25 m at
+  // most, 8 m at the end) and stays inside the head's skin all the way.
+  float along = clamp(dot(rm, uMouthDir), 28.0, 112.0);
   float dSeg = length(rm - uMouthDir * along);
-  float pit = (1.0 - smoothstep(38.0, 52.0, dSeg)) * smoothstep(0.7, 1.0, uRise);
-  P.y -= 90.0 * pit;
-  float ring = (dSeg - 58.0) / 16.0;
-  float bulge = exp(-ring * ring) * (5.0 + 2.5 * sin(uTime * 1.7 + dSeg * 0.35 + rm.x * 0.05)) * smoothstep(0.3, 0.95, uRise);
+  float pr = mix(24.0, 6.0, smoothstep(45.0, 110.0, along));
+  float pit = (1.0 - smoothstep(pr, pr + 14.0, dSeg)) * smoothstep(0.7, 1.0, uRise);
   P.y += bulge;
   vFoam = bulge / 7.0 + pit * 2.0;
+  vPit = pit;
   vWorld = P;
   vNormal = normalize(N);
   vUv = aUv;
@@ -661,6 +697,7 @@ in vec3 vWorld;
 in vec3 vNormal;
 in vec2 vUv;
 in float vFoam;
+in float vPit;
 out vec4 fragColor;
 ${brdfChunk}
 ${noiseChunk}
@@ -668,6 +705,7 @@ ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
 void main () {
+  if (vPit > 0.5) discard;
   vec3 p = vWorld;
   float dist = length(p - uCamPos);
   float lod = clamp(dist / 600.0, 0.0, 1.0);
@@ -1193,6 +1231,7 @@ in vec3 vWorld;
 in vec3 vNormal;
 in vec4 vAux;
 in float vSection;
+uniform vec4 uRide;        // (speed, lapF, bank, section)
 out vec4 fragColor;
 ${brdfChunk}
 ${noiseChunk}
@@ -1200,6 +1239,10 @@ ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
 void main () {
+  // Panels go missing by lap: a 4 m bay is gone once its hash falls under the
+  // lap's share, so the rail thins toward the end of the ride.
+  float bay = floor(vAux.x / 4.0);
+  if (hash12(vec2(bay, 3.0)) < clamp((uRide.y - 0.7) * 0.22, 0.0, 0.6)) discard;
   vec3 n = normalize(vNormal);
   if (dot(n, uCamPos - vWorld) < 0.0) n = -n;
   // Corrugation along the band, and a post every four metres darkening it.
@@ -1250,6 +1293,12 @@ void main () {
   asphalt *= 1.0 - wet * 0.45;
   float crack = smoothstep(0.62, 0.66, fbm(uv * vec2(3.0, 0.8) + 31.0)) * clamp(lapF - 0.5, 0.0, 1.0);
   asphalt *= 1.0 - crack * 0.6;
+  // Potholes from the second lap: dark, rough, with a lip that catches the light.
+  float potN = fbm(uv * vec2(0.9, 0.35) + 57.0);
+  float pot = smoothstep(0.58, 0.68, potN) * clamp(lapF - 0.8, 0.0, 1.0) * step(abs(r), uRoadHalf);
+  float lip = smoothstep(0.52, 0.58, potN) * (1.0 - smoothstep(0.58, 0.64, potN)) * clamp(lapF - 0.8, 0.0, 1.0);
+  asphalt = mix(asphalt, vec3(0.028, 0.026, 0.024), pot * 0.85) * (1.0 + lip * 0.5);
+  rough = mix(rough, 0.95, pot);
 
   // Lane paint: a dashed centre line, solid edge lines, in metres.
   float dash = step(0.5, fract(s / 12.0));
@@ -1333,6 +1382,8 @@ uniform float uExposure;
 uniform vec4  uLamps;       // four warning lamps, 0..1 each
 uniform float uBlink;
 uniform mat4  uCarMat;
+uniform sampler2D uMirror;  // the world drawn once more, small, looking back
+uniform vec4  uMirrorRect;  // car-space: x0, y0, width, height of the glass
 out vec4 fragColor;
 ${brdfChunk}
 ${noiseChunk}
@@ -1371,11 +1422,13 @@ void main () {
     albedo = vec3(0.8); metal = 1.0; rough = 0.2;
   } else if (tag == 4) {                            // paint
     albedo = vec3(0.32, 0.02, 0.025); metal = 0.25; rough = 0.22;
-  } else if (tag == 5) {                            // mirror: the sky behind
-    vec3 v = normalize(uCamPos - p);
-    vec3 r = reflect(-v, n);
-    vec3 sky = skyLookup(vec3(r.x, max(r.y, 0.03), r.z)) * uEnv.y + uFogCol * (1.0 - uEnv.y);
-    fragColor = vec4(aces(sky * uExposure * 0.85), 1.0);
+  } else if (tag == 5) {                            // mirror: the road behind
+    // A mirror keeps left on the left, so the rear camera's image is flipped.
+    vec2 muv = (vLocal.xy - uMirrorRect.xy) / uMirrorRect.zw;
+    muv.x = 1.0 - muv.x;
+    vec3 seen = texture(uMirror, clamp(muv, 0.0, 1.0)).rgb;
+    float vig = 1.0 - 0.35 * dot(muv - 0.5, muv - 0.5) * 4.0;
+    fragColor = vec4(aces(seen * uExposure * 0.9 * vig), 1.0);
     return;
   } else if (tag == 6) {                            // needle
     albedo = vec3(0.9, 0.2, 0.12);

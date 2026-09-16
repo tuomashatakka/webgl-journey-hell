@@ -107,8 +107,13 @@ const HEAD_DROP = 95
 /** Jaw angle (rad, lower jaw's share) that shuts the mouth before the car is off the lip. */
 const JAW_SHUT = 1.0
 
-/** How far below the tube spine the sea bed is dug out: past the deepest cave floor. */
-const TRENCH_DEPTH = 20
+
+/** How far above the river's spine the land is raised inland: over the vault (1.42 × the widest ring), falling to the road at the portal. */
+const PORTAL_LIFT = 30
+
+/** The rear-view pass: the mirror glass is 3.3:1. */
+const MIRROR_W = 320
+const MIRROR_H = 96
 
 interface Drawable {
   mesh:   Mesh;
@@ -275,11 +280,11 @@ export function createScenicRouteScene (
       return 0
 
     const f = Math.min(1, Math.max(0, (s - (seam - 50)) / 44))
-    return 16 * (1 - f * f * (3 - 2 * f))
+    return PORTAL_LIFT * (1 - f * f * (3 - 2 * f))
   })
-  // Under the sea the bed is dug out beneath the throat and the river, to
-  // below the cave floor, so it cannot show through the vault.
-  spine.trench             = buildSpineIndex(route, [ 5, 6 ], 32, () => -TRENCH_DEPTH)
+  // The land is carved away wherever it would pass through the throat or the
+  // cave: the tube's spine lets every terrain vertex know how far inside it is.
+  spine.tube = { idx: buildSpineIndex(route, [ 5, 6 ], 32), s0: route.spans[5].s0 }
 
   const chunks: Drawable[] = buildNearChunks(spine).map(c => ({
     mesh: createMesh(gl, c.builder), cx: c.cx, cy: c.cy, cz: c.cz, radius: c.radius,
@@ -289,7 +294,7 @@ export function createScenicRouteScene (
   // The sea is whole: where the fish surfaces, seaVert drops the surface
   // inside the mouth's footprint and heaps a bow wave around it.
   const seaMesh   = createMesh(gl, buildSeaQuad())
-  const patchMesh = createMesh(gl, buildSeaPatch(SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.half, SEA_PATCH.cells))
+  const patchMesh = createMesh(gl, buildSeaPatch(SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.halfX, SEA_PATCH.halfZ, SEA_PATCH.cells))
 
   // --- the maw -------------------------------------------------------------------
   const maw      = buildMaw(route)
@@ -343,6 +348,18 @@ export function createScenicRouteScene (
   const wheelMesh  = createMesh(gl, cockpit.wheel)
   const speedoMesh = createMesh(gl, cockpit.speedo)
   const tachoMesh  = createMesh(gl, cockpit.tacho)
+  // The rear view for the mirror: a small colour target with its own depth.
+  const mirrorTex   = makeTex(gl, MIRROR_W, MIRROR_H, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR)
+  const mirrorDepth = gl.createRenderbuffer()
+  gl.bindRenderbuffer(gl.RENDERBUFFER, mirrorDepth)
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, MIRROR_W, MIRROR_H)
+
+  const mirrorFbo = gl.createFramebuffer()
+  gl.bindFramebuffer(gl.FRAMEBUFFER, mirrorFbo)
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mirrorTex, 0)
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, mirrorDepth)
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+
   const dialTex    = gl.createTexture()
   gl.bindTexture(gl.TEXTURE_2D, dialTex)
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, drawDialFaces())
@@ -430,17 +447,24 @@ export function createScenicRouteScene (
   }
 
   // --- per-frame scratch -----------------------------------------------------
-  const proj: Mat4                       = new Float32Array(16)
-  const view: Mat4                       = new Float32Array(16)
-  const viewProj: Mat4                   = new Float32Array(16)
-  const invViewProj: Mat4                = new Float32Array(16)
-  const lightProj: Mat4                  = new Float32Array(16)
-  const lightView: Mat4                  = new Float32Array(16)
-  const lightVP: Mat4                    = new Float32Array(16)
-  const shadowMat: Mat4                  = new Float32Array(16)
-  const eye: [number, number, number]    = [ 0, 0, 0 ]
-  const target: [number, number, number] = [ 0, 0, 1 ]
-  const upv: [number, number, number]    = [ 0, 1, 0 ]
+  const proj: Mat4                        = new Float32Array(16)
+  const view: Mat4                        = new Float32Array(16)
+  const viewProj: Mat4                    = new Float32Array(16)
+  const invViewProj: Mat4                 = new Float32Array(16)
+  const mirrorProj: Mat4                  = new Float32Array(16)
+  const mirrorView: Mat4                  = new Float32Array(16)
+  const mirrorVP: Mat4                    = new Float32Array(16)
+  const mirrorInvVP: Mat4                 = new Float32Array(16)
+  const mEye: [number, number, number]    = [ 0, 0, 0 ]
+  const mTarget: [number, number, number] = [ 0, 0, 1 ]
+  const mUp: [number, number, number]     = [ 0, 1, 0 ]
+  const lightProj: Mat4                   = new Float32Array(16)
+  const lightView: Mat4                   = new Float32Array(16)
+  const lightVP: Mat4                     = new Float32Array(16)
+  const shadowMat: Mat4                   = new Float32Array(16)
+  const eye: [number, number, number]     = [ 0, 0, 0 ]
+  const target: [number, number, number]  = [ 0, 0, 1 ]
+  const upv: [number, number, number]     = [ 0, 1, 0 ]
 
   const drawQuad = (prog: GlProgram) => {
     gl.bindBuffer(gl.ARRAY_BUFFER, quad)
@@ -666,6 +690,160 @@ export function createScenicRouteScene (
         gl.colorMask(true, true, true, true)
       }
 
+      // The world, from any camera: the mirror's rear pass and the main pass
+      // share every draw, uniform and cull, only the matrices differ.
+      const drawWorld = (vp: Mat4, cp: typeof camPos, fwd: number[], invVP: Mat4) => {
+      // The land.
+        gl.enable(gl.CULL_FACE)
+        gl.cullFace(gl.BACK)
+        terrainP.use()
+        terrainP.uniformMatrix4fv('uViewProj', vp)
+        bindLit(terrainP, cp, sun, env, fogCol, time, shadowOn)
+        terrainP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+        for (const c of chunks)
+          if (visible(c, cp, fwd[0], fwd[1], fwd[2]))
+            c.mesh.draw(gl)
+        farMesh.draw(gl)
+
+        // Downtown.
+        towerP.use()
+        towerP.uniformMatrix4fv('uViewProj', vp)
+        towerP.uniform1f('uBendGain', bendGain)
+        towerP.uniform1f('uSunEl', Math.asin(Math.max(-1, Math.min(1, sun[1]))) * 180 / Math.PI)
+        towerP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+        bindLit(towerP, cp, sun, env, fogCol, time, shadowOn)
+        towerMesh.drawInstanced(gl, city.count)
+
+        // The maw: head unrolled, jaws by hinge.
+        gl.disable(gl.CULL_FACE)
+        mawP.use()
+        mawP.uniformMatrix4fv('uViewProj', vp)
+        mawP.uniform3f('uOffset', 0, headDrop, 0)
+        bindBank(mawP, 0)
+        bindLit(mawP, cp, sun, env, fogCol, time, shadowOn)
+        mawP.uniform1f('uMouthS', maw.s0)
+        headMesh.draw(gl)
+
+        jawP.use()
+        jawP.uniformMatrix4fv('uViewProj', vp)
+        jawP.uniform3f('uOffset', 0, headDrop, 0)
+        bindLit(jawP, cp, sun, env, fogCol, time, shadowOn)
+        for (const { jaw, mesh } of jaws) {
+          jawP.uniform3f('uHinge', jaw.hinge.x, jaw.hinge.y, jaw.hinge.z)
+          jawP.uniform3f('uAxis', jaw.axis.x, jaw.axis.y, jaw.axis.z)
+          jawP.uniform1f('uJaw', jawAngle * jaw.share)
+          mesh.draw(gl)
+        }
+
+        // The tube and its water.
+        tubeP.use()
+        tubeP.uniformMatrix4fv('uViewProj', vp)
+        bindBank(tubeP, 0)
+        bindLit(tubeP, cp, sun, env, fogCol, time, shadowOn)
+        tubeP.uniform1f('uMouthS', tube.s0)
+        tubeP.uniform2f('uFleshRock', FLESH_END, ROCK_START)
+        tubeP.uniform4f('uPulse', 1.4, time, tube.s0, FLESH_END)
+        tubeP.uniform3f('uOffset', 0, headDrop, 0)
+        tubeFront.draw(gl)
+        tubeP.uniform3f('uOffset', 0, 0, 0)
+        tubeBack.draw(gl)
+
+        waterP.use()
+        waterP.uniformMatrix4fv('uViewProj', vp)
+        bindBank(waterP, 0)
+        bindLit(waterP, cp, sun, env, fogCol, time, shadowOn)
+        waterMesh.draw(gl)
+
+        // The sea: waves on the fine patch, flat beyond it; both rise by lap.
+        seaP.use()
+        seaP.uniformMatrix4fv('uViewProj', vp)
+        bindLit(seaP, cp, sun, env, fogCol, time, shadowOn)
+        seaP.uniform1f('uSeaRise', seaRise)
+        seaP.uniform3f('uMouth', maw.mouth.x, maw.mouth.y, maw.mouth.z)
+        seaP.uniform2f('uMouthDir', mouthDir[0], mouthDir[1])
+        seaP.uniform1f('uRise', fall[1])
+        seaP.uniform4f('uPatch', SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.halfX, SEA_PATCH.halfZ)
+        seaP.uniform1f('uWaveScale', 1)
+        patchMesh.draw(gl)
+        seaP.uniform1f('uWaveScale', 0)
+        seaMesh.draw(gl)
+
+        // The road is two-sided: a corkscrew shows its underside from across the
+        // helix, and a missing ribbon there reads as a hole in the world.
+        gl.disable(gl.CULL_FACE)
+        roadP.use()
+        roadP.uniformMatrix4fv('uViewProj', vp)
+        bindBank(roadP, bankGain)
+        bindLit(roadP, cp, sun, env, fogCol, time, shadowOn)
+        roadP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+        roadP.uniform1f('uRoadHalf', flt[3])
+        roadMesh.draw(gl)
+
+        railP.use()
+        railP.uniformMatrix4fv('uViewProj', vp)
+        railP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+        bindBank(railP, bankGain)
+        bindLit(railP, cp, sun, env, fogCol, time, shadowOn)
+        railMesh.draw(gl)
+
+        // The props, a draw per set.
+        propP.use()
+        propP.uniformMatrix4fv('uViewProj', vp)
+        propP.uniform1f('uTime', time)
+        bindLit(propP, cp, sun, env, fogCol, time, shadowOn)
+        for (const { set, mesh } of props) {
+          if (set.twoSided)
+            gl.disable(gl.CULL_FACE)
+          else {
+            gl.enable(gl.CULL_FACE)
+            gl.cullFace(gl.BACK)
+          }
+          propP.uniform1i('uMaterial', set.material)
+          propP.uniform1f('uSpin', set.spin)
+          mesh.drawInstanced(gl, set.count)
+        }
+        gl.disable(gl.CULL_FACE)
+
+        // --- 4. the sky dome ---
+        gl.depthMask(false)
+        skyDomeP.use()
+        skyDomeP.uniformMatrix4fv('uInvViewProj', invVP)
+        skyDomeP.uniform3f('uCamPos', cp[0], cp[1], cp[2])
+        skyDomeP.uniform3f('uSunDir', sun[0], sun[1], sun[2])
+        skyDomeP.uniform1f('uTime', time)
+        skyDomeP.uniform1f('uSkyMix', env[1])
+        skyDomeP.uniform3f('uFogCol', fogCol[0], fogCol[1], fogCol[2])
+        gl.activeTexture(gl.TEXTURE1)
+        gl.bindTexture(gl.TEXTURE_2D, skyTex)
+        skyDomeP.uniform1i('uSky', 1)
+        drawQuad(skyDomeP)
+        gl.depthMask(true)
+      }
+
+      // --- 2b. the rear view ---
+      // Looking back along the car, wide, into the mirror's texture.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, mirrorFbo)
+      gl.viewport(0, 0, MIRROR_W, MIRROR_H)
+      gl.enable(gl.DEPTH_TEST)
+      gl.depthFunc(gl.LEQUAL)
+      gl.depthMask(true)
+      gl.clearColor(fogCol[0], fogCol[1], fogCol[2], 1)
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+      perspective(mirrorProj, 80 * Math.PI / 180, MIRROR_W / MIRROR_H, 0.3, 4000)
+      mEye[0]    = camPos[0]
+      mEye[1]    = camPos[1]
+      mEye[2]    = camPos[2]
+      mTarget[0] = camPos[0] - carFwd[0]
+      mTarget[1] = camPos[1] - carFwd[1] + 0.05
+      mTarget[2] = camPos[2] - carFwd[2]
+      mUp[0]     = carUp[0]
+      mUp[1]     = carUp[1]
+      mUp[2]     = carUp[2]
+      lookAt(mirrorView, mEye, mTarget, mUp)
+      multiply(mirrorVP, mirrorProj, mirrorView)
+      invert(mirrorInvVP, mirrorVP)
+      drawWorld(mirrorVP, camPos, [ -carFwd[0], -carFwd[1], -carFwd[2] ], mirrorInvVP)
+
       // --- 3. the world ---
       gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
       gl.viewport(0, 0, w, h)
@@ -675,129 +853,7 @@ export function createScenicRouteScene (
       gl.clearColor(fogCol[0], fogCol[1], fogCol[2], 1)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-      // The land.
-      gl.enable(gl.CULL_FACE)
-      gl.cullFace(gl.BACK)
-      terrainP.use()
-      terrainP.uniformMatrix4fv('uViewProj', viewProj)
-      bindLit(terrainP, camPos, sun, env, fogCol, time, shadowOn)
-      terrainP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
-      for (const c of chunks)
-        if (visible(c, camPos, fx, fy, fz))
-          c.mesh.draw(gl)
-      farMesh.draw(gl)
-
-      // Downtown.
-      towerP.use()
-      towerP.uniformMatrix4fv('uViewProj', viewProj)
-      towerP.uniform1f('uBendGain', bendGain)
-      towerP.uniform1f('uSunEl', Math.asin(Math.max(-1, Math.min(1, sun[1]))) * 180 / Math.PI)
-      towerP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
-      bindLit(towerP, camPos, sun, env, fogCol, time, shadowOn)
-      towerMesh.drawInstanced(gl, city.count)
-
-      // The maw: head unrolled, jaws by hinge.
-      gl.disable(gl.CULL_FACE)
-      mawP.use()
-      mawP.uniformMatrix4fv('uViewProj', viewProj)
-      mawP.uniform3f('uOffset', 0, headDrop, 0)
-      bindBank(mawP, 0)
-      bindLit(mawP, camPos, sun, env, fogCol, time, shadowOn)
-      mawP.uniform1f('uMouthS', maw.s0)
-      headMesh.draw(gl)
-
-      jawP.use()
-      jawP.uniformMatrix4fv('uViewProj', viewProj)
-      jawP.uniform3f('uOffset', 0, headDrop, 0)
-      bindLit(jawP, camPos, sun, env, fogCol, time, shadowOn)
-      for (const { jaw, mesh } of jaws) {
-        jawP.uniform3f('uHinge', jaw.hinge.x, jaw.hinge.y, jaw.hinge.z)
-        jawP.uniform3f('uAxis', jaw.axis.x, jaw.axis.y, jaw.axis.z)
-        jawP.uniform1f('uJaw', jawAngle * jaw.share)
-        mesh.draw(gl)
-      }
-
-      // The tube and its water.
-      tubeP.use()
-      tubeP.uniformMatrix4fv('uViewProj', viewProj)
-      bindBank(tubeP, 0)
-      bindLit(tubeP, camPos, sun, env, fogCol, time, shadowOn)
-      tubeP.uniform1f('uMouthS', tube.s0)
-      tubeP.uniform2f('uFleshRock', FLESH_END, ROCK_START)
-      tubeP.uniform3f('uOffset', 0, headDrop, 0)
-      tubeFront.draw(gl)
-      tubeP.uniform3f('uOffset', 0, 0, 0)
-      tubeBack.draw(gl)
-
-      waterP.use()
-      waterP.uniformMatrix4fv('uViewProj', viewProj)
-      bindBank(waterP, 0)
-      bindLit(waterP, camPos, sun, env, fogCol, time, shadowOn)
-      waterMesh.draw(gl)
-
-      // The sea: waves on the fine patch, flat beyond it; both rise by lap.
-      seaP.use()
-      seaP.uniformMatrix4fv('uViewProj', viewProj)
-      bindLit(seaP, camPos, sun, env, fogCol, time, shadowOn)
-      seaP.uniform1f('uSeaRise', seaRise)
-      seaP.uniform3f('uMouth', maw.mouth.x, maw.mouth.y, maw.mouth.z)
-      seaP.uniform2f('uMouthDir', mouthDir[0], mouthDir[1])
-      seaP.uniform1f('uRise', fall[1])
-      seaP.uniform4f('uPatch', SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.half, 0)
-      seaP.uniform1f('uWaveScale', 1)
-      patchMesh.draw(gl)
-      seaP.uniform1f('uWaveScale', 0)
-      seaMesh.draw(gl)
-
-      // The road is two-sided: a corkscrew shows its underside from across the
-      // helix, and a missing ribbon there reads as a hole in the world.
-      gl.disable(gl.CULL_FACE)
-      roadP.use()
-      roadP.uniformMatrix4fv('uViewProj', viewProj)
-      bindBank(roadP, bankGain)
-      bindLit(roadP, camPos, sun, env, fogCol, time, shadowOn)
-      roadP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
-      roadP.uniform1f('uRoadHalf', flt[3])
-      roadMesh.draw(gl)
-
-      railP.use()
-      railP.uniformMatrix4fv('uViewProj', viewProj)
-      bindBank(railP, bankGain)
-      bindLit(railP, camPos, sun, env, fogCol, time, shadowOn)
-      railMesh.draw(gl)
-
-      // The props, a draw per set.
-      propP.use()
-      propP.uniformMatrix4fv('uViewProj', viewProj)
-      propP.uniform1f('uTime', time)
-      bindLit(propP, camPos, sun, env, fogCol, time, shadowOn)
-      for (const { set, mesh } of props) {
-        if (set.twoSided)
-          gl.disable(gl.CULL_FACE)
-        else {
-          gl.enable(gl.CULL_FACE)
-          gl.cullFace(gl.BACK)
-        }
-        propP.uniform1i('uMaterial', set.material)
-        propP.uniform1f('uSpin', set.spin)
-        mesh.drawInstanced(gl, set.count)
-      }
-      gl.disable(gl.CULL_FACE)
-
-      // --- 4. the sky dome ---
-      gl.depthMask(false)
-      skyDomeP.use()
-      skyDomeP.uniformMatrix4fv('uInvViewProj', invViewProj)
-      skyDomeP.uniform3f('uCamPos', camPos[0], camPos[1], camPos[2])
-      skyDomeP.uniform3f('uSunDir', sun[0], sun[1], sun[2])
-      skyDomeP.uniform1f('uTime', time)
-      skyDomeP.uniform1f('uSkyMix', env[1])
-      skyDomeP.uniform3f('uFogCol', fogCol[0], fogCol[1], fogCol[2])
-      gl.activeTexture(gl.TEXTURE1)
-      gl.bindTexture(gl.TEXTURE_2D, skyTex)
-      skyDomeP.uniform1i('uSky', 1)
-      drawQuad(skyDomeP)
-      gl.depthMask(true)
+      drawWorld(viewProj, camPos, [ fx, fy, fz ], invViewProj)
 
       // --- 5. resolve ---
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msaaFbo)
@@ -872,6 +928,10 @@ export function createScenicRouteScene (
       gl.activeTexture(gl.TEXTURE3)
       gl.bindTexture(gl.TEXTURE_2D, dialTex)
       cockpitP.uniform1i('uDial', 3)
+      gl.activeTexture(gl.TEXTURE4)
+      gl.bindTexture(gl.TEXTURE_2D, mirrorTex)
+      cockpitP.uniform1i('uMirror', 4)
+      cockpitP.uniform4f('uMirrorRect', -0.105, 1.378, 0.21, 0.064)
       cockpitP.uniform4f('uDialRect', DIAL.cx, DIAL.cy, DIAL.cz, DIAL.w / 2)
       cockpitP.uniform1f('uExposure', exposure)
 
@@ -926,6 +986,9 @@ export function createScenicRouteScene (
       speedoMesh.dispose(gl)
       tachoMesh.dispose(gl)
       gl.deleteTexture(dialTex)
+      gl.deleteTexture(mirrorTex)
+      gl.deleteRenderbuffer(mirrorDepth)
+      gl.deleteFramebuffer(mirrorFbo)
       tubeFront.dispose(gl)
       tubeBack.dispose(gl)
       waterMesh.dispose(gl)
