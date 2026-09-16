@@ -511,6 +511,19 @@ void main () {
   albedo = mix(albedo, sand, sandW);
   float rough = mix(0.92, 0.75, rockW) ;
 
+  // Downtown's plaza is paved: concrete slabs with joints, over the flat disc.
+  const vec3 PLAZA = vec3(385.0, 665.0, 130.0);
+  float pave = 1.0 - smoothstep(PLAZA.z - 12.0, PLAZA.z + 28.0, length(p.xz - PLAZA.xy));
+  if (pave > 0.001) {
+    vec2 slabUv = p.xz / 6.0;
+    vec2 jf = abs(fract(slabUv) - 0.5);
+    float joint = 1.0 - smoothstep(0.44, 0.49, max(jf.x, jf.y));
+    vec3 slab = vec3(0.4, 0.39, 0.37) * (0.82 + 0.36 * vnoise(floor(slabUv) * 3.7 + 1.0)) * (0.6 + 0.4 * joint);
+    slab *= mix(0.85, 1.0, vnoise(p.xz * 1.3));
+    albedo = mix(albedo, slab, pave);
+    rough  = mix(rough, 0.62, pave);
+  }
+
   // Rock faces get shading from their own relief.
   vec3 nn = n;
   if (rockW > 0.01) {
@@ -605,6 +618,8 @@ out float vSeed;
 out vec3 vCentre;
 void main () {
   vec3 p = aPos * iParams.x;
+  // A pier is a unit column stretched to the deck: iParams.w is its height.
+  if (iParams.w > 0.0) p.y = aPos.y * iParams.w;
   vec3 n = aNormal;
   // Where a canopy's fake sphere is centred: the crown, scaled with the tree.
   vCentre = iXform.xyz + vec3(0.0, 5.9 * iParams.x, 0.0);
@@ -678,7 +693,8 @@ void main () {
   }
   else if (uMaterial == 6) { albedo = vec3(0.22, 0.17, 0.12); rough = 0.92; }                   // trunk
   else if (uMaterial == 7) { albedo = vec3(0.86, 0.87, 0.88); rough = 0.42; det = 1.0; }        // turbine
-  else                     { albedo = vec3(0.55, 0.56, 0.58); rough = 0.35; metal = 0.9; det = 0.9 + 0.2 * fbm3(p * 2.0); } // steel
+  else if (uMaterial == 8) { albedo = vec3(0.55, 0.56, 0.58); rough = 0.35; metal = 0.9; det = 0.9 + 0.2 * fbm3(p * 2.0); } // steel
+  else                     { albedo = vec3(0.5, 0.49, 0.46); rough = 0.85; det = 0.85 + 0.3 * fbm3(p * 0.7); }               // concrete
   albedo *= det;
   float sh = shadowAt(p, n, uSunDir);
   vec3 col = lightSurface(p, n, albedo, rough, metal, 1.0, sh);
@@ -703,6 +719,120 @@ ${noiseChunk}
 ${leafChunk}
 void main () {
   if (uMaterial == 5 && leafMask(vUv, vSeed) < 0.0) discard;
+}
+`
+
+/**
+ * Downtown's towers. A unit box per instance, bent live: lean grows with the
+ * square of height along iBend.xy, twist grows linearly, both scaled by the
+ * lap gain. Facade coordinates come out in metres so the window grid is real.
+ */
+export const towerVert = /* glsl */`#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aUv;
+layout(location = 4) in vec4 iXform;   // pos.xyz, yaw
+layout(location = 5) in vec4 iSize;    // w, h, d, seed
+layout(location = 6) in vec4 iBend;    // dir.x, dir.z, K, twist
+uniform mat4  uViewProj;
+uniform float uBendGain;
+out vec3 vWorld;
+out vec3 vNormal;
+out vec2 vFacade;
+out float vSeed;
+out float vRoof;
+out float vH;
+void main () {
+  vec3 lp = aPos * iSize.xyz;
+  float h = lp.y;
+  float H = iSize.y;
+  float ang = iXform.w + iBend.w * (h / H) * uBendGain;
+  mat2 R = mat2(cos(ang), -sin(ang), sin(ang), cos(ang));
+  vec3 n = aNormal;
+  lp.xz = R * lp.xz;
+  n.xz  = R * n.xz;
+  float lean  = min(iBend.z * h * h * uBendGain, 0.36 * H);
+  float slope = 2.0 * iBend.z * h * uBendGain;
+  vec2 dir = vec2(iBend.x, iBend.y);
+  vec3 w = iXform.xyz + lp;
+  w.xz += dir * lean;
+  // A leaning wall's normal tips back against the lean.
+  n.y -= dot(n.xz, dir) * slope;
+  n = normalize(n);
+  float faceW = abs(aNormal.x) > 0.5 ? iSize.z : iSize.x;
+  vFacade = vec2(aUv.x * faceW, h);
+  vRoof   = step(0.5, aNormal.y);
+  vSeed   = iSize.w;
+  vH      = h / H;
+  vWorld  = w;
+  vNormal = n;
+  gl_Position = uViewProj * vec4(w, 1.0);
+}
+`
+
+/**
+ * Facades: two families by seed — concrete with punched windows, and curtain
+ * glass with mullions. Windows light up as the sun goes down, cell by cell.
+ */
+export const towerFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec2 vFacade;
+in float vSeed;
+in float vRoof;
+in float vH;
+uniform float uSunEl;      // sun elevation, degrees
+uniform vec4  uRide;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+void main () {
+  vec3 p = vWorld;
+  vec3 n = normalize(vNormal);
+  float glassy = step(0.45, hash12(vec2(vSeed * 7.1, 3.0)));
+  vec2 cell = mix(vec2(3.4, 3.7), vec2(2.2, 3.9), glassy);
+  vec2 f  = fract(vFacade / cell);
+  vec2 id = floor(vFacade / cell);
+  float win;
+  vec3 wall;
+  float rough;
+  float metal = 0.0;
+  if (glassy > 0.5) {
+    // Curtain wall: glass everywhere, a mullion grid on top.
+    float mull = step(f.x, 0.05) + step(f.y, 0.06);
+    win  = 1.0 - min(mull, 1.0);
+    wall = vec3(0.22, 0.23, 0.25);
+    rough = 0.4;
+  } else {
+    win  = step(0.14, f.x) * step(f.x, 0.86) * step(0.18, f.y) * step(f.y, 0.82);
+    vec3 tint = mix(vec3(0.3, 0.28, 0.26), vec3(0.46, 0.44, 0.42), hash12(vec2(vSeed, 9.0)));
+    wall = tint * (0.85 + 0.3 * fbm3(p * 0.45));
+    rough = 0.82;
+  }
+  vec3 glass = vec3(0.03, 0.05, 0.07);
+  vec3 albedo = mix(wall, glass, win);
+  rough = mix(rough, 0.12, win);
+  if (vRoof > 0.5) {
+    albedo = vec3(0.16, 0.16, 0.15) * (0.8 + 0.4 * vnoise(p.xz * 0.8));
+    rough  = 0.9;
+    win    = 0.0;
+  }
+  float sh = shadowAt(p, n, uSunDir);
+  vec3 col = lightSurface(p, n, albedo, rough, metal, 1.0, sh);
+
+  // Lights come on with dusk, more of them every lap.
+  float dusk = smoothstep(11.0, 2.0, uSunEl) * 0.85 + 0.15;
+  float on   = step(1.0 - 0.55 * dusk, hash12(id + vSeed * 13.0));
+  vec3 warm  = mix(vec3(1.0, 0.72, 0.42), vec3(0.85, 0.9, 1.0), step(0.7, hash12(id * 1.7 + vSeed)));
+  col += warm * 1.8 * on * win * dusk;
+
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
 }
 `
 
@@ -751,8 +881,10 @@ void main () {
   float s = vAux.x;
   float r = vAux.y;
   vec3 n = normalize(vNormal);
-  // Two-sided: the corkscrew shows its underside from across the helix.
-  if (dot(n, uCamPos - vWorld) < 0.0) n = -n;
+  // Two-sided: the corkscrew shows its underside from across the helix, and
+  // from below it is a concrete deck, not asphalt.
+  float under = step(dot(n, uCamPos - vWorld), 0.0);
+  n = mix(n, -n, under);
   float lapF = uRide.y;
 
   // Aggregate: two scales of noise, tyre-polished toward the wheel tracks.
@@ -784,6 +916,8 @@ void main () {
   albedo = mix(albedo, gravel, shoulder);
   rough = mix(rough, 0.95, shoulder);
 
+  albedo = mix(albedo, vec3(0.42, 0.41, 0.39) * (0.8 + 0.4 * fbm3(vWorld * 0.3)), under);
+  rough  = mix(rough, 0.85, under);
   float sh = shadowAt(vWorld, n, uSunDir);
   vec3 col = lightSurface(vWorld, n, albedo, rough, 0.0, 1.0, sh);
   col = applyFog(col, vWorld);

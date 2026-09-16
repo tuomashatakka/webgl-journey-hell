@@ -32,6 +32,7 @@ export const MAT = {
   TRUNK:     6,
   TURBINE:   7,
   STEEL:     8,
+  CONCRETE:  9,
 } as const
 
 export interface PropSet {
@@ -60,8 +61,9 @@ function hash (n: number): number {
 class Instances {
   data: number[] = []
 
-  add (x: number, y: number, z: number, yaw: number, scale = 1, seed = 0, sway = 0): void {
-    this.data.push(x, y, z, yaw, scale, seed, sway, 0)
+  /** `ys` > 0 stretches the unit's height to that many metres (piers). */
+  add (x: number, y: number, z: number, yaw: number, scale = 1, seed = 0, sway = 0, ys = 0): void {
+    this.data.push(x, y, z, yaw, scale, seed, sway, ys)
   }
 
   get count (): number {
@@ -270,6 +272,13 @@ function turbineTower (): MeshBuilder {
   return b
 }
 
+/** A unit-height column; the instance stretches it to the deck. */
+function pier (): MeshBuilder {
+  const b = createMeshBuilder()
+  taperY(b, 1.35, 1.05, 1, 12)
+  return b
+}
+
 function turbineRotor (): MeshBuilder {
   const b = createMeshBuilder()
   boxT(b, 0, 0, 0, 1.1, 1.1, 0.9)
@@ -410,6 +419,19 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
     rotors.add(x - Math.sin(yaw) * HUB_Z, y - 0.5 + HUB_Y, z + Math.cos(yaw) * HUB_Z, yaw, 1, hash(i * 5), 0)
   }
 
+  // Piers under the elevated downtown road, wherever it is off the ground.
+  const piers = new Instances()
+  {
+    const span = route.spans[2]
+    for (let s = span.s0 + 10; s < span.s1 - 6; s += 21) {
+      const f      = levelFrame(route.curve, s, pl.frame)
+      const ground = terrainHeight(idx, f.pos.x, f.pos.z)
+      const height = f.pos.y - 0.7 - ground
+      if (height > 2.5)
+        piers.add(f.pos.x, ground - 0.4, f.pos.z, yawOf(f.forward.x, f.forward.z), 1, hash(s), 0, height + 0.4)
+    }
+  }
+
   const set = (
     name: string, builder: MeshBuilder, material: number, inst: Instances,
     twoSided = false, spin = 0,
@@ -433,5 +455,6 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
     set('canopies', canopy(), MAT.CANOPY, trees, true),
     set('towers', turbineTower(), MAT.TURBINE, towers),
     set('rotors', turbineRotor(), MAT.TURBINE, rotors, false, 1.35),
+    set('piers', pier(), MAT.CONCRETE, piers),
   ]
 }

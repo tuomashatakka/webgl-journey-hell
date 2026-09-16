@@ -45,6 +45,7 @@ import type { LookParams } from './course'
 import { buildFarMesh, buildNearChunks, buildSeaQuad, buildSpineIndex } from './geometry'
 import { buildProps } from './props'
 import type { PropSet } from './props'
+import { bendGainAt, buildCity } from './city'
 import {
   blurFrag,
   brightFrag,
@@ -62,7 +63,9 @@ import {
   skyLutFrag,
   skyVert,
   sweepVert,
-  terrainFrag
+  terrainFrag,
+  towerFrag,
+  towerVert
 
 } from './shader'
 
@@ -132,21 +135,23 @@ export function createScenicRouteScene (
   gl: WebGL2RenderingContext,
   canvas: HTMLCanvasElement,
 ): JourneyRenderer | null {
-  const skyLutP    = createGlProgram(gl, postVert, skyLutFrag)
-  const skyDomeP   = createGlProgram(gl, skyVert, skyDomeFrag)
-  const roadP      = createGlProgram(gl, sweepVert, roadFrag)
-  const roadDepthP = createGlProgram(gl, sweepVert, depthFrag)
-  const terrainP   = createGlProgram(gl, meshVert, terrainFrag)
-  const meshDepthP = createGlProgram(gl, meshVert, depthFrag)
-  const seaP       = createGlProgram(gl, meshVert, seaFrag)
-  const propP      = createGlProgram(gl, propVert, propFrag)
-  const propDepthP = createGlProgram(gl, propVert, propDepthFrag)
-  const railP      = createGlProgram(gl, sweepVert, railFrag)
-  const brightP    = createGlProgram(gl, postVert, brightFrag)
-  const blurP      = createGlProgram(gl, postVert, blurFrag)
-  const compP      = createGlProgram(gl, postVert, compositeFrag)
+  const skyLutP     = createGlProgram(gl, postVert, skyLutFrag)
+  const skyDomeP    = createGlProgram(gl, skyVert, skyDomeFrag)
+  const roadP       = createGlProgram(gl, sweepVert, roadFrag)
+  const roadDepthP  = createGlProgram(gl, sweepVert, depthFrag)
+  const terrainP    = createGlProgram(gl, meshVert, terrainFrag)
+  const meshDepthP  = createGlProgram(gl, meshVert, depthFrag)
+  const seaP        = createGlProgram(gl, meshVert, seaFrag)
+  const propP       = createGlProgram(gl, propVert, propFrag)
+  const propDepthP  = createGlProgram(gl, propVert, propDepthFrag)
+  const railP       = createGlProgram(gl, sweepVert, railFrag)
+  const towerP      = createGlProgram(gl, towerVert, towerFrag)
+  const towerDepthP = createGlProgram(gl, towerVert, depthFrag)
+  const brightP     = createGlProgram(gl, postVert, brightFrag)
+  const blurP       = createGlProgram(gl, postVert, blurFrag)
+  const compP       = createGlProgram(gl, postVert, compositeFrag)
   if (!skyLutP || !skyDomeP || !roadP || !roadDepthP || !terrainP || !meshDepthP || !seaP ||
-    !propP || !propDepthP || !railP || !brightP || !blurP || !compP)
+    !propP || !propDepthP || !railP || !towerP || !towerDepthP || !brightP || !blurP || !compP)
     return null
 
   const route = getRoute()
@@ -248,6 +253,11 @@ export function createScenicRouteScene (
     mesh.setInstances(gl, set.instances)
     return { set, mesh }
   })
+
+  // --- downtown ------------------------------------------------------------------
+  const city      = buildCity(route, spine)
+  const towerMesh = createMesh(gl, city.builder, 3)
+  towerMesh.setInstances(gl, city.instances)
 
   // --- the coast guardrail -----------------------------------------------------
   // A band on the sea side of section IV, swept like the road so the bank LUT
@@ -457,6 +467,7 @@ export function createScenicRouteScene (
       invert(invViewProj, viewProj)
 
       const bankGain = bankGainAt(ride[1])
+      const bendGain = bendGainAt(ride[1])
       const exposure = EXPOSURE_BASE * Math.pow(2, env[0])
       const shadowOn = env[1] > 0.05 && sun[1] > 0.005 ? 1 : 0
 
@@ -516,6 +527,11 @@ export function createScenicRouteScene (
             c.mesh.draw(gl)
         }
 
+        towerDepthP.use()
+        towerDepthP.uniformMatrix4fv('uViewProj', lightVP)
+        towerDepthP.uniform1f('uBendGain', bendGain)
+        towerMesh.drawInstanced(gl, city.count)
+
         propDepthP.use()
         propDepthP.uniformMatrix4fv('uViewProj', lightVP)
         propDepthP.uniform1f('uTime', time)
@@ -551,6 +567,15 @@ export function createScenicRouteScene (
         if (visible(c, camPos, fx, fy, fz))
           c.mesh.draw(gl)
       farMesh.draw(gl)
+
+      // Downtown.
+      towerP.use()
+      towerP.uniformMatrix4fv('uViewProj', viewProj)
+      towerP.uniform1f('uBendGain', bendGain)
+      towerP.uniform1f('uSunEl', Math.asin(Math.max(-1, Math.min(1, sun[1]))) * 180 / Math.PI)
+      towerP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+      bindLit(towerP, camPos, sun, env, fogCol, time, shadowOn)
+      towerMesh.drawInstanced(gl, city.count)
 
       // The sea, seen from above and, in the fall, from the wrong side.
       gl.disable(gl.CULL_FACE)
@@ -676,9 +701,10 @@ export function createScenicRouteScene (
       seaMesh.dispose(gl)
       for (const { mesh } of props)
         mesh.dispose(gl)
+      towerMesh.dispose(gl)
       for (const p of [
         skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP,
-        propP, propDepthP, railP, brightP, blurP, compP,
+        propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP,
       ])
         p.dispose()
     },
