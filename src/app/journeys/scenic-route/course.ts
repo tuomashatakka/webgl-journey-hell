@@ -193,10 +193,10 @@ export const SECTIONS: Section[] = [
     throttle:   1,
     gW:         0.30,
     cD:         0.0090,
-    exposure:   2.2,
+    exposure:   0.9,
     sky:        0,
     fog:        [ 0.35, 0.05, 0.04 ],
-    fogDensity: 0.020,
+    fogDensity: 0.012,
     roadHalf:   3.0,
     surface:    3,
   },
@@ -209,10 +209,10 @@ export const SECTIONS: Section[] = [
     throttle:   1,
     gW:         0.0,
     cD:         0.0060,
-    exposure:   1.8,
+    exposure:   1.0,
     sky:        0,
     fog:        [ 0.02, 0.05, 0.06 ],
-    fogDensity: 0.012,
+    fogDensity: 0.008,
     roadHalf:   3.0,
     surface:    4,
   },
@@ -414,13 +414,13 @@ const K = (sec: number, frac: number, deg: number, auto = true): BankKnot => ({ 
 
 const BANK_KNOTS: BankKnot[] = [
   // I — camber into each wiggle.
-  K(0, 0.02, 0), K(0, 0.16, 5), K(0, 0.32, 6), K(0, 0.47, 6), K(0, 0.62, 5), K(0, 0.78, 4), K(0, 0.94, 0),
+  K(0, 0.02, 0), K(0, 0.16, 2.5), K(0, 0.32, 3), K(0, 0.47, 3), K(0, 0.62, 2.5), K(0, 0.78, 2), K(0, 0.94, 0),
   // II — a long constant-radius climb.
-  K(1, 0.08, 0), K(1, 0.40, 9), K(1, 0.72, 8), K(1, 0.96, 0),
+  K(1, 0.08, 0), K(1, 0.40, 6), K(1, 0.72, 5), K(1, 0.96, 0),
   // III — the helix. 40° here is the reference the laps are heard against.
   K(2, 0.04, 0), K(2, 0.13, 20), K(2, 0.28, 40), K(2, 0.46, 40), K(2, 0.64, 40), K(2, 0.78, 20), K(2, 0.94, 0),
   // IV — mild, then the headland right-hander.
-  K(3, 0.06, 0), K(3, 0.30, 4), K(3, 0.55, 4), K(3, 0.80, 8), K(3, 0.97, 5),
+  K(3, 0.06, 0), K(3, 0.30, 3), K(3, 0.55, 3), K(3, 0.80, 6), K(3, 0.97, 4),
   // V — the tumble. Not a turn, so signed by hand.
   K(4, 0.10, 6, false), K(4, 0.45, 14, false), K(4, 0.80, 22, false), K(4, 0.98, 25, false),
   // VI — settle, then the turn back.

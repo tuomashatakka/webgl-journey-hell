@@ -138,7 +138,10 @@ export interface SpineIndex {
  * Samples of the spine every two metres on the ground sections, bucketed into
  * cells, so the corridor pull is an O(1) lookup at every terrain vertex.
  */
-export function buildSpineIndex (route: Route, sections: number[], cell = 32): SpineIndex {
+export function buildSpineIndex (
+  route: Route, sections: number[], cell = 32,
+  lift?: (section: number, s: number) => number,
+): SpineIndex {
   const grid = new Map<number, number[]>()
   const key  = (cx: number, cz: number) => cx * 73856093 ^ cz * 19349663
   for (const i of sections) {
@@ -153,7 +156,7 @@ export function buildSpineIndex (route: Route, sections: number[], cell = 32): S
         arr = []
         grid.set(k, arr)
       }
-      arr.push(p.x, p.y, p.z, s)
+      arr.push(p.x, p.y + (lift ? lift(i, s) : 0), p.z, s)
     }
   }
   return { cell, grid }
@@ -324,6 +327,40 @@ export function buildFarMesh (idx: SpineIndex): TerrainChunk {
 }
 
 /** The sea surface: one big quad at sea level east of the valley. */
+/** A fine square of sea for the waves, centred where the fall lands. */
+export function buildSeaPatch (
+  cx: number, cz: number, half: number, cells: number,
+  skip?: (x: number, z: number) => boolean,
+): MeshBuilder {
+  const b   = createMeshBuilder()
+  const ids = new Int32Array((cells + 1) * (cells + 1))
+  for (let j = 0; j <= cells; j++)
+    for (let i = 0; i <= cells; i++) {
+      const x                  = cx - half + 2 * half * (i / cells)
+      const z                  = cz - half + 2 * half * (j / cells)
+      ids[j * (cells + 1) + i] = b.vertex(x, SEA_LEVEL, z, 0, 1, 0, x, z)
+    }
+  for (let j = 0; j < cells; j++)
+    for (let i = 0; i < cells; i++) {
+      if (skip) {
+        const x = cx - half + 2 * half * ((i + 0.5) / cells)
+        const z = cz - half + 2 * half * ((j + 0.5) / cells)
+        if (skip(x, z))
+          continue
+      }
+
+      const a = ids[j * (cells + 1) + i]
+      const c = ids[j * (cells + 1) + i + 1]
+      const d = ids[(j + 1) * (cells + 1) + i + 1]
+      const f = ids[(j + 1) * (cells + 1) + i]
+      b.face(a, f, d)
+      b.face(a, d, c)
+    }
+  return b
+}
+
+export const SEA_PATCH = { x: 640, z: 190, half: 520, cells: 110 }
+
 export function buildSeaQuad (): MeshBuilder {
   const b  = createMeshBuilder()
   const x0 = 380
@@ -340,8 +377,20 @@ export function buildSeaQuad (): MeshBuilder {
       const z              = z0 + (z1 - z0) * (j / n)
       ids[j * (n + 1) + i] = b.vertex(x, y, z, 0, 1, 0, x, z)
     }
+
+  // Cells fully under the fine patch are left out; the patch's wave amplitude
+  // fades to zero before its edge so the two meet flat.
+  const inPatch = (x: number, z: number) =>
+    Math.abs(x - SEA_PATCH.x) < SEA_PATCH.half && Math.abs(z - SEA_PATCH.z) < SEA_PATCH.half
   for (let j = 0; j < n; j++)
     for (let i = 0; i < n; i++) {
+      const xa = x0 + (x1 - x0) * (i / n)
+      const za = z0 + (z1 - z0) * (j / n)
+      const xb = x0 + (x1 - x0) * ((i + 1) / n)
+      const zb = z0 + (z1 - z0) * ((j + 1) / n)
+      if (inPatch(xa, za) && inPatch(xb, zb))
+        continue
+
       const a = ids[j * (n + 1) + i]
       const c = ids[j * (n + 1) + i + 1]
       const d = ids[(j + 1) * (n + 1) + i + 1]

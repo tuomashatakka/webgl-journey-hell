@@ -400,19 +400,47 @@ uniform vec3  uSunDir;
 uniform vec4  uEnv;        // (exposure EV, sky weight, fog density, water level)
 uniform vec3  uFogCol;
 uniform float uTime;
+uniform vec3  uCarPos;
+uniform vec3  uCarFwd;
+uniform vec3  uCarRight;
+uniform float uLights;     // headlights, 0..1
+
+/** Two headlamps: warm, a 24-degree cone with a soft edge, inverse-square. */
+vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) {
+  if (uLights <= 0.001) return vec3(0.0);
+  vec3 sum = vec3(0.0);
+  vec3 lampCol = vec3(1.0, 0.86, 0.66) * 1800.0 * uLights;
+  for (int i = 0; i < 2; i++) {
+    float side = i == 0 ? -0.78 : 0.78;
+    vec3 lp = uCarPos + uCarFwd * 1.9 + uCarRight * side + vec3(0.0, -0.45, 0.0);
+    vec3 toP = p - lp;
+    float d2 = dot(toP, toP) + 30.0;
+    vec3 l = -toP * inversesqrt(d2);
+    float cone = smoothstep(0.6, 0.86, dot(-l, normalize(uCarFwd + vec3(0.0, -0.08, 0.0))));
+    if (cone <= 0.0) continue;
+    sum += shade(n, v, l, albedo, rough, metal, lampCol) * cone / d2;
+  }
+  return sum;
+}
 
 vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float ao, float shadow) {
   vec3 v = normalize(uCamPos - p);
   vec3 sunCol = sunRadiance();
-  vec3 col = shade(n, v, uSunDir, albedo, rough, metal, sunCol) * shadow;
+  // Underground the sky is a memory: sun and ambient scale with the section's
+  // sky weight, and the headlamps take over.
+  float sky = uEnv.y;
+  vec3 col = shade(n, v, uSunDir, albedo, rough, metal, sunCol) * shadow * sky;
   // Sky ambient: radiance at the normal stands in for hemisphere irradiance.
-  vec3 amb = skyLookup(n) * (0.6 + 0.4 * n.y) * ao;
+  vec3 amb = skyLookup(n) * (0.6 + 0.4 * n.y) * ao * sky;
   col += albedo * (1.0 - metal) * amb;
   // Specular ambient, cheap: the sky in the reflected direction, Fresnel-weighted.
   vec3 rdir = reflect(-v, n);
   vec3 f0 = mix(vec3(0.04), albedo, metal);
   vec3 F = F_Schlick(max(dot(n, v), 0.0), f0);
-  col += skyLookup(rdir) * F * (1.0 - rough) * ao;
+  col += skyLookup(rdir) * F * (1.0 - rough) * ao * sky;
+  // A floor of fog-coloured ambient so the cave is never fully black.
+  col += albedo * uFogCol * (1.0 - sky) * 0.35 * ao;
+  col += headlights(p, n, v, albedo, rough, metal);
   return col;
 }
 
@@ -547,9 +575,64 @@ void main () {
 `
 
 /**
- * The sea, placeholder edition: a Fresnel reflection of the sky over a deep
- * body colour, with a small animated normal so the sun glitters. Gerstner and
- * the maw arrive in phase 4.
+ * The sea's vertices: four Gerstner waves (GPU Gems ch. 1), amplitude faded to
+ * nothing at the edge of the fine patch so it meets the flat far quad without
+ * a step. uWaveScale is 0 for the far quad. The whole surface rises by lap.
+ */
+export const seaVert = /* glsl */`#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aUv;
+uniform mat4  uViewProj;
+uniform float uTime;
+uniform float uWaveScale;
+uniform float uSeaRise;
+uniform vec4  uPatch;      // centre.x, centre.z, half size, unused
+out vec3 vWorld;
+out vec3 vNormal;
+out vec2 vUv;
+const vec4 W0 = vec4(0.94, 0.34, 0.85, 58.0);   // dir.x, dir.z, amplitude, wavelength
+const vec4 W1 = vec4(0.62, -0.78, 0.45, 29.0);
+const vec4 W2 = vec4(-0.24, 0.97, 0.26, 16.0);
+const vec4 W3 = vec4(0.71, 0.71, 0.12, 7.5);
+void wave (vec4 w, vec2 xz, float t, float amp, inout vec3 P, inout vec3 N) {
+  float k = 6.2831853 / w.w;
+  float c = sqrt(9.81 / k);
+  float A = w.z * amp;
+  float f = k * dot(w.xy, xz) - c * k * t;
+  float Q = 0.6 / (k * A * 4.0 + 1e-3);
+  Q = min(Q, 1.0);
+  P.x += Q * A * w.x * cos(f);
+  P.z += Q * A * w.y * cos(f);
+  P.y += A * sin(f);
+  N.x -= w.x * k * A * cos(f);
+  N.z -= w.y * k * A * cos(f);
+  N.y -= Q * k * A * sin(f);
+}
+void main () {
+  vec3 P = aPos;
+  vec3 N = vec3(0.0, 1.0, 0.0);
+  vec2 rel = abs(aPos.xz - uPatch.xy) / max(uPatch.z, 1.0);
+  float amp = uWaveScale * (1.0 - smoothstep(0.78, 1.0, max(rel.x, rel.y)));
+  if (amp > 0.0) {
+    wave(W0, aPos.xz, uTime, amp, P, N);
+    wave(W1, aPos.xz, uTime, amp, P, N);
+    wave(W2, aPos.xz, uTime, amp, P, N);
+    wave(W3, aPos.xz, uTime, amp, P, N);
+  }
+  P.y += uSeaRise;
+  vWorld = P;
+  vNormal = normalize(N);
+  vUv = aUv;
+  gl_Position = uViewProj * vec4(P, 1.0);
+}
+`
+
+/**
+ * The sea's surface: the Gerstner normal from the vertex shader, a little
+ * noise for the glitter, water Fresnel over a lit body colour, foam where the
+ * crests pinch.
  */
 export const seaFrag = /* glsl */`#version 300 es
 precision highp float;
@@ -575,7 +658,8 @@ void main () {
   float hx = fbm(q1 + vec2(e, 0.0)) + 0.35 * fbm(q2 + vec2(e * 6.9, 0.0)) - h0;
   float hz = fbm(q1 + vec2(0.0, e)) + 0.35 * fbm(q2 + vec2(0.0, e * 6.9)) - h0;
   float flat_ = 1.0 - lod * 0.85;
-  vec3 n = normalize(vec3(-hx * 2.6 * flat_, e, -hz * 2.6 * flat_));
+  vec3 nn = normalize(vec3(-hx * 1.4 * flat_, e, -hz * 1.4 * flat_));
+  vec3 n = normalize(normalize(vNormal) + (nn - vec3(0.0, 1.0, 0.0)) * 0.6);
 
   // Water, not plastic: f0 0.02, a body colour that is lit through, and the
   // sky mirrored by Fresnel alone. The sun keeps its GGX glitter path.
@@ -589,8 +673,12 @@ void main () {
   float sh = shadowAt(p, vec3(0.0, 1.0, 0.0), uSunDir);
   vec3 sunCol = sunRadiance();
   vec3 under = body * (skyLookup(vec3(0.0, 1.0, 0.0)) * 0.8 + sunCol * max(uSunDir.y, 0.0) * 0.25 * sh);
-  vec3 glitter = shade(n, v, uSunDir, vec3(0.0), 0.09, 0.0, sunCol) * sh;
+  vec3 glitter = shade(n, v, uSunDir, vec3(0.0), 0.14, 0.0, sunCol) * sh;
   vec3 col = under * (1.0 - F) + refl * F + glitter;
+  // Foam where the surface pinches: a steep Gerstner normal.
+  float steep = 1.0 - normalize(vNormal).y;
+  float foam = smoothstep(0.1, 0.3, steep) * (0.5 + 0.5 * vnoise(p.xz * 0.8 + uTime * 0.3)) * (1.0 - lod);
+  col = mix(col, vec3(0.7, 0.72, 0.7) * (skyLookup(vec3(0.0, 1.0, 0.0)) * 0.5 + sunCol * 0.15 * sh), foam);
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
 }
@@ -831,6 +919,239 @@ void main () {
   vec3 warm  = mix(vec3(1.0, 0.72, 0.42), vec3(0.85, 0.9, 1.0), step(0.7, hash12(id * 1.7 + vSeed)));
   col += warm * 1.8 * on * win * dusk;
 
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
+}
+`
+
+/** Skin and flesh, shared by the head and the jaws. */
+const mawMaterialChunk = /* glsl */`
+vec3 skinAlbedo (vec3 p, float belly) {
+  float scales = vnoise(p.xz * 0.9 + p.y * 0.4) * 0.5 + vnoise(p.xy * 2.3 + p.z) * 0.5;
+  vec3 dark = vec3(0.045, 0.075, 0.07);
+  vec3 pale = vec3(0.42, 0.42, 0.36);
+  vec3 c = mix(dark, pale, belly);
+  c *= 0.75 + 0.5 * scales;
+  c += vec3(0.02, 0.05, 0.03) * fbm3(p * 0.06);
+  return c;
+}
+vec3 fleshAlbedo (vec3 p) {
+  float veins = fbm3(p * 0.35);
+  vec3 c = mix(vec3(0.3, 0.05, 0.045), vec3(0.5, 0.12, 0.1), veins);
+  c *= 0.7 + 0.6 * vnoise(p.xz * 1.7 + p.y);
+  return c;
+}
+`
+
+/**
+ * The head: the sweep layout, front faces skin, back faces the mouth. Eyes by
+ * arc length and profile angle, lit from inside.
+ */
+export const mawFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec4 vAux;
+in float vSection;
+uniform float uMouthS;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+${mawMaterialChunk}
+void main () {
+  vec3 p = vWorld;
+  vec3 n = normalize(vNormal);
+  float t = vAux.x - uMouthS;
+  float ang = atan(vAux.z, vAux.y);        // profile angle, 0 = right, pi/2 = up
+  vec3 albedo;
+  float rough;
+  vec3 emit = vec3(0.0);
+  // This sweep's front faces point inward: the front is the mouth.
+  if (!gl_FrontFacing) {
+    float belly = smoothstep(-0.2, -0.95, sin(ang));
+    albedo = skinAlbedo(p, belly);
+    rough = 0.32;
+    // Eyes: two, high on the sides, a little back from the lip.
+    float side = abs(cos(ang));
+    // One eye each side: angles 0.35 (right, a little up) and pi - 0.35 (left).
+    float dAng = min(abs(ang - 0.35), abs(ang - (PI - 0.35)));
+    vec2 eyeUv = vec2(t - 24.0, dAng * 30.0);
+    float eye = length(eyeUv);
+    float eyeW = smoothstep(7.5, 6.0, eye) * step(0.4, side);
+    float pupil = smoothstep(3.2, 2.4, eye);
+    albedo = mix(albedo, vec3(0.9, 0.75, 0.2), eyeW);
+    albedo = mix(albedo, vec3(0.01), pupil);
+    emit = vec3(1.0, 0.7, 0.15) * eyeW * (1.0 - pupil) * 1.6;
+    rough = mix(rough, 0.08, eyeW);
+  } else {
+    albedo = fleshAlbedo(p);
+    rough = 0.22;
+  }
+  if (dot(n, uCamPos - p) < 0.0) n = -n;
+  float sh = shadowAt(p, n, uSunDir);
+  vec3 col = lightSurface(p, n, albedo, rough, 0.0, 1.0, sh) + emit;
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
+}
+`
+
+/**
+ * The tube: flesh for the first stretch past the mouth, rock after, the two
+ * traded by a noisy threshold so the change is ragged, not a seam. Ribs in the
+ * flesh, relief in the rock, a wet band at the waterline.
+ */
+export const tubeFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec4 vAux;
+in float vSection;
+uniform float uMouthS;
+uniform vec2  uFleshRock;   // flesh end, rock start (metres past the mouth)
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+${mawMaterialChunk}
+void main () {
+  vec3 p = vWorld;
+  vec3 n = normalize(vNormal);
+  if (dot(n, uCamPos - p) < 0.0) n = -n;
+  float t = vAux.x - uMouthS;
+  float fleshW = 1.0 - smoothstep(uFleshRock.x, uFleshRock.y, t);
+  float ragged = fbm3(p * 0.045) - 0.5;
+  float flesh  = smoothstep(0.35, 0.65, fleshW + ragged * 0.9);
+
+  // Rock: the terrain's rock, plus relief from its own noise.
+  vec3 rock = vec3(0.26, 0.24, 0.22) * (0.55 + 0.7 * fbm3(p * 0.09));
+  rock = mix(rock, vec3(0.32, 0.27, 0.2), smoothstep(0.4, 0.7, fbm3(p * 0.02 + 3.0)));
+  float e = 0.5;
+  float h0 = fbm3(p * 0.3);
+  vec3 g = vec3(fbm3((p + vec3(e, 0, 0)) * 0.3) - h0, fbm3((p + vec3(0, e, 0)) * 0.3) - h0, fbm3((p + vec3(0, 0, e)) * 0.3) - h0) / e;
+  g -= n * dot(g, n);
+  vec3 nRock = normalize(n - g * 0.7);
+
+  // Flesh: ribs every few metres, glistening.
+  float rib = 0.5 + 0.5 * sin(vAux.x * 1.6 + fbm3(p * 0.2) * 3.0);
+  vec3 fleshCol = fleshAlbedo(p) * (0.8 + 0.4 * rib);
+  vec3 nFlesh = normalize(n + vec3(0.0, 0.0, 0.0) + (fbm3(p * 0.6) - 0.5) * 0.3);
+
+  vec3 albedo = mix(rock, fleshCol, flesh);
+  vec3 nn = normalize(mix(nRock, nFlesh, flesh));
+  float rough = mix(0.85, 0.2, flesh);
+  // Wet below and near the waterline (u near zero and below).
+  float wet = smoothstep(2.5, -1.0, vAux.z);
+  rough = mix(rough, 0.18, wet * (1.0 - flesh));
+  albedo *= 1.0 - 0.35 * wet * (1.0 - flesh);
+
+  float sh = shadowAt(p, nn, uSunDir);
+  vec3 col = lightSurface(p, nn, albedo, rough, 0.0, 0.8, sh);
+  // A faint living glow in the flesh, brighter along the ribs.
+  col += fleshCol * vec3(0.9, 0.3, 0.25) * 0.12 * flesh * rib;
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
+}
+`
+
+/** The water in the tube: dark, flowing, mirroring the headlamps and the walls' glow by fog colour. */
+export const waterFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec4 vAux;
+in float vSection;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+void main () {
+  vec3 p = vWorld;
+  vec3 n0 = normalize(vNormal);
+  if (n0.y < 0.0) n0 = -n0;
+  // Flow along the spine: ripples travelling in s, wobbling across.
+  vec2 q = vec2(vAux.x * 0.35 - uTime * 1.4, vAux.y * 0.5);
+  float e = 0.3;
+  float h0 = fbm(q) + 0.5 * vnoise(q * 3.1 + uTime * 0.7);
+  float hs = fbm(q + vec2(e, 0.0)) + 0.5 * vnoise((q + vec2(e, 0.0)) * 3.1 + uTime * 0.7) - h0;
+  float hr = fbm(q + vec2(0.0, e)) + 0.5 * vnoise((q + vec2(0.0, e)) * 3.1 + uTime * 0.7) - h0;
+  vec3 n = normalize(n0 + vec3(hr, 0.0, hs) * 0.3);
+  vec3 v = normalize(uCamPos - p);
+  float NoV = max(dot(n, v), 0.0);
+  vec3 F = F_Schlick(NoV, vec3(0.02));
+  vec3 body = vec3(0.02, 0.035, 0.03);
+  vec3 col = lightSurface(p, n, body, 0.08, 0.0, 1.0, 1.0);
+  // The walls' glow, mirrored: the fog colour stands in for the reflected cave.
+  col += uFogCol * F * 0.8;
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
+}
+`
+
+/** A jaw shell rotates about its hinge by the lap's jaw angle. */
+export const jawVert = /* glsl */`#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aUv;
+uniform mat4  uViewProj;
+uniform vec3  uHinge;
+uniform vec3  uAxis;
+uniform float uJaw;
+out vec3 vWorld;
+out vec3 vNormal;
+out vec2 vUv;
+vec3 rotAxis (vec3 v, vec3 k, float a) {
+  float c = cos(a), s = sin(a);
+  return v * c + cross(k, v) * s + k * dot(k, v) * (1.0 - c);
+}
+void main () {
+  vec3 p = uHinge + rotAxis(aPos - uHinge, uAxis, uJaw);
+  vec3 n = rotAxis(aNormal, uAxis, uJaw);
+  vWorld = p;
+  vNormal = n;
+  vUv = aUv;
+  gl_Position = uViewProj * vec4(p, 1.0);
+}
+`
+
+/** Jaw shells and teeth: uv.x tags a tooth; facing tells skin from flesh. */
+export const jawFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec2 vUv;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+${mawMaterialChunk}
+void main () {
+  vec3 p = vWorld;
+  vec3 n = normalize(vNormal);
+  if (!gl_FrontFacing) n = -n;
+  vec3 albedo;
+  float rough;
+  if (vUv.x > 1.5) {
+    albedo = mix(vec3(0.55, 0.45, 0.3), vec3(0.85, 0.8, 0.66), vUv.y) * (0.85 + 0.3 * fbm3(p * 1.3));
+    rough = 0.3;
+  } else if (vUv.x > 0.5) {
+    albedo = fleshAlbedo(p);
+    rough = 0.22;
+  } else {
+    albedo = skinAlbedo(p, 0.15);
+    rough = 0.32;
+  }
+  float sh = shadowAt(p, n, uSunDir);
+  vec3 col = lightSurface(p, n, albedo, rough, 0.0, 1.0, sh);
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
 }

@@ -42,7 +42,9 @@ import type { JourneyRenderer } from '@/components/withJourneyShell'
 import type { QuadFrameUniforms } from '@/lib/shaderQuad'
 import { BANK_STEP, SECTION_COUNT, bankGainAt, getRoute, lookAt as lookParamsAt, sectionWeights } from './course'
 import type { LookParams } from './course'
-import { buildFarMesh, buildNearChunks, buildSeaQuad, buildSpineIndex } from './geometry'
+import { SEA_PATCH, buildFarMesh, buildNearChunks, buildSeaPatch, buildSeaQuad, buildSpineIndex, nearestSpine } from './geometry'
+import { FLESH_END, ROCK_START, buildMaw, buildTube, jawAngleAt } from './maw'
+import type { Jaw } from './maw'
 import { buildProps } from './props'
 import type { PropSet } from './props'
 import { bendGainAt, buildCity } from './city'
@@ -51,6 +53,9 @@ import {
   brightFrag,
   compositeFrag,
   depthFrag,
+  jawFrag,
+  jawVert,
+  mawFrag,
   meshVert,
   postVert,
   propDepthFrag,
@@ -59,13 +64,16 @@ import {
   railFrag,
   roadFrag,
   seaFrag,
+  seaVert,
   skyDomeFrag,
   skyLutFrag,
   skyVert,
   sweepVert,
   terrainFrag,
   towerFrag,
-  towerVert
+  towerVert,
+  tubeFrag,
+  waterFrag
 
 } from './shader'
 
@@ -141,7 +149,12 @@ export function createScenicRouteScene (
   const roadDepthP  = createGlProgram(gl, sweepVert, depthFrag)
   const terrainP    = createGlProgram(gl, meshVert, terrainFrag)
   const meshDepthP  = createGlProgram(gl, meshVert, depthFrag)
-  const seaP        = createGlProgram(gl, meshVert, seaFrag)
+  const seaP        = createGlProgram(gl, seaVert, seaFrag)
+  const mawP        = createGlProgram(gl, sweepVert, mawFrag)
+  const jawP        = createGlProgram(gl, jawVert, jawFrag)
+  const jawDepthP   = createGlProgram(gl, jawVert, depthFrag)
+  const tubeP       = createGlProgram(gl, sweepVert, tubeFrag)
+  const waterP      = createGlProgram(gl, sweepVert, waterFrag)
   const propP       = createGlProgram(gl, propVert, propFrag)
   const propDepthP  = createGlProgram(gl, propVert, propDepthFrag)
   const railP       = createGlProgram(gl, sweepVert, railFrag)
@@ -151,7 +164,8 @@ export function createScenicRouteScene (
   const blurP       = createGlProgram(gl, postVert, blurFrag)
   const compP       = createGlProgram(gl, postVert, compositeFrag)
   if (!skyLutP || !skyDomeP || !roadP || !roadDepthP || !terrainP || !meshDepthP || !seaP ||
-    !propP || !propDepthP || !railP || !towerP || !towerDepthP || !brightP || !blurP || !compP)
+    !propP || !propDepthP || !railP || !towerP || !towerDepthP || !brightP || !blurP || !compP ||
+    !mawP || !jawP || !jawDepthP || !tubeP || !waterP)
     return null
 
   const route = getRoute()
@@ -239,13 +253,42 @@ export function createScenicRouteScene (
   )
 
   // --- the land ----------------------------------------------------------------
-  const spine              = buildSpineIndex(route, [ 0, 1, 3 ])
+  // The land follows the road sections, and rises over the cave so the tunnel
+  // is under a hill; the hill falls back to road level at the seam, where the
+  // tube comes out of the ground as a portal.
+  const seam  = route.spans[6].s1
+  const spine = buildSpineIndex(route, [ 0, 1, 3, 6 ], 32, (section, s) => {
+    if (section !== 6)
+      return 0
+
+    const f = Math.min(1, Math.max(0, (s - (seam - 50)) / 44))
+    return 16 * (1 - f * f * (3 - 2 * f))
+  })
   const chunks: Drawable[] = buildNearChunks(spine).map(c => ({
     mesh: createMesh(gl, c.builder), cx: c.cx, cy: c.cy, cz: c.cz, radius: c.radius,
   }))
   const far     = buildFarMesh(spine)
   const farMesh = createMesh(gl, far.builder)
-  const seaMesh = createMesh(gl, buildSeaQuad())
+  // The sea has a hole where the fish is: no water plane cutting through the
+  // mouth or the throat.
+  const gullet    = buildSpineIndex(route, [ 5 ], 32)
+  const seaMesh   = createMesh(gl, buildSeaQuad())
+  const patchMesh = createMesh(gl, buildSeaPatch(
+    SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.half, SEA_PATCH.cells,
+    (x, z) => nearestSpine(gullet, x, z).d < 54,
+  ))
+
+  // --- the maw -------------------------------------------------------------------
+  const maw      = buildMaw(route)
+  const headMesh = createMeshFromArrays(
+    gl, maw.head.vertices, maw.head.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
+  )
+  const jaws: { jaw: Jaw; mesh: Mesh }[] = [ maw.upper, maw.lower ].map(jaw => ({
+    jaw, mesh: createMesh(gl, jaw.builder),
+  }))
+  const tube      = buildTube(route)
+  const tubeMesh  = createMeshFromArrays(gl, tube.tube.vertices, tube.tube.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
+  const waterMesh = createMeshFromArrays(gl, tube.water.vertices, tube.water.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
 
   // --- the props ---------------------------------------------------------------
   const props: { set: PropSet; mesh: Mesh }[] = buildProps(route, spine).map(set => {
@@ -384,11 +427,19 @@ export function createScenicRouteScene (
     prog.uniform1f('uBankGain', gain)
   }
 
-  /** Everything a lit world program shares: sky, shadow, camera, sun, fog. */
+  /** Everything a lit world program shares: sky, shadow, camera, sun, fog, the car's lamps. */
+  let carPos: number[]   = [ 0, 0, 0 ]
+  let carFwd: number[]   = [ 0, 0, 1 ]
+  let carRight: number[] = [ 1, 0, 0 ]
+  let lights             = 0
   const bindLit = (
     prog: GlProgram, camPos: number[], sun: number[], env: number[], fogCol: number[],
     time: number, shadowOn: number,
   ) => {
+    prog.uniform3f('uCarPos', carPos[0], carPos[1], carPos[2])
+    prog.uniform3f('uCarFwd', carFwd[0], carFwd[1], carFwd[2])
+    prog.uniform3f('uCarRight', carRight[0], carRight[1], carRight[2])
+    prog.uniform1f('uLights', lights)
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, skyTex)
     prog.uniform1i('uSky', 1)
@@ -430,7 +481,12 @@ export function createScenicRouteScene (
       const env     = vec(custom, 'uEnv', [ 0, 1, 0.001, -1e4 ])
       const fogCol  = vec(custom, 'uFogCol', [ 0.6, 0.65, 0.7, 0 ])
       const flt     = vec(custom, 'uFloat', [ 0, 0, 0, 3.4 ])
+      const car     = vec(custom, 'uCar', [ 0, 1, 0, 0 ])
       const isHeavy = (heavy ?? 1) > 0.5
+      carPos   = vec(custom, 'uCarPos', camPos)
+      carFwd   = vec(custom, 'uCarFwd', camFwd)
+      carRight = vec(custom, 'uCarRight', [ 1, 0, 0 ])
+      lights   = car[3]
 
       // Pointer look: yaw about the camera's up, pitch toward it.
       const px  = pointer?.x ?? 0
@@ -468,6 +524,8 @@ export function createScenicRouteScene (
 
       const bankGain = bankGainAt(ride[1])
       const bendGain = bendGainAt(ride[1])
+      const jawAngle = jawAngleAt(ride[1])
+      const seaRise  = Math.min(ride[1], 3) * 0.45
       const exposure = EXPOSURE_BASE * Math.pow(2, env[0])
       const shadowOn = env[1] > 0.05 && sun[1] > 0.005 ? 1 : 0
 
@@ -542,8 +600,21 @@ export function createScenicRouteScene (
         }
 
         // The rail casts too; same vertex shader as the road, uniforms retained.
+        // The head too, unrolled: its profile is round, its eyes are not.
         roadDepthP.use()
         railMesh.draw(gl)
+        roadDepthP.uniform1f('uBankGain', 0)
+        headMesh.draw(gl)
+        roadDepthP.uniform1f('uBankGain', bankGain)
+
+        jawDepthP.use()
+        jawDepthP.uniformMatrix4fv('uViewProj', lightVP)
+        for (const { jaw, mesh } of jaws) {
+          jawDepthP.uniform3f('uHinge', jaw.hinge.x, jaw.hinge.y, jaw.hinge.z)
+          jawDepthP.uniform3f('uAxis', jaw.axis.x, jaw.axis.y, jaw.axis.z)
+          jawDepthP.uniform1f('uJaw', jawAngle * jaw.share)
+          mesh.draw(gl)
+        }
         gl.colorMask(true, true, true, true)
       }
 
@@ -577,11 +648,49 @@ export function createScenicRouteScene (
       bindLit(towerP, camPos, sun, env, fogCol, time, shadowOn)
       towerMesh.drawInstanced(gl, city.count)
 
-      // The sea, seen from above and, in the fall, from the wrong side.
+      // The maw: head unrolled, jaws by hinge.
       gl.disable(gl.CULL_FACE)
+      mawP.use()
+      mawP.uniformMatrix4fv('uViewProj', viewProj)
+      bindBank(mawP, 0)
+      bindLit(mawP, camPos, sun, env, fogCol, time, shadowOn)
+      mawP.uniform1f('uMouthS', maw.s0)
+      headMesh.draw(gl)
+
+      jawP.use()
+      jawP.uniformMatrix4fv('uViewProj', viewProj)
+      bindLit(jawP, camPos, sun, env, fogCol, time, shadowOn)
+      for (const { jaw, mesh } of jaws) {
+        jawP.uniform3f('uHinge', jaw.hinge.x, jaw.hinge.y, jaw.hinge.z)
+        jawP.uniform3f('uAxis', jaw.axis.x, jaw.axis.y, jaw.axis.z)
+        jawP.uniform1f('uJaw', jawAngle * jaw.share)
+        mesh.draw(gl)
+      }
+
+      // The tube and its water.
+      tubeP.use()
+      tubeP.uniformMatrix4fv('uViewProj', viewProj)
+      bindBank(tubeP, 0)
+      bindLit(tubeP, camPos, sun, env, fogCol, time, shadowOn)
+      tubeP.uniform1f('uMouthS', tube.s0)
+      tubeP.uniform2f('uFleshRock', FLESH_END, ROCK_START)
+      tubeMesh.draw(gl)
+
+      waterP.use()
+      waterP.uniformMatrix4fv('uViewProj', viewProj)
+      bindBank(waterP, 0)
+      bindLit(waterP, camPos, sun, env, fogCol, time, shadowOn)
+      waterMesh.draw(gl)
+
+      // The sea: waves on the fine patch, flat beyond it; both rise by lap.
       seaP.use()
       seaP.uniformMatrix4fv('uViewProj', viewProj)
       bindLit(seaP, camPos, sun, env, fogCol, time, shadowOn)
+      seaP.uniform1f('uSeaRise', seaRise)
+      seaP.uniform4f('uPatch', SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.half, 0)
+      seaP.uniform1f('uWaveScale', 1)
+      patchMesh.draw(gl)
+      seaP.uniform1f('uWaveScale', 0)
       seaMesh.draw(gl)
 
       // The road is two-sided: a corkscrew shows its underside from across the
@@ -699,12 +808,19 @@ export function createScenicRouteScene (
         c.mesh.dispose(gl)
       farMesh.dispose(gl)
       seaMesh.dispose(gl)
+      patchMesh.dispose(gl)
+      headMesh.dispose(gl)
+      tubeMesh.dispose(gl)
+      waterMesh.dispose(gl)
+      for (const { mesh } of jaws)
+        mesh.dispose(gl)
       for (const { mesh } of props)
         mesh.dispose(gl)
       towerMesh.dispose(gl)
       for (const p of [
         skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP,
         propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP,
+        mawP, jawP, jawDepthP, tubeP, waterP,
       ])
         p.dispose()
     },
