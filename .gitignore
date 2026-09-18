@@ -13,3 +13,4 @@ public/*
 out/*
 # The repo is bun-managed; a second lockfile desyncs from bun.lock and breaks CI.
 package-lock.json
+tsconfig.tsbuildinf
