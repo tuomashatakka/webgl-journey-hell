@@ -17,12 +17,12 @@
   },
   "devDependencies": {
     "@tuomashatakka/eslint-config": "^4.0.1",
-    "@types/node": "^20",
+    "@types/node": "^26",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^10.8.0",
-    "eslint-config-next": "16.0.8",
+    "eslint-config-next": "16.3.5",
     "playwright-core": "^1.62.1",
-    "typescript": "5.9.3"
+    "typescript": "7.0.2"
   }
 }
