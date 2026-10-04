@@ -3,22 +3,21 @@
    page: icons only, each named by aria-label and by a tooltip. */
 
 #journey-toolbar {
-  position:         absolute;
-  top:              0;
-  left:             0;
-  right:            0;
-  z-index:          10;
-  display:          flex;
-  align-items:      center;
-  gap:              8px;
-  padding:          max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
-  pointer-events:   none;
-  transition:       opacity 0.35s ease;
-}
+  position:                       absolute;
+  inset-block-start:              0;
+  inset-inline-start:             0;
+  inset-inline-end:               0;
+  z-index:                        10;
+  display:                        flex;
+  align-items:                    center;
+  gap:                            8px;
+  padding:                        max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+  pointer-events:                 none;
+  transition:                     opacity 0.35s ease;
 
-
-#journey-toolbar > * {
-  pointer-events: auto;
+  > * {
+    pointer-events: auto;
+  }
 }
 
 
@@ -35,17 +34,17 @@
 
 
 .tb-btn {
-  display:            grid;
-  place-items:        center;
-  width:              40px;
-  height:             40px;
-  padding:            0;
-  background:         rgba(0, 0, 0, 0.6);
-  border:             1px solid rgba(255, 255, 255, 0.25);
-  color:              #fff;
-  text-decoration:    none;
-  cursor:             pointer;
-  transition:         background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  display:                  grid;
+  place-items:              center;
+  inline-size:              40px;
+  block-size:               40px;
+  padding:                  0;
+  background:               rgba(0, 0, 0, 0.6);
+  border:                   1px solid rgba(255, 255, 255, 0.25);
+  color:                    #fff;
+  text-decoration:          none;
+  cursor:                   pointer;
+  transition:               background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
 }
 
 
@@ -76,13 +75,13 @@
 
 
 #fps-display {
-  padding-left:     4px;
-  color:            rgba(255, 255, 255, 0.45);
-  font-family:      var(--font-mono);
-  font-size:        11px;
-  letter-spacing:   1px;
-  white-space:      nowrap;
-  pointer-events:   none;
+  padding-inline-start:     4px;
+  color:                    rgba(255, 255, 255, 0.45);
+  font-family:              var(--font-mono);
+  font-size:                0.6875rem;
+  letter-spacing:           1px;
+  white-space:              nowrap;
+  pointer-events:           none;
 }
 
 
@@ -96,7 +95,7 @@
   color:            #fff;
   border:           1px solid var(--line);
   font-family:      var(--font-mono);
-  font-size:        11px;
+  font-size:        0.6875rem;
   letter-spacing:   1px;
   white-space:      nowrap;
   pointer-events:   none;
@@ -108,11 +107,11 @@
    grows inward instead of off it. */
 @supports (anchor-name: --a) and (position-area: bottom) {
   .tb-tip {
-    position:         absolute;
-    inset:            auto;
-    position-anchor:  var(--tb-anchor);
-    position-area:    bottom;
-    margin-top:       8px;
+    position:                 absolute;
+    inset:                    auto;
+    position-anchor:          var(--tb-anchor);
+    position-area:            bottom;
+    margin-block-start:       8px;
   }
 
   .tb-item[data-align="start"] .tb-tip {
@@ -124,9 +123,9 @@
   }
 
   .tb-item[data-side="top"] .tb-tip {
-    position-area:  top;
-    margin-top:     0;
-    margin-bottom:  8px;
+    position-area:          top;
+    margin-block-start:     0;
+    margin-block-end:       8px;
   }
 
   .tb-item[data-side="top"][data-align="start"] .tb-tip {
@@ -146,27 +145,27 @@
 /* No anchor positioning: a plain CSS tooltip under (or over) the button. */
 @supports not ((anchor-name: --a) and (position-area: bottom)) {
   .tb-tip {
-    position:     absolute;
-    top:          calc(100% + 8px);
-    left:         50%;
-    transform:    translateX(-50%);
-    z-index:      60;
+    position:                   absolute;
+    inset-block-start:          calc(100% + 8px);
+    inset-inline-start:         50%;
+    transform:                  translateX(-50%);
+    z-index:                    60;
   }
 
   .tb-item[data-align="start"] .tb-tip {
-    left:       0;
-    transform:  none;
+    inset-inline-start:       0;
+    transform:                none;
   }
 
   .tb-item[data-align="end"] .tb-tip {
-    left:       auto;
-    right:      0;
-    transform:  none;
+    inset-inline-start:       auto;
+    inset-inline-end:         0;
+    transform:                none;
   }
 
   .tb-item[data-side="top"] .tb-tip {
-    top:      auto;
-    bottom:   calc(100% + 8px);
+    inset-block-start:      auto;
+    inset-block-end:        calc(100% + 8px);
   }
 
   .tb-item:hover .tb-tip,
@@ -178,9 +177,9 @@
 
 /* The index page: the gear sits at the foot of the document. */
 .index-footer .tb-item {
-  display:    flex;
-  width:      fit-content;
-  margin:     18px auto 0;
+  display:          flex;
+  inline-size:      fit-content;
+  margin:           18px auto 0;
 }
 
 

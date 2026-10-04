@@ -310,6 +310,14 @@ export interface Section {
   sky: number;
 }
 
+export interface Beat {
+  sec:     Section;
+  index:   number;
+  beat:    number;
+  t:       number;
+  beatLen: number;
+}
+
 /** d/dt of smootherstep on the unit interval. Peaks at 15/8 in the middle. */
 function dSmootherstep (t: number): number {
   const u = clamp01(t)
@@ -375,14 +383,6 @@ function steepen (g: number, t: number): number {
  * and never needed to.
  */
 const FALL_YAW0 = FALL_LAPS * LAP_TURN
-
-export interface Beat {
-  sec:     Section;
-  index:   number;
-  beat:    number;
-  t:       number;
-  beatLen: number;
-}
 
 /**
  * Laps run, with the fractional part ramping across THE OVERLOOK rather than

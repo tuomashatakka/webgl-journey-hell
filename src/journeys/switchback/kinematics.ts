@@ -14,6 +14,13 @@ const EYE = 1.15
  * One simulation instance per mount. Stepped on the shared frame-capped loop,
  * read immediately after, so the frame renders the state this step produced.
  */
+/** Overwrite a uniform array in place (its identity is what the renderer holds). */
+function put (target: number[], values: number[]): void {
+  values.forEach((v, i) => {
+    target[i] = v
+  })
+}
+
 export function createSwitchbackSimulation (): JourneySimulation {
   let s    = 0
   let v    = 9
@@ -129,47 +136,61 @@ export function createSwitchbackSimulation (): JourneySimulation {
         uSecC[o + 3] = slot.lampY
       }
 
-      uBend[0] = state.bend.ax
-      uBend[1] = state.bend.bx
-      uBend[2] = state.bend.ay
-      uBend[3] = state.bend.by
+      put(uBend, [
+        state.bend.ax,
+        state.bend.bx,
+        state.bend.ay,
+        state.bend.by,
+      ])
 
-      uCart[0] = state.phase
-      uCart[1] = state.speed
-      uCart[2] = state.lapF
-      uCart[3] = EYE
+      put(uCart, [
+        state.phase,
+        state.speed,
+        state.lapF,
+        EYE,
+      ])
 
-      uRide[0] = state.lookYaw
-      uRide[1] = state.lookPitch + state.joltY
-      uRide[2] = state.headRoll + state.joltX
-      uRide[3] = state.chain
+      put(uRide, [
+        state.lookYaw,
+        state.lookPitch + state.joltY,
+        state.headRoll + state.joltX,
+        state.chain,
+      ])
 
-      uFall[0] = state.fall
-      // Speed *past* what the ride was ever capable of. uCart.y already pins the
-      // shader's lens widening at 20 m/s, so this is the term that keeps saying
-      // something after the fall has left every previous number behind.
-      //
-      // Logarithmic, because the fall is unbounded and a linear map saturates
-      // fifteen seconds in — after which the picture stops acknowledging speed
-      // at exactly the point the speed becomes the only thing happening.
-      uFall[1] = clamp01(Math.log2(1 + Math.max(0, state.speed - V_MAX) / 20) / 8)
-      uFall[2] = state.twist
-      uFall[3] = state.crack
+      put(uFall, [
+        state.fall,
+        // Speed *past* what the ride was ever capable of. uCart.y already pins the
+        // shader's lens widening at 20 m/s, so this is the term that keeps saying
+        // something after the fall has left every previous number behind.
+        //
+        // Logarithmic, because the fall is unbounded and a linear map saturates
+        // fifteen seconds in — after which the picture stops acknowledging speed
+        // at exactly the point the speed becomes the only thing happening.
+        clamp01(Math.log2(1 + Math.max(0, state.speed - V_MAX) / 20) / 8),
+        state.twist,
+        state.crack,
+      ])
 
-      uAtm[0] = state.lightFail
-      uAtm[1] = state.decay
-      uAtm[2] = state.grade
-      uAtm[3] = state.bank
+      put(uAtm, [
+        state.lightFail,
+        state.decay,
+        state.grade,
+        state.bank,
+      ])
 
-      uSun[0] = state.sun[0]
-      uSun[1] = state.sun[1]
-      uSun[2] = state.sun[2]
-      uSun[3] = 1
+      put(uSun, [
+        state.sun[0],
+        state.sun[1],
+        state.sun[2],
+        1,
+      ])
 
-      uUp[0] = state.up[0]
-      uUp[1] = state.up[1]
-      uUp[2] = state.up[2]
-      uUp[3] = state.slots[1].sky
+      put(uUp, [
+        state.up[0],
+        state.up[1],
+        state.up[2],
+        state.slots[1].sky,
+      ])
 
       return { uSecA, uSecB, uSecC, uBend, uCart, uRide, uAtm, uSun, uUp, uFall }
     },

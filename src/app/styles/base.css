@@ -25,48 +25,48 @@
    store to that box whenever it changes (a ResizeObserver; see
    hooks/use-journey-runtime). */
 #app-container {
-  position:           fixed;
-  inset:              0;
-  width:              100vw;
-  height:             100vh;
-  background-color:   #000;
-  overflow:           hidden;
-  font-family:        var(--font-mono);
-  user-select:        none;
+  position:                 fixed;
+  inset:                    0;
+  inline-size:              100vi;
+  block-size:               100vb;
+  background-color:         #000;
+  overflow:                 hidden;
+  font-family:              var(--font-mono);
+  user-select:              none;
     /* The row the HUD buttons sit on, above the transport. */
   --hud-row: 84px;
 }
 
 
 #gl-canvas {
-  position:   absolute;
-  top:        0;
-  left:       0;
-  width:      100vw;
-  height:     100vh;
-  z-index:    0;
-  display:    block;
+  position:                 absolute;
+  inset-block-start:        0;
+  inset-inline-start:       0;
+  inline-size:              100vi;
+  block-size:               100vb;
+  z-index:                  0;
+  display:                  block;
 }
 
 
-@supports (height: 100dvh) {
+@supports (height: 100dvb) {
   #app-container,
   #gl-canvas {
-    height: 100dvh;
+    block-size: 100dvb;
   }
 }
 
 
 #crt-overlay {
-  position:          absolute;
-  top:               0;
-  left:              0;
-  width:             100%;
-  height:            100%;
-  z-index:           5;
-  pointer-events:    none;
-  background:        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-  background-size:   100% 4px, 3px 100%;
+  position:                        absolute;
+  inset-block-start:               0;
+  inset-inline-start:              0;
+  inline-size:                     100%;
+  block-size:                      100%;
+  z-index:                         5;
+  pointer-events:                  none;
+  background:                      linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size:                 100% 4px, 3px 100%;
 }
 
 
@@ -77,11 +77,11 @@
    it has torn out. */
 #journey-title-intro,
 #journey-section-heading {
-  position:         fixed;
-  inset:            0;
-  width:            100%;
-  height:           100%;
-  pointer-events:   none;
+  position:               fixed;
+  inset:                  0;
+  inline-size:            100%;
+  block-size:             100%;
+  pointer-events:         none;
 }
 
 
@@ -111,21 +111,20 @@
   color:             rgba(255, 255, 255, 0.55);
   font-family:       var(--font-mono);
   transition:        opacity 0.45s ease;
-}
 
-
-#journey-loader[data-done] {
-  opacity:        0;
-  pointer-events: none;
+  &[data-done] {
+    opacity:        0;
+    pointer-events: none;
+  }
 }
 
 
 .jl-bar {
-  position:     relative;
-  width:        min(320px, 70vw);
-  height:       2px;
-  overflow:     hidden;
-  background:   rgba(255, 255, 255, 0.12);
+  position:           relative;
+  inline-size:        min(320px, 70vi);
+  block-size:         2px;
+  overflow:           hidden;
+  background:         rgba(255, 255, 255, 0.12);
 }
 
 
@@ -143,15 +142,15 @@
    the compositor, so it keeps moving while the main thread is blocked
    compiling shaders — the one stage that cannot report its progress. */
 .jl-bar::after {
-  content:       "";
-  position:      absolute;
-  top:           0;
-  bottom:        0;
-  left:          0;
-  width:         30%;
-  background:    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
-  animation:     jlSweep 1.3s linear infinite;
-  will-change:   transform;
+  content:                     "";
+  position:                    absolute;
+  inset-block-start:           0;
+  inset-block-end:             0;
+  inset-inline-start:          0;
+  inline-size:                 30%;
+  background:                  linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation:                   jlSweep 1.3s linear infinite;
+  will-change:                 transform;
 }
 
 
@@ -168,7 +167,7 @@
 .jl-status {
   display:          flex;
   gap:              14px;
-  font-size:        10px;
+  font-size:        0.625rem;
   letter-spacing:   3px;
   text-transform:   uppercase;
   white-space:      nowrap;
@@ -187,25 +186,25 @@
 
 
 #journey-loader[data-failed] .jl-status {
-  max-width:         88vw;
-  color:             #ff5a5a;
-  white-space:       normal;
-  justify-content:   center;
-  text-align:        center;
+  max-inline-size:         88vi;
+  color:                   #ff5a5a;
+  white-space:             normal;
+  justify-content:         center;
+  text-align:              center;
 }
 
 
 /* What the compiler said. Selectable, so it can go into a bug report from a
    phone with no console. */
 .jl-detail {
-  max-width:        min(560px, 88vw);
-  font-size:        10px;
-  line-height:      1.5;
-  letter-spacing:   1px;
-  text-align:       center;
-  color:            rgba(255, 90, 90, 0.75);
-  overflow-wrap:    anywhere;
-  user-select:      text;
+  max-inline-size:        min(560px, 88vi);
+  font-size:              0.625rem;
+  line-height:            1.5;
+  letter-spacing:         1px;
+  text-align:             center;
+  color:                  rgba(255, 90, 90, 0.75);
+  overflow-wrap:          anywhere;
+  user-select:            text;
 }
 
 

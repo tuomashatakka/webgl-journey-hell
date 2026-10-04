@@ -69,6 +69,7 @@ interface House {
 }
 
 class Instances {
+
   /** One identity instance: for a mesh already built in world space. */
   static world (): Instances {
     const i = new Instances()

@@ -180,6 +180,39 @@ function makeSlot (
   }
 }
 
+/** The three resident section slots (previous, current, next) in the current section's frame. */
+function slotsAround (idx: number, localZ: number): ReturnType<typeof makeSlot>[] {
+  const cur  = SECTIONS[idx]
+  const prev = sectionAt(idx - 1)
+  const next = sectionAt(idx + 1)
+
+  // --- slot transforms, all expressed in the current section's frame ---
+
+  const slotCur = makeSlot(1, 0, 0, 0, 0, cur)
+
+  // Next: q = rot(-turnNext) * (p - (0, -cur.drop, cur.len)).
+  const an      = -next.turn
+  const slotNxt = makeSlot(Math.cos(an), Math.sin(an), 0, -cur.drop, cur.len, next)
+
+  // Previous: q = rot(turnCur) * p + (0, -prev.drop, prev.len), rewritten as
+  // rot(turnCur) * (p - t) with t = -rot(-turnCur) * offset so the shader has
+  // one code path. rot(-a) applied to (x=0, z=prev.len) is (sin a, cos a) * len.
+  const ap      = cur.turn
+  const cp      = Math.cos(ap)
+  const sp      = Math.sin(ap)
+  const slotPrv = makeSlot(cp, sp, -sp * prev.len, prev.drop, -cp * prev.len, prev)
+
+  // Route distance to each resident section's entry. The previous section's is
+  // a whole section behind, the current one's is behind by however far into it
+  // we have walked, and the next one's is whatever is left of this one — which
+  // makes `next` the only slot that is ever mid-deployment.
+  slotPrv.ahead = -(prev.len + localZ)
+  slotCur.ahead = -localZ
+  slotNxt.ahead = cur.len - localZ
+
+  return [ slotPrv, slotCur, slotNxt ]
+}
+
 /**
  * The whole route as a pure function of distance walked.
  *
@@ -211,19 +244,7 @@ function getNatatoriumState (dist: number): NatatoriumState {
 
   // --- slot transforms, all expressed in the current section's frame ---
 
-  const slotCur = makeSlot(1, 0, 0, 0, 0, cur)
-
-  // Next: q = rot(-turnNext) * (p - (0, -cur.drop, cur.len)).
-  const an      = -next.turn
-  const slotNxt = makeSlot(Math.cos(an), Math.sin(an), 0, -cur.drop, cur.len, next)
-
-  // Previous: q = rot(turnCur) * p + (0, -prev.drop, prev.len), rewritten as
-  // rot(turnCur) * (p - t) with t = -rot(-turnCur) * offset so the shader has
-  // one code path. rot(-a) applied to (x=0, z=prev.len) is (sin a, cos a) * len.
-  const ap      = cur.turn
-  const cp      = Math.cos(ap)
-  const sp      = Math.sin(ap)
-  const slotPrv = makeSlot(cp, sp, -sp * prev.len, prev.drop, -cp * prev.len, prev)
+  const slots = slotsAround(idx, localZ)
 
   // --- camera ---
 
@@ -273,15 +294,6 @@ function getNatatoriumState (dist: number): NatatoriumState {
   const stride = 1 - 0.75 * clamp01(depth / EYE)
   const bob    = Math.abs(Math.sin(dist * 1.7)) * 0.045 * stride
 
-  // Route distance to each resident section's entry. The previous section's is
-  // a whole section behind, the current one's is behind by however far into it
-  // we have walked, and the next one's is whatever is left of this one — which
-  // makes `next` the only slot that is ever mid-deployment.
-  slotPrv.ahead = -(prev.len + localZ)
-  slotCur.ahead = -localZ
-  slotNxt.ahead = cur.len - localZ
-
-  const slots = [ slotPrv, slotCur, slotNxt ]
 
   return {
     dist,

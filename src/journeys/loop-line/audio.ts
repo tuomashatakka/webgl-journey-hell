@@ -61,9 +61,22 @@ import type { FormantVoice } from './audio/layers'
 import { JOINT_PITCH, MAX_JOINTS, ROOMS, WHEELBASE } from './audio/patches'
 
 
-/** Glide for the room crossfade, which happens at a portal and should be quick. */
+const BAY_LAYER_NAMES: readonly BayLayer[] = [ 'muzak', 'wind', 'water', 'splash', 'fan', 'coil', 'relay', 'void', 'bore' ]
+
+/** Layer gain by bay, as a function of speed: concourse muzak, cut wind, annex water and splash, stacks fans, coil and relays, void, bore. */
+const BAY_LAYERS: Record<number, Partial<Record<BayLayer, (speed: number) => number>>> = {
+  1: { muzak: () => 0.045 },
+  2: { wind: speed => 0.06 * Math.min(speed / 18, 1) },
+  3: { water: () => 0.08, splash: speed => Math.min(speed / 18, 1) * 0.05 },
+  4: { fan: () => 0.055, coil: () => 0.025, relay: () => 1 },
+  5: { void: () => 0.018 },
+  6: { bore: () => 0.1 },
+}
+
 const ROOM_GLIDE = 0.3
 
+/** Glide for the room crossfade, which happens at a portal and should be quick. */
+type BayLayer = 'muzak' | 'wind' | 'water' | 'splash' | 'fan' | 'coil' | 'relay' | 'void' | 'bore'
 
 /**
  * The engine: it owns the nodes the layers return and the per-frame state, and
@@ -212,7 +225,50 @@ export class LoopLineAudioEngine extends JourneyAudio {
     this.room?.tune(ROOMS[i], now, ROOM_GLIDE)
   }
 
-  // ---- construction -------------------------------------------------------
+  // ---- per-frame ----------------------------------------------------------
+
+  /** The continuous layers: the motor always, the rest only in the bay they belong to. */
+  private updateBayLayers (now: number): void {
+    const speed = this.speed
+    this.ramp(this.motorGain?.gain, 0.04 + Math.min(speed / 20, 1) * 0.14, now)
+
+    const open = BAY_LAYERS[this.bay] ?? {}
+    for (const layer of BAY_LAYER_NAMES)
+      this.ramp(this[`${layer}Gain`]?.gain, open[layer]?.(speed) ?? 0, now)
+  }
+
+  // ---- per-frame ----------------------------------------------------------
+
+  /** Master degradation by lap, and the power-cut dropouts gated on `lightFail`. */
+  private degrade (now: number, lightFail: number): void {
+    // --- master degradation ---
+    //
+    // The laps take the top off everything. Not a duck and not a fade — the
+    // building is simply further away every time round, and by the third lap
+    // you are listening to it through a wall.
+    const age = Math.min(this.lapF * 0.22, 0.62)
+    this.masterLP?.frequency.setTargetAtTime(18000 * Math.pow(0.16, age), now, GLIDE)
+    this.wet?.gain.setTargetAtTime(0.45 + age * 0.5, now, GLIDE)
+
+    // Power-cut dropouts gated on uDecay[1] (lightFail).
+    if (lightFail > 0.05 && Math.sin(this.lapF * 47.3) > 0.98 - lightFail * 0.15) {
+      const duck = 0.15 + lightFail * 0.25
+      this.main?.gain.setTargetAtTime(duck, now, 0.01)
+      this.after(120, () => {
+        if (this.ctx && this.main)
+          this.main.gain.setTargetAtTime(0.85, this.ctx.currentTime, 0.04)
+      })
+    }
+  }
+
+  /** Splash events in the annex, their rate tracking speed. */
+  private emitSplash (): void {
+    // Emit splash events — rate tracks speed.
+    if (this.bay === 3 && this.splashGain) {
+      if (Math.random() < this.speed / 18 * 0.08 && this.ctx && this.dry && this.noiseBuffer)
+        splash(this.ctx, this.noiseBuffer, this.dry, this.wet ?? this.dry)
+    }
+  }
 
   protected build (): void {
     const { ctx, dry } = this
@@ -250,8 +306,6 @@ export class LoopLineAudioEngine extends JourneyAudio {
     if (this.wet)
       buildShimmer(ctx, this.wet)
   }
-
-  // ---- per-frame ----------------------------------------------------------
 
   public update (_time: number, state?: CustomUniforms): void {
     if (!this.ctx || this.isMuted || !state)
@@ -295,67 +349,12 @@ export class LoopLineAudioEngine extends JourneyAudio {
     }
     this.crossfadeRoom(now)
 
-    // --- continuous layers ---
+    this.updateBayLayers(now)
 
-    // Motor: pitch and filter track speed.
-    this.ramp(this.motorGain?.gain, 0.04 + Math.min(this.speed / 20, 1) * 0.14, now)
-
-    // Concourse muzak.
-    this.ramp(this.muzakGain?.gain, this.bay === 1 ? 0.045 : 0, now)
-
-    // Wind in the cut — open air.
-    const cutFactor = this.bay === 2 ? 1 : 0
-    this.ramp(this.windGain?.gain, cutFactor * 0.06 * Math.min(this.speed / 18, 1), now)
-
-    // Water in the annex — lapping rate tracks speed.
-    this.ramp(this.waterGain?.gain, this.bay === 3 ? 0.08 : 0, now)
-
-    // Splash in the annex — rate tracks speed.
-    const splashRate = this.bay === 3 ? Math.min(this.speed / 18, 1) * 0.05 : 0
-    this.ramp(this.splashGain?.gain, splashRate, now)
-
-    // Fan walls in the stacks.
-    this.ramp(this.fanGain?.gain, this.bay === 4 ? 0.055 : 0, now)
-
-    // Coil whine in the stacks.
-    this.ramp(this.coilGain?.gain, this.bay === 4 ? 0.025 : 0, now)
-
-    // Relay clicks in the stacks — driven by schedule, just gate the gain.
-    this.ramp(this.relayGain?.gain, this.bay === 4 ? 1 : 0, now)
-
-    // Void — almost nothing on the trestle.
-    this.ramp(this.voidGain?.gain, this.bay === 5 ? 0.018 : 0, now)
-
-    // Bore — narrow, close, dry brick.
-    this.ramp(this.boreGain?.gain, this.bay === 6 ? 0.1 : 0, now)
-
-    // --- master degradation ---
-    //
-    // The laps take the top off everything. Not a duck and not a fade — the
-    // building is simply further away every time round, and by the third lap
-    // you are listening to it through a wall.
-    const age = Math.min(this.lapF * 0.22, 0.62)
-    this.masterLP?.frequency.setTargetAtTime(18000 * Math.pow(0.16, age), now, GLIDE)
-    this.wet?.gain.setTargetAtTime(0.45 + age * 0.5, now, GLIDE)
-
-    // Power-cut dropouts gated on uDecay[1] (lightFail).
-    if (decay[1] > 0.05 && Math.sin(this.lapF * 47.3) > 0.98 - decay[1] * 0.15) {
-      const duck = 0.15 + decay[1] * 0.25
-      this.main?.gain.setTargetAtTime(duck, now, 0.01)
-      this.after(120, () => {
-        if (this.ctx && this.main)
-          this.main.gain.setTargetAtTime(0.85, this.ctx.currentTime, 0.04)
-      })
-    }
-
-    // Emit splash events — rate tracks speed.
-    if (this.bay === 3 && this.splashGain) {
-      if (Math.random() < this.speed / 18 * 0.08 && this.ctx && this.dry && this.noiseBuffer)
-        splash(this.ctx, this.noiseBuffer, this.dry, this.wet ?? this.dry)
-    }
+    this.degrade(now, decay[1])
+    this.emitSplash()
   }
 }
-
 
 export function createLoopLineAudio (): LoopLineAudioEngine {
   return new LoopLineAudioEngine()

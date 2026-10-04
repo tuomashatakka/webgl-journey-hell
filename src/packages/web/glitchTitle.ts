@@ -52,7 +52,6 @@ export interface GlitchTitle {
   resize(width: number, height: number): void;
 }
 
-
 interface Layers {
   base:   HTMLCanvasElement;
   red:    HTMLCanvasElement;
@@ -62,6 +61,16 @@ interface Layers {
   /** The rows the text occupies, for aiming the damage. */
   top:    number;
   bottom: number;
+}
+
+type Rng = () => number
+
+interface BackdropState {
+  backdrop: boolean;
+  calm?:    boolean;
+
+  /** 0..1 progress of the tear-out. */
+  out: number;
 }
 
 function canvasOf (w: number, h: number): HTMLCanvasElement {
@@ -109,6 +118,61 @@ function tinted (src: HTMLCanvasElement, color: string): HTMLCanvasElement {
   return c
 }
 
+/** Channel rotation: copy runs of bytes forward by an offset that is not a multiple of four. */
+function rotateChannels (d: Uint8ClampedArray, row: number, amount: number, rnd: Rng): void {
+  const n      = d.length
+  const shifts = Math.floor(3 + amount * 26)
+  for (let i = 0; i < shifts; i++) {
+    const len  = Math.floor(row * (0.2 + rnd() * 2.5 * amount))
+    const from = Math.floor(rnd() * Math.max(1, n - len))
+    const off  = (Math.floor(rnd() * 40) * 4 + 1 + Math.floor(rnd() * 3)) * (rnd() < 0.5 ? -1 : 1)
+    const to   = Math.min(Math.max(0, from + off), n - len)
+    d.copyWithin(to, from, from + len)
+  }
+}
+
+/** Smears: one row's bytes repeated down a band. */
+function smearRows (d: Uint8ClampedArray, width: number, rows: number, amount: number, rnd: Rng): void {
+  const row    = width * 4
+  const smears = Math.floor(amount * 7)
+  for (let i = 0; i < smears; i++) {
+    const r0   = Math.floor(rnd() * rows)
+    const span = Math.floor(2 + rnd() * rows * 0.25 * amount)
+    const x0   = Math.floor(rnd() * width * 0.6) * 4
+    const w    = Math.floor(width * (0.2 + rnd() * 0.5)) * 4
+    const from = r0 * row + x0
+    for (let r = 1; r < span && r0 + r < rows; r++)
+      d.copyWithin((r0 + r) * row + x0, from, Math.min(from + w, (r0 + 1) * row))
+  }
+}
+
+/** Bit flips, in bursts. */
+function flipBits (d: Uint8ClampedArray, amount: number, rnd: Rng): void {
+  const flips = Math.floor(amount * amount * 1800)
+  for (let i = 0; i < flips; i++) {
+    const at = Math.floor(rnd() * d.length)
+    d[at] ^= 1 << Math.floor(4 + rnd() * 4)
+  }
+}
+
+/** Macroblocks: 8x8 squares posterised to their corner, as a codec that has lost its residuals would draw them. */
+function posteriseBlocks (d: Uint8ClampedArray, width: number, rows: number, amount: number, rnd: Rng): void {
+  const blocks = Math.floor(amount * 40)
+  for (let i = 0; i < blocks; i++) {
+    const bx = Math.floor(rnd() * (width / 8)) * 8
+    const by = Math.floor(rnd() * Math.max(1, rows / 8)) * 8
+    const c0 = (by * width + bx) * 4
+    for (let y = 0; y < 8 && by + y < rows; y++)
+      for (let x = 0; x < 8 && bx + x < width; x++) {
+        const k  = ((by + y) * width + bx + x) * 4
+        d[k]     = d[c0]
+        d[k + 1] = d[c0 + 1]
+        d[k + 2] = d[c0 + 2]
+        d[k + 3] = d[c0 + 3]
+      }
+  }
+}
+
 /**
  * Wreck the bytes of the title's band. `amount` 0..1. Every operation works on
  * raw RGBA bytes, which is the point: copies at offsets that are not multiples
@@ -123,60 +187,42 @@ function corrupt (src: HTMLCanvasElement, top: number, bottom: number, amount: n
   const y0   = Math.max(0, Math.floor(top))
   const rows = Math.max(1, Math.min(src.height, Math.ceil(bottom)) - y0)
   const img  = ctx.getImageData(0, y0, src.width, rows)
-  const d    = img.data
-  const n    = d.length
   const rnd  = mulberry32(seed)
-  const row  = src.width * 4
 
-  // Channel rotation: copy runs of bytes forward by an offset that is not a
-  // multiple of four.
-  const shifts = Math.floor(3 + amount * 26)
-  for (let i = 0; i < shifts; i++) {
-    const len  = Math.floor(row * (0.2 + rnd() * 2.5 * amount))
-    const from = Math.floor(rnd() * Math.max(1, n - len))
-    const off  = (Math.floor(rnd() * 40) * 4 + 1 + Math.floor(rnd() * 3)) * (rnd() < 0.5 ? -1 : 1)
-    const to   = Math.min(Math.max(0, from + off), n - len)
-    d.copyWithin(to, from, from + len)
-  }
-
-  // Smears: one row's bytes repeated down a band.
-  const smears = Math.floor(amount * 7)
-  for (let i = 0; i < smears; i++) {
-    const r0   = Math.floor(rnd() * rows)
-    const span = Math.floor(2 + rnd() * rows * 0.25 * amount)
-    const x0   = Math.floor(rnd() * src.width * 0.6) * 4
-    const w    = Math.floor(src.width * (0.2 + rnd() * 0.5)) * 4
-    const from = r0 * row + x0
-    for (let r = 1; r < span && r0 + r < rows; r++)
-      d.copyWithin((r0 + r) * row + x0, from, Math.min(from + w, (r0 + 1) * row))
-  }
-
-  // Bit flips, in bursts.
-  const flips = Math.floor(amount * amount * 1800)
-  for (let i = 0; i < flips; i++) {
-    const at = Math.floor(rnd() * n)
-    d[at] ^= 1 << Math.floor(4 + rnd() * 4)
-  }
-
-  // Macroblocks: 8×8 squares posterised to their corner, as a codec that has
-  // lost its residuals would draw them.
-  const blocks = Math.floor(amount * 40)
-  for (let i = 0; i < blocks; i++) {
-    const bx = Math.floor(rnd() * (src.width / 8)) * 8
-    const by = Math.floor(rnd() * Math.max(1, rows / 8)) * 8
-    const c0 = (by * src.width + bx) * 4
-    for (let y = 0; y < 8 && by + y < rows; y++)
-      for (let x = 0; x < 8 && bx + x < src.width; x++) {
-        const k  = ((by + y) * src.width + bx + x) * 4
-        d[k]     = d[c0]
-        d[k + 1] = d[c0 + 1]
-        d[k + 2] = d[c0 + 2]
-        d[k + 3] = d[c0 + 3]
-      }
-  }
+  rotateChannels(img.data, src.width * 4, amount, rnd)
+  smearRows(img.data, src.width, rows, amount, rnd)
+  flipBits(img.data, amount, rnd)
+  posteriseBlocks(img.data, src.width, rows, amount, rnd)
 
   ctx.putImageData(img, 0, y0)
   return out
+}
+
+/**
+ * The black it all starts on. Fades plainly when calm; otherwise it is torn
+ * away in bands, the way a picture rolls back in when a signal locks. A
+ * heading (no backdrop) has nothing behind it to tear away.
+ */
+function paintBackdrop (ctx: CanvasRenderingContext2D, w: number, h: number, { backdrop, calm, out }: BackdropState, rnd: Rng): void {
+  if (!backdrop)
+    return
+  if (calm) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${1 - out})`
+    ctx.fillRect(0, 0, w, h)
+    return
+  }
+  if (out >= 1)
+    return
+
+  ctx.fillStyle = `rgba(0, 0, 0, ${1 - out * out * 0.9})`
+  ctx.fillRect(0, 0, w, h)
+
+  const holes = Math.floor(out * 38)
+  for (let i = 0; i < holes; i++) {
+    const y  = rnd() * h
+    const bh = 2 + rnd() * h * 0.08 * (0.3 + out)
+    ctx.clearRect(0, y, w, bh)
+  }
 }
 
 export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleOptions): GlitchTitle {
@@ -284,27 +330,7 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
       const out   = clamp01((t - outStart) / Math.max(0.01, tOut - outStart))
       const g     = glitchAt(t, rnd)
 
-      // --- the black it all starts on -----------------------------------------
-      // Fades plainly when calm; otherwise it is torn away in bands, the way a
-      // picture rolls back in when a signal locks.
-      if (!backdrop) {
-        // A heading has nothing behind it to tear away.
-      }
-      else if (opts.calm) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${1 - out})`
-        ctx.fillRect(0, 0, w, h)
-      }
-      else if (out < 1) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${1 - out * out * 0.9})`
-        ctx.fillRect(0, 0, w, h)
-
-        const holes = Math.floor(out * 38)
-        for (let i = 0; i < holes; i++) {
-          const y  = rnd() * h
-          const bh = 2 + rnd() * h * 0.08 * (0.3 + out)
-          ctx.clearRect(0, y, w, bh)
-        }
-      }
+      paintBackdrop(ctx, w, h, { backdrop, calm: opts.calm, out }, rnd)
 
       // --- the name -------------------------------------------------------------
       const alpha = opts.calm

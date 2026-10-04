@@ -65,23 +65,44 @@ const CULL_DIST = 420
 
 const FOV = 70 * Math.PI / 180
 
+interface Programs {
+  surfProg:  GlProgram;
+  wallProg:  GlProgram;
+  waterProg: GlProgram;
+  skyProg:   GlProgram;
+  downProg:  GlProgram;
+  upProg:    GlProgram;
+  compProg:  GlProgram;
+}
+
+/** Every program the scene draws with, or null (all disposed) if any failed to compile. */
+function createPrograms (gl: WebGL2RenderingContext): Programs | null {
+  const made = {
+    surfProg:  createGlProgram(gl, loopLineVert, loopLineFrag('surface')),
+    wallProg:  createGlProgram(gl, loopLineVert, loopLineFrag('headwall')),
+    waterProg: createGlProgram(gl, loopLineVert, loopLineFrag('water')),
+    skyProg:   createGlProgram(gl, skyVert, skyFrag),
+    downProg:  createGlProgram(gl, postVert, bloomDownFrag),
+    upProg:    createGlProgram(gl, postVert, bloomUpFrag),
+    compProg:  createGlProgram(gl, postVert, compositeFrag),
+  }
+  const all = Object.values(made)
+  if (all.some(p => !p)) {
+    all.forEach(p => p?.dispose())
+    return null
+  }
+  return made as Programs
+}
+
 export function createLoopLineScene (
   gl: WebGL2RenderingContext,
   canvas: HTMLCanvasElement,
 ): JourneyRenderer | null {
-  const surfProg  = createGlProgram(gl, loopLineVert, loopLineFrag('surface'))
-  const wallProg  = createGlProgram(gl, loopLineVert, loopLineFrag('headwall'))
-  const waterProg = createGlProgram(gl, loopLineVert, loopLineFrag('water'))
-  const skyProg   = createGlProgram(gl, skyVert, skyFrag)
-  const downProg  = createGlProgram(gl, postVert, bloomDownFrag)
-  const upProg    = createGlProgram(gl, postVert, bloomUpFrag)
-  const compProg  = createGlProgram(gl, postVert, compositeFrag)
-  const programs  = [ surfProg, wallProg, waterProg, skyProg, downProg, upProg, compProg ]
-  if (programs.some(p => !p)) {
-    programs.forEach(p => p?.dispose())
+  const programs = createPrograms(gl)
+  if (!programs)
     return null
-  }
 
+  const { surfProg, wallProg, waterProg, skyProg } = programs
 
   const materials = createMaterialArrays(gl)
   const skyIds    = [ ...new Set([ ...BAYS, CHORD_BAY ].map(b => b.sky).filter(Boolean) as string[]) ]
@@ -126,7 +147,7 @@ export function createLoopLineScene (
     shared.encode = encoded()
     setFrame(prog, frame, shared)
   }
-  const postProgs = { down: downProg!, up: upProg!, comp: compProg! }
+  const postProgs = { down: programs.downProg, up: programs.upProg, comp: programs.compProg }
 
   return {
     ready () {
@@ -356,7 +377,7 @@ export function createLoopLineScene (
       cabDraws.forEach(d => d.mesh.dispose(gl))
       materials.dispose(gl)
       skies.forEach(sky => sky.dispose(gl))
-      programs.forEach(p => p!.dispose())
+      Object.values(programs).forEach(p => p.dispose())
     },
   }
 }

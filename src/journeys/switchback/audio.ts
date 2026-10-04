@@ -431,6 +431,49 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     param.setTargetAtTime(value, now, GLIDE)
   }
 
+  /** Distance travelled since the last frame, and the rail joints it crosses. */
+  private advanceTravel (phase: number): void {
+    // --- distance travelled since the last frame ---
+    //
+    // The phase is folded into [0, PHASE_WRAP), so once every couple of thousand
+    // metres the difference between two frames is enormous and negative. A wrap
+    // is the one delta that can be, so it is also the one that identifies itself.
+    if (this.phase >= 0) {
+      let d = phase - this.phase
+      if (d < -PHASE_WRAP * 0.5)
+        d += PHASE_WRAP
+      if (d > 0 && d < 40)
+        this.travel += d
+    }
+    this.phase = phase
+
+    // Joints, off distance. Capped per frame so that a tab left in the
+    // background does not come back and fire four hundred of them at once.
+    let fired = 0
+    while (this.travel >= JOINT_PITCH && fired < 3) {
+      this.travel -= JOINT_PITCH
+      this.joint(0.05 + Math.min(this.speed / 18, 1) * 0.13)
+      fired++
+    }
+    if (this.travel > JOINT_PITCH * 4)
+      this.travel = 0
+  }
+
+  /** The lift chain's ratchet. */
+  private advanceChain (): void {
+    // The chain, off a rate of its own. It is a ratchet: the dogs drop at the
+    // speed the chain runs at, not at the speed the hill goes past.
+    if (this.chain > 0.01) {
+      this.ratchet += 0.0166 * 7.5
+      while (this.ratchet >= 1) {
+        this.ratchet -= 1
+        this.clack()
+      }
+    }
+    else
+      this.ratchet = 0
+  }
+
   // ---- construction -------------------------------------------------------
 
   protected build (): void {
@@ -468,43 +511,8 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     this.chain   = ride[3]
     this.secType = secA[CUR_TYPE_INDEX]
 
-    // --- distance travelled since the last frame ---
-    //
-    // The phase is folded into [0, PHASE_WRAP), so once every couple of thousand
-    // metres the difference between two frames is enormous and negative. A wrap
-    // is the one delta that can be, so it is also the one that identifies itself.
-    const phase = cart[0]
-    if (this.phase >= 0) {
-      let d = phase - this.phase
-      if (d < -PHASE_WRAP * 0.5)
-        d += PHASE_WRAP
-      if (d > 0 && d < 40)
-        this.travel += d
-    }
-    this.phase = phase
-
-    // Joints, off distance. Capped per frame so that a tab left in the
-    // background does not come back and fire four hundred of them at once.
-    let fired = 0
-    while (this.travel >= JOINT_PITCH && fired < 3) {
-      this.travel -= JOINT_PITCH
-      this.joint(0.05 + Math.min(this.speed / 18, 1) * 0.13)
-      fired++
-    }
-    if (this.travel > JOINT_PITCH * 4)
-      this.travel = 0
-
-    // The chain, off a rate of its own. It is a ratchet: the dogs drop at the
-    // speed the chain runs at, not at the speed the hill goes past.
-    if (this.chain > 0.01) {
-      this.ratchet += 0.0166 * 7.5
-      while (this.ratchet >= 1) {
-        this.ratchet -= 1
-        this.clack()
-      }
-    }
-    else
-      this.ratchet = 0
+    this.advanceTravel(cart[0])
+    this.advanceChain()
 
     // --- continuous layers ---
     const v = Math.min(this.speed / 20, 1)

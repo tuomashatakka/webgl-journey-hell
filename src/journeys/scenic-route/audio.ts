@@ -31,6 +31,8 @@ interface Voice {
   filter?: BiquadFilterNode;
 }
 
+type Partial = readonly [OscillatorType, number, number]
+
 export class ScenicRouteAudio extends JourneyAudio {
   private engineOsc: OscillatorNode[] = []
   private engine:    Voice | null = null
@@ -106,18 +108,7 @@ export class ScenicRouteAudio extends JourneyAudio {
 
     // Engine: saw, detuned saw an octave up, sub square.
     const mix = ctx.createGain()
-    for (const [ type, ratio, level ] of [[ 'sawtooth', 1, 0.5 ], [ 'sawtooth', 2.01, 0.18 ], [ 'square', 0.5, 0.3 ]] as const) {
-      const osc           = ctx.createOscillator()
-      osc.type            = type
-      osc.frequency.value = 60 * ratio
-
-      const g      = ctx.createGain()
-      g.gain.value = level
-      osc.connect(g)
-      g.connect(mix)
-      osc.start()
-      this.engineOsc.push(osc)
-    }
+    this.engineOsc.push(...oscStack(ctx, mix, [[ 'sawtooth', 60, 0.5 ], [ 'sawtooth', 60 * 2.01, 0.18 ], [ 'square', 60 * 0.5, 0.3 ]]))
     this.engine = this.voice(ctx, mix, 'lowpass', 600, 1.2)
 
     this.tyres = this.voice(ctx, this.noise(ctx, buf), 'bandpass', 620, 0.6)
@@ -125,18 +116,7 @@ export class ScenicRouteAudio extends JourneyAudio {
 
     // Radio: a triad through a voice band, plus static.
     const station = ctx.createGain()
-    for (const f of [ 220, 277.2, 329.6 ]) {
-      const osc           = ctx.createOscillator()
-      osc.type            = 'sine'
-      osc.frequency.value = f
-
-      const g      = ctx.createGain()
-      g.gain.value = 0.33
-      osc.connect(g)
-      g.connect(station)
-      osc.start()
-      this.radioOsc.push(osc)
-    }
+    this.radioOsc.push(...oscStack(ctx, station, [ 220, 277.2, 329.6 ].map(f => [ 'sine', f, 0.33 ] as const)))
     this.radio   = this.voice(ctx, station, 'bandpass', 900, 0.9)
     this.staticV = this.voice(ctx, this.noise(ctx, buf), 'bandpass', 2400, 0.4)
 
@@ -230,6 +210,22 @@ export class ScenicRouteAudio extends JourneyAudio {
       this.nextDrip = time + 0.35 + Math.random() * 1.6
     }
   }
+}
+
+/** Start one oscillator per [type, Hz, level] partial, summed into `out`. */
+function oscStack (ctx: AudioContext, out: AudioNode, partials: readonly Partial[]): OscillatorNode[] {
+  return partials.map(([ type, hz, level ]) => {
+    const osc           = ctx.createOscillator()
+    osc.type            = type
+    osc.frequency.value = hz
+
+    const g      = ctx.createGain()
+    g.gain.value = level
+    osc.connect(g)
+    g.connect(out)
+    osc.start()
+    return osc
+  })
 }
 
 function weightAt (surface: number, centre: number): number {

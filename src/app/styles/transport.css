@@ -12,18 +12,18 @@
  */
 
 #journey-transport {
-  position:         absolute;
-  bottom:           0;
-  left:             0;
-  right:            0;
-  z-index:          12;
-  padding:          8px 20px 14px;
-  display:          flex;
-  flex-direction:   column;
-  gap:              7px;
-  font-family:      var(--font-mono);
-  background:       linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
-  transition:       opacity 0.35s ease;
+  position:                       absolute;
+  inset-block-end:                0;
+  inset-inline-start:             0;
+  inset-inline-end:               0;
+  z-index:                        12;
+  padding:                        8px 20px 14px;
+  display:                        flex;
+  flex-direction:                 column;
+  gap:                            7px;
+  font-family:                    var(--font-mono);
+  background:                     linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+  transition:                     opacity 0.35s ease;
 }
 
 
@@ -45,35 +45,32 @@
 
 
 .jt-btn {
-  width:         38px;
-  height:        26px;
-  background:    rgba(0, 0, 0, 0.6);
-  border:        1px solid rgba(255, 255, 255, 0.25);
-  color:         #fff;
-  font-family:   var(--font-mono);
-  font-size:     11px;
-  line-height:   1;
-  cursor:        pointer;
-  outline:       none;
-  transition:    all 0.15s ease;
-}
+  inline-size:         38px;
+  block-size:          26px;
+  background:          rgba(0, 0, 0, 0.6);
+  border:              1px solid rgba(255, 255, 255, 0.25);
+  color:               #fff;
+  font-family:         var(--font-mono);
+  font-size:           0.6875rem;
+  line-height:         1;
+  cursor:              pointer;
+  outline:             none;
+  transition:          background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 
+  &:hover {
+    background:     #fff;
+    color:          #000;
+    border-color:   #fff;
+  }
 
-.jt-btn:hover {
-  background:     #fff;
-  color:          #000;
-  border-color:   #fff;
-}
+  &:focus-visible {
+    border-color: var(--accent, #fff);
+    box-shadow:   0 0 0 1px var(--accent, #fff);
+  }
 
-
-.jt-btn:focus-visible {
-  border-color: var(--accent, #fff);
-  box-shadow:   0 0 0 1px var(--accent, #fff);
-}
-
-
-.jt-btn:active {
-  transform: translateY(1px);
+  &:active {
+    transform: translateY(1px);
+  }
 }
 
 
@@ -81,23 +78,22 @@
 .jt-pause[aria-pressed="true"] {
   color:        var(--accent, #fff);
   border-color: var(--accent, #fff);
-}
 
-
-.jt-pause[aria-pressed="true"]:hover {
-  color: #000;
+  &:hover {
+    color: #000;
+  }
 }
 
 
 /* The play state, and the section it is in, read as one line. */
 .jt-state {
-  grid-area:        state;
-  min-width:        0;
-  display:          flex;
-  gap:              12px;
-  align-items:      baseline;
-  font-size:        10px;
-  letter-spacing:   2px;
+  grid-area:              state;
+  min-inline-size:        0;
+  display:                flex;
+  gap:                    12px;
+  align-items:            baseline;
+  font-size:              0.625rem;
+  letter-spacing:         2px;
 }
 
 
@@ -106,19 +102,19 @@
   color: var(--accent, #fff);
     /* Fixed width, so the section name does not shuffle sideways every time
        the state changes. */
-  min-width: 80px;
+  min-inline-size: 80px;
 }
 
 
 .jt-label {
-  flex:             1 1 auto;
-  min-width:        0;
-  overflow:         hidden;
-  white-space:      nowrap;
-  text-overflow:    ellipsis;
-  color:            rgba(255, 255, 255, 0.6);
-  letter-spacing:   3px;
-  text-transform:   uppercase;
+  flex:                   1 1 auto;
+  min-inline-size:        0;
+  overflow:               hidden;
+  white-space:            nowrap;
+  text-overflow:          ellipsis;
+  color:                  rgba(255, 255, 255, 0.6);
+  letter-spacing:         3px;
+  text-transform:         uppercase;
 }
 
 
@@ -126,44 +122,45 @@
   grid-area:        counter;
   justify-self:     end;
   color:            rgba(255, 255, 255, 0.4);
-  font-size:        10px;
+  font-size:        0.625rem;
   letter-spacing:   2px;
 }
 
 
 .jt-track {
-  position:     relative;
-  height:       6px;
-  background:   rgba(255, 255, 255, 0.09);
-  border:       1px solid rgba(255, 255, 255, 0.16);
-  cursor:       pointer;
-    /* The bar is a slider: a drag on it scrubs, it must not scroll the page. */
+  position:         relative;
+  block-size:       6px;
+  background:       rgba(255, 255, 255, 0.09);
+  border:           1px solid rgba(255, 255, 255, 0.16);
+  cursor:           pointer;
+
+  /* The bar is a slider: a drag on it scrubs, it must not scroll the page. */
   touch-action: none;
   outline:      none;
+
+  &::before {
+    content:    "";
+    position:   absolute;
+    inset:      -12px 0;
+  }
+
+  &:focus-visible {
+    border-color: var(--accent, #fff);
+  }
 }
 
 
 /* A target a finger can hit: the bar stays six pixels, the hit area does not. */
-.jt-track::before {
-  content:    "";
-  position:   absolute;
-  inset:      -12px 0;
-}
-
-
-.jt-track:focus-visible {
-  border-color: var(--accent, #fff);
-}
 
 
 .jt-fill {
-  position:     absolute;
-  top:          0;
-  left:         0;
-  width:        100%;
-  height:       100%;
-  background:   var(--accent, #fff);
-  opacity:      0.75;
+  position:                   absolute;
+  inset-block-start:          0;
+  inset-inline-start:         0;
+  inline-size:                100%;
+  block-size:                 100%;
+  background:                 var(--accent, #fff);
+  opacity:                    0.75;
     /* Written every frame as a transform: compositor-only, no layout. */
   transform:          scaleX(0);
   transform-origin:   left center;
@@ -173,12 +170,12 @@
 
 
 .jt-tick {
-  position:         absolute;
-  top:              0;
-  width:            1px;
-  height:           100%;
-  background:       rgba(0, 0, 0, 0.75);
-  pointer-events:   none;
+  position:                       absolute;
+  inset-block-start:              0;
+  inline-size:                    1px;
+  block-size:                     100%;
+  background:                     rgba(0, 0, 0, 0.75);
+  pointer-events:                 none;
 }
 
 
@@ -212,13 +209,13 @@
 /* Fingers, not cursors: bigger buttons, a thicker tape. */
 @media (pointer: coarse) {
   .jt-btn {
-    width:         46px;
-    height:        34px;
-    font-size:     13px;
+    inline-size:         46px;
+    block-size:          34px;
+    font-size:           0.8125rem;
   }
 
   .jt-track {
-    height: 10px;
+    block-size: 10px;
   }
 }
 
@@ -240,7 +237,7 @@
 
 @media (width <= 360px) {
   .jt-btn {
-    width: 40px;
+    inline-size: 40px;
   }
 }
 
@@ -252,15 +249,15 @@
 #app-container[data-fullscreen] .hud {
   opacity:        0;
   pointer-events: none;
-}
 
+  &:focus-visible {
+    opacity: 1;
+  }
 
-#app-container[data-fullscreen] .hud:focus-visible {
-  opacity: 1;
+  &:has(:focus-visible) {
+    opacity: 1;
+  }
 }
 
 
 /* Separate: a browser without :has() drops only this rule, not the above. */
-#app-container[data-fullscreen] .hud:has(:focus-visible) {
-  opacity: 1;
-}

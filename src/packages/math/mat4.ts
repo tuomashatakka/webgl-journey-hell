@@ -152,22 +152,15 @@ export function lookAt (
   const upy = rz * fx - rx * fz
   const upz = rx * fy - ry * fx
 
-  out[0]  = rx
-  out[1]  = upx
-  out[2]  = -fx
-  out[3]  = 0
-  out[4]  = ry
-  out[5]  = upy
-  out[6]  = -fy
-  out[7]  = 0
-  out[8]  = rz
-  out[9]  = upz
-  out[10] = -fz
-  out[11] = 0
-  out[12] = -(rx * ex + ry * ey + rz * ez)
-  out[13] = -(upx * ex + upy * ey + upz * ez)
-  out[14] = -(-fx * ex + -fy * ey + -fz * ez)
-  out[15] = 1
+  out.set([
+    rx, upx, -fx, 0,
+    ry, upy, -fy, 0,
+    rz, upz, -fz, 0,
+    -(rx * ex + ry * ey + rz * ez),
+    -(upx * ex + upy * ey + upz * ez),
+    -(-fx * ex + -fy * ey + -fz * ez),
+    1,
+  ])
 
   return out
 }

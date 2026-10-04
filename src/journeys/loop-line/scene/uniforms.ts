@@ -8,7 +8,6 @@ import { BLEND, flicker, bayMedium } from './bays'
 import type { BayRender, Draw } from './bays'
 
 
-/** The sky map's yaw on this line: puts the noon sun ahead-left of THE CUT. */
 export const SKY_YAW = 0.18
 
 export type FrameType = {
@@ -34,6 +33,22 @@ export interface FrameShared {
   scatPos:  Float32Array;
   scatCol:  Float32Array;
   encode:   number;
+}
+
+/** The sky map's yaw on this line: puts the noon sun ahead-left of THE CUT. */
+/** The fog and ambient of this bay and of its two neighbours, through `bufs` (previous, own, next). */
+function setMedia (prog: GlProgram, br: BayRender, decay: number[], bufs: Float32Array[]): void {
+  const [ medA, medB, medC ] = bufs
+  const n                    = br.spans.length
+  bayMedium(br.spans[(br.index - 1 + n) % n].bay, decay, medA)
+  bayMedium(br.bay, decay, medB)
+  bayMedium(br.spans[(br.index + 1) % n].bay, decay, medC)
+  prog.uniform4f('uFogA', medA[0], medA[1], medA[2], medA[3])
+  prog.uniform4f('uFogB', medB[0], medB[1], medB[2], medB[3])
+  prog.uniform4f('uFogC', medC[0], medC[1], medC[2], medC[3])
+  prog.uniform4f('uAmbA', medA[4], medA[5], medA[6], medA[7])
+  prog.uniform4f('uAmbB', medB[4], medB[5], medB[6], medB[7])
+  prog.uniform4f('uAmbC', medC[4], medC[5], medC[6], medC[7])
 }
 
 /** The uniforms every program takes once a frame. */
@@ -65,6 +80,18 @@ export function setFrame (prog: GlProgram, frame: FrameType, shared: FrameShared
 }
 
 /** Writers for the per-bay and per-draw uniforms, with their scratch. */
+/** The special amount for a bay's rupture mode. */
+function ruptureSpecial (rupture: Rupture, decay: number[]): number {
+  const lapF = decay[3] / 0.16
+  switch (rupture) {
+    case Rupture.BLACKOUT: return Math.min(1, decay[1] * 1.1)
+    case Rupture.ADVANCE: return decay[0] * 3.2
+    case Rupture.EMPTY: return Math.min(1, decay[1] * 1.2)
+    case Rupture.VANISH: return Math.min(0.85, Math.max(0, lapF - 1.5) * 0.06)
+    default: return 0
+  }
+}
+
 export function createBayUniforms () {
   const lampPos = new Float32Array(MAX_LAMPS * 4)
   const lampCol = new Float32Array(MAX_LAMPS * 4)
@@ -77,28 +104,11 @@ export function createBayUniforms () {
   /** Per-bay uniforms: its medium and its neighbours', its lamps, its rupture. */
   const setBay = (prog: GlProgram, br: BayRender, camPos: number[], camFwd: number[],
     decay: number[], time: number, isShell: boolean) => {
-    const n = br.spans.length
-    bayMedium(br.spans[(br.index - 1 + n) % n].bay, decay, medA)
-    bayMedium(br.bay, decay, medB)
-    bayMedium(br.spans[(br.index + 1) % n].bay, decay, medC)
+    setMedia(prog, br, decay, [ medA, medB, medC ])
     prog.uniform4f('uBay', br.span.s0, br.span.s1, BLEND, isShell ? 1 : 0)
-    prog.uniform4f('uFogA', medA[0], medA[1], medA[2], medA[3])
-    prog.uniform4f('uFogB', medB[0], medB[1], medB[2], medB[3])
-    prog.uniform4f('uFogC', medC[0], medC[1], medC[2], medC[3])
-    prog.uniform4f('uAmbA', medA[4], medA[5], medA[6], medA[7])
-    prog.uniform4f('uAmbB', medB[4], medB[5], medB[6], medB[7])
-    prog.uniform4f('uAmbC', medC[4], medC[5], medC[6], medC[7])
 
     // Rupture: shard weight, the special amount for this bay's mode, the mode.
-    const lapF = decay[3] / 0.16
-    let special = 0
-    switch (br.bay.rupture) {
-      case Rupture.BLACKOUT: special = Math.min(1, decay[1] * 1.1); break
-      case Rupture.ADVANCE: special = decay[0] * 3.2; break
-      case Rupture.EMPTY: special = Math.min(1, decay[1] * 1.2); break
-      case Rupture.VANISH: special = Math.min(0.85, Math.max(0, lapF - 1.5) * 0.06); break
-      default: special = 0
-    }
+    const special = ruptureSpecial(br.bay.rupture, decay)
     prog.uniform4f('uRupture', decay[0] > 0 ? br.bay.shatter : 0, special, br.bay.rupture, 0)
 
     // The bay's lamps nearest the camera, with lamps ahead counted nearer than

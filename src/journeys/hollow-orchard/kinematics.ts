@@ -338,6 +338,15 @@ interface OrchardState {
   name: string;
 }
 
+interface LoopPlace {
+  stageA:   number;
+  stageB:   number;
+  blend:    number;
+  localZ:   number;
+  stageLen: number;
+  descent:  number;
+}
+
 function mix3 (a: RGB, b: RGB, t: number): RGB {
   return [ mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t) ]
 }
@@ -358,17 +367,8 @@ function stage (id: number): OrchardStage {
   return ORCHARD_STAGES[Math.max(0, Math.min(ORCHARD_STAGES.length - 1, id - 1))]
 }
 
-/**
- * The whole timeline as a pure function of distance walked.
- *
- * Both branches emit the same `(stageA, stageB, blend)` triple, so the shader
- * has exactly one dispatch path: evaluate A, and evaluate B only when the
- * crossfade is actually open.
- */
-function getOrchardState (z: number): OrchardState {
-  const loop  = Math.floor(z / ORCHARD_LOOP_Z)
-  const loopZ = z - loop * ORCHARD_LOOP_Z
-
+/** Which stage pair (and crossfade) a distance into the loop falls in. */
+function placeInLoop (loopZ: number): LoopPlace {
   let stageA   = STAGE_NURSERY
   let stageB   = STAGE_NURSERY
   let blend    = 0
@@ -406,6 +406,22 @@ function getOrchardState (z: number): OrchardState {
     localZ   = frac * slotLen
     stageLen = slotLen
   }
+
+  return { stageA, stageB, blend, localZ, stageLen, descent }
+}
+
+/**
+ * The whole timeline as a pure function of distance walked.
+ *
+ * Both branches emit the same `(stageA, stageB, blend)` triple, so the shader
+ * has exactly one dispatch path: evaluate A, and evaluate B only when the
+ * crossfade is actually open.
+ */
+function getOrchardState (z: number): OrchardState {
+  const loop  = Math.floor(z / ORCHARD_LOOP_Z)
+  const loopZ = z - loop * ORCHARD_LOOP_Z
+
+  const { stageA, stageB, blend, localZ, stageLen, descent } = placeInLoop(loopZ)
 
   const a = stage(stageA)
   const b = stage(stageB)

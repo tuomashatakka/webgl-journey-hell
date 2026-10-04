@@ -94,6 +94,26 @@ export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
   drawQuad()
 }
 
+/** The cockpit draws over a fresh depth buffer, back faces culled. */
+function beginCockpitDepth (gl: WebGL2RenderingContext): void {
+  gl.enable(gl.DEPTH_TEST)
+  gl.depthFunc(gl.LEQUAL)
+  gl.depthMask(true)
+  gl.clear(gl.DEPTH_BUFFER_BIT)
+  gl.enable(gl.CULL_FACE)
+  gl.cullFace(gl.BACK)
+}
+
+/** The dial face on unit 3 and the mirror's render target on unit 4. */
+function bindCockpitTextures (gl: WebGL2RenderingContext, program: GlProgram, dialTex: WebGLTexture, mirrorTex: WebGLTexture): void {
+  gl.activeTexture(gl.TEXTURE3)
+  gl.bindTexture(gl.TEXTURE_2D, dialTex)
+  program.uniform1i('uDial', 3)
+  gl.activeTexture(gl.TEXTURE4)
+  gl.bindTexture(gl.TEXTURE_2D, mirrorTex)
+  program.uniform1i('uMirror', 4)
+}
+
 /**
  * The cockpit, straight onto the back buffer after the composite, with its own
  * depth, so the world's speed blur never smears the dashboard.
@@ -111,22 +131,12 @@ export function cockpitPass (gl: WebGL2RenderingContext, rig: CockpitRig, a: Coc
     carFwd[0], carFwd[1], carFwd[2], 0,
     carPos[0], carPos[1], carPos[2], 1,
   ])
-  gl.enable(gl.DEPTH_TEST)
-  gl.depthFunc(gl.LEQUAL)
-  gl.depthMask(true)
-  gl.clear(gl.DEPTH_BUFFER_BIT)
-  gl.enable(gl.CULL_FACE)
-  gl.cullFace(gl.BACK)
+  beginCockpitDepth(gl)
   cockpitP.use()
   cockpitP.uniformMatrix4fv('uViewProj', viewProj)
   cockpitP.uniformMatrix4fv('uCarMat', carMat)
   bindLit(cockpitP, camPos, sun, env, fogCol, time, shadowOn)
-  gl.activeTexture(gl.TEXTURE3)
-  gl.bindTexture(gl.TEXTURE_2D, dialTex)
-  cockpitP.uniform1i('uDial', 3)
-  gl.activeTexture(gl.TEXTURE4)
-  gl.bindTexture(gl.TEXTURE_2D, mirror.tex)
-  cockpitP.uniform1i('uMirror', 4)
+  bindCockpitTextures(gl, cockpitP, dialTex, mirror.tex)
   cockpitP.uniform4f('uMirrorRect', -0.105, 1.378, 0.21, 0.064)
   cockpitP.uniform4f('uDialRect', DIAL.cx, DIAL.cy, DIAL.cz, DIAL.w / 2)
   cockpitP.uniform1f('uExposure', exposure)

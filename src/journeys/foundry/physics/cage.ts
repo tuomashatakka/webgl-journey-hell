@@ -103,6 +103,12 @@ const BUFFER_C        = 34000
 const BUFFER_POWER    = 1.6
 
 /**
+ * Bounding-sphere contacts between debris bodies. Returns the summed closing
+ * speed so these impacts register too.
+ */
+type Debris = FoundryState['debris'][number]
+
+/**
  * Where this run starts.
  *
  * The drop is meant to get longer every time, and moving the *brake* down alone
@@ -487,67 +493,65 @@ export function stepCage (s: FoundryState, dt: number): number {
   return impactSum + stepBodyContacts(s)
 }
 
-/**
- * Bounding-sphere contacts between debris bodies. Returns the summed closing
- * speed so these impacts register too.
- */
+/** Resolve one bounding-sphere contact between two offcuts; returns the impact it made. */
+function collideSpheres (a: Debris, b: Debris): number {
+  const dx   = b.px - a.px
+  const dy   = b.py - a.py
+  const dz   = b.pz - a.pz
+  const rsum = (a.scale + b.scale) * 0.55
+  const d2   = dx * dx + dy * dy + dz * dz
+  if (d2 >= rsum * rsum || d2 < 1e-9)
+    return 0
+
+  const dist    = Math.sqrt(d2)
+  const nx      = dx / dist
+  const ny      = dy / dist
+  const nz      = dz / dist
+  const overlap = rsum - dist
+
+  // Split the positional correction by inverse mass so a heavy offcut
+  // shoves a light one aside rather than both drifting equally.
+  const invA   = 1 / a.mass
+  const invB   = 1 / b.mass
+  const invSum = invA + invB
+  const corr   = overlap / invSum
+  a.px -= nx * corr * invA
+  a.py -= ny * corr * invA
+  a.pz -= nz * corr * invA
+  b.px += nx * corr * invB
+  b.py += ny * corr * invB
+  b.pz += nz * corr * invB
+
+  // Normal impulse, only if they are closing.
+  const rvn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny + (b.vz - a.vz) * nz
+  if (rvn >= 0)
+    return 0
+
+  const jImp = -(1 + 0.28) * rvn / invSum
+  a.vx -= nx * jImp * invA
+  a.vy -= ny * jImp * invA
+  a.vz -= nz * jImp * invA
+  b.vx += nx * jImp * invB
+  b.vy += ny * jImp * invB
+  b.vz += nz * jImp * invB
+
+  // Off-centre contact spins them.
+  const spin = jImp * 0.5
+  a.wx -= ny * spin * invA
+  a.wz += nx * spin * invA
+  b.wx += ny * spin * invB
+  b.wz -= nx * spin * invB
+  return -rvn * 0.5
+}
+
 function stepBodyContacts (s: FoundryState): number {
   let impactSum = 0
   // Bounding-sphere pairs only (15 for 6 bodies). Full box-box manifolds would
   // be far more code for a contact that is on screen for a second at a time;
   // spheres are enough to stop offcuts from visibly occupying the same space.
   for (let i = 0; i < s.debris.length; i++)
-    for (let j = i + 1; j < s.debris.length; j++) {
-      const a    = s.debris[i]
-      const b    = s.debris[j]
-      const dx   = b.px - a.px
-      const dy   = b.py - a.py
-      const dz   = b.pz - a.pz
-      const rsum = (a.scale + b.scale) * 0.55
-      const d2   = dx * dx + dy * dy + dz * dz
-      if (d2 >= rsum * rsum || d2 < 1e-9)
-        continue
-
-      const dist    = Math.sqrt(d2)
-      const nx      = dx / dist
-      const ny      = dy / dist
-      const nz      = dz / dist
-      const overlap = rsum - dist
-
-      // Split the positional correction by inverse mass so a heavy offcut
-      // shoves a light one aside rather than both drifting equally.
-      const invA   = 1 / a.mass
-      const invB   = 1 / b.mass
-      const invSum = invA + invB
-      const corr   = overlap / invSum
-      a.px -= nx * corr * invA
-      a.py -= ny * corr * invA
-      a.pz -= nz * corr * invA
-      b.px += nx * corr * invB
-      b.py += ny * corr * invB
-      b.pz += nz * corr * invB
-
-      // Normal impulse, only if they are closing.
-      const rvn = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny + (b.vz - a.vz) * nz
-      if (rvn >= 0)
-        continue
-
-      const jImp = -(1 + 0.28) * rvn / invSum
-      a.vx -= nx * jImp * invA
-      a.vy -= ny * jImp * invA
-      a.vz -= nz * jImp * invA
-      b.vx += nx * jImp * invB
-      b.vy += ny * jImp * invB
-      b.vz += nz * jImp * invB
-
-      // Off-centre contact spins them.
-      const spin = jImp * 0.5
-      a.wx -= ny * spin * invA
-      a.wz += nx * spin * invA
-      b.wx += ny * spin * invB
-      b.wz -= nx * spin * invB
-      impactSum += -rvn * 0.5
-    }
+    for (let j = i + 1; j < s.debris.length; j++)
+      impactSum += collideSpheres(s.debris[i], s.debris[j])
 
   return impactSum
 }

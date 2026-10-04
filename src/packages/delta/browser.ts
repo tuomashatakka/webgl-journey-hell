@@ -11,7 +11,6 @@ import { MAP_MODES, FRAG, VERT } from './browserShader'
 import { SKIES } from './manifest'
 
 
-/** A card's preview box: what to draw into it. `kind` 0 a material sphere, 1 a sky pan. */
 export interface AssetSlot {
   el:    HTMLElement;
   kind:  0 | 1;
@@ -21,6 +20,18 @@ export interface AssetSlot {
 export interface AssetView {
   mode:  string;
   light: string;
+}
+
+/** A card's preview box: what to draw into it. `kind` 0 a material sphere, 1 a sky pan. */
+/** Resize the canvas backing store to the window at the given pixel ratio; returns its size. */
+function fitCanvas (canvas: HTMLCanvasElement, dpr: number): [number, number] {
+  const w = Math.round(window.innerWidth * dpr)
+  const h = Math.round(window.innerHeight * dpr)
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width  = w
+    canvas.height = h
+  }
+  return [ w, h ]
 }
 
 /** Draw every registered slot, every frame, until the returned stop is called. */
@@ -46,13 +57,8 @@ export function startAssetBrowser (
   const frame = () => {
     raf = requestAnimationFrame(frame)
 
-    const dpr = Math.min(1.5, window.devicePixelRatio || 1)
-    const w   = Math.round(window.innerWidth * dpr)
-    const h   = Math.round(window.innerHeight * dpr)
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width  = w
-      canvas.height = h
-    }
+    const dpr      = Math.min(1.5, window.devicePixelRatio || 1)
+    const [ w, h ] = fitCanvas(canvas, dpr)
     gl.viewport(0, 0, w, h)
     gl.disable(gl.SCISSOR_TEST)
     gl.clearColor(0, 0, 0, 0)
