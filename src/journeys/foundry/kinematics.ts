@@ -7,6 +7,7 @@
 // foot, of how far you have actually walked, so a slow-motion run reports the
 // same sections in the same order.
 
+import { zeros } from '@wjh/math/arrays'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
 import {
@@ -127,13 +128,13 @@ export function createFoundrySimulation (): JourneySimulation {
   let signalAge = 0
 
   // Scratch buffers — packed in place every frame, never reallocated.
-  const debris  = Array.from({ length: 24 }).fill(0)
-  const debrisQ = Array.from({ length: 24 }).fill(0)
+  const debris  = zeros(24)
+  const debrisQ = zeros(24)
   const folds   = [
-    Array.from({ length: 4 }).fill(0),
-    Array.from({ length: 4 }).fill(0),
-    Array.from({ length: 4 }).fill(0),
-    Array.from({ length: 4 }).fill(0),
+    zeros(4),
+    zeros(4),
+    zeros(4),
+    zeros(4),
   ]
 
   return {

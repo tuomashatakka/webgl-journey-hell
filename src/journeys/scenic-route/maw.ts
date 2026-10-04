@@ -12,7 +12,8 @@
 
 import { createMeshBuilder } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
-import { finishSweep, levelFrame, newFrame, sweepProfile } from '@wjh/geometry/sweep'
+import { finishSweep, levelFrame, sweepProfile } from '@wjh/geometry/sweep'
+import { newFrame } from '@wjh/geometry/curve'
 import type { ProfilePoint, SweepArrays } from '@wjh/geometry/sweep'
 import type { Route } from './course'
 

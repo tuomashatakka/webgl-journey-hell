@@ -36,6 +36,7 @@
 // own `right` is −x, and a basis built on it would be a reflection that turns
 // every prop inside out).
 
+import { newFrame } from '@wjh/geometry/curve'
 import { createMeshBuilder, fracture } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { mulberry32 } from '@wjh/math/rng'
@@ -441,15 +442,6 @@ export function portalFor (theme: Theme): [ number, number ][] | null {
 }
 
 // --- the sweep -----------------------------------------------------------------
-
-function newFrame (): Frame {
-  return {
-    pos:     { x: 0, y: 0, z: 0 },
-    forward: { x: 0, y: 0, z: 1 },
-    up:      { x: 0, y: 1, z: 0 },
-    right:   { x: 1, y: 0, z: 0 },
-  }
-}
 
 /**
  * Insert points beside concave corners and darken the corners themselves.

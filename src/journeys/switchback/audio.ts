@@ -33,7 +33,10 @@
 //    centre, a nave, and — over the overlook — almost nothing at all, which
 //    after the nave is the loudest thing in the journey.
 
+import { createRoomReverb } from '@wjh/audio/room'
+import type { RoomReverb, RoomTone } from '@wjh/audio/room'
 import { JourneyAudio } from '@wjh/audio/engine'
+import { driftingChord } from '@wjh/audio/nodes'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
 import { PHASE_WRAP } from './kinematics'
 
@@ -63,14 +66,6 @@ const WHEELBASE = 1.9
  */
 const CUR_TYPE_INDEX = 1 * 4 + 2
 
-/** Per-room reverb: delay time, feedback, damping cutoff, and a wet level. */
-interface RoomTone {
-  time: number;
-  fb:   number;
-  damp: number;
-  wet:  number;
-}
-
 const ROOMS: RoomTone[] = [
   { time: 0.011, fb: 0.8, damp: 3200, wet: 0.55 }, // platform — tile flutter
   { time: 0.038, fb: 0.34, damp: 900, wet: 0.3 }, // drift — earth eats it
@@ -85,14 +80,8 @@ export class SwitchbackAudioEngine extends JourneyAudio {
   protected readonly bus = true
 
 
-  private wet: GainNode | null = null
-
-  // The room, as one delay pair whose character is crossfaded between portals.
-  private tap:     DelayNode | null = null
-  private tapFb:   GainNode | null = null
-  private tapDamp: BiquadFilterNode | null = null
-  private tail:    DelayNode | null = null
-  private tailFb:  GainNode | null = null
+  private room: RoomReverb | null = null
+  private wet:  GainNode | null = null
 
   private rollGain:  GainNode | null = null
   private rollLP:    BiquadFilterNode | null = null
@@ -154,38 +143,8 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     if (!this.ctx || !this.masterLP)
       return
 
-    const now = this.ctx.currentTime
-
-    this.wet = this.ctx.createGain()
-    this.wet.gain.setValueAtTime(0.5, now)
-
-    this.tap = this.ctx.createDelay(0.5)
-    this.tap.delayTime.setValueAtTime(ROOMS[0].time, now)
-
-    this.tapDamp      = this.ctx.createBiquadFilter()
-    this.tapDamp.type = 'lowpass'
-    this.tapDamp.frequency.setValueAtTime(ROOMS[0].damp, now)
-
-    this.tapFb = this.ctx.createGain()
-    this.tapFb.gain.setValueAtTime(ROOMS[0].fb, now)
-
-    // A second, longer tap at an incommensurate ratio, so the two never line up
-    // into a pitch. 3.7 rather than 4 is the whole of that.
-    this.tail = this.ctx.createDelay(2)
-    this.tail.delayTime.setValueAtTime(ROOMS[0].time * 3.7, now)
-
-    this.tailFb = this.ctx.createGain()
-    this.tailFb.gain.setValueAtTime(ROOMS[0].fb * 0.8, now)
-
-    this.wet.connect(this.tap)
-    this.tap.connect(this.tapDamp)
-    this.tapDamp.connect(this.tapFb)
-    this.tapFb.connect(this.tap)
-    this.tapDamp.connect(this.tail)
-    this.tail.connect(this.tailFb)
-    this.tailFb.connect(this.tail)
-    this.tail.connect(this.masterLP)
-    this.tapDamp.connect(this.masterLP)
+    this.room = createRoomReverb(this.ctx, this.masterLP, ROOMS[0], 0.5)
+    this.wet  = this.room.wet
   }
 
   /** Wheels on rail: brown noise, opened up by speed. */
@@ -324,37 +283,15 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     this.muzakGain = this.ctx.createGain()
     this.muzakGain.gain.setValueAtTime(0, now)
 
-    const lp = this.ctx.createBiquadFilter()
-    lp.type  = 'lowpass'
-    lp.frequency.setValueAtTime(1100, now)
-    lp.Q.setValueAtTime(0.8, now)
-    lp.connect(this.muzakGain)
-
     // F, A, C, E — and every voice detuned by a different amount, so the chord
     // beats against itself instead of sounding played.
-    for (const [ f, det ] of [[ 174.6, 0 ], [ 220, 7 ], [ 261.6, -5 ], [ 329.6, 11 ]]) {
-      const osc = this.ctx.createOscillator()
-      osc.type  = 'triangle'
-      osc.frequency.setValueAtTime(f, now)
-      osc.detune.setValueAtTime(det, now)
-
-      // Tape wow: slow, deep, and the reason this reads as a recording rather
-      // than as four oscillators.
-      const wow = this.ctx.createOscillator()
-      wow.frequency.setValueAtTime(0.23 + f * 0.0004, now)
-
-      const wowAmt = this.ctx.createGain()
-      wowAmt.gain.setValueAtTime(9, now)
-      wow.connect(wowAmt)
-      wowAmt.connect(osc.detune)
-      wow.start()
-
-      const g = this.ctx.createGain()
-      g.gain.setValueAtTime(0.22, now)
-      osc.connect(g)
-      g.connect(lp)
-      osc.start()
-    }
+    driftingChord(this.ctx, this.muzakGain, {
+      voices:    [[ 174.6, 0 ], [ 220, 7 ], [ 261.6, -5 ], [ 329.6, 11 ]],
+      cutoff:    1100,
+      voiceGain: 0.22,
+      wowRate:   0.23,
+      wowDepth:  9,
+    })
 
     this.muzakGain.connect(this.dry)
     this.muzakGain.connect(this.wet ?? this.dry)
@@ -430,80 +367,35 @@ export class SwitchbackAudioEngine extends JourneyAudio {
 
   // ---- events -------------------------------------------------------------
 
-  /**
-   * One rail joint: two impacts a wheelbase apart, the second a touch softer.
-   *
-   * The click is a noise burst through a resonant bandpass rather than a
-   * synthesised thump, because what you actually hear is not the impact — it is
-   * the whole cart ringing afterwards, and a high-Q filter *is* a ringing.
-   */
+  /** One rail joint, a little different every time. */
   private joint (level: number): void {
     if (!this.ctx || !this.wet || !this.dry)
       return
 
-    const now = this.ctx.currentTime
-    const gap = WHEELBASE / Math.max(this.speed, 1)
-
-    for (let axle = 0; axle < 2; axle++) {
-      const src = this.noiseSource(false)
-      if (!src)
-        return
-
-      const at = now + axle * Math.min(gap, 0.4)
-
-      const bp = this.ctx.createBiquadFilter()
-      bp.type  = 'bandpass'
-      bp.frequency.setValueAtTime(280 + Math.random() * 160, at)
-      bp.Q.setValueAtTime(3.2, at)
-
-      const ring = this.ctx.createBiquadFilter()
-      ring.type  = 'bandpass'
-      ring.frequency.setValueAtTime(1500 + Math.random() * 900, at)
-      ring.Q.setValueAtTime(14, at)
-
-      const g   = level * (axle === 0 ? 1 : 0.72)
-      const env = this.ctx.createGain()
-      env.gain.setValueAtTime(0, at)
-      env.gain.linearRampToValueAtTime(g, at + 0.004)
-      env.gain.exponentialRampToValueAtTime(0.0001, at + 0.13)
-
-      src.connect(bp)
-      bp.connect(env)
-      src.connect(ring)
-      ring.connect(env)
-      env.connect(this.dry)
-      env.connect(this.wet)
-      src.start(at)
-      src.stop(at + 0.2)
-    }
+    this.railJoint({
+      gap:   WHEELBASE / Math.max(this.speed, 1),
+      level,
+      body:  () => ({ f: 280 + Math.random() * 160, q: 3.2 }),
+      ring:  () => ({ f: 1500 + Math.random() * 900, q: 14 }),
+      decay: 0.13,
+      stop:  0.2,
+      to:    [ this.dry, this.wet ],
+    })
   }
 
   /** One chain dog dropping into one link. */
   private clack (): void {
-    if (!this.ctx || !this.dry || !this.wet)
+    if (!this.dry || !this.wet)
       return
 
-    const now = this.ctx.currentTime
-    const src = this.noiseSource(false)
-    if (!src)
-      return
-
-    const bp = this.ctx.createBiquadFilter()
-    bp.type  = 'bandpass'
-    bp.frequency.setValueAtTime(900 + Math.random() * 500, now)
-    bp.Q.setValueAtTime(9, now)
-
-    const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0, now)
-    env.gain.linearRampToValueAtTime(0.11, now + 0.002)
-    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.055)
-
-    src.connect(bp)
-    bp.connect(env)
-    env.connect(this.dry)
-    env.connect(this.wet)
-    src.start(now)
-    src.stop(now + 0.1)
+    this.noiseHit({
+      bands:  [{ f: 900 + Math.random() * 500, q: 9 }],
+      peak:   0.11,
+      attack: 0.002,
+      decay:  0.055,
+      stop:   0.1,
+      to:     [ this.dry, this.wet ],
+    })
   }
 
   // ---- per-frame ----------------------------------------------------------
@@ -622,12 +514,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     const r       = ROOMS[i]
     this.lastRoom = this.secType
 
-    this.tap?.delayTime.setTargetAtTime(r.time, now, ROOM_GLIDE)
-    this.tail?.delayTime.setTargetAtTime(r.time * 3.7, now, ROOM_GLIDE)
-    this.tapFb?.gain.setTargetAtTime(r.fb, now, ROOM_GLIDE)
-    this.tailFb?.gain.setTargetAtTime(r.fb * 0.8, now, ROOM_GLIDE)
-    this.tapDamp?.frequency.setTargetAtTime(r.damp, now, ROOM_GLIDE)
-    this.wet?.gain.setTargetAtTime(r.wet, now, ROOM_GLIDE)
+    this.room?.tune(r, now, ROOM_GLIDE)
   }
 
   private ramp (

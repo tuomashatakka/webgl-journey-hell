@@ -15,6 +15,7 @@
 // instanced fittings and the light uniforms. Those two disagreeing is how you
 // get a pool of light thrown by nothing.
 
+import { cloneFrame, newFrame } from '@wjh/geometry/curve'
 import { mulberry32 } from '@wjh/math/rng'
 import type { ClosedCurve, Frame, Vec3 } from '@wjh/geometry/curve'
 import { BAYS, Theme } from './stations'
@@ -62,17 +63,6 @@ export interface Dressing {
   instances: Map<string, number[]>;
   lamps:     Lamp[];
 }
-
-const newFrame = (): Frame => ({
-  pos:     { x: 0, y: 0, z: 0 },
-  forward: { x: 0, y: 0, z: 1 },
-  up:      { x: 0, y: 1, z: 0 },
-  right:   { x: 1, y: 0, z: 0 },
-})
-
-const cloneFrame = (f: Frame): Frame => ({
-  pos: { ...f.pos }, forward: { ...f.forward }, up: { ...f.up }, right: { ...f.right },
-})
 
 interface PutOpts {
   yaw?:  number;

@@ -13,6 +13,49 @@ import type { CustomUniforms } from '@wjh/gl/uniforms'
 import { brownNoise, createAudioContext } from './nodes'
 
 
+/** One resonant bandpass: centre frequency Hz and Q. */
+export interface Band {
+  f: number;
+  q: number;
+}
+
+/** A burst of noise through parallel bandpasses and a percussive envelope. */
+export interface NoiseHit {
+
+  /** AudioContext time to start at; now when omitted. */
+  at?:    number;
+  bands:  readonly Band[];
+  peak:   number;
+  attack: number;
+
+  /** Seconds from `at` until the envelope has fallen to silence. */
+  decay:  number;
+
+  /** Seconds from `at` until the source is stopped. */
+  stop:   number;
+  to:     readonly AudioNode[];
+}
+
+/** Two impacts a wheelbase apart, the second a touch softer. */
+export interface RailJoint {
+  gap:   number;
+  level: number;
+  body:  () => Band;
+  ring:  () => Band;
+  decay: number;
+  stop:  number;
+  to:    readonly AudioNode[];
+}
+
+/** Longest gap between the two impacts of one joint, seconds. */
+const MAX_AXLE_GAP = 0.4
+
+/** The second axle's level relative to the first. */
+const REAR_AXLE_LEVEL = 0.72
+
+/** Attack of a joint's impact, seconds. */
+const JOINT_ATTACK = 0.004
+
 export abstract class JourneyAudio implements JourneyAudioEngine {
   protected ctx:         AudioContext | null = null
   protected main:        GainNode | null = null
@@ -105,6 +148,53 @@ export abstract class JourneyAudio implements JourneyAudioEngine {
     src.buffer = this.noiseBuffer
     src.loop   = loop
     return src
+  }
+
+  /** One percussive noise burst. Does nothing without a running graph. */
+  protected noiseHit ({ at, bands, peak, attack, decay, stop, to }: NoiseHit): void {
+    const ctx = this.ctx
+    const src = this.noiseSource(false)
+    if (!ctx || !src)
+      return
+
+    const t   = at ?? ctx.currentTime
+    const env = ctx.createGain()
+    env.gain.setValueAtTime(0, t)
+    env.gain.linearRampToValueAtTime(peak, t + attack)
+    env.gain.exponentialRampToValueAtTime(0.0001, t + decay)
+
+    for (const band of bands) {
+      const bp = ctx.createBiquadFilter()
+      bp.type  = 'bandpass'
+      bp.frequency.setValueAtTime(band.f, t)
+      bp.Q.setValueAtTime(band.q, t)
+      src.connect(bp)
+      bp.connect(env)
+    }
+    for (const node of to)
+      env.connect(node)
+    src.start(t)
+    src.stop(t + stop)
+  }
+
+  /**
+   * One rail joint. The click is a noise burst through a resonant bandpass
+   * rather than a synthesised thump, because what you actually hear is not the
+   * impact — it is the whole cart ringing afterwards, and a high-Q filter *is*
+   * a ringing.
+   */
+  protected railJoint ({ gap, level, body, ring, decay, stop, to }: RailJoint): void {
+    const now = this.ctx?.currentTime ?? 0
+    for (let axle = 0; axle < 2; axle++)
+      this.noiseHit({
+        at:     now + axle * Math.min(gap, MAX_AXLE_GAP),
+        bands:  [ body(), ring() ],
+        peak:   level * (axle === 0 ? 1 : REAR_AXLE_LEVEL),
+        attack: JOINT_ATTACK,
+        decay,
+        stop,
+        to,
+      })
   }
 
   private init (): void {

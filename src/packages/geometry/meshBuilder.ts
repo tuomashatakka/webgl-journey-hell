@@ -35,6 +35,8 @@
 // triangle.
 
 
+import { grownTo } from '@wjh/math/arrays'
+
 /** Interleaved vertex: position(3) normal(3) uv(2) shard(4) = 12 floats, stride 48 bytes. */
 export const VERTEX_FLOATS = 12
 
@@ -89,29 +91,11 @@ export function createMeshBuilder (): MeshBuilder {
   let iLen    = 0
 
   const growV = (need: number) => {
-    if (vLen + need <= verts.length)
-      return
-
-    let cap = verts.length
-    while (cap < vLen + need)
-      cap *= 2
-
-    const next = new Float32Array(cap)
-    next.set(verts.subarray(0, vLen))
-    verts = next
+    verts = grownTo(verts, vLen, need, 0)
   }
 
   const growI = (need: number) => {
-    if (iLen + need <= indices.length)
-      return
-
-    let cap = indices.length
-    while (cap < iLen + need)
-      cap *= 2
-
-    const next = new Uint32Array(cap)
-    next.set(indices.subarray(0, iLen))
-    indices = next
+    indices = grownTo(indices, iLen, need, 0)
   }
 
   const pushVert = (

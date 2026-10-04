@@ -9,5 +9,8 @@
     "./curve": "./curve.ts",
     "./meshBuilder": "./meshBuilder.ts",
     "./sweep": "./sweep.ts"
+  },
+  "dependencies": {
+    "@wjh/math": "workspace:*"
   }
 }

@@ -26,6 +26,7 @@
 // comes from the water instead — the building floods further every lap, so lap 1
 // you drown and resurface, lap 2 you barely surface, lap 3 you never do.
 
+import { zeros } from '@wjh/math/arrays'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
@@ -784,10 +785,10 @@ export function createNatatoriumSimulation (): JourneySimulation {
   // Packed in place every frame, never reallocated. Three slots x three vec4.
   // Separate arrays indexed by a bare loop variable rather than one array with
   // computed indices: both are legal GLSL ES 1.00, only one is well-trodden.
-  const uSecA = Array.from({ length: 12 }).fill(0) // cos, sin, tx, tz
-  const uSecB = Array.from({ length: 12 }).fill(0) // ty, halfW, ceilH, len
-  const uSecC = Array.from({ length: 12 }).fill(0) // slope, type, grime, lampPitch
-  const uSecD = Array.from({ length: 12 }).fill(0) // deploy, aisleY, sectionId, -
+  const uSecA = zeros(12) // cos, sin, tx, tz
+  const uSecB = zeros(12) // ty, halfW, ceilH, len
+  const uSecC = zeros(12) // slope, type, grime, lampPitch
+  const uSecD = zeros(12) // deploy, aisleY, sectionId, -
   const uCam  = [ 0, 0, 0, 0 ]
   const uLook = [ 0, 0, 0, 0 ]
   const uWave = [ 0, 0, 0, 0 ]

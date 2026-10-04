@@ -107,6 +107,21 @@ export interface Frame {
   right: Vec3;
 }
 
+/** The world frame: at the origin, looking down +z with +y up. */
+export function newFrame (): Frame {
+  return {
+    pos:     { x: 0, y: 0, z: 0 },
+    forward: { x: 0, y: 0, z: 1 },
+    up:      { x: 0, y: 1, z: 0 },
+    right:   { x: 1, y: 0, z: 0 },
+  }
+}
+
+/** A deep copy of `f`. */
+export function cloneFrame (f: Frame): Frame {
+  return { pos: { ...f.pos }, forward: { ...f.forward }, up: { ...f.up }, right: { ...f.right }}
+}
+
 
 export interface ClosedCurve {
 

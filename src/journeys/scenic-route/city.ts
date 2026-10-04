@@ -12,7 +12,8 @@
 
 import { createMeshBuilder } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
-import { levelFrame, newFrame } from '@wjh/geometry/sweep'
+import { levelFrame } from '@wjh/geometry/sweep'
+import { newFrame } from '@wjh/geometry/curve'
 import { signedCurvature } from './course'
 import type { Route } from './course'
 import { PLAZA, buildSpineIndex, nearestSpine, terrainHeight } from './geometry'

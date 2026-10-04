@@ -46,3 +46,58 @@ export function scalar (state: CustomUniforms | undefined, name: string, fallbac
   return typeof v === 'number' ? v : fallback
 }
 
+
+/** A chord of triangle voices, each detuned and wobbling by its own slow LFO. */
+export interface DriftingChord {
+
+  /** [frequency Hz, static detune cents] per voice. */
+  voices:    readonly (readonly [number, number])[];
+
+  /** Lowpass cutoff (Hz) the whole chord sits behind. */
+  cutoff:    number;
+  voiceGain: number;
+
+  /** Wow LFO rate is `wowRate + frequency * 0.0004` Hz. */
+  wowRate:   number;
+
+  /** Wow depth, cents. */
+  wowDepth:  number;
+}
+
+/**
+ * The muzak recipe: every voice detuned by a different amount so the chord
+ * beats against itself instead of sounding played, and a tape wow that makes
+ * it read as a recording rather than as oscillators. Starts immediately and
+ * feeds `out` through a dark lowpass.
+ */
+export function driftingChord (ctx: AudioContext, out: AudioNode, chord: DriftingChord): void {
+  const now = ctx.currentTime
+
+  const lp = ctx.createBiquadFilter()
+  lp.type  = 'lowpass'
+  lp.frequency.setValueAtTime(chord.cutoff, now)
+  lp.Q.setValueAtTime(0.8, now)
+  lp.connect(out)
+
+  for (const [ f, det ] of chord.voices) {
+    const osc = ctx.createOscillator()
+    osc.type  = 'triangle'
+    osc.frequency.setValueAtTime(f, now)
+    osc.detune.setValueAtTime(det, now)
+
+    const wow = ctx.createOscillator()
+    wow.frequency.setValueAtTime(chord.wowRate + f * 0.0004, now)
+
+    const wowAmt = ctx.createGain()
+    wowAmt.gain.setValueAtTime(chord.wowDepth, now)
+    wow.connect(wowAmt)
+    wowAmt.connect(osc.detune)
+    wow.start()
+
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(chord.voiceGain, now)
+    osc.connect(g)
+    g.connect(lp)
+    osc.start()
+  }
+}

@@ -51,6 +51,7 @@
 // boundary is carried across by it, with no nearest-point search to snap a
 // boundary onto the wrong branch.
 
+import { zeros } from '@wjh/math/arrays'
 import { createClosedCurve } from '@wjh/geometry/curve'
 import type { ClosedCurve, Frame, Vec3 } from '@wjh/geometry/curve'
 import { smootherstep } from '@wjh/math/scalar'
@@ -480,7 +481,7 @@ function crossPlane (curve: ClosedCurve, plane: Frame, guess: number): number {
  * points between the junction and the rejoin.
  */
 function buildCircuits (): Circuits {
-  const flat   = createClosedCurve(ringPoints(new Array(RADII.length).fill(0) as number[]))
+  const flat   = createClosedCurve(ringPoints(zeros(RADII.length)))
   const fracs  = RADII.map((_, i) => arcFractionAtParam(flat, i / RADII.length))
   const design = createClosedCurve(ringPoints(fracs.map(heightAt)))
 

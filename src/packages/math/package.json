@@ -6,6 +6,7 @@
   "description": "Scalar maths, seeded randomness and column-major matrices",
   "sideEffects": false,
   "exports": {
+    "./arrays": "./arrays.ts",
     "./mat4": "./mat4.ts",
     "./rng": "./rng.ts",
     "./scalar": "./scalar.ts"

@@ -45,7 +45,8 @@ import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
 import type { Frame } from '@wjh/geometry/curve'
-import { levelFrame, newFrame } from '@wjh/geometry/sweep'
+import { levelFrame } from '@wjh/geometry/sweep'
+import { newFrame } from '@wjh/geometry/curve'
 import {
   DECAY_SECTION,
   SECTION_COUNT,

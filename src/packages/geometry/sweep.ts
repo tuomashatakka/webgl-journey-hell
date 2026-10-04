@@ -24,8 +24,11 @@
 // each point; rotated by the same bank it is the world normal, so shading stays
 // smooth without a second pass.
 
+import { zeros } from '@wjh/math/arrays'
+import { newFrame } from './curve'
 import type { ClosedCurve, Frame } from './curve'
 import type { AttribSpec } from './meshBuilder'
+import { grownTo } from '@wjh/math/arrays'
 
 
 export const SWEEP_FLOATS = 16
@@ -103,34 +106,9 @@ export function levelFrame (curve: ClosedCurve, s: number, out: Frame): Frame {
   return out
 }
 
-export function newFrame (): Frame {
-  return {
-    pos:     { x: 0, y: 0, z: 0 },
-    forward: { x: 0, y: 0, z: 1 },
-    up:      { x: 0, y: 1, z: 0 },
-    right:   { x: 1, y: 0, z: 0 },
-  }
-}
-
 function grow (arr: SweepArrays, verts: number, idx: number): void {
-  if (arr.vertexCount * SWEEP_FLOATS + verts > arr.vertices.length) {
-    let cap = Math.max(arr.vertices.length, SWEEP_FLOATS * 64)
-    while (cap < arr.vertexCount * SWEEP_FLOATS + verts)
-      cap *= 2
-
-    const next = new Float32Array(cap)
-    next.set(arr.vertices.subarray(0, arr.vertexCount * SWEEP_FLOATS))
-    arr.vertices = next
-  }
-  if (arr.indexCount + idx > arr.indices.length) {
-    let cap = Math.max(arr.indices.length, 192)
-    while (cap < arr.indexCount + idx)
-      cap *= 2
-
-    const next = new Uint32Array(cap)
-    next.set(arr.indices.subarray(0, arr.indexCount))
-    arr.indices = next
-  }
+  arr.vertices = grownTo(arr.vertices, arr.vertexCount * SWEEP_FLOATS, verts, SWEEP_FLOATS * 64)
+  arr.indices  = grownTo(arr.indices, arr.indexCount, idx, 192)
 }
 
 function createSweepArrays (): SweepArrays {
@@ -155,7 +133,7 @@ export function finishSweep (arr: SweepArrays): SweepArrays {
  */
 function profileNormals (pts: ProfilePoint[], closed: boolean): number[] {
   const n     = pts.length
-  const out   = Array.from({ length: n * 2 }).fill(0)
+  const out   = zeros(n * 2)
   const edges = closed ? n : n - 1
   for (let e = 0; e < edges; e++) {
     const a  = pts[e]

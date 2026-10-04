@@ -14,7 +14,8 @@
 
 import { createMeshBuilder } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
-import { levelFrame, newFrame } from '@wjh/geometry/sweep'
+import { levelFrame } from '@wjh/geometry/sweep'
+import { newFrame } from '@wjh/geometry/curve'
 import { lookAt, SECTION_COUNT } from './course'
 import type { LookParams, Route } from './course'
 import { buildSpineIndex, spineHits, terrainHeight } from './geometry'

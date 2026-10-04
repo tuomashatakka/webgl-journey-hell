@@ -49,6 +49,8 @@
 // Units are SI: metres, seconds, kilograms. +Y is up, the walk runs along +Z,
 // and the hoist shaft rises above the landing at the head of the loading bay.
 
+import { zeros } from '@wjh/math/arrays'
+import { mulberry32 } from '@wjh/math/rng'
 import { smoothstep } from '@wjh/math/scalar'
 
 
@@ -621,17 +623,6 @@ export function decayFor (smoothLoop: number): number {
 
 
 // --- deterministic RNG ------------------------------------------------------
-function mulberry32 (seed: number): () => number {
-  let a = seed >>> 0
-  return () => {
-    a = a + 0x6d2b79f5 >>> 0
-
-    let t = Math.imul(a ^ a >>> 15, 1 | a)
-    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
-    return ((t ^ t >>> 14) >>> 0) / 4294967296
-  }
-}
-
 /** Cheap scalar hash, used to vary one footfall from the next. */
 function hash11 (x: number): number {
   const s = Math.sin(x * 12.9898) * 43758.5453123
@@ -717,8 +708,8 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
     hookOmega:    0,
     chain:        0.12,
     chainOmega:   0,
-    fold:         Array.from({ length: SPAN_TILES }).fill(0),
-    foldOmega:    Array.from({ length: SPAN_TILES }).fill(0),
+    fold:         zeros(SPAN_TILES),
+    foldOmega:    zeros(SPAN_TILES),
   }
 }
 

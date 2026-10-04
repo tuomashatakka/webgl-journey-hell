@@ -69,6 +69,7 @@
 // A small fraction of the bank is fed back into the ray basis as `headRoll`,
 // because a rider's head does lag the car, and because it is the shot.
 
+import { zeros } from '@wjh/math/arrays'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
@@ -1198,9 +1199,9 @@ export function createSwitchbackSimulation (): JourneySimulation {
       console.warn('[switchback route]', p)
   }
 
-  const uSecA = Array.from({ length: 12 }).fill(0) // z0, z1, type, bore
-  const uSecB = Array.from({ length: 12 }).fill(0) // ceilH, floorD, lamp, grime
-  const uSecC = Array.from({ length: 12 }).fill(0) // sky, id, lit, lampY
+  const uSecA = zeros(12) // z0, z1, type, bore
+  const uSecB = zeros(12) // ceilH, floorD, lamp, grime
+  const uSecC = zeros(12) // sky, id, lit, lampY
   const uBend = [ 0, 0, 0, 0 ]
   const uCart = [ 0, 0, 0, 0 ]
   const uRide = [ 0, 0, 0, 0 ]

@@ -44,6 +44,9 @@
     "src/packages/geometry": {
       "name": "@wjh/geometry",
       "version": "1.0.0",
+      "dependencies": {
+        "@wjh/math": "workspace:*",
+      },
     },
     "src/packages/gl": {
       "name": "@wjh/gl",

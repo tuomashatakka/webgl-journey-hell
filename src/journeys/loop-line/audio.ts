@@ -50,7 +50,10 @@
 //    plus an occasional power-cut dropout gated on uDecay[1] where everything
 //    ducks for 100-200 ms.
 
+import { createRoomReverb } from '@wjh/audio/room'
+import type { RoomReverb, RoomTone } from '@wjh/audio/room'
 import { JourneyAudio } from '@wjh/audio/engine'
+import { driftingChord } from '@wjh/audio/nodes'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
 import { clamp01 } from '@wjh/math/scalar'
 
@@ -70,14 +73,6 @@ const WHEELBASE = 2.2
 
 /** Maximum joints to fire in a single update frame. */
 const MAX_JOINTS = 4
-
-/** Per-bay reverb: delay time, feedback, damping cutoff, wet level. */
-interface RoomTone {
-  time: number;
-  fb:   number;
-  damp: number;
-  wet:  number;
-}
 
 /**
  * Seven rooms, one per bayId 0..6.
@@ -118,14 +113,8 @@ export class LoopLineAudioEngine extends JourneyAudio {
   protected readonly bus = true
 
 
-  private wet: GainNode | null = null
-
-  // One delay pair for all seven rooms, crossfaded on portal.
-  private tap:     DelayNode | null = null
-  private tapFb:   GainNode | null = null
-  private tapDamp: BiquadFilterNode | null = null
-  private tail:    DelayNode | null = null
-  private tailFb:  GainNode | null = null
+  private room: RoomReverb | null = null
+  private wet:  GainNode | null = null
 
   private motorGain:  GainNode | null = null
   private muzakGain:  GainNode | null = null
@@ -181,36 +170,8 @@ export class LoopLineAudioEngine extends JourneyAudio {
     if (!this.ctx || !this.masterLP)
       return
 
-    const now = this.ctx.currentTime
-
-    this.wet = this.ctx.createGain()
-    this.wet.gain.setValueAtTime(0.45, now)
-
-    this.tap = this.ctx.createDelay(0.5)
-    this.tap.delayTime.setValueAtTime(ROOMS[0].time, now)
-
-    this.tapDamp      = this.ctx.createBiquadFilter()
-    this.tapDamp.type = 'lowpass'
-    this.tapDamp.frequency.setValueAtTime(ROOMS[0].damp, now)
-
-    this.tapFb = this.ctx.createGain()
-    this.tapFb.gain.setValueAtTime(ROOMS[0].fb, now)
-
-    this.tail = this.ctx.createDelay(2)
-    this.tail.delayTime.setValueAtTime(ROOMS[0].time * 3.7, now)
-
-    this.tailFb = this.ctx.createGain()
-    this.tailFb.gain.setValueAtTime(ROOMS[0].fb * 0.8, now)
-
-    this.wet.connect(this.tap)
-    this.tap.connect(this.tapDamp)
-    this.tapDamp.connect(this.tapFb)
-    this.tapFb.connect(this.tap)
-    this.tapDamp.connect(this.tail)
-    this.tail.connect(this.tailFb)
-    this.tailFb.connect(this.tail)
-    this.tail.connect(this.masterLP)
-    this.tapDamp.connect(this.masterLP)
+    this.room = createRoomReverb(this.ctx, this.masterLP, ROOMS[0], 0.45)
+    this.wet  = this.room.wet
   }
 
   // ---- bays: continuous layers --------------------------------------------
@@ -265,35 +226,15 @@ export class LoopLineAudioEngine extends JourneyAudio {
     this.muzakGain = this.ctx.createGain()
     this.muzakGain.gain.setValueAtTime(0, now)
 
-    const lp = this.ctx.createBiquadFilter()
-    lp.type  = 'lowpass'
-    lp.frequency.setValueAtTime(1000, now)
-    lp.Q.setValueAtTime(0.8, now)
-    lp.connect(this.muzakGain)
-
     // F, A, B, E — wrong-sounding intervals that read as a muzak recording
     // that nobody has been in to change.
-    for (const [ f, det ] of [[ 174.6, 0 ], [ 220, 8 ], [ 246.9, -6 ], [ 329.6, 12 ]]) {
-      const osc = this.ctx.createOscillator()
-      osc.type  = 'triangle'
-      osc.frequency.setValueAtTime(f, now)
-      osc.detune.setValueAtTime(det, now)
-
-      const wow = this.ctx.createOscillator()
-      wow.frequency.setValueAtTime(0.21 + f * 0.0004, now)
-
-      const wowAmt = this.ctx.createGain()
-      wowAmt.gain.setValueAtTime(8, now)
-      wow.connect(wowAmt)
-      wowAmt.connect(osc.detune)
-      wow.start()
-
-      const g = this.ctx.createGain()
-      g.gain.setValueAtTime(0.18, now)
-      osc.connect(g)
-      g.connect(lp)
-      osc.start()
-    }
+    driftingChord(this.ctx, this.muzakGain, {
+      voices:    [[ 174.6, 0 ], [ 220, 8 ], [ 246.9, -6 ], [ 329.6, 12 ]],
+      cutoff:    1000,
+      voiceGain: 0.18,
+      wowRate:   0.21,
+      wowDepth:  8,
+    })
 
     // Escalator rumble — a fixed mechanical rate.
     const rumble = this.ctx.createOscillator()
@@ -667,53 +608,21 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
   // ---- events -------------------------------------------------------------
 
-  /**
-   * One rail joint: two impacts a wheelbase apart, the second a touch softer.
-   *
-   * The click is a noise burst through a resonant bandpass rather than a
-   * synthesised thump, because what you actually hear is not the impact — it is
-   * the whole cart ringing afterwards, and a high-Q filter *is* a ringing.
-   */
+  /** One rail joint, ringing harder as the laps wear the line down. */
   private fireJoint (): void {
     if (!this.ctx || !this.wet || !this.dry)
       return
 
-    const now  = this.ctx.currentTime
-    const gap  = WHEELBASE / Math.max(this.speed, 1)
     const wear = clamp01(this.lapF * 0.35)
-
-    for (let axle = 0; axle < 2; axle++) {
-      const src = this.noiseSource(false)
-      if (!src)
-        return
-
-      const at = now + axle * Math.min(gap, 0.4)
-
-      const bp = this.ctx.createBiquadFilter()
-      bp.type  = 'bandpass'
-      bp.frequency.setValueAtTime(280 + wear * 400, at)
-      bp.Q.setValueAtTime(3.2 + wear * 4, at)
-
-      const ring = this.ctx.createBiquadFilter()
-      ring.type  = 'bandpass'
-      ring.frequency.setValueAtTime(1500 + wear * 1200, at)
-      ring.Q.setValueAtTime(14 + wear * 10, at)
-
-      const g   = (0.035 + wear * 0.16) * (axle === 0 ? 1 : 0.72)
-      const env = this.ctx.createGain()
-      env.gain.setValueAtTime(0, at)
-      env.gain.linearRampToValueAtTime(g, at + 0.004)
-      env.gain.exponentialRampToValueAtTime(0.0001, at + 0.11)
-
-      src.connect(bp)
-      bp.connect(env)
-      src.connect(ring)
-      ring.connect(env)
-      env.connect(this.dry)
-      env.connect(this.wet)
-      src.start(at)
-      src.stop(at + 0.18)
-    }
+    this.railJoint({
+      gap:   WHEELBASE / Math.max(this.speed, 1),
+      level: 0.035 + wear * 0.16,
+      body:  () => ({ f: 280 + wear * 400, q: 3.2 + wear * 4 }),
+      ring:  () => ({ f: 1500 + wear * 1200, q: 14 + wear * 10 }),
+      decay: 0.11,
+      stop:  0.18,
+      to:    [ this.dry, this.wet ],
+    })
   }
 
   /** One formant syllable. Pitch and duration are syllable-specific. */
@@ -834,12 +743,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
     const r       = ROOMS[i]
     this.lastRoom = this.bay
 
-    this.tap?.delayTime.setTargetAtTime(r.time, now, ROOM_GLIDE)
-    this.tail?.delayTime.setTargetAtTime(r.time * 3.7, now, ROOM_GLIDE)
-    this.tapFb?.gain.setTargetAtTime(r.fb, now, ROOM_GLIDE)
-    this.tailFb?.gain.setTargetAtTime(r.fb * 0.8, now, ROOM_GLIDE)
-    this.tapDamp?.frequency.setTargetAtTime(r.damp, now, ROOM_GLIDE)
-    this.wet?.gain.setTargetAtTime(r.wet, now, ROOM_GLIDE)
+    this.room?.tune(r, now, ROOM_GLIDE)
   }
 
   // ---- per-frame ----------------------------------------------------------
