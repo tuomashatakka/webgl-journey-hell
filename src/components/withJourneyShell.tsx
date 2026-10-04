@@ -19,7 +19,7 @@
 // journey at once: ?t= freezes an instant, ?debug publishes state, ?hud=0
 // strips the chrome, ?w=&h= fix the backing store.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { JourneyDefinition } from '✦/lib/journey'
 import { getJourney } from '✦/app/journeys/registry'
@@ -47,8 +47,13 @@ export function withJourneyShell (definition: JourneyDefinition) {
 
     // The CSS scanline layer is part of the look where the CRT is on; on a
     // low-tier phone it is a full-screen blend at native resolution that the
-    // GL pass's own scanlines already cover.
-    const scanlines = settings.crt && detectDevice().tier > 0
+    // GL pass's own scanlines already cover. Decided after mount: the saved
+    // settings and the device are client facts, and the prerendered HTML has
+    // to match the first client render.
+    const [ mounted, setMounted ] = useState(false)
+    useEffect(() => setMounted(true), [])
+
+    const scanlines = !mounted || settings.crt && detectDevice().tier > 0
 
     const accentStyle = meta?.accent
       ? ({ ['--accent' as string]: meta.accent } as React.CSSProperties)
