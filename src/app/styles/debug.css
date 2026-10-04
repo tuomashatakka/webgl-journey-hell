@@ -1,6 +1,6 @@
 /* ---- ?debug=1 overlay (see packages/web/debugParams) ---------------------------- */
 
-#journey-debug {
+.journey-debug {
   position:                       absolute;
   inset-block-start:              68px;   /* under the toolbar */
   inset-inline-end:            12px;
@@ -13,10 +13,44 @@
   font-size:                   0.6875rem;
   line-height:                 1.45;
   color:                       rgba(255, 255, 255, 0.72);
+
+  h2 {
+    margin:           10px 0 4px;
+    font-size:        0.625rem;
+    letter-spacing:   2px;
+    text-transform:   uppercase;
+    color:            rgba(255, 255, 255, 0.4);
+  }
+
+  dl {
+    display:                 grid;
+    grid-template-columns:   auto 1fr;
+    gap:                     1px 12px;
+    margin:                  0;
+
+    > div {
+      display: contents;
+    }
+  }
+
+  dt {
+    color:       rgba(255, 255, 255, 0.42);
+    white-space: nowrap;
+  }
+
+  dd {
+    margin: 0;
+    color:  var(--accent, rgba(255, 255, 255, 0.85));
+  }
+
+  pre {
+    margin: 0;
+    font:   inherit;
+  }
 }
 
 
-#journey-debug-toggle {
+.journey-debug-toggle {
   background:       rgba(0, 0, 0, 0.55);
   border:           1px solid rgba(255, 255, 255, 0.18);
   color:            inherit;
@@ -31,7 +65,7 @@
 }
 
 
-#journey-debug-body {
+.journey-debug-body {
   margin-block-start:   6px;
   padding:              10px 12px;
   overflow-block:       auto;
@@ -40,45 +74,6 @@
     /* The numbers are for reading against a moving image; without this the
        panel is unreadable over the bright tile and invisible over the dark. */
   backdrop-filter: blur(3px);
-}
-
-
-#journey-debug h2 {
-  margin:           10px 0 4px;
-  font-size:        0.625rem;
-  letter-spacing:   2px;
-  text-transform:   uppercase;
-  color:            rgba(255, 255, 255, 0.4);
-}
-
-
-#journey-debug dl {
-  display:                 grid;
-  grid-template-columns:   auto 1fr;
-  gap:                     1px 12px;
-  margin:                  0;
-
-  > div {
-    display: contents;
-  }
-}
-
-
-#journey-debug dt {
-  color:       rgba(255, 255, 255, 0.42);
-  white-space: nowrap;
-}
-
-
-#journey-debug dd {
-  margin: 0;
-  color:  var(--accent, rgba(255, 255, 255, 0.85));
-}
-
-
-#journey-debug pre {
-  margin: 0;
-  font:   inherit;
 }
 
 

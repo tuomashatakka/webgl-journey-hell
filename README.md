@@ -6,7 +6,7 @@ Next.js (App Router, static export), React 19, TypeScript, bun workspaces.
 
 | | |
 | --- | --- |
-| ![The index grid](assets/screenshots/app-index.png) | ![A journey, with the top toolbar](assets/screenshots/app-journey.png) |
+| ![The index: a CRT in a dark room](assets/screenshots/app-index.png) | ![A journey, with the top toolbar](assets/screenshots/app-journey.png) |
 | ![Toolbar tooltip](assets/screenshots/app-tooltip.png) | ![The settings pane](assets/screenshots/app-settings.png) |
 
 <img src="assets/screenshots/app-phone.png" alt="A journey at phone width" width="195">
@@ -36,7 +36,7 @@ bun run check               # tsc, eslint, knip, bun test: the gate for every co
 | `loop-line` | a rasterized closed circuit, nine bays, lit by the asset library |
 | `scenic-route` | a rasterized coaster road with a cockpit and a mouth at the end |
 
-`/` is the index grid, `/assets` is the Δ asset library, `/journeys/<slug>` is a journey.
+`/` is the index (a CRT in a dark room: ◀ ▶ change the channel, MENU lists every journey, ENTER goes in), `/assets` is the Δ asset library, `/journeys/<slug>` is a journey.
 
 ## Where things are
 

@@ -45,8 +45,7 @@ export interface PanControlOptions {
   gyroscope?: boolean;
 
   /**
-   * Rect the pointer is normalized against. Defaults to the viewport — the
-   * landing grid passes its preview canvas so the pointer stays card-relative.
+   * Rect the pointer is normalized against. Defaults to the viewport.
    */
   getRect?: () => DOMRect | null | undefined;
 }

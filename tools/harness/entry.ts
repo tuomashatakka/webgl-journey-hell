@@ -15,20 +15,30 @@
 // the shell does: same context, same renderer factory, same seek, same frame
 // evaluation (lib/journey). A harness that disagreed with the shell would lie.
 //
-// /journeys/previews compiles every landing-page preview shader in one WebGL 1
-// context and reports any that fail.
+// /journeys/previews compiles every index channel's preview shader in one WebGL 1
+// context, and the CRT room they play in, and reports any that fail.
 
 import { JOURNEY_DEFINITIONS } from '✦/journeys/definitions'
+
 import { JOURNEYS } from '✦/journeys/registry'
+
 import { publishDebugState, readDebugParams } from '@wjh/web/debugParams'
+
 import { createContext } from '@wjh/gl/context'
+
 import { createShaderQuad } from '@wjh/gl/shaderQuad'
+
+import { createCrtRoom } from '@wjh/web/crtRoom'
+
 import { evaluateFrame } from '@wjh/journey/frame'
+
 import { seekSimulation } from '@wjh/journey/seek'
 
 
 const errors: string[] = []
+
 const origError        = console.error
+
 console.error          = (...args: unknown[]) => {
   errors.push(args.map(String).join(' '))
   origError(...args)
@@ -39,6 +49,17 @@ declare global {
     __harnessErrors?: string[];
   }
 }
+
+main().catch(err => {
+  errors.push(String(err?.stack ?? err))
+  publishStatus('?', 'CRASHED')
+})
+
+/**
+ * Assets load asynchronously (Δ). The shell holds its frozen frame on the
+ * same flag, so a plate is never of the placeholder.
+ */
+type RendererType = { ready?(): boolean }
 
 function publishStatus (journey: string, label: string, width = 0, height = 0): void {
   publishDebugState({ journey, time: 0, label, seeking: true, ready: true, width, height, fps: 0, paused: false, speed: 1, pan: [ 0, 0 ], uniforms: {}})
@@ -66,6 +87,20 @@ function checkPreviews (): void {
     quad.dispose()
   }
   gl.finish()
+
+  // The index's own room, with every channel tuned once inside it.
+  const tv   = document.createElement('canvas')
+  document.body.appendChild(tv)
+
+  const room = createCrtRoom(tv, JOURNEYS.map(j => ({ preview: j.previewShader, accent: j.accent })))
+  if (!room)
+    errors.push('crt room failed to compile')
+  room?.resize(64, 64, 1)
+  JOURNEYS.forEach((_, i) => {
+    room?.tune(i)
+    room?.frame(1 / 60)
+  })
+  room?.dispose()
   publishStatus('previews', `PREVIEWS · ${JOURNEYS.length}`, 64, 64)
 }
 
@@ -81,12 +116,6 @@ function withOverrides (custom: Record<string, number | number[]>): Record<strin
     }
   return custom
 }
-
-/**
- * Assets load asynchronously (Δ). The shell holds its frozen frame on the
- * same flag, so a plate is never of the placeholder.
- */
-type RendererType = { ready?(): boolean }
 
 async function whenReady (renderer: RendererType): Promise<void> {
   const deadline = performance.now() + 20_000
@@ -160,8 +189,3 @@ async function main (): Promise<void> {
     uniforms: custom,
   })
 }
-
-main().catch(err => {
-  errors.push(String(err?.stack ?? err))
-  publishStatus('?', 'CRASHED')
-})

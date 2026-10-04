@@ -1,4 +1,5 @@
 import { clamp01, mix, smootherstep } from '@wjh/math/scalar'
+
 import { D, DECAY_SECTION, FALL_ENTRY, TYPE_FALL } from './constants'
 
 // ---- room types, read by the shader's material branch ---------------------
@@ -241,6 +242,34 @@ export const FALL_SECTION: Section = {
   sky:    0,
 }
 
+{
+  let accLen = 0
+  let accYaw = 0
+  for (const s of SECTIONS) {
+    STARTS.push(accLen)
+    SEC_YAW0.push(accYaw)
+
+    const beats: number[] = []
+    let inner            = 0
+    for (const t of s.turn) {
+      beats.push(inner)
+      inner += t
+    }
+    BEAT_YAW0.push(beats)
+
+    accLen += s.len
+    accYaw += inner
+  }
+  LAP_TURN = accYaw
+}
+
+/**
+ * Heading at the instant the rails stop, which is where the shaft's corkscrew is
+ * measured from. Four whole laps of turning, since the lap does not close in yaw
+ * and never needed to.
+ */
+const FALL_YAW0 = FALL_LAPS * LAP_TURN
+
 // open sky over a cloud sea, drifting ash
 
 export interface Section {
@@ -355,34 +384,6 @@ function steepen (g: number, t: number): number {
 
   return Math.max(-DROP_CEIL, g * (1 + t * PITCH_GAIN) - t * PITCH_BIAS)
 }
-
-{
-  let accLen = 0
-  let accYaw = 0
-  for (const s of SECTIONS) {
-    STARTS.push(accLen)
-    SEC_YAW0.push(accYaw)
-
-    const beats: number[] = []
-    let inner            = 0
-    for (const t of s.turn) {
-      beats.push(inner)
-      inner += t
-    }
-    BEAT_YAW0.push(beats)
-
-    accLen += s.len
-    accYaw += inner
-  }
-  LAP_TURN = accYaw
-}
-
-/**
- * Heading at the instant the rails stop, which is where the shaft's corkscrew is
- * measured from. Four whole laps of turning, since the lap does not close in yaw
- * and never needed to.
- */
-const FALL_YAW0 = FALL_LAPS * LAP_TURN
 
 /**
  * Laps run, with the fractional part ramping across THE OVERLOOK rather than

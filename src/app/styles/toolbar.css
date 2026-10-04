@@ -2,7 +2,7 @@
 /* components/JourneyToolbar, ToolbarButton. The bar is the top row of the
    page: icons only, each named by aria-label and by a tooltip. */
 
-#journey-toolbar {
+.journey-toolbar {
   position:                       absolute;
   inset-block-start:              0;
   inset-inline-start:             0;
@@ -45,36 +45,34 @@
   text-decoration:          none;
   cursor:                   pointer;
   transition:               background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+
+  &:hover, &:focus-visible {
+    background:     #fff;
+    color:          #000;
+    border-color:   #fff;
+  }
+
+  &:focus-visible {
+    outline:          2px solid var(--signal);
+    outline-offset:   2px;
+  }
+
+  &[aria-pressed="true"] {
+    color:          var(--accent, var(--signal));
+    border-color:   var(--accent, var(--signal));
+
+    &:hover, &:focus-visible {
+      color: #000;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 
-.tb-btn:hover,
-.tb-btn:focus-visible {
-  background:     #fff;
-  color:          #000;
-  border-color:   #fff;
-}
-
-
-.tb-btn:focus-visible {
-  outline:          2px solid var(--signal);
-  outline-offset:   2px;
-}
-
-
-.tb-btn[aria-pressed="true"] {
-  color:          var(--accent, var(--signal));
-  border-color:   var(--accent, var(--signal));
-}
-
-
-.tb-btn[aria-pressed="true"]:hover,
-.tb-btn[aria-pressed="true"]:focus-visible {
-  color: #000;
-}
-
-
-#fps-display {
+.fps-display {
   padding-inline-start:     4px;
   color:                    rgba(255, 255, 255, 0.45);
   font-family:              var(--font-mono);
@@ -105,7 +103,7 @@
 /* Anchored popover: top layer, placed against its button. data-align says which
    edge of the button the tooltip lines up with, so one at the edge of the screen
    grows inward instead of off it. */
-@supports (anchor-name: --a) and (position-area: bottom) {
+@supports (anchor-name: --a) and (position-anchor: --a) and (position-area: bottom) {
   .tb-tip {
     position:                 absolute;
     inset:                    auto;
@@ -180,11 +178,4 @@
   display:          flex;
   inline-size:      fit-content;
   margin:           18px auto 0;
-}
-
-
-@media (prefers-reduced-motion: reduce) {
-  .tb-btn {
-    transition: none;
-  }
 }

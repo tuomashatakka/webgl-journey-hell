@@ -1,4 +1,4 @@
-// Single source of truth for the landing grid and the journey routes.
+// Single source of truth for the index and the journey routes.
 // Adding a journey = append one entry here + create app/journeys/<slug>/page.tsx.
 import { staticUrl } from '@wjh/web/assetUrl'
 import liminalPoster from '../../assets/posters/liminal.jpg'
@@ -49,7 +49,7 @@ const liminalPreviewFrag = `
 `
 
 // Stairwell hover preview: an open weather bridge crossing a ruptured industrial
-// horizon. It stays loop-free so the shared-context landing grid remains cheap.
+// horizon. It stays loop-free so the index's single-context CRT stays cheap.
 const stairwellPreviewFrag = `
   precision highp float;
   uniform vec2 iResolution;

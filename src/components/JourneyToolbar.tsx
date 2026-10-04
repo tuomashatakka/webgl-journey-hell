@@ -14,7 +14,7 @@ const ICON = { 'size': 18, 'strokeWidth': 1.75, 'aria-hidden': true } as const
 export default function JourneyToolbar () {
   const rt = useJourneyRuntimeContext()
 
-  return <nav id="journey-toolbar" className="hud" aria-label="Journey controls">
+  return <nav className="hud journey-toolbar" id="journey-toolbar" aria-label="Journey controls">
     <ToolbarButton id="back-btn" label="Back to the index" href="/" align="start" icon={ <ArrowLeft { ...ICON } /> } />
     <span className="tb-spacer" />
 
@@ -37,6 +37,6 @@ export default function JourneyToolbar () {
       onClick={ rt.toggleFullscreen } />
 
     <SettingsButton align="end" />
-    <span ref={ rt.statsRef } id="fps-display">— FPS</span>
+    <span ref={ rt.statsRef } className="fps-display" id="fps-display">— FPS</span>
   </nav>
 }

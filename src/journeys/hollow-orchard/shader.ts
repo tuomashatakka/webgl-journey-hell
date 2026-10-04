@@ -187,7 +187,7 @@ const SCENE = `
 
 export const hollowOrchardFrag = COMMON + SCENE
 
-// Hover preview. Self-driving on iTime alone: ShaderPreviewLayer attaches no
+// Hover preview. Self-driving on iTime alone: the index's CRT attaches no
 // simulation, so uStage/uCam would all read zero and the real shader would
 // render a black frame. No raymarch either — every card in the grid shares one
 // GL context, so this has to compile fast and stay branch-light.

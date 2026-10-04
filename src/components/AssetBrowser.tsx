@@ -4,7 +4,7 @@
 // strip down to any one of its maps, and every sky as a slow pan.
 //
 // One WebGL2 canvas sits fixed behind the whole page and every card's preview
-// is a scissored viewport on it — the same trick ShaderPreviewLayer plays for
+// is a scissored viewport on it — the trick the old index grid played for
 // the journey cards, and for the same reason: a page of two dozen previews
 // with a context each would hit the browser's per-document limit long before
 // the bottom of the page. A card only registers the box it wants drawn; the

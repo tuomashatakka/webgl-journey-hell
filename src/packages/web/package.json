@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Browser utilities: asset URLs, debug params, the frame loop, pan control, title-card renderer",
+  "description": "Browser utilities: asset URLs, debug params, the frame loop, pan control, title-card renderer, the index's CRT room",
   "sideEffects": false,
   "exports": {
     "./assetUrl": "./assetUrl.ts",
     "./canvasText": "./canvasText.ts",
+    "./crtRoom": "./crtRoom.ts",
+    "./crtRoomShader": "./crtRoomShader.ts",
     "./debugParams": "./debugParams.ts",
     "./frameLoopManager": "./frameLoopManager.ts",
     "./glitchTitle": "./glitchTitle.ts",
@@ -17,6 +19,8 @@
   },
   "dependencies": {
     "@wjh/config": "workspace:*",
+    "@wjh/gl": "workspace:*",
+    "@wjh/glsl": "workspace:*",
     "@wjh/math": "workspace:*"
   }
 }

@@ -53,7 +53,7 @@ function GlitchTitleCanvas ({ id, skippable, maxScale = 2, onDone, onOut, ...opt
   // compile can hold that frame up, and the card has to cover it.
   return <canvas
     ref={ canvasRef }
-    className={ options.backdrop === false ? 'gt-clear' : 'gt-black' }
+    className={ `${id} ${options.backdrop === false ? 'gt-clear' : 'gt-black'}` }
     id={ id }
     aria-hidden="true" />
 }

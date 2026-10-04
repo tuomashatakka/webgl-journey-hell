@@ -1,5 +1,5 @@
 /* ============================================================= */
-/* INDEX GRID LANDING PAGE                                        */
+/* INDEX: THE CRT ROOM                                            */
 /* ============================================================= */
 html, body {
   background-color: #000;
@@ -14,13 +14,20 @@ html, body {
         #000;
   color:         #fff;
   font-family:   var(--font-mono);
-  padding:       64px 24px 48px;
+  padding:       0;
 }
 
 
 .index-header {
+  position:         relative;
+  z-index:          1;
+  padding:          36px 24px 0;
   text-align:       center;
-  margin-block-end: 48px;
+  pointer-events:   none;
+
+  & a {
+    pointer-events: auto;
+  }
 }
 
 
@@ -53,7 +60,10 @@ html, body {
 
 
 .index-footer {
-  margin-block-start:       48px;
+  position:                 fixed;
+  inset-inline:             0;
+  inset-block-end:          10px;
+  z-index:                  1;
   text-align:               center;
   color:                    rgba(255, 255, 255, 0.3);
   font-size:                0.625rem;
@@ -61,147 +71,173 @@ html, body {
 }
 
 
-.journey-grid {
-  max-inline-size:               1200px;
-  margin:                        0 auto;
-  display:                       grid;
-  grid-template-columns:         repeat(auto-fill, minmax(300px, 1fr));
-  gap:                           24px;
+/* ---- the CRT room (components/CrtIndex) ------------------------------- */
+/* The room is the page: a fixed canvas behind everything, the heading over
+   its top, the channel controls along its foot, and the on-screen display
+   laid over the tube face — placed by the room's own projection through
+   --sx/--sy/--sw/--sh. Going in fades every piece of chrome. */
+.crt-index {
+  position: fixed;
+  inset:    0;
+  z-index:  0;
+
+  /* Without WebGL there is no room: the display stands alone, centred. */
+
+  &[data-failed] .crt-screen {
+    inset:       30% 10%;
+    inline-size: auto;
+    block-size:  auto;
+    border:      1px solid rgba(157, 255, 212, 0.35);
+  }
 }
 
 
-.journey-card {
-  position:          relative;
-  display:           block;
-  text-decoration:   none;
-  color:             #fff;
-  background:        #07080b;
-  border:            1px solid var(--panel);
-  overflow:          hidden;
-  transition:        border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+.crt-canvas {
+  position:    absolute;
+  inset:       0;
+  inline-size: 100%;
+  block-size:  100%;
+  display:     block;
 }
 
 
-.journey-card:hover,
-.journey-card:focus-visible {
-  border-color:   var(--accent, var(--signal));
-  box-shadow:     0 0 24px -4px var(--accent, var(--signal));
-  transform:      translateY(-2px);
-  outline:        none;
-}
-
-
-.journey-card__poster {
-  position:             relative;
-  inline-size:          100%;
-  aspect-ratio:         16 / 10;
-  overflow:             hidden;
-}
-
-
-.journey-card__img {
+/* The channel's still, where the room cannot be drawn. */
+.crt-poster {
   object-fit: cover;
-  transition: transform 0.4s ease, opacity 0.25s ease;
+  opacity:    0.6;
 }
 
 
-.journey-card:hover .journey-card__img {
-  transform: scale(1.04);
+.crt-screen {
+  position:           absolute;
+  inset-inline-start: var(--sx, 50%);
+  inset-block-start:  var(--sy, 50%);
+  inline-size:        var(--sw, 0);
+  block-size:         var(--sh, 0);
+  display:            grid;
+  overflow:           hidden;
+  border-radius:      6% / 8%;
+  color:              #9dffd4;
+  font-family:        var(--font-mono);
+  text-shadow:        0 0 6px rgba(120, 255, 200, 0.75);
+  transition:         opacity 0.3s ease;
 }
 
 
-/* Empty slot the shared preview <canvas> is appended into on hover. */
-.journey-card__mount {
-  position:         absolute;
-  inset:            0;
-  pointer-events:   none;
+.crt-osd {
+  all:            unset;
+  position:       relative;
+  display:        grid;
+  grid-template:  "ch" auto "." 1fr "name" auto "tag" auto / 1fr;
+  padding:        7% 8%;
+  cursor:         pointer;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+
+  &:focus-visible {
+    outline:        1px solid currentColor;
+    outline-offset: -6px;
+  }
 }
 
 
-/* CRT scanline veil — painted above the poster AND the live preview. */
-.journey-card__scan {
-  position:         absolute;
-  inset:            0;
-  pointer-events:   none;
-  opacity:          0.5;
-  background:
-        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
-        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-  background-size: 100% 4px, 3px 100%;
+.crt-ch {
+  grid-area: ch;
+  font-size: clamp(10px, 1.6vi, 18px);
 }
 
 
-.journey-card__body {
-  padding: 16px 18px 18px;
+.crt-name {
+  grid-area:   name;
+  font-size:   clamp(11px, 1.7vi, 22px);
+  font-weight: 700;
 }
 
 
-.journey-card__title {
-  position:         relative;
-  font-family:      var(--font-mono);
-  font-size:        0.8125rem;
-  font-weight:      bold;
-  letter-spacing:   2px;
-  text-transform:   uppercase;
-  color:            #fff;
+.crt-tag {
+  grid-area:          tag;
+  margin-block-start: 4px;
+  font-size:          clamp(8px, 0.9vi, 12px);
+  opacity:            0.75;
+  letter-spacing:     1px;
 }
 
 
-/* Glitch the title on hover, reusing the journey's glitchAnim keyframes. */
-.journey-card:hover .journey-card__title::before,
-.journey-card:hover .journey-card__title::after {
-  content:                  attr(data-text);
-  position:                 absolute;
-  inset-block-start:        0;
-  inset-inline-start:       0;
-  inline-size:              100%;
-  overflow:                 hidden;
+.crt-menu {
+  position:   relative;
+  padding:    5% 6%;
+  overflow:   auto;
+
+  & ol {
+    display:               grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 12em), 1fr));
+    gap:                   2px 12px;
+    list-style:            none;
+  }
 }
 
 
-.journey-card:hover .journey-card__title::before {
-  inset-inline-start:          2px;
-  text-shadow:                 -2px 0 #ff0055;
-  animation:                   glitchAnim1 0.8s 6 linear alternate-reverse;
+.crt-item {
+  all:            unset;
+  display:        flex;
+  gap:            0.8em;
+  padding:        3px 4px;
+  font-size:      clamp(9px, 1.05vi, 14px);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor:         pointer;
+
+  &:hover,
+  &:focus-visible,
+  &[aria-current="true"] {
+    background:  #9dffd4;
+    color:       #021;
+    text-shadow: none;
+  }
 }
 
 
-.journey-card:hover .journey-card__title::after {
-  inset-inline-start:          -2px;
-  text-shadow:                 -1px 0 #00ffff, 0 2px #ffff00;
-  animation:                   glitchAnim2 0.7s 7 linear alternate-reverse;
+.crt-item-ch {
+  opacity: 0.7;
 }
 
 
-.journey-card__tagline {
-  margin-block-start:    8px;
-  font-size:             0.6875rem;
-  line-height:           1.5;
-  color:                 rgba(255, 255, 255, 0.5);
+.crt-controls {
+  position:          absolute;
+  inset-inline:      0;
+  inset-block-end:   44px;
+  display:           flex;
+  flex-wrap:         wrap;
+  justify-content:   center;
+  gap:               8px;
+  padding-inline:    16px;
+  transition:        opacity 0.3s ease;
 }
 
 
-.journey-card__tags {
-  list-style:           none;
-  display:              flex;
-  flex-wrap:            wrap;
-  gap:                  6px;
-  margin-block-start:   12px;
+.crt-btn {
+  background:     rgba(0, 0, 0, 0.6);
+  border:         1px solid rgba(157, 255, 212, 0.35);
+  color:          #9dffd4;
+  font-family:    var(--font-mono);
+  font-size:      0.6875rem;
+  letter-spacing: 2px;
+  padding:        9px 14px;
+  cursor:         pointer;
+  transition:     background 0.15s ease, color 0.15s ease;
+
+  &:hover,
+  &:focus-visible,
+  &[aria-pressed="true"] {
+    background: #9dffd4;
+    color:      #021;
+  }
 }
 
 
-.journey-card__tag {
-  font-size:        0.5625rem;
-  letter-spacing:   1px;
-  text-transform:   uppercase;
-  padding:          2px 7px;
-  border:           1px solid var(--line);
-  color:            rgba(255, 255, 255, 0.55);
-  transition:       color 0.25s ease, border-color 0.25s ease;
-}
-
-
-.journey-card:hover .journey-card__tag {
-  border-color: var(--accent, var(--signal));
-  color:        var(--accent, var(--signal));
+.index-page:has(.crt-index[data-going]) :is(.index-header, .index-footer),
+.crt-index[data-going] :is(.crt-screen, .crt-controls) {
+  opacity:        0;
+  pointer-events: none;
+  transition:     opacity 0.35s ease;
 }

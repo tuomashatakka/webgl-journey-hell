@@ -44,17 +44,94 @@
 // because the picture behind it changed.
 
 import { chromium } from 'playwright-core'
+
 import { mkdir, writeFile } from 'node:fs/promises'
+
 import path from 'node:path'
+
 import { startHarness } from './harness/serve.mjs'
+
 import { CONFIG } from '../src/packages/config/config.ts'
+
 import { findChromium, glArgs } from './chromium.mjs'
 
 // Reassigned by --bare to the in-process harness.
 let BASE = process.env.JOURNEY_BASE_URL ?? `${CONFIG.tools.devOrigin}${CONFIG.site.basePath}`
 
 const DEF_W = CONFIG.tools.defaultWidth
+
 const DEF_H = CONFIG.tools.defaultHeight
+
+// Every fixed piece of chrome, and what each is anchored to. An overlay that
+// moves between two timestamps is a layout bug; one that stays put is not, no
+// matter what the frame behind it did.
+// #journey-transport is deliberately absent: every command here drives `?t=`,
+// and the transport hides itself in frozen mode so the seek stays a pure
+// function of the URL. A gate that can never pass is noise, so it is not one.
+// The section headings are absent for the same reason (and are a full-viewport
+// canvas besides: fixed by construction).
+const HUD_IDS = CONFIG.tools.hudIds
+
+const COMMANDS = {
+  shot:    cmdShot,
+  film:    cmdFilm,
+  probe:   cmdProbe,
+  scan:    cmdScan,
+  uv:      cmdUv,
+  hud:     cmdHud,
+  fps:     cmdFps,
+  contact: cmdContact,
+  glsl:    cmdGlsl,
+}
+
+const { cmd, journey, opts } = parseArgs(process.argv.slice(2))
+
+if (!COMMANDS[cmd] || !journey) {
+  console.error('usage: node tools/journey.mjs <shot|film|probe|scan|uv|hud|fps|contact|glsl> <journey> [--bare] [--opts]')
+  process.exit(1)
+}
+
+let harness = null
+
+if (flag(opts.bare, false)) {
+  harness = await startHarness()
+  BASE    = harness.url
+}
+
+try {
+  await withBrowser(page => COMMANDS[cmd](page, journey, opts))
+}
+finally {
+  await harness?.close()
+}
+
+const num = (v, d) => v === undefined ? d : Number(v)
+
+const hudFn = ids => ids.map(id => {
+  const el = document.getElementById(id)
+  if (!el)
+    return { id, present: false }
+
+  const r = el.getBoundingClientRect()
+  return {
+    id,
+    present: true,
+    text:    (el.textContent ?? '').trim(),
+    // The CENTRE is what the eye tracks, and for a centred overlay it is the
+    // thing that is supposed to be invariant while the width is not.
+    cx:      +((r.left + r.right) / 2).toFixed(1),
+    cy:      +((r.top + r.bottom) / 2).toFixed(1),
+    w:       +r.width.toFixed(1),
+    h:       +r.height.toFixed(1),
+  }
+})
+
+// Flags arrive as STRINGS, and "0" is truthy in JavaScript — so `opts.hud ? …`
+// answered yes to --hud=0 and every "clean plate" ever taken with it came back
+// with the whole HUD still on it. Anything that reads as an off-switch is off.
+function flag (v, d) {
+  return v === undefined ? d : !(/^(0|false|no|off)$/i).test(String(v))
+}
 
 function parseArgs (argv) {
   const [ cmd, journey, ...rest ] = argv
@@ -66,13 +143,6 @@ function parseArgs (argv) {
   }
   return { cmd, journey, opts }
 }
-
-const num = (v, d) => v === undefined ? d : Number(v)
-
-// Flags arrive as STRINGS, and "0" is truthy in JavaScript — so `opts.hud ? …`
-// answered yes to --hud=0 and every "clean plate" ever taken with it came back
-// with the whole HUD still on it. Anything that reads as an off-switch is off.
-const flag = (v, d) => v === undefined ? d : !(/^(0|false|no|off)$/i).test(String(v))
 
 function url (journey, t, opts, extra = {}) {
   const q = new URLSearchParams({
@@ -341,35 +411,6 @@ function uvFn () {
   return { hDetail: hAcc / n, vDetail: vAcc / n, ratio: hAcc / n / Math.max(vAcc / n, 1e-6) }
 }
 
-// Every fixed piece of chrome, and what each is anchored to. An overlay that
-// moves between two timestamps is a layout bug; one that stays put is not, no
-// matter what the frame behind it did.
-// #journey-transport is deliberately absent: every command here drives `?t=`,
-// and the transport hides itself in frozen mode so the seek stays a pure
-// function of the URL. A gate that can never pass is noise, so it is not one.
-// The section headings are absent for the same reason (and are a full-viewport
-// canvas besides: fixed by construction).
-const HUD_IDS = CONFIG.tools.hudIds
-
-const hudFn = ids => ids.map(id => {
-  const el = document.getElementById(id)
-  if (!el)
-    return { id, present: false }
-
-  const r = el.getBoundingClientRect()
-  return {
-    id,
-    present: true,
-    text:    (el.textContent ?? '').trim(),
-    // The CENTRE is what the eye tracks, and for a centred overlay it is the
-    // thing that is supposed to be invariant while the width is not.
-    cx:      +((r.left + r.right) / 2).toFixed(1),
-    cy:      +((r.top + r.bottom) / 2).toFixed(1),
-    w:       +r.width.toFixed(1),
-    h:       +r.height.toFixed(1),
-  }
-})
-
 async function cmdHud (page, journey, opts) {
   const from = num(opts.from, 0)
   const to   = num(opts.to, 60)
@@ -531,34 +572,4 @@ async function cmdGlsl (page, journey, opts) {
   }
   else
     console.log(`${journey}: ok  (${dbg.label})`)
-}
-
-const COMMANDS = {
-  shot:    cmdShot,
-  film:    cmdFilm,
-  probe:   cmdProbe,
-  scan:    cmdScan,
-  uv:      cmdUv,
-  hud:     cmdHud,
-  fps:     cmdFps,
-  contact: cmdContact,
-  glsl:    cmdGlsl,
-}
-
-const { cmd, journey, opts } = parseArgs(process.argv.slice(2))
-if (!COMMANDS[cmd] || !journey) {
-  console.error('usage: node tools/journey.mjs <shot|film|probe|scan|uv|hud|fps|contact|glsl> <journey> [--bare] [--opts]')
-  process.exit(1)
-}
-
-let harness = null
-if (flag(opts.bare, false)) {
-  harness = await startHarness()
-  BASE    = harness.url
-}
-try {
-  await withBrowser(page => COMMANDS[cmd](page, journey, opts))
-}
-finally {
-  await harness?.close()
 }

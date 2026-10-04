@@ -81,7 +81,7 @@ void main () {
 `
 
 // ---------------------------------------------------------------------------
-// the hover preview (GLSL ES 1.00 — shared WebGL1 context on the landing grid)
+// the hover preview (GLSL ES 1.00 — the index's WebGL1 CRT)
 // ---------------------------------------------------------------------------
 
 /**

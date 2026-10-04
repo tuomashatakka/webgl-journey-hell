@@ -1,5 +1,5 @@
-// Capture the card posters in assets/posters/<slug>.jpg by driving the real
-// journeys in a browser — the landing grid's fallback art is a genuine still of
+// Capture the posters in assets/posters/<slug>.jpg by driving the real
+// journeys in a browser — the index's fallback picture is a genuine still of
 // the shader, not a mockup.
 //
 //   bun run dev                       # in another shell
@@ -19,23 +19,36 @@
 // still take a couple of minutes.
 
 import { chromium } from 'playwright-core'
+
 import { mkdir, writeFile } from 'node:fs/promises'
+
 import path from 'node:path'
+
 import { fileURLToPath } from 'node:url'
+
 import { CONFIG } from '../src/packages/config/config.ts'
+
 import { findChromium, glArgs } from './chromium.mjs'
 
 
 const { posters } = CONFIG.tools
+
 const ROOT        = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
 const OUT         = path.join(ROOT, posters.dir)
+
 const BASE        = process.env.POSTER_BASE_URL ?? `${CONFIG.tools.devOrigin}${CONFIG.site.basePath}`
+
 const SHOTS       = posters.shots.map(shot => ({ ...shot, section: new RegExp(shot.section) }))
+
 const quality     = posters.quality
 
 const bare      = process.argv.includes('--bare')
+
 const requested = new Set(process.argv.slice(2).filter(a => !a.startsWith('--')))
+
 const unknown   = [ ...requested ].filter(slug => !SHOTS.some(shot => shot.slug === slug))
+
 if (unknown.length)
   throw new Error(`unknown journey slug: ${unknown.join(', ')}`)
 
@@ -72,25 +85,8 @@ if (bare) {
   process.exit(0)
 }
 
-// One browser per shot, so one journey's GPU trouble cannot cost the rest.
-async function openPage () {
-  const browser = await chromium.launch({
-    executablePath: await findChromium(),
-    args:           glArgs(),
-  })
-  const context = await browser.newContext({
-    viewport:          { width: posters.width, height: posters.height },
-    deviceScaleFactor: 1,
-  })
-  await context.addInitScript(([ key, settings ]) => {
-    localStorage.setItem(key, JSON.stringify(settings))
-  }, [ CONFIG.settings.storageKey, posters.settings ])
-
-  const page = await context.newPage()
-  return { browser, page }
-}
-
 const failed = []
+
 for (const { slug, section, t } of shots) {
   const { browser, page } = await openPage()
   page.on('crash', () => console.error(`${slug}: page crashed`))
@@ -110,6 +106,24 @@ for (const { slug, section, t } of shots) {
 if (failed.length) {
   console.error(`failed: ${failed.join(', ')}`)
   process.exit(1)
+}
+
+// One browser per shot, so one journey's GPU trouble cannot cost the rest.
+async function openPage () {
+  const browser = await chromium.launch({
+    executablePath: await findChromium(),
+    args:           glArgs(),
+  })
+  const context = await browser.newContext({
+    viewport:          { width: posters.width, height: posters.height },
+    deviceScaleFactor: 1,
+  })
+  await context.addInitScript(([ key, settings ]) => {
+    localStorage.setItem(key, JSON.stringify(settings))
+  }, [ CONFIG.settings.storageKey, posters.settings ])
+
+  const page = await context.newPage()
+  return { browser, page }
 }
 
 async function shoot (page, slug, section, t) {

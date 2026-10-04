@@ -73,4 +73,4 @@ A journey is declared once in `src/journeys/<slug>/journey.ts` (`defineJourney`)
 
 ## Assets
 
-Every image is in `assets/`: `posters/` (the index cards), `screenshots/` (kebab-case, `<journey>-<subject>-<n>`), `textures/`. There is no `public/` directory. Posters and the skybridges environment map are statically imported, so the bundler hashes them and applies the basePath; a runtime URL built from a string must go through `staticUrl` / `assetUrl` (`@wjh/web/assetUrl`). The delta library's files are the same: `delta/urls.ts` is generated static imports.
+Every image is in `assets/`: `posters/` (the index's fallback pictures), `screenshots/` (kebab-case, `<journey>-<subject>-<n>`), `textures/`. There is no `public/` directory. Posters and the skybridges environment map are statically imported, so the bundler hashes them and applies the basePath; a runtime URL built from a string must go through `staticUrl` / `assetUrl` (`@wjh/web/assetUrl`). The delta library's files are the same: `delta/urls.ts` is generated static imports.

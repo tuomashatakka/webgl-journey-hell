@@ -24,7 +24,7 @@
    toolbars do not hide the bottom of it — and the runtime matches the backing
    store to that box whenever it changes (a ResizeObserver; see
    hooks/use-journey-runtime). */
-#app-container {
+.app-container {
   position:                 fixed;
   inset:                    0;
   inline-size:              100vi;
@@ -32,13 +32,12 @@
   background-color:         #000;
   overflow:                 hidden;
   font-family:              var(--font-mono);
-  user-select:              none;
     /* The row the HUD buttons sit on, above the transport. */
   --hud-row: 84px;
 }
 
 
-#gl-canvas {
+.gl-canvas {
   position:                 absolute;
   inset-block-start:        0;
   inset-inline-start:       0;
@@ -50,14 +49,14 @@
 
 
 @supports (height: 100dvb) {
-  #app-container,
-  #gl-canvas {
+  .app-container,
+  .gl-canvas {
     block-size: 100dvb;
   }
 }
 
 
-#crt-overlay {
+.crt-overlay {
   position:                        absolute;
   inset-block-start:               0;
   inset-inline-start:              0;
@@ -75,8 +74,8 @@
    listener that skips it, so the canvas itself takes no pointer events. A
    section heading sits over the journey, under the chrome, and unmounts once
    it has torn out. */
-#journey-title-intro,
-#journey-section-heading {
+.journey-title-intro,
+.journey-section-heading {
   position:               fixed;
   inset:                  0;
   inline-size:            100%;
@@ -85,12 +84,12 @@
 }
 
 
-#journey-title-intro {
+.journey-title-intro {
   z-index: 40;
 }
 
 
-#journey-section-heading {
+.journey-section-heading {
   z-index: 8;
 }
 
@@ -98,7 +97,7 @@
 /* ---- the loading bar (components/JourneyLoader) ------------------------ */
 /* Before the title card, over it: black, a hairline bar, a status line. In
    the prerendered HTML, so it is the first thing a journey's page shows. */
-#journey-loader {
+.journey-loader {
   position:          fixed;
   inset:             0;
   z-index:           45;
@@ -116,6 +115,18 @@
     opacity:        0;
     pointer-events: none;
   }
+
+  &[data-failed] .jl-track::after {
+    display: none;
+  }
+
+  &[data-failed] .jl-status {
+    max-inline-size:         88vi;
+    color:                   #ff5a5a;
+    white-space:             normal;
+    justify-content:         center;
+    text-align:              center;
+  }
 }
 
 
@@ -125,47 +136,40 @@
   inline-size:        min(320px, 70vi);
   block-size:         2px;
   overflow:           hidden;
+
+  /* A highlight sweeping the bar the whole time. A transform animation runs on
+     the compositor, so it keeps moving while the main thread is blocked
+     compiling shaders — the one stage that cannot report its progress. */
+
+  &::after {
+    content:                     "";
+    position:                    absolute;
+    inset-block-start:           0;
+    inset-block-end:             0;
+    inset-inline-start:          0;
+    inline-size:                 30%;
+    background:                  linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    animation:                   jlSweep 1.3s linear infinite;
+    will-change:                 transform;
+
+    @media (prefers-reduced-motion: reduce) {
+      display: none;
+    }
+  }
 }
 
 
-/* A native progress element: the bar is its value, no inline style needed. */
+/* An SVG bar: its fill is a rect as wide as the percentage. */
 .jl-bar {
   display:            block;
   inline-size:        100%;
   block-size:         100%;
-  border:             0;
-  appearance:         none;
   background:         rgba(255, 255, 255, 0.12);
-  color:              var(--accent, #fff);
 
-  &::-webkit-progress-bar {
-    background: rgba(255, 255, 255, 0.12);
+  rect {
+    fill:       var(--accent, #fff);
+    transition: width 0.35s ease-out;
   }
-
-  &::-webkit-progress-value {
-    background: var(--accent, #fff);
-    transition: inline-size 0.35s ease-out;
-  }
-
-  &::-moz-progress-bar {
-    background: var(--accent, #fff);
-  }
-}
-
-
-/* A highlight sweeping the bar the whole time. A transform animation runs on
-   the compositor, so it keeps moving while the main thread is blocked
-   compiling shaders — the one stage that cannot report its progress. */
-.jl-track::after {
-  content:                     "";
-  position:                    absolute;
-  inset-block-start:           0;
-  inset-block-end:             0;
-  inset-inline-start:          0;
-  inline-size:                 30%;
-  background:                  linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
-  animation:                   jlSweep 1.3s linear infinite;
-  will-change:                 transform;
 }
 
 
@@ -195,20 +199,6 @@
 }
 
 
-#journey-loader[data-failed] .jl-track::after {
-  display: none;
-}
-
-
-#journey-loader[data-failed] .jl-status {
-  max-inline-size:         88vi;
-  color:                   #ff5a5a;
-  white-space:             normal;
-  justify-content:         center;
-  text-align:              center;
-}
-
-
 /* What the compiler said. Selectable, so it can go into a bug report from a
    phone with no console. */
 .jl-detail {
@@ -219,12 +209,4 @@
   text-align:             center;
   color:                  rgba(255, 90, 90, 0.75);
   overflow-wrap:          anywhere;
-  user-select:            text;
-}
-
-
-@media (prefers-reduced-motion: reduce) {
-  .jl-track::after {
-    display: none;
-  }
 }

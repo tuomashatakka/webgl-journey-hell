@@ -45,24 +45,25 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
   return createPortal(
     <>
       {/* The backdrop: a fixed full-viewport layer, so a click anywhere outside the panel closes it. */}
-      <div id="settings-backdrop" aria-hidden="true" onClick={ onClose } />
+      <div className="settings-backdrop" id="settings-backdrop" aria-hidden="true" onClick={ onClose } />
 
       <aside
         ref={ panelRef }
+        className="settings-panel"
         id="settings-panel"
         aria-modal="true"
         aria-labelledby="settings-title"
         role="dialog"
         tabIndex={ -1 }>
-        <header id="settings-header">
-          <h2 id="settings-title">GRAPHICS & CONTROLS</h2>
+        <header className="settings-header" id="settings-header">
+          <h2 className="settings-title" id="settings-title">GRAPHICS & CONTROLS</h2>
 
-          <button id="settings-close-btn" aria-label="Close settings" type="button" onClick={ onClose }>
+          <button className="settings-close-btn" id="settings-close-btn" aria-label="Close settings" type="button" onClick={ onClose }>
             <CloseIcon aria-hidden size={ 16 } />
           </button>
         </header>
 
-        <section id="settings-body">
+        <section className="settings-body" id="settings-body">
           {/* Resolution */}
           <fieldset className="settings-group">
             <legend className="settings-label">RENDER RESOLUTION</legend>

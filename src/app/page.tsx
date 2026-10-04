@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import JourneyGrid from '✦/components/JourneyGrid'
+import CrtIndex from '✦/components/CrtIndex'
 import SettingsButton from '✦/components/SettingsButton'
 
 
@@ -27,10 +27,10 @@ export default function IndexPage () {
       </p>
     </header>
 
-    <JourneyGrid />
+    <CrtIndex />
 
     <footer className="index-footer">
-      <span>{`// ${process.env.NODE_ENV === 'production' ? 'live' : 'dev'} — hover a tile to wake it, stills stand in where it can't`}</span>
+      <span>{`// ${process.env.NODE_ENV === 'production' ? 'live' : 'dev'} — ◀ ▶ change the channel · M the menu · enter goes in`}</span>
       <SettingsButton side="top" />
     </footer>
   </main>

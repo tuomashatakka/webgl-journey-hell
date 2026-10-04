@@ -368,7 +368,7 @@ const SCENE = `
 
 export const natatoriumFrag = COMMON + SCENE
 
-// Hover preview. Self-driving from iTime alone: ShaderPreviewLayer attaches no
+// Hover preview. Self-driving from iTime alone: the index's CRT attaches no
 // simulation, so uSec/uCam would all read zero and the real shader would render
 // a black frame. No raymarch either — every card in the grid shares one GL
 // context. The job is to read as a swimming pool at 300px, which is what the

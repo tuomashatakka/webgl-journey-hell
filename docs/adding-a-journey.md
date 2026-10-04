@@ -55,27 +55,26 @@ Then register it:
 
 1. Add it to `src/journeys/definitions.ts`.
 2. Append an entry to `JOURNEYS` in `src/journeys/registry.ts` (title, tagline,
-   tags, accent, gradient, and a compact `previewShader` for the hover preview).
+   tags, accent, gradient, and a compact `previewShader` for its channel on the index).
    Export the preview shader from your own `shader.ts` and import it here. Keep it
-   cheap and **self-driving from `iTime` alone** — the grid attaches no simulation,
-   so a preview that reads `uStage`/`uCam` renders a black card.
+   cheap and **self-driving from `iTime` alone** — the index attaches no simulation,
+   so a preview that reads `uStage`/`uCam` renders a black channel.
 
    A preview is **always GLSL ES 1.00**, even for a geometry journey whose own
-   renderer is WebGL2: every card's preview shares one WebGL 1.0 context, so the
+   renderer is WebGL2: every channel draws in the index's one WebGL 1.0 context, so the
    preview cannot be the journey's real renderer and has to fake the shot.
 3. Add a poster screenshot at `assets/posters/<slug>.jpg`, import it statically
    in the registry and wrap it in `staticUrl(...)` (posters are bundled assets,
    there is no `public/` directory) — `node tools/shoot-posters.mjs` captures
-   one from the running route. The card's art falls back screenshot-first: live preview on hover,
-   the screenshot wherever WebGL or hover isn't available (phones, mostly), the
-   CSS gradient only if the image itself fails to load.
+   one from the running route. The index shows it on the tube wherever WebGL is
+   not to be had.
 
-The landing grid picks it up automatically from the registry; the journey's title
+The index picks it up automatically from the registry, as the next channel; the journey's title
 card takes its title, tagline and accent from the same entry.
 
-> **Note:** the card hover previews all share a **single** WebGL context
-> (`ShaderPreviewLayer`) so the page never trips the browser's per-document
-> context limit, no matter how many journeys are listed.
+> **Note:** the channels all draw through the CRT room's **single** WebGL context
+> (`packages/web/crtRoom`), one picture at a time, so the page never trips the
+> browser's per-document context limit, no matter how many journeys are listed.
 
 ## Develop
 

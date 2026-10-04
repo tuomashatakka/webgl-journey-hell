@@ -55,13 +55,13 @@ export default function JourneyDebugPanel ({ getState }: Props) {
 
   const entries = Object.entries(state.uniforms)
 
-  return <aside id="journey-debug" data-open={ open ? '1' : '0' }>
-    <button id="journey-debug-toggle" onClick={ () => setOpen(v => !v) }>
+  return <aside className="journey-debug" id="journey-debug" data-open={ open ? '1' : '0' }>
+    <button className="journey-debug-toggle" id="journey-debug-toggle" type="button" onClick={ () => setOpen(v => !v) }>
       {open ? '▾' : '▸'} DEBUG
     </button>
 
     {open &&
-      <div id="journey-debug-body">
+      <div className="journey-debug-body" id="journey-debug-body">
         <dl>
           <dt>time</dt>
           <dd>{state.time.toFixed(3)}s {state.seeking && '(frozen)'}</dd>

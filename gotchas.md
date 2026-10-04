@@ -49,10 +49,10 @@ Traps that have already cost time, in the order you are likely to hit them. The 
 * **Journeys are integrators, not timelines.** A time cannot be jumped to, only replayed (`seekSimulation`). Forward seeks step the live simulation; backward seeks replay from a recorded log. Anything keyed to wall-clock time breaks `?t=`: signal loss counts simulation seconds (`JourneyMarks.signalAge`).
 * **The simulation's `step` must be deterministic**: no `Math.random`, no `Date.now`. Use `@wjh/math/rng`.
 * **The CRT caption is composited in GL**, not DOM, or it would sit flat and square on a curved, torn picture.
-* **Pan inversion** is in `use-journey-runtime` (the view swings away from the pointer sideways); the shaders all look toward `uPointer`.
+* **Pan follows the pointer**: `use-journey-runtime` inverts nothing, and the shaders all look toward `uPointer`, so pointer right turns the view right.
 * **Resize is applied just before the next draw**, because resizing clears the canvas and a cleared canvas between a frame and its paint is a flash.
 * **Lost contexts come back**: the runtime asks for the context back and rebuilds the renderer.
-* **The index previews share ONE WebGL context** (`ShaderPreviewLayer`) to stay under the browser's context cap.
+* **The index draws every channel in ONE WebGL context** (`packages/web/crtRoom`) to stay under the browser's context cap; a channel's program compiles the first time it is tuned.
 * **Signal-loss laps differ per journey** (`CONFIG.signal.lossLaps`: loop line 5, skybridges 2, scenic route 3, natatorium 5); the four journeys with a persistent ending trigger on entering it.
 
 ## UI

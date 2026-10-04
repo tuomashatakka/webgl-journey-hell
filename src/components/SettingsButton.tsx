@@ -1,7 +1,7 @@
 'use client'
 
 // The gear + the settings panel, wired to the global SettingsProvider. Reused
-// by the landing grid's footer and by every journey's toolbar.
+// by the index's footer and by every journey's toolbar.
 
 import { useState } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'

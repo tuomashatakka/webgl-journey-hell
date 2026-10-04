@@ -151,6 +151,10 @@
 
 .assets-grid--wide {
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+
+  .asset-card__preview {
+    aspect-ratio: 16 / 9;
+  }
 }
 
 
@@ -163,11 +167,6 @@
 
 .asset-card__preview {
   aspect-ratio: 1;
-}
-
-
-.assets-grid--wide .asset-card__preview {
-  aspect-ratio: 16 / 9;
 }
 
 

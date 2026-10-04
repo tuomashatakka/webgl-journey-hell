@@ -28,20 +28,17 @@
 //     rather than moving rigidly).
 
 import { createClosedCurve, newFrame } from '@wjh/geometry/curve'
+
 import type { Vec3 } from '@wjh/geometry/curve'
+
 import { getCircuits } from '✦/journeys/loop-line/stations'
+
 import { SWEEP_FLOATS, finishSweep, levelFrame, sweepProfile } from '@wjh/geometry/sweep'
+
 import { getRoute } from '✦/journeys/scenic-route/course'
 
 
 let fails = 0
-const ok = (name: string, cond: boolean, detail = '') => {
-  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`)
-  if (!cond)
-    fails++
-}
-const d = (a: Vec3, b: Vec3): number =>
-  Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
 
 // --- the two checks a wrong basis cannot pass -----------------------------
 // Unevenly spaced control points. A broken parametrisation shows up here and
@@ -50,21 +47,27 @@ const uneven = [
   { x: 0, y: 0, z: 0 }, { x: 100, y: 0, z: 4 }, { x: 108, y: 0, z: 60 },
   { x: 40, y: 12, z: 95 }, { x: -70, y: 6, z: 70 }, { x: -95, y: 0, z: -20 },
 ]
+
 const cu = createClosedCurve(uneven)
 
 let worstCp = 0
+
 for (let i = 0; i < uneven.length; i++) {
   const got = cu.sample(i / uneven.length)
   worstCp = Math.max(worstCp, d(got, uneven[i]))
 }
+
 ok('curve interpolates its control points', worstCp < 1e-6, `max err ${worstCp.toExponential(2)} m`)
 
 // Continuity: the largest gap between consecutive dense samples must not be a
 // multiple of the typical gap. A torn segment join shows as a huge outlier.
 let maxJump = 0,
   sumJump   = 0
+
 const N = 4000
+
 let prev = cu.sample(0)
+
 for (let i = 1; i <= N; i++) {
   const p = cu.sample(i / N)
   const j = d(p, prev)
@@ -73,28 +76,35 @@ for (let i = 1; i <= N; i++) {
 }
 
 const meanJump = sumJump / N
+
 ok('no tear at segment joins', maxJump < meanJump * 6,
    `max/mean = ${(maxJump / meanJump).toFixed(2)}`)
 
 // --- arc-length machinery -------------------------------------------------
-const R      = 100,
-  M          = 8
+const R = 100,
+  M     = 8
+
 const circle = createClosedCurve(
   Array.from({ length: M }, (_, i) => {
     const a = i / M * Math.PI * 2
     return { x: R * Math.cos(a), y: 0, z: R * Math.sin(a) }
   }))
+
 ok('circle length ≈ 2πr', Math.abs(circle.length - 2 * Math.PI * R) / (2 * Math.PI * R) < 0.02,
    `${circle.length.toFixed(1)} vs ${(2 * Math.PI * R).toFixed(1)}`)
+
 ok('loop closes', d(circle.pointAtDistance(0), circle.pointAtDistance(circle.length)) < 1e-4)
 
 let mn = Infinity,
   mx   = 0
+
 let pp = circle.pointAtDistance(0)
+
 for (let i = 1; i <= 200; i++) {
   const p    = circle.pointAtDistance(i / 200 * circle.length)
   const step = d(p, pp); mn = Math.min(mn, step); mx = Math.max(mx, step); pp = p
 }
+
 ok('arc-length uniform', mx / mn < 1.05, `ratio ${(mx / mn).toFixed(4)}`)
 
 // An 8-point Catmull-Rom through points on a circle is not a circle, so its
@@ -106,26 +116,35 @@ const fine = createClosedCurve(
     const a = i / 64 * Math.PI * 2
     return { x: R * Math.cos(a), y: 0, z: R * Math.sin(a) }
   }))
+
 const kf = fine.curvatureAtDistance(fine.length * 0.37)
+
 ok('curvature -> 1/R as the circle is refined',
    Math.abs(kf - 1 / R) / (1 / R) < 0.05,
    `${kf.toExponential(3)} vs ${(1 / R).toExponential(3)}`)
 
 let turning = 0
+
 const TN = 20000
+
 for (let i = 0; i < TN; i++)
   turning += circle.curvatureAtDistance(i / TN * circle.length) * (circle.length / TN)
+
 ok('total turning = 2π', Math.abs(turning - 2 * Math.PI) / (2 * Math.PI) < 0.02,
    `${turning.toFixed(4)} vs ${(2 * Math.PI).toFixed(4)}`)
 
 // --- frames ---------------------------------------------------------------
 const f0   = circle.frameAtDistance(0)
+
 const f1   = circle.frameAtDistance(circle.length - 1e-6)
+
 const holo = Math.max(Math.abs(f0.up.x - f1.up.x), Math.abs(f0.up.y - f1.up.y), Math.abs(f0.up.z - f1.up.z))
+
 ok('frame closes (holonomy corrected)', holo < 0.02, `residual ${holo.toExponential(2)}`)
 
 let worstOrtho = 0,
   nan          = false
+
 for (const c of [ cu, circle, getCircuits().main, getCircuits().alt ])
   for (let i = 0; i < 500; i++) {
     const f = c.frameAtDistance(i / 500 * c.length)
@@ -137,14 +156,19 @@ for (const c of [ cu, circle, getCircuits().main, getCircuits().alt ])
                           Math.abs(Math.hypot(f.forward.x, f.forward.y, f.forward.z) - 1),
                           Math.abs(Math.hypot(f.up.x, f.up.y, f.up.z) - 1))
   }
+
 ok('no NaN in any frame', !nan)
+
 ok('frames orthonormal', worstOrtho < 1e-5, `worst ${worstOrtho.toExponential(2)}`)
 
 // --- the circuit itself ---------------------------------------------------
 const c = getCircuits()
+
 console.log(`\nmain ${c.main.length.toFixed(1)} m   alt ${c.alt.length.toFixed(1)} m   ` +
             `(${c.mainBays.length} bays on main, ${c.altBays.length} on alt)`)
+
 ok('main loop is 1.8-2.4 km', c.main.length > 1800 && c.main.length < 2400)
+
 ok('alt skips THE CUT', !c.altBays.some(s => s.bay.name === 'THE CUT') &&
    c.altBays.some(s => s.bay.name === 'THE CHORD'))
 
@@ -198,9 +222,12 @@ for (const [ label, mainS, altS ] of [
 }
 
 console.log('\nmain bays:')
+
 for (const s of c.mainBays)
   console.log(`  ${s.bay.name.padEnd(20)} ${s.s0.toFixed(0).padStart(5)} → ${s.s1.toFixed(0).padStart(5)} m  (${(s.s1 - s.s0).toFixed(0)} m)`)
+
 console.log('alt bays:')
+
 for (const s of c.altBays)
   console.log(`  ${s.bay.name.padEnd(20)} ${s.s0.toFixed(0).padStart(5)} → ${s.s1.toFixed(0).padStart(5)} m  (${(s.s1 - s.s0).toFixed(0)} m)`)
 
@@ -208,15 +235,17 @@ for (const s of c.altBays)
 // on a sixpence.
 let maxGrade = 0,
   minRadius  = Infinity
+
 for (const curve of [ c.main, c.alt ])
   for (let i = 0; i < 3000; i++) {
     const s = i / 3000 * curve.length
     maxGrade  = Math.max(maxGrade, Math.abs(curve.frameAtDistance(s).forward.y))
     minRadius = Math.min(minRadius, 1 / Math.max(1e-9, curve.curvatureAtDistance(s)))
   }
-ok('max gradient under 10%', maxGrade < 0.1, `${(maxGrade * 100).toFixed(1)}%`)
-ok('min radius over 50 m', minRadius > 50, `${minRadius.toFixed(0)} m`)
 
+ok('max gradient under 10%', maxGrade < 0.1, `${(maxGrade * 100).toFixed(1)}%`)
+
+ok('min radius over 50 m', minRadius > 50, `${minRadius.toFixed(0)} m`)
 
 // --- mesh -----------------------------------------------------------------
 
@@ -268,3 +297,13 @@ console.log(fails ? `\n${fails} FAILURES` : '\nall green')
 }
 
 process.exit(fails ? 1 : 0)
+
+function ok (name: string, cond: boolean, detail = '') {
+  console.log(`${cond ? 'PASS' : 'FAIL'}  ${name}${detail ? '  — ' + detail : ''}`)
+  if (!cond)
+    fails++
+}
+
+function d (a: Vec3, b: Vec3): number {
+  return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z)
+}

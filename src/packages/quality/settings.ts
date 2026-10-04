@@ -1,5 +1,5 @@
 // Global graphics settings shared by every journey: one source of truth for the
-// journeys and the landing grid. Brightness and contrast are applied by the CRT
+// journeys and the index. Brightness and contrast are applied by the CRT
 // pass (packages/gl/crtPass), not a CSS filter, so no shader needs a uniform for
 // them. maxFrameRate drives the shared frame loop's cap (see SettingsProvider).
 

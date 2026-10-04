@@ -17,8 +17,11 @@
 // through the current lap; arrow keys step it when focused.
 
 import { CONFIG } from '@wjh/config/config'
+
 import { useCallback, useImperativeHandle, useRef } from 'react'
+
 import type { TransportAction, TransportMode } from '@wjh/journey/transport'
+
 import { useJourneyRuntimeContext } from './JourneyRuntimeContext'
 
 
@@ -39,19 +42,18 @@ const FORWARD: { act: TransportAction; glyph: string; title: string }[] = [
   { act: 'next-lap', glyph: '⏭', title: 'Next lap' },
 ]
 
-
-/** mm:ss — a tape counter, not a timestamp. */
-function counter (t: number): string {
-  const s = Math.max(0, Math.floor(t))
-  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
-}
-
 interface Written {
   label:    string;
   mode:     string;
   counter:  string;
   sections: string;
   progress: number;
+}
+
+/** mm:ss — a tape counter, not a timestamp. */
+function counter (t: number): string {
+  const s = Math.max(0, Math.floor(t))
+  return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
 /** Text only when it differs from what is already there. */
@@ -148,7 +150,7 @@ export default function JourneyTransport () {
       {glyph}
     </button>
 
-  return <aside ref={ rootRef } id="journey-transport" className="hud" data-mode="play">
+  return <aside ref={ rootRef } className="hud journey-transport" id="journey-transport" data-mode="play">
     <header className="jt-head">
       <nav className="jt-buttons" aria-label="Transport">
         {BACK.map(button)}

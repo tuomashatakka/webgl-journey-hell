@@ -37,7 +37,7 @@ Small on purpose: tokens, a handful of rules, and the tooling that enforces them
 | token | value | use |
 | --- | --- | --- |
 | `--signal` | `#00ffaa` | the UI's own green: labels, readouts, focus rings |
-| `--accent` | per journey | set inline by the shell and the cards from the registry |
+| `--accent` | per journey | set inline by the shell from the registry; the index tints the room with it |
 | `--violet` | `#c9b6ff` | selection: the checked option, a lit control |
 | `--ink` | `#f2f1f6` | text on a panel |
 | `--panel`, `--panel-deep` | `#1a1e24`, `#15181f` | surfaces |
@@ -49,7 +49,7 @@ Add a token before adding a literal colour. Spacing is multiples of 4 px; the HU
 
 ### Stylesheets (`src/app/styles/`)
 
-One file per concern, imported in cascade order by `layout.tsx`: `base` (page, canvas, title card, loader), `debug`, `settings` (the panel), `index` (grid), `toolbar`, `transport` (the deck, fullscreen), `assets`. A class or id exists in CSS if and only if a component uses it; there are no orphaned stylesheets.
+One file per concern, imported in cascade order by `layout.tsx`: `base` (page, canvas, title card, loader), `debug`, `settings` (the panel), `index` (the CRT room), `toolbar`, `transport` (the deck, fullscreen), `assets`. A class or id exists in CSS if and only if a component uses it; there are no orphaned stylesheets.
 
 ### Components
 
@@ -62,7 +62,7 @@ One file per concern, imported in cascade order by `layout.tsx`: `base` (page, c
 | `JourneyToolbar`, `ToolbarButton` | the top bar and its icon buttons with tooltips |
 | `SettingsButton`, `SettingsView` | the settings panel (an aside over a backdrop) and its trigger |
 | `JourneyKeys`, `JourneyRuntimeContext` | the keyboard, and the runtime for everything under the shell |
-| `JourneyGrid`, `JourneyCard`, `ShaderPreviewLayer` | the index and its single shared preview canvas |
+| `CrtIndex` | the index: a CRT in a dark room, one journey per channel, a menu of all of them (`hooks/use-crt-room`, `packages/web/crtRoom`) |
 | `AssetBrowser` | the Δ page |
 | `JourneyDebugPanel` | the `?debug=1` overlay |
 

@@ -16,12 +16,23 @@ export default function JourneyLoader ({ progress, status, done, failed, detail 
   const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100)
 
   return <section
+    className="journey-loader"
     id="journey-loader"
     data-done={ done ? '1' : undefined }
     data-failed={ failed ? '1' : undefined }
     aria-label="Loading">
     <span className="jl-track">
-      <progress className="jl-bar" aria-valuetext={ status } value={ pct } max={ 100 } />
+      <svg
+        className="jl-bar"
+        aria-valuemax={ 100 }
+        aria-valuemin={ 0 }
+        aria-valuenow={ pct }
+        aria-valuetext={ status }
+        role="progressbar"
+        viewBox="0 0 100 1"
+        preserveAspectRatio="none">
+        <rect width={ pct } height={ 1 } />
+      </svg>
     </span>
 
     <p className="jl-status">

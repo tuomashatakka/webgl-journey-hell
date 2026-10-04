@@ -88,7 +88,7 @@ const SCENE = skyAndRoomsGlsl + surfacesGlsl + lightingGlsl + mainGlsl
 
 export const switchbackFrag = COMMON + SCENE
 
-// Hover preview. Self-driving from iTime alone: ShaderPreviewLayer attaches no
+// Hover preview. Self-driving from iTime alone: the index's CRT attaches no
 // simulation, so uBend/uCart/uSec would all read zero and the real shader would
 // render one flat frame forever. No raymarch either — every card in the grid
 // shares a single GL context. The job is to read as "you are in a mine cart" at

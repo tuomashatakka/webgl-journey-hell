@@ -1,7 +1,7 @@
 'use client'
 
 // App-wide graphics-settings context. Mounted once in app/layout.tsx so every
-// route (the landing grid + each journey) reads one source of truth, persisted
+// route (the index + each journey) reads one source of truth, persisted
 // to localStorage. This is also the single place that drives the shared frame
 // loop (see hooks/use-settings-effects).
 

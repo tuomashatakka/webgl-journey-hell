@@ -20,7 +20,7 @@ jobs:
       - run: bun run check
 
   # Every journey's shaders compiled and drawn once in a headless browser, and
-  # every landing-page preview: a broken shader still builds, so the build
+  # every index channel's preview and the CRT room: a broken shader still builds, so the build
   # alone never catches one.
   shaders:
     runs-on: ubuntu-latest

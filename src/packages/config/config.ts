@@ -369,8 +369,6 @@ export const CONFIG = {
   },
 
   ui: {
-    // Render the preview below native resolution — plenty for a thumbnail, easy on the GPU.
-    previewScale:       0.6,
     debugPanelSampleMs: 200,
 
     /** How long the bar takes to fade once loaded; the shell unmounts it after. */
@@ -378,6 +376,23 @@ export const CONFIG = {
 
     /** Arrow-key scrub step, as a fraction of the lap. */
     transportKeyStep: 0.02,
+  },
+
+  /** The index page: a CRT in a dark room, tuned to one journey at a time. */
+  index: {
+
+    /** Backing pixels per CSS pixel, by device tier (0 = weakest), before the DPR cap. */
+    renderScale: [ 0.45, 0.65, 0.85 ],
+    maxDpr:      1.5,
+
+    /** The channel's picture: a 4:3 texture the preview shader draws into. */
+    pictureWidth:  384,
+    pictureHeight: 288,
+
+    /** Snow between channels, the dolly into the tube, and the glitch held at its end. */
+    staticMs:     380,
+    zoomMs:       1100,
+    glitchHoldMs: 420,
   },
 
   tools: {

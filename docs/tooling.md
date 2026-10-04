@@ -122,7 +122,7 @@ do not edit while one runs.
 With `bun run dev` running:
 
 ```bash
-node tools/shoot-posters.mjs [slug…]   # assets/posters/<slug>.jpg, the index cards' fallback art
+node tools/shoot-posters.mjs [slug…]   # assets/posters/<slug>.jpg, the index's picture where WebGL is not to be had
 node tools/shoot-ui.mjs                # assets/screenshots/app-*.png, the README's shots of the chrome
 ```
 

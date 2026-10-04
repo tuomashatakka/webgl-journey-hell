@@ -34,24 +34,42 @@
 // strips the chrome, ?w=&h= fix the backing store.
 
 import type { JourneyDefinition } from '@wjh/journey/definition'
-import { getJourney } from '✦/journeys/registry'
-import type { Journey } from '✦/journeys/registry'
-import { useJourneyRuntime } from '✦/hooks/use-journey-runtime'
-import { detectDevice } from '@wjh/quality/device'
-import { useMounted } from '✦/hooks/use-mounted'
-import { useOpening } from '✦/hooks/use-opening'
-import { useSettings } from './SettingsProvider'
-import JourneyKeys from './JourneyKeys'
-import JourneyToolbar from './JourneyToolbar'
-import { JourneyRuntimeProvider, useJourneyRuntimeContext } from './JourneyRuntimeContext'
-import JourneyDebugPanel from './JourneyDebugPanel'
-import JourneyTransport from './JourneyTransport'
-import JourneyLoader from './JourneyLoader'
-import { SectionHeading, TitleCard } from './GlitchTitle'
 
+import { getJourney } from '✦/journeys/registry'
+
+import type { Journey } from '✦/journeys/registry'
+
+import { useJourneyRuntime } from '✦/hooks/use-journey-runtime'
+
+import { detectDevice } from '@wjh/quality/device'
+
+import { useMounted } from '✦/hooks/use-mounted'
+
+import { useOpening } from '✦/hooks/use-opening'
+
+import { useSettings } from './SettingsProvider'
+
+import JourneyKeys from './JourneyKeys'
+
+import JourneyToolbar from './JourneyToolbar'
+
+import { JourneyRuntimeProvider, useJourneyRuntimeContext } from './JourneyRuntimeContext'
+
+import JourneyDebugPanel from './JourneyDebugPanel'
+
+import JourneyTransport from './JourneyTransport'
+
+import JourneyLoader from './JourneyLoader'
+
+import { SectionHeading, TitleCard } from './GlitchTitle'
 
 /** The journey's accent as the --accent all the chrome reads — in the prerendered HTML too. */
 type AccentStyleProps = { accent?: string }
+
+interface OpeningProps {
+  meta:    Journey | undefined;
+  opening: ReturnType<typeof useOpening>;
+}
 
 function AccentStyle ({ accent }: AccentStyleProps) {
   return accent ? <style>{`#app-container { --accent: ${accent}; }`}</style> : null
@@ -67,12 +85,7 @@ function AccentStyle ({ accent }: AccentStyleProps) {
 function Scanlines () {
   const { settings } = useSettings()
   const mounted      = useMounted()
-  return !mounted || settings.crt && detectDevice().tier > 0 ? <section id="crt-overlay" /> : null
-}
-
-interface OpeningProps {
-  meta:    Journey | undefined;
-  opening: ReturnType<typeof useOpening>;
+  return !mounted || settings.crt && detectDevice().tier > 0 ? <section className="crt-overlay" id="crt-overlay" /> : null
 }
 
 /** The title card (which starts the clock as it tears away) over the loading bar. */
@@ -97,9 +110,9 @@ export function withJourneyShell (definition: JourneyDefinition) {
     const opening                   = useOpening({ staged, hasCard: !!meta, begin: rt.begin, loading, sectionKey: section.key, sectionNamed: !!section.name })
 
     return <JourneyRuntimeProvider value={ rt }>
-      <main id="app-container" data-fullscreen={ rt.fullscreen ? '1' : undefined }>
+      <main className="app-container" id="app-container" data-fullscreen={ rt.fullscreen ? '1' : undefined }>
         <AccentStyle accent={ meta?.accent } />
-        <canvas ref={ rt.canvasRef } id="gl-canvas" />
+        <canvas ref={ rt.canvasRef } className="gl-canvas" id="gl-canvas" />
         <Scanlines />
 
         {opening.showHeading &&
