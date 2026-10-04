@@ -6,12 +6,16 @@
   "description": "CC0 materials and skies (ambientCG) packed for WebGL2, with loaders and GLSL",
   "sideEffects": false,
   "exports": {
+    "./browser": "./browser.ts",
+    "./browserShader": "./browserShader.ts",
     "./gl": "./gl.ts",
     "./glsl": "./glsl.ts",
     "./manifest": "./manifest.ts",
     "./urls": "./urls.ts"
   },
   "dependencies": {
+    "@wjh/gl": "workspace:*",
+    "@wjh/glsl": "workspace:*",
     "@wjh/web": "workspace:*"
   },
   "license": "CC0-1.0",

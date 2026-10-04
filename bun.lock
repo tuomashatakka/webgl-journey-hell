@@ -46,6 +46,8 @@
       "name": "@wjh/delta",
       "version": "1.0.0",
       "dependencies": {
+        "@wjh/gl": "workspace:*",
+        "@wjh/glsl": "workspace:*",
         "@wjh/web": "workspace:*",
       },
     },
