@@ -38,7 +38,7 @@ import type { RoomReverb, RoomTone } from '@wjh/audio/room'
 import { JourneyAudio } from '@wjh/audio/engine'
 import { driftingChord } from '@wjh/audio/nodes'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
-import { PHASE_WRAP } from './kinematics'
+import { PHASE_WRAP } from './kinematics/route'
 
 
 /** Glide for slow-moving parameters. */

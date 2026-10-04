@@ -1,17 +1,7 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  FALL_BLOCK,
-  FALL_LAPS,
-  FALL_START,
-  LAP_LEN,
-  PITCH_LAPS,
-  SECTIONS,
-  assertRouteSane,
-  createSwitchbackSimulation,
-  gradeAt,
-  lapFAt,
-  pitchAt,
-} from './kinematics'
+import { FALL_BLOCK, FALL_LAPS, FALL_START, LAP_LEN, PITCH_LAPS, SECTIONS, gradeAt, lapFAt, pitchAt } from './kinematics/route'
+import { assertRouteSane } from './kinematics/check'
+import { createSwitchbackSimulation } from './kinematics'
 
 
 const D = Math.PI / 180
