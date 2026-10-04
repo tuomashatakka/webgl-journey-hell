@@ -245,28 +245,28 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
     const title = opts.title.toUpperCase()
     const head  = (px: number) => `700 ${px}px "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif`
     const body  = (px: number) => `400 ${px}px "Helvetica Neue", Helvetica, Arial, sans-serif`
-    const size  = fitSize(b, head, title, Math.max(14, Math.min(w * 0.058, h * 0.11) * (opts.fontScale ?? 1)), 0.32, maxW)
+    const size  = fitSize(b, head, title, Math.max(11, Math.min(w * 0.03, h * 0.06) * (opts.fontScale ?? 1)), 0.62, maxW)
     const midY  = h * 0.5
 
     b.fillStyle    = '#f4f4f4'
     b.textBaseline = 'middle'
     b.font         = head(size)
-    spacedText(b, title, w / 2, midY, size * 0.32)
+    spacedText(b, title, w / 2, midY, size * 0.62)
 
     let bottom = midY + size * 0.75
     if (opts.subtitle) {
       // A tagline that will not fit on one line at a readable size takes two.
       const text  = opts.subtitle.toUpperCase()
-      const want  = Math.max(10, size * 0.26)
-      const fit   = fitSize(b, body, text, want, 0.42, maxW)
+      const want  = Math.max(9, size * 0.42)
+      const fit   = fitSize(b, body, text, want, 0.8, maxW)
       const lines = fit < want * 0.8 ? twoLines(text) : [ text ]
       const sub   = lines.length > 1
-        ? Math.min(...lines.map(l => fitSize(b, body, l, want, 0.42, maxW)))
+        ? Math.min(...lines.map(l => fitSize(b, body, l, want, 0.8, maxW)))
         : fit
 
       b.globalAlpha = 0.62
       b.font        = body(sub)
-      lines.forEach((line, i) => spacedText(b, line, w / 2, midY + size * 1.15 + i * sub * 1.6, sub * 0.42))
+      lines.forEach((line, i) => spacedText(b, line, w / 2, midY + size * 1.15 + i * sub * 1.6, sub * 0.8))
       bottom = midY + size * 1.15 + (lines.length - 1) * sub * 1.6 + sub
       b.globalAlpha = 1
     }

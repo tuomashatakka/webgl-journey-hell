@@ -63,9 +63,16 @@ export function TitleCard (props: TitleCardProps) {
   return <GlitchTitleCanvas id="journey-title-intro" skippable { ...props } />
 }
 
+/**
+ * Every journey's label in one format: the place's name, and "LAP n" under it
+ * once there is more than one. Journeys say "SECTION 3:", "SECTOR 3:", "LOOP 2",
+ * "LAP 2"; the heading says none of that differently.
+ */
 function splitLabel (label: string): SplitLabelReturnType {
-  const at = label.lastIndexOf(' · ')
-  return at < 0 ? { title: label } : { title: label.slice(at + 3), subtitle: label.slice(0, at) }
+  const parts = label.toUpperCase().split(' · ')
+  const title = parts[parts.length - 1].replace(/^SECT(?:ION|OR)\s+\d+\s*:\s*/, '')
+  const lap   = parts.length > 1 ? (/\d+/).exec(parts[0])?.[0] : undefined
+  return lap ? { title, subtitle: `LAP ${lap}` } : { title }
 }
 
 /**

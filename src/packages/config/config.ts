@@ -405,6 +405,9 @@ export const CONFIG = {
     staticMs:     380,
     zoomMs:       1100,
     glitchHoldMs: 420,
+
+    /** localStorage key of the channel last watched. */
+    channelKey: 'wjh-index-channel',
   },
 
   tools: {

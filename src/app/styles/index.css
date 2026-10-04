@@ -205,7 +205,7 @@ html, body {
 .crt-controls {
   position:          absolute;
   inset-inline:      0;
-  inset-block-end:   44px;
+  inset-block-end:   96px;
   display:           flex;
   flex-wrap:         wrap;
   justify-content:   center;

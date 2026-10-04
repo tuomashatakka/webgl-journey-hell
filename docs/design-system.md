@@ -57,7 +57,7 @@ One file per concern, imported in cascade order by `layout.tsx`: `base` (page, c
 | --- | --- |
 | `withJourneyShell` | the journey page: canvas, HUD, overlays |
 | `JourneyTransport` | the tape deck; chapters, laps, scrubbing |
-| `JourneyLoader`, `GlitchTitle` | the opening: the bar, the title card, section headings |
+| `JourneyLoader`, `GlitchTitle` | the opening: the bar, the title card, section headings (small type, wide tracking; every journey's label normalised to the place's name over "LAP n") |
 | `SettingsProvider` | graphics settings state, persisted |
 | `JourneyToolbar`, `ToolbarButton` | the top bar and its icon buttons with tooltips |
 | `SettingsButton`, `SettingsView` | the settings panel (an aside over a backdrop) and its trigger |

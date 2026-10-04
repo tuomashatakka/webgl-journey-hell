@@ -68,14 +68,32 @@ export function useCrtRoom (channels: CrtChannel[]) {
  * `enter` dollies into the tube and calls `onEnter` once the picture has failed.
  */
 export function useCrtControls (roomRef: React.RefObject<CrtRoom | null>, count: number, onEnter: (index: number) => void) {
-  const [ channel, setChannel ] = useState(0)
-  const [ menu, setMenu ]       = useState(false)
-  const [ going, setGoing ]     = useState(false)
+  const [ channel, setChannel ] = useState(() => {
+    try {
+      return Math.min(count - 1, Math.max(0, Number(localStorage.getItem(CONFIG.index.channelKey)) || 0))
+    }
+    catch {
+      return 0
+    }
+  })
+  const [ menu, setMenu ]   = useState(false)
+  const [ going, setGoing ] = useState(false)
+
+  // Back on the channel last watched (the room itself starts on the first).
+  useEffect(() => {
+    roomRef.current?.tune(channel)
+  }, [ roomRef ])
 
   const tune   = useCallback((index: number) => {
     const next = (index % count + count) % count
     roomRef.current?.tune(next)
     setChannel(next)
+    try {
+      localStorage.setItem(CONFIG.index.channelKey, String(next))
+    }
+    catch {
+      // No storage (private mode): the index just starts on channel one.
+    }
   }, [ count, roomRef ])
   const toggle = useCallback((open: boolean) => {
     roomRef.current?.setMenu(open)
