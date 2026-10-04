@@ -1,4 +1,4 @@
-import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
+import { brdfChunk, deltaChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
 
 /** Skin and flesh, shared by the head and the jaws. */
 const mawMaterialChunk = /* glsl */`
@@ -280,6 +280,7 @@ ${noiseChunk}
 ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
+${deltaChunk}
 void main () {
   float s = vAux.x;
   float r = vAux.y;
@@ -295,13 +296,20 @@ void main () {
   float agg = vnoise(uv * 18.0) * 0.5 + vnoise(uv * 61.0) * 0.5;
   float polish = exp(-pow((abs(r) - 1.55) * 2.2, 2.0)) * 0.35;
   vec3 asphalt = vec3(0.055, 0.056, 0.058) * (0.7 + agg * 0.6) + polish * 0.02;
+  // The aggregate under the binder, and the ballast on the shoulder, are Δ scans.
+  Surface sRoad = sampleTriplanar(MAT_CONCRETE, vWorld, n, 4.0);
+  Surface sBal = sampleTriplanar(MAT_BALLAST, vWorld, n, 4.0);
+  asphalt *= 0.55 + 0.9 * dot(sRoad.albedo, vec3(0.333));
+  n = normalize(mix(n, sRoad.normal, 0.45));
   float rough = 0.86 - polish * 0.35 - agg * 0.08;
 
   // Wet patches and cracks arriving with the laps.
   float wet = smoothstep(0.55, 0.8, fbm(uv * 0.35 + 7.0)) * clamp(lapF * 0.5, 0.0, 1.0);
   rough = mix(rough, 0.25, wet);
   asphalt *= 1.0 - wet * 0.45;
-  float crack = smoothstep(0.62, 0.66, fbm(uv * vec2(3.0, 0.8) + 31.0)) * clamp(lapF - 0.5, 0.0, 1.0);
+  // From the second lap the cracks open wider every lap, and what is under them glows.
+  float worse = clamp(lapF - 1.0, 0.0, 2.0);
+  float crack = smoothstep(0.62 - 0.05 * worse, 0.66, fbm(uv * vec2(3.0, 0.8) + 31.0)) * clamp(lapF - 0.5, 0.0, 1.0);
   asphalt *= 1.0 - crack * 0.6;
   // Potholes from the second lap: dark, rough, with a lip that catches the light.
   float potN = fbm(uv * vec2(0.9, 0.35) + 57.0);
@@ -321,14 +329,19 @@ void main () {
 
   // Shoulder: gravel, then verge.
   float shoulder = smoothstep(uRoadHalf - 0.05, uRoadHalf + 0.25, abs(r));
-  vec3 gravel = vec3(0.22, 0.20, 0.17) * (0.6 + vnoise(uv * 40.0) * 0.8);
+  vec3 gravel = mix(vec3(0.22, 0.20, 0.17) * (0.6 + vnoise(uv * 40.0) * 0.8), sBal.albedo * 0.85, 0.75);
   albedo = mix(albedo, gravel, shoulder);
   rough = mix(rough, 0.95, shoulder);
 
-  albedo = mix(albedo, vec3(0.42, 0.41, 0.39) * (0.8 + 0.4 * fbm3(vWorld * 0.3)), under);
+  albedo = mix(albedo, sRoad.albedo * (0.8 + 0.4 * fbm3(vWorld * 0.3)), under);
   rough  = mix(rough, 0.85, under);
   float sh = shadowAt(vWorld, n, uSunDir);
   vec3 col = lightSurface(vWorld, n, albedo, rough, 0.0, 1.0, sh);
+  // Red under the road: the cracks and the potholes leak it from the second
+  // lap, more every lap after. Bright enough in red alone to clear the bloom
+  // threshold, so the post pass can carry it into the air as shafts.
+  float hell = smoothstep(0.8, 1.3, lapF) * (1.0 + 1.5 * worse);
+  col += vec3(12.0, 0.18, 0.04) * (crack * 0.8 + pot * 0.6) * hell * (1.0 - under) * (0.75 + 0.25 * sin(uTime * 3.0 + s * 0.2));
   col = applyFog(col, vWorld);
   fragColor = vec4(col, 1.0);
 }

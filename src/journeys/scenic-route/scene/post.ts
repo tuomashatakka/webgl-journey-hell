@@ -91,6 +91,10 @@ export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
   // The speed blur bites only past what the road ever reaches.
   compP.uniform1f('uSpeedBlur', Math.max(0, Math.min(1, (ride[0] - 36) / 24)))
   compP.uniform1f('uTime', time)
+
+  // The road's red, as shafts in the air: nothing on the first lap, then more every lap.
+  const lapF = ride[1]
+  compP.uniform1f('uRedRays', Math.max(0, Math.min(1, (lapF - 0.8) / 0.5)) * (1 + Math.min(2, Math.max(0, lapF - 1))))
   drawQuad()
 }
 

@@ -1,3 +1,4 @@
+import { MATERIAL_GLSL, SURFACE_GLSL } from '@wjh/delta/glsl'
 import { HASH11, HASH12 } from '@wjh/glsl/hash'
 import { fbm2, valueNoise2 } from '@wjh/glsl/noise'
 
@@ -202,3 +203,11 @@ vec3 applyFog (vec3 col, vec3 p) {
   return mix(col, fogCol, f);
 }
 `
+
+/**
+ * Δ's scans (delta/), for the near field: rock, spoil, the road's aggregate,
+ * ballast, timber, steel, concrete — the same library the loop line is built
+ * from. Raster fragments have their derivatives, so the plain triplanar does.
+ */
+export const deltaChunk = `${MATERIAL_GLSL}
+${SURFACE_GLSL}`

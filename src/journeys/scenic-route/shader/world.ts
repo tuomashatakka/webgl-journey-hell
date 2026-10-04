@@ -1,4 +1,4 @@
-import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
+import { brdfChunk, deltaChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
 
 // ---------------------------------------------------------------------------
 // the swept road
@@ -110,6 +110,7 @@ ${noiseChunk}
 ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
+${deltaChunk}
 void main () {
   // The heightfield cannot tunnel: inside the tube it is simply not there.
   if (vCarve < 0.0) discard;
@@ -135,6 +136,14 @@ void main () {
   vec3 rock = vec3(0.30, 0.285, 0.26) * (0.6 + 0.6 * fbm3(p * 0.11));
   rock = mix(rock, rock * vec3(0.85, 0.8, 0.75), smoothstep(0.3, 0.7, fbm3(p * 0.021 + 5.0)));
   vec3 sand = vec3(0.44, 0.39, 0.29) * (0.85 + 0.3 * vnoise(p.xz * 2.2));
+
+  // The near ground is Δ's scans — rock on the faces, spoil where it is worn —
+  // and the procedural colour carries the far field, where a scan would tile.
+  Surface sRock = sampleTriplanar(MAT_ROCK, p, n, 4.0);
+  Surface sDirt = sampleTriplanar(MAT_DIRT, p, n, 4.0);
+  float nearW = 1.0 - smoothstep(60.0, 220.0, dist);
+  rock = mix(rock, sRock.albedo * vec3(0.95, 0.92, 0.88), nearW * 0.85);
+  soil = mix(soil, sDirt.albedo, nearW * 0.8);
 
   float slope = 1.0 - n.y;
   float rockW = smoothstep(0.22, 0.48, slope + (fbm3(p * 0.06) - 0.5) * 0.18);
@@ -173,6 +182,8 @@ void main () {
     nn = normalize(n - g * 0.9 * rockW * (1.0 - lod));
   }
 
+  nn = normalize(mix(nn, sRock.normal, rockW * nearW * 0.8));
+  nn = normalize(mix(nn, sDirt.normal, soilW * nearW * 0.6));
   float sh = shadowAt(p, nn, uSunDir);
   // A little ambient occlusion from slope: ground under a steep face sees less sky.
   float ao = 0.75 + 0.25 * n.y;
@@ -403,6 +414,7 @@ ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
 ${leafChunk}
+${deltaChunk}
 void main () {
   vec3 p = vWorld;
   vec3 n = normalize(vNormal);
@@ -431,6 +443,17 @@ void main () {
   else if (uMaterial == 11) { albedo = vec3(0.27, 0.25, 0.23); rough = 0.95; det = 0.6 + 0.8 * fbm3(p * 0.9); }              // rock
   else                     { albedo = vec3(0.84, 0.83, 0.78); rough = 0.55; det = 0.94 + 0.12 * fbm3(p * 4.0); }              // paint
   albedo *= det;
+  // Timber, sheet, steel, concrete and rock are Δ's scans under the set's colour.
+  float lay = uMaterial == 0 || uMaterial == 1 || uMaterial == 3 || uMaterial == 6 ? MAT_WOOD
+    : uMaterial == 4 ? MAT_CORRUGATED : uMaterial == 8 ? MAT_STEEL : uMaterial == 9 ? MAT_CONCRETE
+    : uMaterial == 11 ? MAT_ROCK : -1.0;
+  if (lay >= 0.0) {
+    Surface sp = sampleTriplanar(lay, p, n, 4.0);
+    float lum = dot(sp.albedo, vec3(0.333));
+    albedo = mix(albedo, albedo * sp.albedo / max(lum, 0.05) * 0.8, 0.75);
+    n = normalize(mix(n, sp.normal, 0.7));
+    rough = mix(rough, sp.rough, 0.6);
+  }
   float sh = shadowAt(p, n, uSunDir);
   vec3 col = lightSurface(p, n, albedo, rough, metal, 1.0, sh);
   // Leaves are lit through: a wrapped sun term keeps the shade side of a crown
@@ -526,9 +549,13 @@ ${noiseChunk}
 ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
+${deltaChunk}
 void main () {
   vec3 p = vWorld;
   vec3 n = normalize(vNormal);
+  // The masonry is a Δ scan, sampled before any branch so its derivatives hold.
+  float lay = hash12(vec2(vSeed, 4.0)) < 0.45 ? MAT_PANEL : hash12(vec2(vSeed, 5.0)) < 0.6 ? MAT_CONCRETE : MAT_BRICK;
+  Surface sw = sampleTriplanar(lay, p, n, 4.0);
   float glassy = step(0.45, hash12(vec2(vSeed * 7.1, 3.0)));
   vec2 cell = mix(vec2(3.4, 3.7), vec2(2.2, 3.9), glassy);
   vec2 f  = fract(vFacade / cell);
@@ -546,7 +573,8 @@ void main () {
   } else {
     win  = step(0.14, f.x) * step(f.x, 0.86) * step(0.18, f.y) * step(f.y, 0.82);
     vec3 tint = mix(vec3(0.3, 0.28, 0.26), vec3(0.46, 0.44, 0.42), hash12(vec2(vSeed, 9.0)));
-    wall = tint * (0.85 + 0.3 * fbm3(p * 0.45));
+    wall = mix(tint * (0.85 + 0.3 * fbm3(p * 0.45)), sw.albedo * 0.62, 0.75);
+    n = normalize(mix(n, sw.normal, 0.6 * (1.0 - win)));
     rough = 0.82;
   }
   vec3 glass = vec3(0.03, 0.05, 0.07);

@@ -30,6 +30,7 @@
 // because only the renderer knows the aspect ratio, and the pointer look is
 // applied here because where the rider looks must not change where the car is.
 
+import { createMaterialArrays } from '@wjh/delta/gl'
 import { vector } from '@wjh/gl/uniforms'
 import type { JourneyRenderer } from '@wjh/journey/types'
 import { HIGH_QUALITY } from '@wjh/gl/uniforms'
@@ -101,7 +102,8 @@ export function createScenicRouteScene (
 
   const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP } = programs
 
-  const route = getRoute()
+  const route     = getRoute()
+  const materials = createMaterialArrays(gl)
 
   const { bankTex, skyTarget, skyTex, shadowTex, shadowFbo } = createTargets(gl, route)
 
@@ -187,6 +189,11 @@ export function createScenicRouteScene (
     prog.uniform4f('uEnv', env[0], env[1], env[2], env[3])
     prog.uniform3f('uFogCol', fogCol[0], fogCol[1], fogCol[2])
     prog.uniform1f('uTime', time)
+    // Δ's scans on units 5–7, for the programs that sample them.
+    materials.bind(gl, 5)
+    prog.uniform1i('uMatColor', 5)
+    prog.uniform1i('uMatNormal', 6)
+    prog.uniform1i('uMatDetail', 7)
   }
 
   /** Chunk culling: sphere against distance and against being fully behind. */
@@ -201,6 +208,9 @@ export function createScenicRouteScene (
   }
 
   return {
+    ready:    () => materials.ready,
+    progress: () => materials.ready ? 1 : 0,
+
     draw ({ time, pointer, heavy, custom, quality }: FrameUniforms) {
       const w = canvas.width
       const h = canvas.height
@@ -529,6 +539,7 @@ export function createScenicRouteScene (
     },
 
     dispose () {
+      materials.dispose(gl)
       chain.dispose()
       blur.forEach(b => b.dispose())
       quad.dispose()

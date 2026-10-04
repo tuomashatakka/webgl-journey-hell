@@ -50,6 +50,7 @@ uniform sampler2D uBloom;
 uniform float uExposure;   // linear multiplier
 uniform float uSpeedBlur;  // 0..1
 uniform float uTime;
+uniform float uRedRays;    // 0 until the second lap, then more every lap
 out vec4 fragColor;
 ${ACES}
 void main () {
@@ -72,6 +73,20 @@ void main () {
     col = texture(uScene, uv).rgb;
 
   col += texture(uBloom, uv).rgb * 0.55;
+
+  // Red light shafts: the glow the road's cracks leak, dragged up the frame
+  // from a point under it, keeping only what is red. From the second lap.
+  if (uRedRays > 0.001) {
+    vec2 dir = uv - vec2(0.5, -0.15);
+    float acc = 0.0;
+    for (int i = 0; i < 16; i++) {
+      float t = float(i) / 16.0;
+      vec3 b = texture(uBloom, uv - dir * t * 0.5).rgb;
+      acc += max(b.r - max(b.g, b.b) * 1.3, 0.0) * (1.0 - t);
+    }
+    float flick = 0.85 + 0.15 * sin(uTime * 2.3 + uv.x * 9.0);
+    col += vec3(1.0, 0.07, 0.02) * acc / 16.0 * uRedRays * 18.0 * flick;
+  }
   col *= uExposure;
   col = aces(col);
   col *= 1.0 - smoothstep(0.45, 1.15, length(c * vec2(1.0, 1.1))) * 0.30;

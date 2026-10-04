@@ -499,3 +499,19 @@ the fix taken; the order is the order of the commits.
 | 13 | Spec's open items | — | Peristalsis on the flesh, potholes and rail loss by lap, stalactites, a rear world pass into the mirror, a 1570 × 1600 m Gerstner patch |
 | 14 | Gullet walls a cream wash | The headlamp knee capped luminance at 0.55 before the exposure: 0.32 in the gullet, which the ACES fit puts at 0.8 sRGB, flat across the whole near wall | Knee at 0.2·2^−EV; lamps 1600 so the road keeps its light |
 | 15 | White plane at the end of the throat | The sea's 90 m funnel came back up through the tube where the ceiling goes under; every displaced surface must | The pit is a fragment discard, no displaced surface |
+
+## Revision 3 — Δ scans, and the red under the road
+
+- **Materials.** The near field is Δ's scans (`delta/`, the loop line's
+  library), sampled triplanar in the fragment shaders (`deltaChunk`): rock on
+  the faces and spoil on the worn ground (fading back to the procedural colour
+  past ~200 m, where a scan would only tile), concrete aggregate under the
+  asphalt's binder and ballast on the shoulders, shuttered concrete, spalled
+  concrete or brick on the towers, timber, sheet, steel, concrete and rock on
+  the props. The material arrays sit on texture units 5–7 for every lit
+  program (`bindLit`); the renderer is not ready until they are.
+- **The red.** From the second lap the road's cracks open wider every lap and
+  the cracks and potholes glow red — bright enough in red alone to clear the
+  bloom threshold — and the composite drags that glow up the frame as shafts
+  (`uRedRays`: nothing on the first lap, 1 by the middle of the second, up to
+  3 by the fourth).
