@@ -10,27 +10,11 @@
 import { zeros } from '@wjh/math/arrays'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
-import {
-  advance,
-  createFoundryState,
-  decayFor,
-  LAP_ARC,
-  MODE_BOARD,
-  MODE_BRAKE,
-  MODE_FALL,
-  MODE_OBLIVION,
-  MODE_SETTLE,
-  MODE_WALK,
-  OBLIVION_LOOP,
-  pistonExtension,
-  SECTION_COUNT,
-  SECTION_LEN,
-  shaftHeadFor,
-  SPAN_ARC,
-  SPAN_TILES,
-  tileArc
-} from './physics'
-import type { FoundryState } from './physics'
+import { advance, createFoundryState, MODE_BOARD, pistonExtension } from './physics'
+import { decayFor, LAP_ARC, SECTION_COUNT, SECTION_LEN, SPAN_ARC, SPAN_TILES, tileArc } from './physics/route'
+import { MODE_BRAKE, OBLIVION_LOOP, shaftHeadFor } from './physics/cage'
+import { MODE_FALL, MODE_OBLIVION, MODE_SETTLE, MODE_WALK } from './physics/common'
+import type { FoundryState } from './physics/types'
 
 
 interface FoundrySection {

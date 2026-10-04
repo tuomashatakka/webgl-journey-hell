@@ -1,31 +1,8 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  CYCLE_LEN,
-  FURNACE_HALF_W,
-  LAP_ARC,
-  LIFT_BRAKE_Y,
-  MAX_SQUEEZE,
-  MODE_OBLIVION,
-  OBLIVION_LOOP,
-  OBLIVION_PERIOD,
-  PIT_Y,
-  SPAN_ARC,
-  SPAN_EXTRA,
-  SPAN_HALF_W,
-  SPAN_TILES,
-  TILE,
-  TILE_HALF,
-  WALK_START,
-  advance,
-  brakeYFor,
-  liftTopFor,
-  shaftHeadFor,
-  createFoundryState,
-  routeAt,
-  tileArc,
-  tileX,
-  tileZ,
-} from './physics'
+import { CYCLE_LEN, FURNACE_HALF_W, LAP_ARC, MAX_SQUEEZE, SPAN_ARC, SPAN_EXTRA, SPAN_HALF_W, SPAN_TILES, TILE, TILE_HALF, routeAt, tileArc, tileX, tileZ } from './physics/route'
+import { LIFT_BRAKE_Y, OBLIVION_LOOP, OBLIVION_PERIOD, PIT_Y, brakeYFor, liftTopFor, shaftHeadFor } from './physics/cage'
+import { MODE_OBLIVION, WALK_START } from './physics/common'
+import { advance, createFoundryState } from './physics'
 
 
 const pt = () => ({ x: 0, z: 0, dx: 0, dz: 1 })
