@@ -10,7 +10,7 @@
 // are for reading, and nobody can read sixty updates a second anyway.
 
 import { useEffect, useRef, useState } from 'react'
-import type { JourneyDebugState } from '✦/lib/debugParams'
+import type { JourneyDebugState } from '@wjh/web/debugParams'
 
 
 const SAMPLE_MS = 200

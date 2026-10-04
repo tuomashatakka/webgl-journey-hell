@@ -1,7 +1,7 @@
 'use client'
 
 import { withJourneyShell } from '✦/components/withJourneyShell'
-import journey from './journey'
+import journey from '../../../journeys/switchback/journey'
 
 
 export default withJourneyShell(journey)

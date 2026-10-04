@@ -1,0 +1,15 @@
+// The journey, declared once: its page and the bare harness both run this.
+
+import { defineJourney, shaderRenderer } from '@wjh/journey/definition'
+import { getSkybridgesMarks, getSkybridgesSectionName } from './kinematics'
+import { skybridgesFrag } from './shader'
+
+
+export const skybridges = defineJourney({
+  slug:          'skybridges',
+  renderer:      shaderRenderer(skybridgesFrag, { envMapUrl: '/journeys/skybridges/env.png' }),
+  marksAt:       getSkybridgesMarks,
+  sectionNameAt: getSkybridgesSectionName,
+})
+
+export default skybridges

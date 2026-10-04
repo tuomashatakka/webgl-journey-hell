@@ -1,0 +1,23 @@
+{
+  "name": "@wjh/gl",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "WebGL toolkit: contexts, programs, quads, render targets, meshes, the CRT pass",
+  "sideEffects": false,
+  "exports": {
+    "./context": "./context.ts",
+    "./crtPass": "./crtPass.ts",
+    "./mesh": "./mesh.ts",
+    "./program": "./program.ts",
+    "./quad": "./quad.ts",
+    "./shaderQuad": "./shaderQuad.ts",
+    "./targets": "./targets.ts",
+    "./texture": "./texture.ts",
+    "./uniforms": "./uniforms.ts"
+  },
+  "dependencies": {
+    "@wjh/geometry": "workspace:*",
+    "@wjh/web": "workspace:*"
+  }
+}

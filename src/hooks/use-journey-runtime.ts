@@ -33,32 +33,33 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import useFrameLoop from '✦/hooks/use-frame-loop'
-import type { FrameLoopManager } from '✦/lib/frameLoopManager'
+import type { FrameLoopManager } from '@wjh/web/frameLoopManager'
 import usePanControl from '✦/hooks/use-pan-control'
 import useAudioEngine from '✦/hooks/use-audio-engine'
 import type { AudioEngineHandle } from '✦/hooks/use-audio-engine'
 import { useSettings } from '✦/components/SettingsProvider'
-import { NO_DEBUG, publishDebugState, readDebugParams } from '✦/lib/debugParams'
-import type { DebugParams, JourneyDebugState } from '✦/lib/debugParams'
-import { CRT_BYPASS, CRT_DEFAULTS, createContext, createCrtPass, takeGlFailure } from '✦/lib/gl'
-import type { CrtPass, CustomUniforms, QualityHints } from '✦/lib/gl'
-import { createJourneyTransport, evaluateFrame, hudLabel, seekSimulation } from '✦/lib/journey'
-import type {
-  JourneyAudioEngine,
-  JourneyDefinition,
-  JourneyRenderer,
-  JourneySimulation,
-  JourneyTransport,
-  TransportAction,
-  TransportState
-} from '✦/lib/journey'
-import { createGovernor, detectDevice, qualityForTier, scaleRange } from '✦/lib/quality'
-import type { Governor } from '✦/lib/quality'
-import { AUTO_RESOLUTION } from '✦/lib/settings'
-import type { GraphicsSettings } from '✦/lib/settings'
-import { signalLossAt } from '✦/lib/signalLoss'
-import { createSignalOverlay } from '✦/lib/signalOverlay'
-import type { SignalOverlay } from '✦/lib/signalOverlay'
+import { NO_DEBUG, publishDebugState, readDebugParams } from '@wjh/web/debugParams'
+import type { DebugParams, JourneyDebugState } from '@wjh/web/debugParams'
+import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '@wjh/gl/crtPass'
+import { createContext } from '@wjh/gl/context'
+import { takeGlFailure } from '@wjh/gl/program'
+import type { CrtPass } from '@wjh/gl/crtPass'
+import type { CustomUniforms, QualityHints } from '@wjh/gl/uniforms'
+import { createJourneyTransport } from '@wjh/journey/transport'
+import { evaluateFrame, hudLabel } from '@wjh/journey/frame'
+import { seekSimulation } from '@wjh/journey/seek'
+import type { JourneyAudioEngine, JourneyRenderer, JourneySimulation } from '@wjh/journey/types'
+import type { JourneyDefinition } from '@wjh/journey/definition'
+import type { JourneyTransport, TransportAction, TransportState } from '@wjh/journey/transport'
+import { createGovernor } from '@wjh/quality/governor'
+import { detectDevice } from '@wjh/quality/device'
+import { qualityForTier, scaleRange } from '@wjh/quality/tiers'
+import type { Governor } from '@wjh/quality/governor'
+import { AUTO_RESOLUTION } from '@wjh/quality/settings'
+import type { GraphicsSettings } from '@wjh/quality/settings'
+import { signalLossAt } from '@wjh/journey/signalLoss'
+import { createSignalOverlay } from '@wjh/journey/signalOverlay'
+import type { SignalOverlay } from '@wjh/journey/signalOverlay'
 import type { TransportHandle } from '✦/components/JourneyTransport'
 
 

@@ -1,0 +1,16 @@
+{
+  "name": "@wjh/audio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Web Audio engine base class and the nodes soundtracks are built from",
+  "sideEffects": false,
+  "exports": {
+    "./engine": "./engine.ts",
+    "./nodes": "./nodes.ts"
+  },
+  "dependencies": {
+    "@wjh/gl": "workspace:*",
+    "@wjh/journey": "workspace:*"
+  }
+}

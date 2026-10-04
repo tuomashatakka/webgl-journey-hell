@@ -1,0 +1,14 @@
+{
+  "name": "@wjh/glsl",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared GLSL snippets: hashes, noise, SDFs, tone mapping",
+  "sideEffects": false,
+  "exports": {
+    "./color": "./color.ts",
+    "./hash": "./hash.ts",
+    "./noise": "./noise.ts",
+    "./sdf": "./sdf.ts"
+  }
+}

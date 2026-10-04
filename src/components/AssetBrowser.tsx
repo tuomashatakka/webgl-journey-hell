@@ -16,11 +16,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { MATERIALS, SKIES } from 'Δ'
-import { createMaterialArrays, createSkyTexture } from 'Δ/gl'
-import type { SkyTexture } from 'Δ/gl'
-import { MATERIAL_GLSL, SKY_GLSL, SURFACE_GLSL } from 'Δ/glsl'
-import { createGlProgram } from '✦/lib/gl'
+import { MATERIALS, SKIES } from '@wjh/delta/manifest'
+import { createMaterialArrays, createSkyTexture } from '@wjh/delta/gl'
+import type { SkyTexture } from '@wjh/delta/gl'
+import { MATERIAL_GLSL, SKY_GLSL, SURFACE_GLSL } from '@wjh/delta/glsl'
+import { createGlProgram } from '@wjh/gl/program'
 
 
 /** What a material card shows. Index is the shader's uMode. */

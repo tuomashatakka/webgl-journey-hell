@@ -9,9 +9,9 @@
 // ghost — when it is done.
 
 import { useEffect, useRef, useState } from 'react'
-import { createGlitchTitle } from '✦/lib/glitchTitle'
-import type { GlitchTitleOptions } from '✦/lib/glitchTitle'
-import { detectDevice } from '✦/lib/quality'
+import { createGlitchTitle } from '@wjh/web/glitchTitle'
+import type { GlitchTitleOptions } from '@wjh/web/glitchTitle'
+import { detectDevice } from '@wjh/quality/device'
 
 
 interface CanvasProps extends Omit<GlitchTitleOptions, 'calm'> {

@@ -1,0 +1,13 @@
+{
+  "name": "@wjh/math",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Scalar maths, seeded randomness and column-major matrices",
+  "sideEffects": false,
+  "exports": {
+    "./mat4": "./mat4.ts",
+    "./rng": "./rng.ts",
+    "./scalar": "./scalar.ts"
+  }
+}

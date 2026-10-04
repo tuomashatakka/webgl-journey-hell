@@ -18,11 +18,13 @@
 // /journeys/previews compiles every landing-page preview shader in one WebGL 1
 // context and reports any that fail.
 
-import { JOURNEY_DEFINITIONS } from '✦/app/journeys/definitions'
-import { JOURNEYS } from '✦/app/journeys/registry'
-import { publishDebugState, readDebugParams } from '✦/lib/debugParams'
-import { createContext, createShaderQuad } from '✦/lib/gl'
-import { evaluateFrame, seekSimulation } from '✦/lib/journey'
+import { JOURNEY_DEFINITIONS } from '✦/journeys/definitions'
+import { JOURNEYS } from '✦/journeys/registry'
+import { publishDebugState, readDebugParams } from '@wjh/web/debugParams'
+import { createContext } from '@wjh/gl/context'
+import { createShaderQuad } from '@wjh/gl/shaderQuad'
+import { evaluateFrame } from '@wjh/journey/frame'
+import { seekSimulation } from '@wjh/journey/seek'
 
 
 const errors: string[] = []

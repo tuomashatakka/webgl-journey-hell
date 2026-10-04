@@ -17,7 +17,7 @@
 // through the current lap; arrow keys step it when focused.
 
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
-import type { TransportAction, TransportMode } from '✦/lib/journey'
+import type { TransportAction, TransportMode } from '@wjh/journey/transport'
 
 
 export interface TransportView {

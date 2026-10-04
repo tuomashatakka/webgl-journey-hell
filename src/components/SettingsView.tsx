@@ -14,8 +14,8 @@ import {
   SPEED_CHOICES,
   FRAME_RATE_CHOICES,
   frameRateLabel,
-} from '✦/lib/settings'
-import { requestGyroscopePermission } from '✦/lib/panControl'
+} from '@wjh/quality/settings'
+import { requestGyroscopePermission } from '@wjh/web/panControl'
 
 
 interface SettingsViewProps {

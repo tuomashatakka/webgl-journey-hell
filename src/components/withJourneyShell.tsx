@@ -34,10 +34,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import type { JourneyDefinition } from '✦/lib/journey'
-import { getJourney } from '✦/app/journeys/registry'
+import type { JourneyDefinition } from '@wjh/journey/definition'
+import { getJourney } from '✦/journeys/registry'
 import { useJourneyRuntime } from '✦/hooks/use-journey-runtime'
-import { detectDevice } from '✦/lib/quality'
+import { detectDevice } from '@wjh/quality/device'
 import { useSettings } from './SettingsProvider'
 import SettingsButton from './SettingsButton'
 import JourneyDebugPanel from './JourneyDebugPanel'

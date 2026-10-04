@@ -11,7 +11,7 @@
 //   <button onClick={ audio.toggle }>{ audio.isMuted ? 'UNMUTE' : 'MUTE' }</button>
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { JourneyAudioEngine } from '✦/lib/journey'
+import type { JourneyAudioEngine } from '@wjh/journey/types'
 
 
 export interface AudioEngineHandle<T extends JourneyAudioEngine> {

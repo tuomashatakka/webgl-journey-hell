@@ -1,0 +1,23 @@
+{
+  "name": "@wjh/journey",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Journey contracts, definitions, frame evaluation, seeking, transport and signal loss",
+  "sideEffects": false,
+  "exports": {
+    "./definition": "./definition.ts",
+    "./frame": "./frame.ts",
+    "./label": "./label.ts",
+    "./seek": "./seek.ts",
+    "./signalLoss": "./signalLoss.ts",
+    "./signalOverlay": "./signalOverlay.ts",
+    "./transport": "./transport.ts",
+    "./types": "./types.ts"
+  },
+  "dependencies": {
+    "@wjh/gl": "workspace:*",
+    "@wjh/math": "workspace:*",
+    "@wjh/web": "workspace:*"
+  }
+}

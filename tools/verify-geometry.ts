@@ -27,11 +27,11 @@
 //   * no triangle may straddle two fracture shards (catches a shard that stretches
 //     rather than moving rigidly).
 
-import { createClosedCurve } from '✦/lib/curve'
-import type { Vec3 } from '✦/lib/curve'
-import { getCircuits } from '✦/app/journeys/loop-line/stations'
-import { SWEEP_FLOATS, finishSweep, levelFrame, newFrame, sweepProfile } from '✦/lib/sweep'
-import { getRoute } from '✦/app/journeys/scenic-route/course'
+import { createClosedCurve } from '@wjh/geometry/curve'
+import type { Vec3 } from '@wjh/geometry/curve'
+import { getCircuits } from '✦/journeys/loop-line/stations'
+import { SWEEP_FLOATS, finishSweep, levelFrame, newFrame, sweepProfile } from '@wjh/geometry/sweep'
+import { getRoute } from '✦/journeys/scenic-route/course'
 
 
 let fails = 0

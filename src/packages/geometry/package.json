@@ -1,0 +1,13 @@
+{
+  "name": "@wjh/geometry",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Splines, swept surfaces and the CPU mesh builder",
+  "sideEffects": false,
+  "exports": {
+    "./curve": "./curve.ts",
+    "./meshBuilder": "./meshBuilder.ts",
+    "./sweep": "./sweep.ts"
+  }
+}

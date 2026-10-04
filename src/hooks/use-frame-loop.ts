@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect } from 'react'
-import { frameLoopManager } from '✦/lib/frameLoopManager'
-import type { FrameLoopManager } from '✦/lib/frameLoopManager'
+import { frameLoopManager } from '@wjh/web/frameLoopManager'
+import type { FrameLoopManager } from '@wjh/web/frameLoopManager'
 
 
 /**

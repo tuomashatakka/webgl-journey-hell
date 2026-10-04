@@ -16,11 +16,11 @@ import {
 
 } from 'react'
 import type { ReactNode } from 'react'
-import { createShaderQuad } from '✦/lib/gl'
-import type { ShaderQuad } from '✦/lib/gl'
-import { createPanControl } from '✦/lib/panControl'
-import type { PanControl } from '✦/lib/panControl'
-import type { Journey } from '✦/app/journeys/registry'
+import { createShaderQuad } from '@wjh/gl/shaderQuad'
+import type { ShaderQuad } from '@wjh/gl/shaderQuad'
+import { createPanControl } from '@wjh/web/panControl'
+import type { PanControl } from '@wjh/web/panControl'
+import type { Journey } from '✦/journeys/registry'
 
 
 interface PreviewAPI {

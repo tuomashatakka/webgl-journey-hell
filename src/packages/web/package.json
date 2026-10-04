@@ -1,0 +1,19 @@
+{
+  "name": "@wjh/web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Browser utilities: asset URLs, debug params, the frame loop, pan control, title-card renderer",
+  "sideEffects": false,
+  "exports": {
+    "./assetUrl": "./assetUrl.ts",
+    "./canvasText": "./canvasText.ts",
+    "./debugParams": "./debugParams.ts",
+    "./frameLoopManager": "./frameLoopManager.ts",
+    "./glitchTitle": "./glitchTitle.ts",
+    "./panControl": "./panControl.ts"
+  },
+  "dependencies": {
+    "@wjh/math": "workspace:*"
+  }
+}
