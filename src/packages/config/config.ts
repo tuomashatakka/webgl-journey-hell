@@ -161,13 +161,13 @@ export const CONFIG = {
       loopLine: 5,
 
       /**
-       * The lap on which the sun goes off.
+       * The lap after which the city goes up.
        *
        * Two rather than the five every other looping journey uses, because here the
-       * signal loss is not the point — it is the *consequence*. The star this whole
-       * run is lit by comes apart (see the blast sequence in shader.ts), and an event
-       * that only fires after nine minutes of walking is an event nobody sees. Two
-       * laps is about three and a half minutes: long enough that the run has settled
+       * signal loss is not the point — it is the *consequence*. The lap-three
+       * boundary is a detonation on the horizon (glsl/blast.ts), and an event that
+       * only fires after nine minutes of running is an event nobody sees. Two laps
+       * is about three and a half minutes: long enough that the run has settled
        * into a rhythm, short enough that breaking it lands.
        */
       skybridges: 2,
@@ -187,6 +187,18 @@ export const CONFIG = {
        * See lib/signalLoss.
        */
       natatorium: 5,
+    },
+
+    /**
+     * Seconds the ending plays at full picture before the journey's signalAge
+     * starts counting (and so before the signal goes, graceSeconds after that).
+     *
+     * Skybridges: the lap-two boundary is the detonation, and the cloud it raises
+     * needs most of a minute to climb. With 40 here the picture starts failing
+     * 48 s into it and is gone by 63 s, the cloud still rising.
+     */
+    holdSeconds: {
+      skybridges: 40,
     },
   },
 
@@ -428,7 +440,7 @@ export const CONFIG = {
       shots: [
         { slug: 'liminal', section: 'CRYSTAL CAVE' },
         { slug: 'stairwell', section: 'PROTEAN WEATHER BRIDGE' },
-        { slug: 'skybridges', section: 'THE ASCENT' },
+        { slug: 'skybridges', section: 'THE CURTAIN WALL' },
         { slug: 'foundry', section: 'FURNACE FLOOR|GEARWORKS' },
         { slug: 'scenic-route', section: 'THE FALL', t: 103.2 },
         { slug: 'hollow-orchard', section: 'THE NURSERY' },
@@ -438,7 +450,7 @@ export const CONFIG = {
       ],
 
       /** Instants the bare harness shoots at, for the journeys it is used for. */
-      bare: { 'loop-line': 87, 'stairwell': 24 },
+      bare: { 'loop-line': 87, 'stairwell': 24, 'skybridges': 30 },
 
       /** Seeded into localStorage: cheap settings, because software GL runs at ~1 fps. */
       settings: {

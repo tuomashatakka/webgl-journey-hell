@@ -25,9 +25,8 @@ export interface FrameState {
 
 /**
  * Evaluate a journey at `time`. The signal-loss level rides along as a uniform
- * because a journey whose world reacts to the failing signal (skybridges' sun)
- * has to be told: the CRT pass degrades the picture and knows nothing about the
- * world in it. A journey without a simulation has no uniform map of its own,
+ * because a journey whose world reacts to the failing signal has to be told:
+ * the CRT pass degrades the picture and knows nothing about the world in it. A journey without a simulation has no uniform map of its own,
  * so one is made for it.
  */
 export function evaluateFrame (

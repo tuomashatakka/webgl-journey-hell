@@ -1,216 +1,209 @@
+// The ground floor of the skybridges shader: uniforms, the clock, the route the
+// runner follows and the height of their eye along it. Everything else builds
+// on the per-pixel state declared here and filled in once by main().
+
 import { HASH21 } from '@wjh/glsl/hash'
-import { ROT, SD_BOX } from '@wjh/glsl/sdf'
+import { ROT, SD_BOX, SMIN } from '@wjh/glsl/sdf'
 import { fbm2, valueNoise2 } from '@wjh/glsl/noise'
+import { ACES } from '@wjh/glsl/color'
 
 
-export const foundationGlsl = `
+/** The numbers the shader shares with kinematics.ts, baked in as constants. */
+export interface SkybridgesTimeline {
+  speed:  number;
+  loopZ:  number;
+  blastT: number;
+}
+
+const f = (n: number) => n.toFixed(3)
+
+export function foundationGlsl ({ speed, loopZ, blastT }: SkybridgesTimeline): string {
+  return /* glsl */`
   precision highp float;
   uniform vec2 iResolution;
   uniform float iTime;
   uniform vec2 uPointer;
-  uniform float uHeavy;        // 1.0 = heavyEffects on (see-through refraction march)
+  uniform float uHeavy;        // 1.0 = heavy effects: the view carries on through glass
   uniform sampler2D uEnv;      // equirectangular environment map (unit 0)
   uniform float uEnvLoaded;    // 1.0 once uEnv's image has uploaded
-  uniform float uSignalLoss;   // 0..SIGNAL_PEAK, how far the signal has gone
-
-  // ========================= THE SUN GOES OFF ==============================
-  //
-  // The signal does not fail because the transmitter fails. It fails because
-  // the star this whole journey is lit by comes apart, and the last thing the
-  // camera does is watch it happen — which is why the reception failure and the
-  // event share one clock. lib/signalLoss ramps over fifteen seconds; that ramp
-  // is the detonation, and the picture going is the consequence rather than the
-  // subject.
-  //
-  // Every stage below is keyed off this one number, so the whole sequence seeks
-  // exactly like everything else does.
-  //
-  //   0.00-0.10  the flash        — the disc swells, the colour burns to white
-  //   0.10-0.45  the shockfront   — a luminous wavefront crosses the whole sky
-  //   0.45-1.00  the aftermath    — a ragged cooling coal, and an ember sky
-  //
-  // The light arrives before the wave, because it does.
-  const float SIGNAL_PEAK = 0.86;
-  float blast() { return clamp(uSignalLoss / SIGNAL_PEAK, 0.0, 1.0); }
-
-  /** Angular radius of the shockfront, radians. Nought until the flash is out. */
-  float blastFront(float b) {
-    return smoothstep(0.10, 1.0, b) * 3.4;
-  }
 
   const float PI = 3.14159265359;
-  const float SEG = 9.0;         // Z length of each main-deck segment
-  const float SPEED = 5.0;       // longer, more legible acts — mirrors kinematics.ts
-  const float LOOP_Z = 540.0;    // nine 60-unit sections; mirrored in kinematics.ts
-  const float EYE = 1.6;         // first-person eye height above the deck
-  const float LOOKAHEAD = 16.0;  // camera anticipation through an authored corner
-  const float BENDLEN = 24.0;    // half-length over which each hard turn eases in
+  const float SPEED = ${f(speed)};
+  const float LOOP_Z = ${f(loopZ)};
+  const float LAP_T = ${f(loopZ / speed)};
+  const float BLAST_T = ${f(blastT)};   // the detonation: the lap-three boundary
+  const float EYE = 1.6;
+  const float LOOKAHEAD = 14.0;          // how far ahead the head turns into a bend
+  const float SEG = 9.0;                 // the steel skeleton falls in segments this long
+  const float PANE_W = 1.0667;           // three panes across the standard deck
+  const float PANE_L = 1.5;
+  const float SEA_Y = -120.0;            // cloud tops
+  const float GRAV = 18.0;
 
-  // Material/look state written by the SDF at the nearest hit, read by shading.
-  float gThick;   // thin-film thickness proxy + Beer-Lambert depth
-  float gFell;    // fracture/darken weight 0..1
-  float gSpark;   // shatter sparkle weight 0..1
-  float gMat;     // 0 = glass, 1 = train (dark metal), 2 = skyscraper
+  const float M_GLASS = 0.0;
+  const float M_STEEL = 1.0;
+  const float M_FACADE = 2.0;
+  const float M_TRAIN = 3.0;
+  const float M_CONCRETE = 4.0;
+  const float M_FROST = 5.0;
 
-  // Continuous per-fragment atmosphere (set once by setupAtmosphere()).
-  vec3  gBg, gKeyDir, gKeyCol, gGlassTint;
-  float gRough, gDisp, gBloom, gFogDen;
-  // Section weights (0..1), peaking at each act centre, overlapping:
-  // 1 DAWN 2 CONVERGENCE 3 ASCENT 4 HIGH-SPAN 5 TRAIN 6 CATCH 7 FROST 8 HELIX 9 SKYLIGHT
-  float gDawn, gConv, gAsc, gSpan, gTrain, gCatch, gFrost, gHelix, gSky;
+  // The nearest surface. Each structure writes its candidate (c*); the scene
+  // map keeps the winner (g*). gInfo and the box are material-specific.
+  float gMat, cMat;
+  vec4 gInfo, cInfo;
+  vec3 gBoxC, cBoxC, gBoxH, cBoxH;
 
-  // --- hash / noise --------------------------------------------------------
+  // Per pixel, set once by main() before anything is marched.
+  float gZ;        // the runner's canonical z, unwrapped
+  float gZL;       // ...and within the lap
+  float gCamH;     // true-world heading of the route at the runner
+  float gDamage;   // 0..1, how far the city has come apart over the run
+  float gE;        // seconds since the detonation; negative before it
+  float gArrive;   // seconds after the detonation at which the shockfront reaches the runner
+  float gTm;       // a wrapped clock for anything that only animates
+  vec2 gCamW;      // the runner's true-world position (xz, metres)
+  vec2 gGZ;        // ground zero (xz, metres)
+  float gW1, gW2, gW3, gW4, gW5, gW6, gW7, gW8, gW9;   // section weights, sum 1
+
+  // Light, blended across sections (atmosphere.ts). *W are true-world.
+  vec3 gSunW, gSun, gSunCol, gZenith, gHorizon;
+  vec3 gBlastW, gBlastDir, gBlastCol;
+  float gHaze, gExposure, gNight, gFrost, gCloud, gBloom, gAurora;
+
   ${HASH21}
   ${valueNoise2('hash21')}
-  ${fbm2({ octaves: 'FBM_OCTAVES', next: 'p *= 2.02;' })}
+  ${fbm2({ octaves: 'FBM_OCTAVES', next: 'p = p * 2.03 + vec2(1.7, 9.2);' })}
   ${ROT}
-
-  // --- SDF primitives ------------------------------------------------------
   ${SD_BOX}
-  float sdTorus(vec3 p, vec2 t) { vec2 q = vec2(length(p.xy) - t.x, p.z); return length(q) - t.y; }
+  ${SMIN}
+  ${ACES}
 
-  // --- easing / physics shapes --------------------------------------------
-  float easeIO(float u) { u = clamp(u, 0.0, 1.0); return u * u * (3.0 - 2.0 * u); }
-  float accel(float u)  { u = clamp(u, 0.0, 1.0); return u * u; }            // from rest (gravity)
-  float decel(float u)  { u = clamp(u, 0.0, 1.0); return 1.0 - (1.0 - u) * (1.0 - u); }
-  float win(float z, float a, float b, float c, float d) { return smoothstep(a, b, z) - smoothstep(c, d, z); }
-
-  // --- timeline ------------------------------------------------------------
-  float rawPlayerZ() { return iTime * SPEED; }
-  float sectionZ() { return mod(rawPlayerZ(), LOOP_Z); }
-  float playerZ() { return rawPlayerZ(); }
-  float sectionEnv(float center, float halfW) {
-    float d = abs(sectionZ() - center);
-    d = min(d, LOOP_Z - d);
-    return 1.0 - smoothstep(0.0, halfW, d);
+  float sdSeg(vec3 p, vec3 a, vec3 b, float r) {
+    vec3 pa = p - a, ba = b - a;
+    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+    return length(pa - ba * h) - r;
   }
 
-  // Restored from the original six-act journey: real angular corners instead
-  // of lateral centreline offsets. The final return turn closes the heading so
-  // z=540 flows continuously into z=0 on every lap.
+  /** Rotate an xz vector by heading h: +z swings towards +x (right) as h grows. */
+  vec2 turnXZ(vec2 v, float h) {
+    float c = cos(h), s = sin(h);
+    return vec2(v.x * c + v.y * s, v.y * c - v.x * s);
+  }
+
+  float easeIO(float u) { u = clamp(u, 0.0, 1.0); return u * u * (3.0 - 2.0 * u); }
+  float win(float z, float a, float b, float c, float d) { return smoothstep(a, b, z) - smoothstep(c, d, z); }
+  float bandW(float z, float a, float b) { return smoothstep(a - 6.0, a + 6.0, z) - smoothstep(b - 6.0, b + 6.0, z); }
+
+  /** A section's weight at lap-local z, wrapping across the lap seam. */
+  float sectionW(float z, float a, float b) {
+    return bandW(z, a, b) + bandW(z + LOOP_Z, a, b) + bandW(z - LOOP_Z, a, b);
+  }
+
+  float playerZ() { return iTime * SPEED; }
+
+  // --- the route -------------------------------------------------------------
+  // Authored straight along +z and bent around the runner by unbend(). Four
+  // turns a lap, never through a set piece, summing to one full turn so the lap
+  // seam carries no yaw jump: a heading of 2pi rotates exactly like 0.
   float turnHeading(float z) {
     z = mod(z, LOOP_Z);
-    float h = 0.0;
-    h += (PI * 0.5)       * smoothstep(90.0  - BENDLEN, 90.0  + BENDLEN, z);
-    h += (-PI / 3.0)      * smoothstep(210.0 - BENDLEN, 210.0 + BENDLEN, z);
-    h += (PI * 2.0 / 3.0) * smoothstep(390.0 - BENDLEN, 390.0 + BENDLEN, z);
-    h += (-PI * 5.0 / 6.0) * smoothstep(510.0 - BENDLEN, 510.0 + BENDLEN, z);
-    return h;
+    return -PI / 3.0 * smoothstep(188.0, 224.0, z)
+      + PI * 2.0 / 3.0 * smoothstep(366.0, 414.0, z)
+      + PI * smoothstep(420.0, 480.0, z)
+      + PI * 2.0 / 3.0 * smoothstep(488.0, 532.0, z);
   }
 
-  // World -> canonical: undo the local corridor heading around the camera. All
-  // straight authored SDFs then occupy the same visibly turning route.
+  /** Render space -> canonical: undo the route's heading change between the runner and w. */
   vec3 unbend(vec3 w) {
-    float camZ = playerZ();
-    float angle = turnHeading(w.z) - turnHeading(camZ);
-    vec2 offset = w.xz - vec2(0.0, camZ);
-    offset = rot(-angle) * offset;
-    return vec3(offset.x, w.y, offset.y + camZ);
+    float a = turnHeading(w.z) - gCamH;
+    vec2 o = turnXZ(w.xz - vec2(0.0, gZ), -a);
+    return vec3(o.x, w.y, o.y + gZ);
   }
 
-  float pathHeading(float z) {
-    return turnHeading(z) - turnHeading(z + LOOKAHEAD);
+  vec3 toWorld(vec3 d) { vec2 t = turnXZ(d.xz, gCamH); return vec3(t.x, d.y, t.y); }
+  vec3 toRender(vec3 d) { vec2 t = turnXZ(d.xz, -gCamH); return vec3(t.x, d.y, t.y); }
+
+  // The route's true-world track, for the things that need real distance:
+  // the cloud sea's parallax and the shockfront. Each turn is integrated as an
+  // arc of constant curvature, which the smoothstep headings above approximate.
+  void leg(float zl, float z1, inout vec2 p, inout float z0, float h) {
+    p += max(0.0, min(zl, z1) - z0) * vec2(sin(h), cos(h));
+    z0 = z1;
+  }
+  void arc(float zl, float hw, float a, inout vec2 p, inout float z0, inout float h) {
+    float len = 2.0 * hw;
+    float da = a * clamp(zl - z0, 0.0, len) / len;
+    float r = len / a;
+    p += r * vec2(cos(h) - cos(h + da), sin(h + da) - sin(h));
+    h += da;
+    z0 += len;
+  }
+  vec2 routeLocal(float zl) {
+    vec2 p = vec2(0.0);
+    float h = 0.0, z0 = 0.0;
+    leg(zl, 188.0, p, z0, h);
+    arc(zl, 18.0, -PI / 3.0, p, z0, h);
+    leg(zl, 366.0, p, z0, h);
+    arc(zl, 24.0, PI * 2.0 / 3.0, p, z0, h);
+    leg(zl, 420.0, p, z0, h);
+    arc(zl, 30.0, PI, p, z0, h);
+    leg(zl, 488.0, p, z0, h);
+    arc(zl, 22.0, PI * 2.0 / 3.0, p, z0, h);
+    leg(zl, LOOP_Z, p, z0, h);
+    return p;
+  }
+  vec2 routeW(float z) {
+    float lap = floor(z / LOOP_Z);
+    return lap * routeLocal(LOOP_Z) + routeLocal(z - lap * LOOP_Z);
   }
 
-  // --- vertical path (first-person eye Y), continuous, physically shaped ----
-  // E0 = ground eye, E1 = upper-tier eye, ET = train-roof eye. See SPEC.md §4.
+  // --- the runner's eye ------------------------------------------------------
+  /** A hop off an edge: up at first, then gravity, landing on y1 at u = 1. */
+  float hop(float y0, float y1, float u, float lift) {
+    u = clamp(u, 0.0, 1.0);
+    return y0 + (y1 - y0) * u * u + lift * u * (1.0 - u);
+  }
+
+  /** Eye height at canonical z. Continuous at every join (spec section 5). */
   float pathY(float z) {
     z = mod(z, LOOP_Z);
-    float E0 = EYE, E1 = 11.6, ET = -2.3;
-    if (z < 120.0) return E0;                                              // 1 dawn / 2 convergence
-    if (z < 180.0) return mix(E0, E1, easeIO((z - 120.0) / 60.0));         // 3 ascent (climb)
-    if (z < 225.0) return E1;                                             // 4 high catwalk
-    if (z < 240.0) return mix(E1, E0, accel((z - 225.0) / 15.0));         // 4 jump down
-    if (z < 248.0) return E0;                                             // brief lower run
-    if (z < 260.0) return mix(E0, ET, accel((z - 248.0) / 12.0));         // 5 leap onto train
-    if (z < 288.0) return ET + sin(z * 0.5) * 0.22;                       // 5 ride (sway)
-    if (z < 300.0) return ET - accel((z - 288.0) / 12.0) * 37.2;          // 5 free fall
-    if (z < 330.0) return mix(-39.5, E0, decel((z - 300.0) / 30.0));      // 6 catch + climb
-    if (z < 360.0) return E0;                                             // 6 settle
-    if (z < 420.0) return E0 + sin((z - 360.0) * 0.12) * 0.3;             // 7 frost (flat)
-    if (z < 480.0) return E0 + sin((z - 420.0) / 60.0 * PI) * 4.0;        // 8 helix rise/fall
-    return E0;                                                            // 9 skylight
+    if (z < 120.0) return EYE;
+    if (z < 180.0) return mix(EYE, 11.6, easeIO((z - 120.0) / 60.0));          // 3 the climb
+    if (z < 225.0) return 11.6;                                               // 4 the wire
+    if (z < 240.0) return hop(11.6, EYE, (z - 225.0) / 15.0, 2.0);           // 4 the jump
+    if (z < 248.0) return EYE;                                                // 5 landing deck
+    if (z < 260.0) return hop(EYE, -2.3, (z - 248.0) / 12.0, 1.4);           // 5 onto the train
+    if (z < 288.0) return -2.3 + sin(z * 0.9) * 0.05;                         // 5 the ride
+    if (z < 300.0) { float u = (z - 288.0) / 12.0; return -2.3 - 21.7 * u * u; }  // 5 off the end
+    if (z < 306.0) { float s = z - 300.0; return -24.0 - 3.617 * s + 0.3014 * s * s; } // 6 caught
+    if (z < 356.0) return mix(-34.85, -18.4, easeIO((z - 306.0) / 50.0));     // 6 climbing out
+    if (z < 420.0) return -18.4;                                              // 7 the tube
+    if (z < 480.0) return mix(-18.4, 9.6, easeIO((z - 420.0) / 60.0));        // 8 the helix climbs
+    if (z < 526.0) return 9.6;                                                // 9 the crown
+    return mix(9.6, EYE, easeIO((z - 526.0) / 14.0));                         // down to the dawn
   }
 
-  // Deck top Y at canonical depth sz, or 1e4 where there is no main deck
-  // (jump gaps, the train section, etc — those use other geometry).
-  float deckTopAt(float sz) {
-    float zz = mod(sz, LOOP_Z);
-    if (zz < 225.0) return pathY(sz) - EYE;        // ground / climb / catwalk
-    if (zz < 240.0) return 1e4;                     // jump-down gap
-    if (zz < 248.0) return 0.0;                     // brief landing deck
-    if (zz < 300.0) return 1e4;                     // train section
-    if (zz < 540.0) return pathY(sz) - EYE;         // catch / settle / frost / helix / skylight
-    return pathY(sz) - EYE;
+  /** The main deck's top at canonical z, or 1e4 where there is none. */
+  float deckTop(float z) {
+    float zl = mod(z, LOOP_Z);
+    if (zl >= 225.0 && zl < 236.0) return 1e4;    // the wire has snapped
+    if (zl >= 236.0 && zl < 248.0) return 0.0;    // the landing deck
+    if (zl >= 248.0 && zl < 300.0) return 1e4;    // the train has the route
+    return pathY(z) - EYE;
   }
 
-  // --- atmosphere ----------------------------------------------------------
-  void setupAtmosphere() {
-    gDawn  = sectionEnv(30.0, 64.0);  gConv  = sectionEnv(90.0, 64.0);  gAsc   = sectionEnv(150.0, 64.0);
-    gSpan  = sectionEnv(210.0, 64.0); gTrain = sectionEnv(270.0, 64.0); gCatch = sectionEnv(330.0, 64.0);
-    gFrost = sectionEnv(390.0, 64.0); gHelix = sectionEnv(450.0, 64.0); gSky   = sectionEnv(510.0, 64.0);
-
-    float s = 0.0, w;
-    vec3 bg = vec3(0.0), kd = vec3(0.0), kc = vec3(0.0), gt = vec3(0.0);
-    float ro = 0.0, di = 0.0, bl = 0.0, fd = 0.0;
-    // 1 DAWN APPROACH — warm low sun, clear
-    w = gDawn;  s += w; bg += w*vec3(0.12,0.13,0.20); kd += w*normalize(vec3(-0.35,0.16,0.92)); kc += w*vec3(1.00,0.76,0.50); gt += w*vec3(0.90,0.93,0.97); ro += w*0.05; di += w*0.020; bl += w*0.40; fd += w*0.013;
-    // 2 CONVERGENCE — cool prism, crossing bridges
-    w = gConv;  s += w; bg += w*vec3(0.10,0.15,0.26); kd += w*normalize(vec3( 0.30,0.42,0.86)); kc += w*vec3(1.00,0.98,0.98); gt += w*vec3(0.95,0.97,1.00); ro += w*0.03; di += w*0.115; bl += w*0.46; fd += w*0.012;
-    // 3 ASCENT — bright opening, climb
-    w = gAsc;   s += w; bg += w*vec3(0.13,0.18,0.30); kd += w*normalize(vec3( 0.10,0.34,0.94)); kc += w*vec3(0.82,0.90,1.00); gt += w*vec3(0.86,0.92,1.00); ro += w*0.05; di += w*0.035; bl += w*0.40; fd += w*0.013;
-    // 4 HIGH SPAN — teal, thin, vertigo
-    w = gSpan;  s += w; bg += w*vec3(0.07,0.17,0.22); kd += w*normalize(vec3(-0.18,0.36,0.91)); kc += w*vec3(0.58,0.92,1.00); gt += w*vec3(0.80,0.94,0.99); ro += w*0.05; di += w*0.050; bl += w*0.42; fd += w*0.018;
-    // 5 TRAIN — dramatic side light, energetic
-    w = gTrain; s += w; bg += w*vec3(0.18,0.15,0.18); kd += w*normalize(vec3(0.55,0.30,0.78));  kc += w*vec3(1.00,0.82,0.62); gt += w*vec3(0.92,0.94,1.00); ro += w*0.05; di += w*0.045; bl += w*0.58; fd += w*0.016;
-    // 6 CATCH — warm golden relief
-    w = gCatch; s += w; bg += w*vec3(0.22,0.16,0.14); kd += w*normalize(vec3(0.20,0.40,0.89));  kc += w*vec3(1.00,0.78,0.52); gt += w*vec3(0.96,0.90,0.84); ro += w*0.05; di += w*0.040; bl += w*0.70; fd += w*0.014;
-    // 7 FROST GALLERY — cold milky, crossings
-    w = gFrost; s += w; bg += w*vec3(0.14,0.18,0.30); kd += w*normalize(vec3(-0.30,0.28,0.91)); kc += w*vec3(0.74,0.84,1.00); gt += w*vec3(0.82,0.88,1.00); ro += w*0.55; di += w*0.020; bl += w*0.30; fd += w*0.026;
-    // 8 AURORA HELIX — iridescent dusk, spiral
-    w = gHelix; s += w; bg += w*vec3(0.10,0.14,0.26); kd += w*normalize(vec3(0.30,0.40,0.87));  kc += w*vec3(0.62,1.00,0.82); gt += w*vec3(0.90,0.96,1.00); ro += w*0.08; di += w*0.065; bl += w*0.50; fd += w*0.018;
-    // 9 SKYLIGHT RELEASE — brilliant bloom
-    w = gSky;   s += w; bg += w*vec3(0.30,0.34,0.44);  kd += w*normalize(vec3(0.05,0.55,0.83));  kc += w*vec3(1.00,0.98,0.94); gt += w*vec3(0.97,0.99,1.00); ro += w*0.03; di += w*0.030; bl += w*0.74; fd += w*0.010;
-
-    float inv = 1.0 / max(s, 0.001);
-    gBg = bg*inv; gKeyDir = normalize(kd); gKeyCol = kc*inv; gGlassTint = gt*inv;
-    gRough = ro*inv; gDisp = di*inv; gBloom = bl*inv; gFogDen = fd*inv;
-
-    // The detonation is applied to the *key light*, not to the sky. Every pane
-    // of glass, every rail, every window across the whole run takes its
-    // highlight and its tint from gKeyCol — so rewriting it here is what puts
-    // the event on the bridge you are standing on rather than only on the
-    // backdrop behind it. This is the whole reason the effect goes in here.
-    float b = blast();
-    if (b > 0.0) {
-      // Flash: white-hot, and far brighter than anything in the palette. Then it
-      // cools through everything a fire cools through and settles at ember.
-      vec3 flash  = vec3(1.60, 1.52, 1.42);
-      vec3 ember  = vec3(1.10, 0.30, 0.10);
-      // 'lit' is a step — the sun is a fire now and stays one. The *brightness*
-      // is a pulse, and the difference matters: a step here multiplies every
-      // surface in the scene by six for the rest of the run and the whole frame
-      // sits blown out with nothing readable in it. The flash is a moment.
-      float lit   = smoothstep(0.0, 0.09, b);
-      float cool  = smoothstep(0.16, 0.85, b);
-      // Squared by multiplication, never by pow(): GLSL leaves pow(x, y)
-      // undefined for negative x, and every one of these arguments is negative
-      // for the first half of the sequence. It returns NaN, the NaN reaches the
-      // colour, and the whole frame comes out black — which is exactly what it
-      // did, and exactly what a screenshot of an exploding sun cannot tell you
-      // apart from a very dark exploding sun.
-      float pk = (b - 0.045) * 14.0;
-      float pulse = exp(-pk * pk);
-      vec3 blown  = mix(flash, ember, cool);
-      gKeyCol = mix(gKeyCol, blown, lit) * (1.0 + 6.0 * pulse + 0.20 * lit * (1.0 - cool));
-
-      // The sky loses its own colour and takes the fire's.
-      gBg = mix(gBg, mix(vec3(0.34, 0.24, 0.15), vec3(0.10, 0.030, 0.024), cool), lit);
-      gGlassTint = mix(gGlassTint, vec3(1.00, 0.72, 0.55), lit * 0.8);
-      gBloom = mix(gBloom, 0.95, lit * (1.0 - cool * 0.4));
-      // Ash. The air stops being clear about a second after the flash.
-      gFogDen = mix(gFogDen, 0.052, smoothstep(0.05, 0.55, b));
-    }
+  /** How far along z to the nearest deck where there is none (a safe step). */
+  float deckGap(float zl) {
+    if (zl >= 225.0 && zl < 236.0) return min(zl - 225.0, 236.0 - zl);
+    if (zl >= 248.0 && zl < 300.0) return min(zl - 248.0, 300.0 - zl);
+    return 0.0;
   }
 
+  float deckHalfW(float zl) {
+    float w = 1.6;
+    w = mix(w, 0.7, win(zl, 180.0, 184.0, 224.0, 226.0));      // the wire
+    w = mix(w, 6.0, win(zl, 484.0, 494.0, 526.0, 536.0));      // the crown's plaza
+    return w;
+  }
 `
+}

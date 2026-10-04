@@ -183,8 +183,8 @@ the laps, and the blast's shockfront finishes the job.
 - **Light:** low side light from the right (sun 12°), hard and dramatic; sparks
   under the cars.
 - **Breaks:** the station's facade shatters outward as the train punches through.
-- **Out (fall):** the train rolls off the sheared end at z 288; free fall at
-  g' = 26, pitch hard down, the stub receding.
+- **Out (fall):** the train rolls off the sheared end at z 288; free fall,
+  pitch hard down, the stub receding.
 
 ### 6 · THE CANYON (z 300–360)
 - **Place:** a slot 14 m wide between two towers (z 282–340): the fall drops
@@ -193,8 +193,8 @@ the laps, and the blast's shockfront finishes the job.
 - **Light:** golden, sun 3° ahead-right, bounced between the facades.
 - **Breaks:** the catch cracks the rising deck from end to end; the facades
   craze around the impact.
-- **Out (catch):** the fall decelerates onto the rising deck (z 300–330), then
-  climbs back to y 0 and runs out of the slot.
+- **Out (catch):** the fall decelerates onto a deck that curves up under it
+  (z 300–306), then climbs out of the slot to −20.
 
 ### 7 · FROST GALLERY (z 360–420)
 - **Place:** an enclosed tube bridge (r 2.6 m, steel rings every 3 m), its glass
@@ -212,7 +212,7 @@ the laps, and the blast's shockfront finishes the job.
   cloud sea.
 - **Light:** moonlight and the tower's own windows.
 - **Breaks:** the lit panes beside you crack and the light spills through.
-- **Out:** the ramp crests and levels onto the Crown.
+- **Out:** the ramp climbs from −20 to +8 and levels onto the Crown.
 
 ### 9 · THE CROWN (z 480–540)
 - **Place:** the top of the city: a wide glass plaza (12 m) under a steel space
@@ -220,7 +220,7 @@ the laps, and the blast's shockfront finishes the job.
 - **Light:** brilliant noon, sun 70°, the space frame's grid shadow on the glass;
   the light blooms towards white and fades to dawn across the lap seam.
 - **Breaks:** the plaza's panes craze outward from your path in every direction.
-- **Out:** across the seam into the Dawn Approach.
+- **Out:** down a last flight across the seam into the Dawn Approach.
 
 ---
 
@@ -235,11 +235,13 @@ the laps, and the blast's shockfront finishes the job.
 | 240–248 | landing deck | constant |
 | 248–260 | leap onto the train roof (eye −2.3) | gravity |
 | 260–288 | ride | low-frequency sway |
-| 288–300 | free fall to −39.5 | `−½g'τ²` |
-| 300–330 | catch, climb back to 0 | decelerating arc |
-| 330–420 | level; storm sway in the tube | constant |
-| 420–480 | helix: rise and fall ±4, bank right | sine |
-| 480–540 | level | constant |
+| 288–300 | free fall to −24 | `−½g'τ²` |
+| 300–306 | caught: the deck curves under the fall, bottoming at −34.9 | decelerating arc |
+| 306–356 | climbing out of the canyon to −20 | ease-in-out |
+| 356–420 | level in the tube; storm sway | constant |
+| 420–480 | the helix climbs to +8, banked right | ease-in-out |
+| 480–526 | level on the crown | constant |
+| 526–540 | down to 0 across the seam, into the light | ease-in-out |
 
 **Glances.** Look down at the cracking deck every ~9 s; look back at the
 collapse every ~13 s; look down on every jump and the fall; up on the climbs;
@@ -261,16 +263,16 @@ The picture holds at full quality while the event plays:
 so the signal starts going at e ≈ 48 s and is gone by e ≈ 63 s, with the cloud
 still climbing.
 
-Ground zero is 24 km out at a true-world heading of +24° (ahead-right for the
+Ground zero is 16 km out at a true-world heading of +24° (ahead-right for the
 first 42 s, when the route still runs straight).
 
 | e (s) | beat |
 |-------|------|
 | 0–1.6 | **the flash** — a total white-out for a quarter second, the whole scene lit from the blast side, then recovering |
 | 0–6 | **the fireball** — white, then yellow, then orange, rising; a condensation ring flickers round it (0.5–3.5 s) |
-| 1–10 | **the shockfront** crosses the cloud sea towards you at 2.4 km/s: a bright ring that lifts and flattens the cloud tops, dust behind it; towers' glass bursts as it reaches them |
+| 1–10 | **the shockfront** crosses the cloud sea towards you at 1.6 km/s: a bright ring that lifts and flattens the cloud tops, dust behind it; towers' glass bursts as it reaches them |
 | 10 | **arrival** — one hard shove and a ring-down, every pane on the deck cracks at once, the nearby facades blow out, glass glitters in the air |
-| 3–60 | **the mushroom cloud** — the fireball becomes the cap and keeps rising (to ~11 km), a stem of dust drawn up under it, the cap rolling outward as a torus with an ice-cap pileus above (6–26 s); a base surge spreads across the cloud sea; the cap's underside glows and cools from orange to red to brown |
+| 3–60 | **the mushroom cloud** — the fireball becomes the cap and keeps rising (to ~8 km, its top near 10), a stem of dust drawn up under it, the cap rolling outward as a torus with an ice-cap pileus above (6–26 s); a base surge spreads across the cloud sea; the cap's underside glows and cools from orange to red to brown |
 | 12– | **the aftermath** — ash falling, the sky browning under the spreading pall, the sun dimmed; the head stays on the cloud |
 | 48–63 | the signal goes |
 

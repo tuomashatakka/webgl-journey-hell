@@ -28,7 +28,7 @@ bun run check               # tsc, eslint, knip, bun test: the gate for every co
 | --- | --- |
 | `liminal` | raymarched descent through shifting poolrooms |
 | `stairwell` | six acts joined through walls, lit by the asset library |
-| `skybridges` | collapsing glass spans over a cloud sea |
+| `skybridges` | glass bridges between glass towers over a cloud sea, breaking under you; a detonation at the end |
 | `foundry` | seven halls, rigid-body physics, a terminal fall |
 | `hollow-orchard` | a fungal descent |
 | `natatorium` | flooded poolrooms along a turning route |
