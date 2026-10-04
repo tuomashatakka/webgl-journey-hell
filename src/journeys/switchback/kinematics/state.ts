@@ -2,7 +2,7 @@ import { lapLabel } from '@wjh/journey/label'
 import { clamp01, mix, smootherstep } from '@wjh/math/scalar'
 import { Bend, fitBend } from './bend'
 import { FALL_BLOCK, FALL_LAPS, FALL_SECTION, FALL_START, LAP_LEN, PHASE_WRAP, PITCH_LAPS, SECTIONS, SECTION_COUNT, STARTS, Section, beatAt, curvAt, fallDepthAt, gradeAt, yawAt } from './route'
-import { DECAY_SECTION, FALL_ENTRY, G, V_MAX } from './common'
+import { DECAY_SECTION, FALL_ENTRY, G, V_MAX } from './constants'
 
 // ---------------------------------------------------------------------------
 

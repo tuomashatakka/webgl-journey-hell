@@ -13,7 +13,7 @@ import { lapLabel } from '@wjh/journey/label'
 import { advance, createFoundryState, MODE_BOARD, pistonExtension } from './physics'
 import { decayFor, LAP_ARC, SECTION_COUNT, SECTION_LEN, SPAN_ARC, SPAN_TILES, tileArc } from './physics/route'
 import { MODE_BRAKE, OBLIVION_LOOP, shaftHeadFor } from './physics/cage'
-import { MODE_FALL, MODE_OBLIVION, MODE_SETTLE, MODE_WALK } from './physics/common'
+import { MODE_FALL, MODE_OBLIVION, MODE_SETTLE, MODE_WALK } from './physics/constants'
 import type { FoundryState } from './physics/types'
 
 

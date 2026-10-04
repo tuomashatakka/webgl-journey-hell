@@ -1,6 +1,6 @@
 import { mix } from '@wjh/math/scalar'
 import { gradeAt, yawAt } from './route'
-import { FIT_Z2 } from './common'
+import { FIT_Z2 } from './constants'
 
 // ---------------------------------------------------------------------------
 // Rectification

@@ -1,4 +1,4 @@
-import { G, LANDING_Y, LIFT_TOP, MODE_FALL, MODE_OBLIVION, MODE_SETTLE } from './common'
+import { G, LANDING_Y, LIFT_TOP, MODE_FALL, MODE_OBLIVION, MODE_SETTLE } from './constants'
 import { DebrisBody, FoundryState } from './types'
 
 // gravity

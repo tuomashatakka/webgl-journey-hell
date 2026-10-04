@@ -1,5 +1,5 @@
 import { FALL_START, LAP_LEN, PHASE_WRAP, SECTIONS, SECTION_COUNT, beatAt, gradeAt, liftAt, yawAt } from './route'
-import { D, DRAG, FIT_Z2, G, ROLL_RES, V_MAX, V_MIN } from './common'
+import { D, DRAG, FIT_Z2, G, ROLL_RES, V_MAX, V_MIN } from './constants'
 
 /** The peak-to-mean ratio of the above. Curvature caps are stated against it. */
 const EASE_PEAK = 1.875

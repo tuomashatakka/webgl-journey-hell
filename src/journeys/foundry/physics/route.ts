@@ -1,4 +1,4 @@
-import { WALK_START } from './common'
+import { WALK_START } from './constants'
 
 // --- the loop (mirrored by the shader) --------------------------------------
 

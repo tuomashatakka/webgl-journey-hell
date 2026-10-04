@@ -1,4 +1,4 @@
-import { brdfChunk, noiseChunk, skyLookupChunk } from './common'
+import { brdfChunk, noiseChunk, skyLookupChunk } from './chunks'
 
 /**
  * Single scattering. Camera at r0 (planet-centred metres), ray rd, integrated

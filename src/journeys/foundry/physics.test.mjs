@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { CYCLE_LEN, FURNACE_HALF_W, LAP_ARC, MAX_SQUEEZE, SPAN_ARC, SPAN_EXTRA, SPAN_HALF_W, SPAN_TILES, TILE, TILE_HALF, routeAt, tileArc, tileX, tileZ } from './physics/route'
 import { LIFT_BRAKE_Y, OBLIVION_LOOP, OBLIVION_PERIOD, PIT_Y, brakeYFor, liftTopFor, shaftHeadFor } from './physics/cage'
-import { MODE_OBLIVION, WALK_START } from './physics/common'
+import { MODE_OBLIVION, WALK_START } from './physics/constants'
 import { advance, createFoundryState } from './physics'
 
 

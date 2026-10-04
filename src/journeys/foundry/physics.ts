@@ -1,7 +1,7 @@
 import { zeros } from '@wjh/math/arrays'
 import { mulberry32 } from '@wjh/math/rng'
 import { FoundryState } from './physics/types'
-import { EYE_HEIGHT, LIFT_TOP, MODE_FALL, MODE_OBLIVION, MODE_SETTLE, MODE_WALK, WALK_START } from './physics/common'
+import { EYE_HEIGHT, LIFT_TOP, MODE_FALL, MODE_OBLIVION, MODE_SETTLE, MODE_WALK, WALK_START } from './physics/constants'
 import { LAP_ARC, SPAN_TILES } from './physics/route'
 import { liftTopFor, spawnDebris, stepCage } from './physics/cage'
 import { stepMechanisms, stepRide, stepSpan, stepWalker } from './physics/walker'

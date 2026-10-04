@@ -1,5 +1,5 @@
 import { ACES } from '@wjh/glsl/color'
-import { brdfChunk, lightingChunk, noiseChunk, skyLookupChunk } from './common'
+import { brdfChunk, lightingChunk, noiseChunk, skyLookupChunk } from './chunks'
 
 // ---------------------------------------------------------------------------
 // the cockpit

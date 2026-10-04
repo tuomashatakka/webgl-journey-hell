@@ -5,7 +5,7 @@ import { clamp01, mix } from '@wjh/math/scalar'
 import { getSwitchbackState, labelFor } from './kinematics/state'
 import { assertRouteSane } from './kinematics/check'
 import { FALL_BLOCK, FALL_LAPS, FALL_START, LAP_LEN, SECTIONS, SECTION_COUNT, liftAt } from './kinematics/route'
-import { DRAG, G, ROLL_RES, TYPE_FALL, V_MAX, V_MIN } from './kinematics/common'
+import { DRAG, G, ROLL_RES, TYPE_FALL, V_MAX, V_MIN } from './kinematics/constants'
 
 /** Eye height above the rail head, sitting in the cart. */
 const EYE = 1.15

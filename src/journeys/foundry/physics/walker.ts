@@ -1,6 +1,6 @@
 import { smoothstep } from '@wjh/math/scalar'
 import { FoundryState } from './types'
-import { EYE_HEIGHT, G, LANDING_Y, MODE_WALK } from './common'
+import { EYE_HEIGHT, G, LANDING_Y, MODE_WALK } from './constants'
 import { LAP_ARC, RoutePoint, SPAN_TILES, TILE_HALF, cycDelta, cyclic, decayFor, routeAt, tileArc, tileX, tileZ } from './route'
 
 // Metres of travel per footstep. CYCLE_LEN is a whole number of these, so the

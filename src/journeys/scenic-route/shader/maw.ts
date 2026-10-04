@@ -1,4 +1,4 @@
-import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './common'
+import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
 
 /** Skin and flesh, shared by the head and the jaws. */
 const mawMaterialChunk = /* glsl */`

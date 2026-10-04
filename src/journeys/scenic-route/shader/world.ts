@@ -1,4 +1,4 @@
-import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './common'
+import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
 
 // ---------------------------------------------------------------------------
 // the swept road

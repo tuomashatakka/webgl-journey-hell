@@ -1,5 +1,5 @@
 import { clamp01, mix, smootherstep } from '@wjh/math/scalar'
-import { D, DECAY_SECTION, FALL_ENTRY, TYPE_FALL } from './common'
+import { D, DECAY_SECTION, FALL_ENTRY, TYPE_FALL } from './constants'
 
 /** d/dt of smootherstep on the unit interval. Peaks at 15/8 in the middle. */
 function dSmootherstep (t: number): number {
