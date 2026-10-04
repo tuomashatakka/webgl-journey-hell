@@ -62,7 +62,7 @@ export const oblivionGlsl = `  // ============================= OBLIVION =======
     if (deb < d) { d = deb; gMat = 2.0; gWear = 0.85; gGlow = 0.0; }
 
     // The machine is coming apart too, at the rate everything else does.
-    return d + fieldBoil(p, decay()) * 0.6;
+    return d + fieldBoil(p, decayVis()) * 0.6;
   }
 
   // ============================== THE MAP ==================================
@@ -89,7 +89,8 @@ export const oblivionGlsl = `  // ============================= OBLIVION =======
       // worse than one you are standing in the middle of.
       vec3 pw = p;
       float dec = decay();
-      float guard = dec > 0.005 ? smoothstep(1.2, 7.0, abs(p.z - walkZ())) : 0.0;
+      float dv = decayVis();
+      float guard = dv > 0.005 ? smoothstep(1.2, 7.0, abs(p.z - walkZ())) : 0.0;
 
       vec2 pr = mix(secProfile(a), secProfile(b), t);
       float squeeze = 1.0 - dec * 0.18;
@@ -105,8 +106,8 @@ export const oblivionGlsl = `  // ============================= OBLIVION =======
       // larger value, not a smaller one — the opposite sign to liminal's, whose
       // field is the usual outside-positive kind.
       if (guard > 0.0) {
-        hall += crackField(p, dec) * 0.55 * guard;
-        hall += fieldBoil(p, dec) * guard;
+        hall += crackField(p, dv) * 0.55 * guard;
+        hall += fieldBoil(p, dv) * guard;
       }
       // The shaft's interior unions with the hall's, opening the ceiling above
       // the landing. Far from it the shaft is deeply negative and does nothing.
@@ -123,6 +124,11 @@ export const oblivionGlsl = `  // ============================= OBLIVION =======
         if (featB < feat) { feat = featB; fmat = fmB; }
       }
       if (feat < d) { d = feat; gMat = fmat; gWear = 0.10; }
+
+      // --- the clutter: crates, drums, power packs, and the pipes ---------------
+      float pm, pp;
+      float props = mapProps(pw, zc, W, H, a, pm, pp) + tf * FEAT_ERODE;
+      if (props < d) { d = props; gMat = pm; gWear = pp; }
 
       float portal = mapPortal(pw, zc, W, H);
       if (portal < d) { d = portal; gMat = 1.0; gWear = 0.45; }
@@ -152,7 +158,7 @@ export const oblivionGlsl = `  // ============================= OBLIVION =======
       // and over-estimates are exactly what a sphere trace cannot survive. It
       // steps straight through the plate and the corridor fills with holes. The
       // step has to come down with the decay, and this is what it costs.
-      if (dec > 0.05) d *= mix(1.0, 0.60, min(1.0, dec * 1.2));
+      if (dv > 0.05) d *= mix(1.0, 0.60, min(1.0, dv * 1.2));
     }
 
     // --- the shaft's own fittings, the cage, and what is loose in it --------

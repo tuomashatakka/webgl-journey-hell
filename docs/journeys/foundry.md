@@ -129,20 +129,55 @@ distance to the wall, and a sphere trace cannot survive an over-estimate: it
 steps through the plate and the corridor fills with holes. the march step comes
 down with the decay to absorb it, and that is what it costs.
 
-## materials
+## the decay you can see
 
-no image textures. every surface is a height field, and that field does three
-jobs — tints the albedo, drives the roughness, and perturbs the normal.
+`decay()` is the geometry's: the corridor squeezes by it, and that squeeze has
+to agree with the walker's (the physics tests hold the span inside the
+tightest hall). `decayVis()` is what the eye gets — the cracks, the dead lamps,
+the lens, the grade — and it does not wait for the slow geometric curve: from
+the second lap the walls are visibly splitting (≈0.3), by the third they are
+coming apart (≈0.6).
 
-three scales, triplanar-blended: `bloom` for the corrosion a whole wall is read
-at, the weld/rivet/pit layer a step away, and `micro` within arm's reach, the
-last faded out by `detailFade` because past a few metres it is noise in a pixel
-that cannot resolve it. `cavity` darkens the crevices and occludes both the
-specular and the fresnel rim — a rim highlight surviving inside a pit is the
-single most plastic-looking thing a metal shader can do.
+from the second lap the cracks also **leak red into the air**: the march gathers
+`leakAt` on its way through the hall — sheets of light off the splits in the
+walls, falling off with distance from the wall, and columns up out of the
+floor — and it lands as red in-scatter, stronger every lap (`leakI`).
 
-triplanar rather than pick-one-axis: the old projection swapped abruptly across
-every rounded box corner and the texture visibly sheared.
+## materials and light
+
+every surface is a Δ scan (`delta/`), sampled triplanar in loop-local space so
+the textures repeat with the ring: brick in the loading bay and the furnace
+floor, shuttered concrete in the piston gallery, spalled concrete in the long
+run, subway tile in the coolant tier, corrugated sheet in the gearworks, steel
+in the brake run; steel and quarry tile underfoot, concrete overhead; hazard
+paint on frames and power packs, timber crates, painted drums and pipes (the
+paint chipped back to the scan wherever its own AO says it gets knocked),
+rubber hoses. rust comes out of the wear field and the decay on top.
+
+lit the way the loop line lights its bays: the three nearest lamps through a
+GGX BRDF, the hall's bounce as the ambient, and every nearby lamp's glow in the
+air in closed form (Macklin's single scattering) — this hall's five and the
+next hall's, so the halos never pop at a bulkhead. linear light throughout,
+ACES at the end.
+
+the webgl 2 build is the route's; the index's channel is still a GLSL ES 1.00
+sketch of the drop (`foundryPreviewFrag`).
+
+## the clutter
+
+crates, drums (one always on its side) and hydraulic power packs — tank, motor,
+accumulator, hoses climbing to the service pipes — stand along the walls on a
+per-hall lattice that falls *between* the machine stations, so nothing stands
+where a ram drives out or a gear rises; never against a bulkhead, never in the
+brake run (too narrow) or on the furnace floor (a hole). two flanged service
+pipes run under the ceiling on brackets, and about a third of the flanges leak:
+a jet of steam that slows, spreads and rises, gathered by the march like the
+leaks and lit by the hall.
+
+## the drop, looking down
+
+while the cage falls the head goes down — further the faster it falls — so the
+shaft comes up through the mesh floor; in oblivion it stays down.
 
 ## gates
 
@@ -151,4 +186,5 @@ bun test src/journeys/foundry/physics.test.mjs
 bun tools/journey.mjs probe foundry --from=0 --to=440 --step=8
 bun tools/journey.mjs scan  foundry --from=94 --to=114 --step=0.25   # the crossing
 bun tools/journey.mjs fps   foundry --at=20,100,390
+node tools/journey.mjs glsl foundry --bare
 ```

@@ -450,7 +450,7 @@ export const CONFIG = {
       ],
 
       /** Instants the bare harness shoots at, for the journeys it is used for. */
-      bare: { 'loop-line': 87, 'stairwell': 24, 'skybridges': 30 },
+      bare: { 'loop-line': 87, 'stairwell': 24, 'skybridges': 30, 'foundry': 140 },
 
       /** Seeded into localStorage: cheap settings, because software GL runs at ~1 fps. */
       settings: {

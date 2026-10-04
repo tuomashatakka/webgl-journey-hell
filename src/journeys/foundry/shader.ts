@@ -9,8 +9,8 @@
 // piston extension, and two pendulums swung by the cage's acceleration and by
 // your own footsteps. The shader draws state; it does not invent motion.
 //
-// Single-pass raymarch via lib/gl/shaderQuad.ts. WebGL 1.0 / GLSL ES 1.00 — no
-// bitwise ops, constant loop bounds only. Uniforms beyond the shared set:
+// Single-pass raymarch on WebGL 2 / GLSL ES 3.00 (renderer.ts binds the Δ
+// material arrays). Uniforms beyond the shared set:
 //   uWalk    = (cyclicZ, smoothLoop, decay, headRoll)
 //   uGait    = (eyeY, swayX, headYaw, headPitch)
 //   uRide    = (riding, shutterClosed, gateOpen, phaseSeconds)
@@ -42,14 +42,18 @@
 // all run on one closed-form damped hinge (deployAt) evaluated against distance
 // to the walker, so they overshoot and ring down instead of easing.
 //
-// TEXTURE. There are no image textures here — one draw call, no render targets,
-// no assets — so every surface is built from a height field which tints the
-// albedo, drives the roughness, and whose gradient perturbs the normal.
+// TEXTURE AND LIGHT. Every surface is a Δ scan (delta/: brick, shuttered and
+// spalled concrete, subway tile, corrugated sheet, weathered steel, hazard
+// paint, timber), sampled triplanar and lit through a GGX BRDF by the nearest
+// lamps, the way the loop line lights its bays — with each lamp's glow in the
+// air in closed form, steam blowing off the pipe flanges, and the halls
+// cluttered with crates, drums and hydraulic power packs between the machines.
 //
 // THE DECAY. Each completed lap leaves the foundry a little less sure of itself:
 // the corridor snakes and breathes, the walls close in, lamps fail, the lens
 // barrels, whole scanlines tear sideways and the grade rots toward oxblood.
-// Same road, one level deeper, worse every time round.
+// Same road, one level deeper, worse every time round — and from the second
+// lap the cracks bleed red light into the air.
 
 import { HASH21 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
@@ -57,15 +61,17 @@ import { decayGlsl } from './glsl/decay'
 import { hallsGlsl } from './glsl/halls'
 import { shaftGlsl } from './glsl/shaft'
 import { oblivionGlsl } from './glsl/oblivion'
-import { surfaceTextureGlsl } from './glsl/surfaceTexture'
+import { propsGlsl } from './glsl/props'
+import { MATERIAL_GLSL, SURFACE_GLSL } from '@wjh/delta/glsl'
 import { shadingGlsl } from './glsl/shading'
 import { cameraGlsl } from './glsl/camera'
 
 
-const COMMON = foundationGlsl + decayGlsl + hallsGlsl + shaftGlsl + oblivionGlsl + surfaceTextureGlsl + shadingGlsl + cameraGlsl
+const COMMON = foundationGlsl + MATERIAL_GLSL + SURFACE_GLSL + decayGlsl + hallsGlsl + shaftGlsl + propsGlsl +
+  oblivionGlsl + shadingGlsl + cameraGlsl
 
-// Full-quality variant used by the route page.
-export const foundryFrag = `
+// The route page (WebGL 2).
+export const foundryFrag = `#version 300 es
 #define RM_STEPS 96
 #define MAX_DIST 90.0
 #define STEP_K 0.72
@@ -134,9 +140,10 @@ export const foundryPreviewFrag = `
   }
 `
 
-// perf: expensive. 96 raymarch steps x (hall + deployed machinery + portal +
-// shaft + cage + 6 quaternion-rotated debris boxes + 8 folding cubes), plus four
-// height-field evaluations for the bump normal at the hit. The bounding-sphere
-// rejects, the ceiling test that skips the whole corridor while you are up the
-// shaft, and the shaft/span distance gates keep the common case near the cost of
-// the corridor alone. ~1 draw call, no textures, no render targets.
+// perf: expensive. 96 raymarch steps x (hall + deployed machinery + props +
+// portal + shaft + cage + 6 quaternion-rotated debris boxes + 8 folding cubes),
+// the steam and the leaks gathered along the way, then nine texture reads for
+// the triplanar Δ material at the hit. The bounding-sphere rejects, the ceiling
+// test that skips the whole corridor while you are up the shaft, and the
+// shaft/span distance gates keep the common case near the cost of the corridor
+// alone. One draw call, three texture arrays, no render targets.

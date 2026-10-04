@@ -1,10 +1,12 @@
 import { HASH11, HASH21 } from '@wjh/glsl/hash'
 import { ROT, SD_BOX, SD_BOX2 } from '@wjh/glsl/sdf'
 import { fbm2, valueNoise2 } from '@wjh/glsl/noise'
+import { ACES } from '@wjh/glsl/color'
 
 
 export const foundationGlsl = `
   precision highp float;
+  out vec4 fragColor;
   uniform vec2 iResolution;
   uniform float iTime;
   uniform vec2 uPointer;
@@ -72,6 +74,7 @@ export const foundationGlsl = `
   ${valueNoise2('hash21')}
   ${fbm2({ octaves: 'FBM_OCTAVES', next: 'p *= 2.03;' })}
   ${ROT}
+  ${ACES}
 
   // Rotate v by quaternion q / by its inverse. Used to bring a world-space
   // sample point into each debris body's local frame.
@@ -99,6 +102,13 @@ export const foundationGlsl = `
   float cageA() { return uCage.z; }
   float spark() { return uSim.z; }
   float decay() { return uWalk.z; }
+  // What the eye is shown of it. decay() is the geometry's (the corridor's
+  // squeeze has to agree with the walker's); this is the one the cracks, the
+  // leaks, the lamps and the grade use, and it does not wait: from the second
+  // lap on the place is visibly coming apart.
+  float decayVis() { return clamp(max(uWalk.z * 3.2, (uWalk.y - 0.6) * 0.36), 0.0, 0.85); }
+  // The red leaking through the split plate into the air, from the second lap.
+  float leakI() { return smoothstep(0.75, 1.25, uWalk.y) * (1.5 + 2.0 * clamp(uWalk.y - 1.0, 0.0, 2.0)); }
   float walkZ() { return uWalk.x; }
   float riding() { return uRide.x; }
   float shutter() { return uRide.y; }

@@ -1,13 +1,13 @@
 // The journey, declared once: its page and the bare harness both run this.
 
-import { defineJourney, shaderRenderer } from '@wjh/journey/definition'
+import { defineJourney, passRenderer } from '@wjh/journey/definition'
 import { createFoundrySimulation } from './kinematics'
-import { foundryFrag } from './shader'
+import { createFoundryRenderer } from './renderer'
 
 
 const foundry = defineJourney({
   slug:             'foundry',
-  renderer:         shaderRenderer(foundryFrag),
+  renderer:         passRenderer(createFoundryRenderer),
   createSimulation: createFoundrySimulation,
 })
 

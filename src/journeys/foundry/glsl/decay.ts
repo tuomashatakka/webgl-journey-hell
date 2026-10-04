@@ -21,9 +21,9 @@ export const decayGlsl = `  // ========================== THE DECAY ============
     if (d < 0.05) return 0.0;
     float veins = sin(p.x * 3.5 + cos(p.z * 4.5)) * cos(p.z * 3.1 + sin(p.y * 4.0));
     float edge = smoothstep(mix(0.004, 0.11, d), 0.0, abs(veins));
-    float patch = smoothstep(0.1, 0.5,
+    float blot = smoothstep(0.1, 0.5,
       sin(p.x * 0.35) * cos(p.z * 0.45) * sin(p.y * 0.25) + d * 0.35);
-    return edge * patch * d;
+    return edge * blot * d;
   }
 
   /**

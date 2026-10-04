@@ -27,7 +27,7 @@ export const hallsGlsl = `  // ============================ GEOMETRY ===========
     float band = floor(p.z / sp);
     float lz = p.z - (band + 0.5) * sp;
     float side = mod(band, 2.0) * 2.0 - 1.0;
-    float dead = step(hash11(band * 3.17 + 11.0), decay() * 0.38);
+    float dead = step(hash11(band * 3.17 + 11.0), decayVis() * 0.38);
     float dep = deployStation((band + 0.5) * sp);
     vec3 lp = vec3(p.x - side * (W - 0.22), p.y - (H - 0.62), lz);
     float bulb = sdCylX(lp, 0.17, 0.14);
