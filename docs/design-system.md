@@ -18,7 +18,7 @@ Small on purpose: tokens, a handful of rules, and the tooling that enforces them
 ### State and effects
 
 * A component has no `useState` and no `useEffect`. Put them in a hook named `use-<thing>.ts` in `src/hooks/`, or in a provider.
-* A hook does one job and returns what the view needs: `useOpening` (the opening flags), `usePauseKey`, `useMounted`, `useSampled` (a slow readout), `useAssetCanvas`, `useJourneyRuntime`.
+* A hook does one job and returns what the view needs: `useOpening` (the opening flags), `useJourneyKeys` (the keyboard), `useTooltip`, `useDialogFocus`, `useMounted`, `useSampled` (a slow readout), `useAssetCanvas`, `useJourneyRuntime`.
 * `useEffect` is for subscribing to something outside React (a listener, an interval, a ResizeObserver) and must return its cleanup. If an effect only derives a value, compute the value instead.
 * `useLatestRef` mirrors a changing value for long-lived callbacks (the engine is created once and reads settings through a ref).
 * Per-frame data never goes through `setState`.
@@ -49,7 +49,7 @@ Add a token before adding a literal colour. Spacing is multiples of 4 px; the HU
 
 ### Stylesheets (`src/app/styles/`)
 
-One file per concern, imported in cascade order by `layout.tsx`: `base` (page, canvas, title card, loader), `debug`, `settings`, `index` (grid), `transport` (the deck, fullscreen, footer gear), `assets`. A class or id exists in CSS if and only if a component uses it; there are no orphaned stylesheets.
+One file per concern, imported in cascade order by `layout.tsx`: `base` (page, canvas, title card, loader), `debug`, `settings` (the panel), `index` (grid), `toolbar`, `transport` (the deck, fullscreen), `assets`. A class or id exists in CSS if and only if a component uses it; there are no orphaned stylesheets.
 
 ### Components
 
@@ -59,12 +59,18 @@ One file per concern, imported in cascade order by `layout.tsx`: `base` (page, c
 | `JourneyTransport` | the tape deck; chapters, laps, scrubbing |
 | `JourneyLoader`, `GlitchTitle` | the opening: the bar, the title card, section headings |
 | `SettingsProvider` | graphics settings state, persisted |
-| `SettingsButton`, `SettingsView` | the settings panel and its trigger |
+| `JourneyToolbar`, `ToolbarButton` | the top bar and its icon buttons with tooltips |
+| `SettingsButton`, `SettingsView` | the settings panel (an aside over a backdrop) and its trigger |
+| `JourneyKeys`, `JourneyRuntimeContext` | the keyboard, and the runtime for everything under the shell |
 | `JourneyGrid`, `JourneyCard`, `ShaderPreviewLayer` | the index and its single shared preview canvas |
 | `AssetBrowser` | the Δ page |
 | `JourneyDebugPanel` | the `?debug=1` overlay |
 
 ### Chrome rules
+
+* The toolbar is at the top. Its buttons are icon-only inline SVG (`lucide-react` renders inline SVG, never an icon font), each with an `aria-label` and a tooltip; add a control by adding a `ToolbarButton`, not by writing a new absolutely positioned button.
+* A modal panel is an `<aside role="dialog" aria-modal>` over a fixed backdrop, portalled to the body, with its focus contract from `use-dialog-focus`.
+* Components under the journey shell read the runtime from `JourneyRuntimeContext` instead of taking it as props.
 
 * All chrome carries the `hud` class: it fades in fullscreen and under `?hud=0`, and takes no pointer events while hidden.
 * Controls are real `<button>` and `<a>` elements, with an accessible name, a visible `:focus-visible` ring and a hit area a finger can reach.

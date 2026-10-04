@@ -1,5 +1,4 @@
 :root {
-
   /* Design tokens. Per-journey colour arrives as --accent (set inline by the
      shell and the cards); everything else is one palette, defined here. */
   --signal:     #00ffaa;   /* the UI's own green: labels, focus rings, readouts */
@@ -11,6 +10,7 @@
   --hud-row:    84px;      /* height reserved for the bottom transport row */
   --font-mono:  monospace;
 }
+
 
 * {
   box-sizing:   border-box;
@@ -213,43 +213,4 @@
   .jl-bar::after {
     display: none;
   }
-}
-
-
-#fullscreen-btn {
-  position:         absolute;
-  bottom:           var(--hud-row, 84px);
-  left:             20px;
-  background:       rgba(0, 0, 0, 0.6);
-  border:           1px solid rgba(255, 255, 255, 0.25);
-  color:            #fff;
-  font-family:      var(--font-mono);
-  font-size:        11px;
-  letter-spacing:   2px;
-  padding:          8px 16px;
-  cursor:           pointer;
-  z-index:          10;
-  outline:          none;
-  transition:       all 0.2s ease;
-}
-
-
-#fullscreen-btn:hover {
-  background:     #fff;
-  color:          #000;
-  border-color:   #fff;
-}
-
-
-#fps-display {
-  position:         absolute;
-  bottom:           var(--hud-row, 84px);
-  right:            20px;
-  color:            rgba(255, 255, 255, 0.45);
-  font-family:      var(--font-mono);
-  font-size:        11px;
-  letter-spacing:   1px;
-  pointer-events:   none;
-  z-index:          10;
-  transition:       opacity 0.35s ease;
 }

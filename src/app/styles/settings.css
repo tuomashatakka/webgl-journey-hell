@@ -1,3 +1,89 @@
+/* ---- the settings panel: an aside on the right, over a backdrop --------- */
+/* The backdrop is a fixed full-viewport layer: any click that lands on it
+   closes the panel. The panel sits above it, fixed to the right edge. */
+#settings-backdrop {
+  position:           fixed;
+  inset:              0;
+  z-index:            50;
+  background:         rgba(0, 0, 0, 0.55);
+  backdrop-filter:    blur(3px);
+}
+
+
+#settings-panel {
+  position:           fixed;
+  top:                0;
+  right:              0;
+  bottom:             0;
+  z-index:            51;
+  width:              min(100vw, 420px);
+  display:            flex;
+  flex-direction:     column;
+  padding:            max(20px, env(safe-area-inset-top)) 24px 20px;
+  background:         #0d0e12;
+  border-left:        1px solid var(--line);
+  box-shadow:         -12px 0 40px rgba(0, 0, 0, 0.7);
+  color:              #fff;
+  text-align:         left;
+  outline:            none;
+  overflow:           hidden;
+  animation:          settings-in 0.18s ease-out;
+}
+
+
+@keyframes settings-in {
+  from {
+    transform: translateX(24px);
+    opacity:   0;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  #settings-panel {
+    animation: none;
+  }
+}
+
+
+#settings-header {
+  display:            flex;
+  align-items:        center;
+  justify-content:    space-between;
+  border-bottom:      1px solid var(--line);
+  padding-bottom:     12px;
+  margin-bottom:      20px;
+}
+
+
+#settings-title {
+  font-family:        var(--font-mono);
+  font-size:          14px;
+  font-weight:        bold;
+  letter-spacing:     2px;
+  color:              var(--signal);
+}
+
+
+#settings-close-btn {
+  display:            grid;
+  place-items:        center;
+  width:              36px;
+  height:             36px;
+  background:         transparent;
+  border:             1px solid transparent;
+  color:              rgba(255, 255, 255, 0.6);
+  cursor:             pointer;
+  transition:         color 0.2s ease, border-color 0.2s ease;
+}
+
+
+#settings-close-btn:hover {
+  color:              #fff;
+  border-color:       var(--line);
+}
+
+
 /* BRIGHTNESS SLIDER STYLES */
 .settings-slider-row {
   display:    block;
@@ -50,4 +136,173 @@
   vertical-align:   middle;
   width:            45px;
   text-align:       left;
+}
+
+
+/* ---- the panel's groups and controls ----------------------------------- */
+
+#settings-close-btn:focus-visible,
+.settings-choice-btn:focus-visible,
+.settings-slider:focus-visible {
+  outline:        2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+
+#settings-body {
+  flex:               1;
+  min-height:         0;
+  overflow-y:         auto;
+  scrollbar-gutter:   stable;
+}
+
+
+.settings-group {
+  display:         block;
+  outline:         none;
+  border:          1px solid var(--panel);
+  padding:         16px;
+  margin-bottom:   16px;
+  background:      rgba(0, 0, 0, 0.2);
+}
+
+
+.settings-label {
+  font-family:      var(--font-mono);
+  font-size:        11px;
+  letter-spacing:   1.5px;
+  color:            rgba(255, 255, 255, 0.7);
+  padding:          0 8px;
+}
+
+
+.settings-description {
+  font-family:     var(--font-mono);
+  font-size:       10px;
+  line-height:     1.5;
+  color:           rgba(255, 255, 255, 0.4);
+  margin-top:      4px;
+  margin-bottom:   12px;
+}
+
+
+.settings-choices {
+  display: block;
+}
+
+
+.settings-choice-btn {
+  display:         inline-block;
+  background:      var(--panel-deep);
+  border:          1px solid var(--line);
+  color:           rgba(255, 255, 255, 0.7);
+  font-family:     var(--font-mono);
+  font-size:       11px;
+  padding:         6px 12px;
+  margin-right:    8px;
+  margin-bottom:   8px;
+  cursor:          pointer;
+  transition:      all 0.2s ease;
+}
+
+
+.settings-choice-btn:hover {
+  background:     rgba(0, 255, 170, 0.05);
+  border-color:   var(--signal);
+  color:          #fff;
+}
+
+
+.settings-choice-btn.active {
+  background:     var(--signal);
+  border-color:   var(--signal);
+  color:          #000;
+  font-weight:    bold;
+}
+
+
+.settings-toggle-container {
+  display:    block;
+  margin-top: 4px;
+}
+
+
+.settings-switch-label {
+  display:        inline-block;
+  cursor:         pointer;
+  position:       relative;
+  padding-left:   28px;
+  min-height:     18px;
+  line-height:    18px;
+  user-select:    none;
+}
+
+
+.settings-switch-label input {
+  position:   absolute;
+  opacity:    0;
+  cursor:     pointer;
+  height:     0;
+  width:      0;
+}
+
+
+.settings-custom-checkbox {
+  position:           absolute;
+  top:                1px;
+  left:               0;
+  height:             16px;
+  width:              16px;
+  background-color:   var(--panel-deep);
+  border:             1px solid var(--line);
+  transition:         all 0.2s ease;
+}
+
+
+.settings-switch-label:hover input ~ .settings-custom-checkbox {
+  border-color: var(--signal);
+}
+
+
+.settings-switch-label:has(input:focus-visible) .settings-custom-checkbox {
+  outline:        2px solid var(--signal);
+  outline-offset: 3px;
+}
+
+
+.settings-switch-label input:checked ~ .settings-custom-checkbox {
+  background-color: var(--signal);
+  border-color:     var(--signal);
+}
+
+
+.settings-custom-checkbox::after {
+  content:    "";
+  position:   absolute;
+  display:    none;
+}
+
+
+.settings-switch-label input:checked ~ .settings-custom-checkbox::after {
+  display: block;
+}
+
+
+.settings-switch-label .settings-custom-checkbox::after {
+  left:           5px;
+  top:            2px;
+  width:          4px;
+  height:         8px;
+  border:         solid #000;
+  border-width:   0 2px 2px 0;
+  transform:      rotate(45deg);
+}
+
+
+.settings-switch-text {
+  font-family:      var(--font-mono);
+  font-size:        11px;
+  color:            rgba(255, 255, 255, 0.82);
+  display:          inline-block;
+  vertical-align:   middle;
 }

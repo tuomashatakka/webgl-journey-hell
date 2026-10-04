@@ -18,6 +18,7 @@
 
 import { CONFIG } from '@wjh/config/config'
 import { clamp, easeInOutCubic } from '@wjh/math/scalar'
+import { stepLookOffset } from './keymap'
 
 
 export interface PanVector {
@@ -61,6 +62,13 @@ export interface PanControl {
 
   /** Adopt the current device pose as the neutral, centered one. */
   recenter: () => void;
+
+  /**
+   * Hold the look keys: a direction per axis (-1..1, y up) the offset is pushed
+   * toward, in output space — +x looks right whatever the pointer inversion.
+   * (0, 0) lets it ease back.
+   */
+  look: (x: number, y: number) => void;
 
   /** Detach every listener. */
   dispose: () => void;
@@ -125,6 +133,8 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
   const gyroRaw          = { x: 0, y: 0 }
   const gyro             = { x: 0, y: 0 }
   const value: PanVector = { x: 0, y: 0 }
+  const lookHeld         = { x: 0, y: 0 }
+  const lookOffset       = { x: 0, y: 0 }
 
   // Jump tween: eases from `fromX/fromY` toward the *live* target, so a drag
   // that continues after a sudden jump keeps tracking instead of stuttering.
@@ -262,8 +272,12 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
     gyro.x += (gyroRaw.x - gyro.x) * gyroLerp
     gyro.y += (gyroRaw.y - gyro.y) * gyroLerp
 
-    const targetX = clamp(pointer.x + gyro.x, -1, 1)
-    const targetY = clamp(pointer.y + gyro.y, -1, 1)
+    // Held keys are a third input beside the pointer and the gyro.
+    lookOffset.x = stepLookOffset(lookOffset.x, lookHeld.x, step)
+    lookOffset.y = stepLookOffset(lookOffset.y, lookHeld.y, step)
+
+    const targetX = clamp(pointer.x + gyro.x + lookOffset.x, -1, 1)
+    const targetY = clamp(pointer.y + gyro.y + lookOffset.y, -1, 1)
 
     const dx       = targetX - value.x
     const dy       = targetY - value.y
@@ -306,6 +320,10 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
     },
     update,
     recenter,
+    look (x, y) {
+      lookHeld.x = x
+      lookHeld.y = y
+    },
     dispose () {
       disposed = true
       detachers.forEach(off => off())

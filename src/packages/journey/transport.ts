@@ -78,6 +78,9 @@ export interface JourneyTransport {
   /** Jump by structure. Ignored mid-scrub. */
   request(action: TransportAction): void;
 
+  /** Seek `seconds` from now (negative goes back). Ignored mid-scrub. */
+  skip(seconds: number): void;
+
   /**
    * Move the playhead to `fraction` (0..1) of the current lap. Called on every
    * pointer move; applied at most once per frame, on the next `tick`.
@@ -313,6 +316,33 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
           break
         }
       }
+    },
+
+    skip (seconds) {
+      if (scrubbing)
+        return
+
+      const { time } = host.current()
+      if (seconds < 0) {
+        if (time <= 1e-6)
+          return
+        seekTo(time + seconds)
+        flash(-1)
+        return
+      }
+
+      const until = time + seconds
+      let steps   = 0
+      while (host.current().time < until && steps++ < CONFIG.transport.maxSeekSteps) {
+        host.advance(CONFIG.transport.searchDt)
+
+        const now = marksOf()
+        if (now)
+          record(host.current().time, now)
+        if (now?.terminal)
+          break
+      }
+      flash(1)
     },
 
     scrub (fraction) {

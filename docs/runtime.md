@@ -114,6 +114,28 @@ A journey's page opens in three beats, none of them under `?t=` or `?hud=0`:
    the middle entirely; the section stays named on the transport, next to the play
    state.
 
+## Keyboard
+
+Bound on `window` by `JourneyKeys` (`src/hooks/use-journey-keys.ts`) while the journey is live (not under `?t=`, and not during the opening). The key map is `CONFIG.keys` (physical key codes); what a press means is `@wjh/web/keymap`. A key whose target is a field, a slider or an open dialog is left alone; every key that is handled is `preventDefault`-ed.
+
+| key | does |
+| --- | --- |
+| Space | pause / resume (acts on keydown; keyup is swallowed so a focused button is not clicked too) |
+| ArrowLeft / ArrowRight | seek back / forward `CONFIG.keys.seekSeconds` (5 s) |
+| Meta + ArrowLeft / ArrowRight | previous / next loop. "Loop" is the transport's lap (`prev-lap` / `next-lap`). Checked before the plain arrows |
+| 1 2 3 4 | playback speed 0.5, 1, 1.5, 2 (the same values the settings panel offers) |
+| W A S D | look around: up, left, down, right |
+
+Seeking forward steps the live simulation; seeking back replays a fresh one (`transport.skip`), like every other jump. Looking is a third input to the pan control beside the pointer and the gyroscope: held keys push the offset toward `CONFIG.keys.lookLimit` at `lookPushRate` and it eases back at `lookReturnRate` on release. The offset is added in output space, so D looks right regardless of the pointer inversion.
+
+`?debug=1` publishes `window.__journeyDebug` every live frame with `time`, `paused`, `speed` and `pan` (the look input as the shaders receive it), which is how every binding is checked from a driver.
+
+## The toolbar and the settings panel
+
+The top bar (`JourneyToolbar`) holds the back link, mute (journeys with a soundtrack), fullscreen and settings, then the FPS readout. Every button is an inline SVG icon with an `aria-label` and a tooltip (`ToolbarButton`): a manual popover anchored to the button with CSS anchor positioning where the browser supports it, a plain CSS tooltip otherwise. It shows on hover and on keyboard focus. The bar is `.hud`, so fullscreen hides it and keyboard focus brings it back; at phone width the buttons keep a 40 px hit area and the bar respects the safe-area insets.
+
+The settings panel is an `<aside role="dialog">` fixed to the right edge over a fixed full-viewport backdrop, portalled to the body so nothing on the page can sit above it. A click on the backdrop closes it, Esc closes it, focus moves in on open, Tab is trapped inside it and focus returns to the gear (`use-dialog-focus`).
+
 ## The transport, and the CRT
 
 Every journey carries a tape deck (`src/components/JourneyTransport`), driven by

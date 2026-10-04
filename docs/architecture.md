@@ -41,8 +41,8 @@ A journey page is a loop with one direction. Nothing in the UI reaches into the 
 
 ```
 settings (SettingsProvider, localStorage)  --\
-pan input (pointer, touch, gyro, keys)     ---+-->  EngineHost  -->  createJourneyEngine(definition, host)
-transport actions (buttons, keys, scrub)   --/                         |
+pan input (pointer, touch, gyro, look keys)     ---+-->  EngineHost  -->  createJourneyEngine(definition, host)
+transport actions (buttons, keys, seek, scrub)   --/                         |
                                                                        v
                                        frame loop tick --> engine.frame(dt)
                                                            simulation.step -> uniforms -> renderer -> canvas
@@ -56,7 +56,7 @@ transport actions (buttons, keys, scrub)   --/                         |
 
 * `src/packages/journey/engine.ts` (`createJourneyEngine`) owns the GL context, renderer, simulation and its clock, transport, pause, governor, CRT pass, signal-loss overlay and loading stages. It is framework-free and testable without a DOM framework.
 * `src/hooks/use-journey-runtime.ts` is the glue: it builds the `EngineHost` from the settings, the pan control and the transport ref, forwards the frame loop's ticks, and exposes the few facts the view displays. Per-frame readouts (FPS, the transport tape) are written to the DOM through refs, never through React state.
-* `src/components/withJourneyShell.tsx` is the view: canvas, HUD, transport, overlays. Its flags (`useOpening`), pause key (`usePauseKey`) and mount check (`useMounted`) are hooks.
+* `src/components/withJourneyShell.tsx` is the view: canvas, HUD, transport, overlays. Its flags (`useOpening`) and mount check (`useMounted`) are hooks; the keyboard is `JourneyKeys`; the runtime reaches the toolbar, the transport and the keys through `JourneyRuntimeContext`, not through props.
 * Two frame paths. **Live**: the transport observes, the simulation steps on the speed-scaled delta, the governor moves the render scale, audio follows the uniforms. **Frozen** (`?t=`): seek once, redraw that instant every frame; no integration, no audio, no governor. The frame is a pure function of the URL, which is what every shot and probe relies on.
 
 ## State rules

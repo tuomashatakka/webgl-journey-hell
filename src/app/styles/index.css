@@ -205,29 +205,3 @@ html, body {
   border-color: var(--accent, var(--signal));
   color:        var(--accent, var(--signal));
 }
-
-
-/* Back-to-index link reused across journey routes (top-left). */
-#back-btn {
-  position:          absolute;
-  top:               20px;
-  left:              20px;
-  background:        rgba(0, 0, 0, 0.6);
-  border:            1px solid rgba(255, 255, 255, 0.25);
-  color:             #fff;
-  font-family:       var(--font-mono);
-  font-size:         11px;
-  letter-spacing:    2px;
-  padding:           8px 16px;
-  text-decoration:   none;
-  cursor:            pointer;
-  z-index:           10;
-  transition:        all 0.2s ease;
-}
-
-
-#back-btn:hover {
-  background:     #fff;
-  color:          #000;
-  border-color:   #fff;
-}

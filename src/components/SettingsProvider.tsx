@@ -9,6 +9,7 @@
 import {
   createContext,
   useContext,
+  useCallback,
   useEffect,
   useMemo,
   useState
@@ -64,15 +65,11 @@ export function SettingsProvider ({ children }: SettingsProviderProps) {
     frameLoopManager.resume()
   }, [])
 
-  const api = useMemo<SettingsAPI>(
-    () => ({
-      settings,
-      setSettings,
-      // Functional update sees the latest state without a render-time ref.
-      update: patch => setSettings(prev => ({ ...prev, ...patch })),
-    }),
-    [ settings ],
-  )
+  // Functional update sees the latest state without a render-time ref, and
+  // keeps its identity so key bindings are not rebound on every change.
+  const update = useCallback((patch: Partial<GraphicsSettings>) => setSettings(prev => ({ ...prev, ...patch })), [])
+
+  const api = useMemo<SettingsAPI>(() => ({ settings, setSettings, update }), [ settings, update ])
 
   return <SettingsCtx.Provider value={ api }>{children}</SettingsCtx.Provider>
 }

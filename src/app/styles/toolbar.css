@@ -1,0 +1,191 @@
+/* ---- the journey toolbar, and the tooltip every icon button carries ------- */
+/* components/JourneyToolbar, ToolbarButton. The bar is the top row of the
+   page: icons only, each named by aria-label and by a tooltip. */
+
+#journey-toolbar {
+  position:         absolute;
+  top:              0;
+  left:             0;
+  right:            0;
+  z-index:          10;
+  display:          flex;
+  align-items:      center;
+  gap:              8px;
+  padding:          max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left));
+  pointer-events:   none;
+  transition:       opacity 0.35s ease;
+}
+
+
+#journey-toolbar > * {
+  pointer-events: auto;
+}
+
+
+.tb-spacer {
+  flex: 1;
+}
+
+
+.tb-item {
+  position:       relative;
+  display:        inline-flex;
+  anchor-name:    var(--tb-anchor);
+}
+
+
+.tb-btn {
+  display:            grid;
+  place-items:        center;
+  width:              40px;
+  height:             40px;
+  padding:            0;
+  background:         rgba(0, 0, 0, 0.6);
+  border:             1px solid rgba(255, 255, 255, 0.25);
+  color:              #fff;
+  text-decoration:    none;
+  cursor:             pointer;
+  transition:         background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+
+.tb-btn:hover,
+.tb-btn:focus-visible {
+  background:     #fff;
+  color:          #000;
+  border-color:   #fff;
+}
+
+
+.tb-btn:focus-visible {
+  outline:          2px solid var(--signal);
+  outline-offset:   2px;
+}
+
+
+.tb-btn[aria-pressed="true"] {
+  color:          var(--accent, var(--signal));
+  border-color:   var(--accent, var(--signal));
+}
+
+
+.tb-btn[aria-pressed="true"]:hover,
+.tb-btn[aria-pressed="true"]:focus-visible {
+  color: #000;
+}
+
+
+#fps-display {
+  padding-left:     4px;
+  color:            rgba(255, 255, 255, 0.45);
+  font-family:      var(--font-mono);
+  font-size:        11px;
+  letter-spacing:   1px;
+  white-space:      nowrap;
+  pointer-events:   none;
+}
+
+
+/* The tooltip. Hidden until shown; the box is the same either way. */
+.tb-tip {
+  display:          none;
+  margin:           0;
+  padding:          4px 8px;
+  overflow:         visible;
+  background:       #000;
+  color:            #fff;
+  border:           1px solid var(--line);
+  font-family:      var(--font-mono);
+  font-size:        11px;
+  letter-spacing:   1px;
+  white-space:      nowrap;
+  pointer-events:   none;
+}
+
+
+/* Anchored popover: top layer, placed against its button. data-align says which
+   edge of the button the tooltip lines up with, so one at the edge of the screen
+   grows inward instead of off it. */
+@supports (anchor-name: --a) and (position-area: bottom) {
+  .tb-tip {
+    position:         absolute;
+    inset:            auto;
+    position-anchor:  var(--tb-anchor);
+    position-area:    bottom;
+    margin-top:       8px;
+  }
+
+  .tb-item[data-align="start"] .tb-tip {
+    position-area: bottom span-right;
+  }
+
+  .tb-item[data-align="end"] .tb-tip {
+    position-area: bottom span-left;
+  }
+
+  .tb-item[data-side="top"] .tb-tip {
+    position-area:  top;
+    margin-top:     0;
+    margin-bottom:  8px;
+  }
+
+  .tb-item[data-side="top"][data-align="start"] .tb-tip {
+    position-area: top span-right;
+  }
+
+  .tb-item[data-side="top"][data-align="end"] .tb-tip {
+    position-area: top span-left;
+  }
+
+  .tb-tip:popover-open {
+    display: block;
+  }
+}
+
+
+/* No anchor positioning: a plain CSS tooltip under (or over) the button. */
+@supports not ((anchor-name: --a) and (position-area: bottom)) {
+  .tb-tip {
+    position:     absolute;
+    top:          calc(100% + 8px);
+    left:         50%;
+    transform:    translateX(-50%);
+    z-index:      60;
+  }
+
+  .tb-item[data-align="start"] .tb-tip {
+    left:       0;
+    transform:  none;
+  }
+
+  .tb-item[data-align="end"] .tb-tip {
+    left:       auto;
+    right:      0;
+    transform:  none;
+  }
+
+  .tb-item[data-side="top"] .tb-tip {
+    top:      auto;
+    bottom:   calc(100% + 8px);
+  }
+
+  .tb-item:hover .tb-tip,
+  .tb-item:has(:focus-visible) .tb-tip {
+    display: block;
+  }
+}
+
+
+/* The index page: the gear sits at the foot of the document. */
+.index-footer .tb-item {
+  display:    flex;
+  width:      fit-content;
+  margin:     18px auto 0;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .tb-btn {
+    transition: none;
+  }
+}

@@ -1,6 +1,6 @@
 'use client'
 
-// React wrapper around lib/panControl — pointer + gyroscope view panning with
+// React wrapper around @wjh/web/panControl — pointer + gyroscope view panning with
 // jump tweening. Every journey drives `uPointer` from this, so the input feel
 // (and the iOS orientation-permission dance) lives in exactly one place.
 //
@@ -28,6 +28,9 @@ interface PanControlHandle {
 
   /** Adopt the device's current pose as the neutral one. */
   recenterPan: () => void;
+
+  /** Hold the look keys: a direction per axis, -1..1, y up. (0, 0) releases. */
+  lookPan: (x: number, y: number) => void;
 }
 
 function usePanControl (options: PanControlOptions = {}): PanControlHandle {
@@ -69,7 +72,9 @@ function usePanControl (options: PanControlOptions = {}): PanControlHandle {
 
   const recenterPan = useCallback(() => controlRef.current?.recenter(), [])
 
-  return { pointerRef, updatePan, recenterPan }
+  const lookPan = useCallback((x: number, y: number) => controlRef.current?.look(x, y), [])
+
+  return { pointerRef, updatePan, recenterPan, lookPan }
 }
 
 export default usePanControl

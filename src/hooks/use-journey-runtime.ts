@@ -60,11 +60,18 @@ export interface JourneyRuntime {
   paused:      boolean;
   togglePause: () => void;
 
+  /** The journey has a soundtrack, so the toolbar shows a mute button. */
+  hasAudio: boolean;
+
+  /** Hold the look keys: a direction per axis, -1..1, y up. (0, 0) releases. */
+  look: (x: number, y: number) => void;
+
   audio:            AudioEngineHandle<JourneyAudioEngine>;
   fullscreen:       boolean;
   toggleFullscreen: () => void;
 
   act:     (action: TransportAction) => void;
+  skip:    (seconds: number) => void;
   scrub:   (fraction: number) => void;
   release: () => void;
 
@@ -96,7 +103,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
   // from the pointer sideways — pointer (or phone) to the right, and it turns
   // left — and follows it up and down. The shaders all look *toward* uPointer,
   // so the one inversion lives here rather than in each of them.
-  const { pointerRef, updatePan } = usePanControl({ gyroscope: settings.gyroscope, invertX: true })
+  const { pointerRef, updatePan, lookPan } = usePanControl({ gyroscope: settings.gyroscope, invertX: true })
 
   // An engine built while paused (the first unmute) starts out paused, so its
   // context is never resumed only to be suspended a moment later.
@@ -162,6 +169,9 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     fullscreen:       fullscreen.isFullscreen,
     toggleFullscreen: fullscreen.toggle,
     act:              engine.act,
+    skip:             engine.skip,
+    hasAudio:         !!definition.createAudio,
+    look:             lookPan,
     scrub:            engine.scrub,
     release:          engine.release,
     debugState:       engine.debugState,

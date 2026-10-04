@@ -53,6 +53,40 @@ export const CONFIG = {
     maxDelta: 0.1,
   },
 
+  /**
+   * The keyboard. Codes are physical keys (KeyboardEvent.code), so the layout
+   * does not matter. Meta+Arrow is checked before the plain arrows.
+   */
+  keys: {
+
+    /** Seconds one arrow press seeks. */
+    seekSeconds: 5,
+
+    /** Space. */
+    pause: [ 'Space' ] as string[],
+
+    /** Arrow → direction of the seek. */
+    seek: { ArrowLeft: -1, ArrowRight: 1 } as Record<string, number>,
+
+    /** With Meta held: previous / next loop (the lap, in the transport's terms). */
+    loop: { ArrowLeft: 'prev-lap', ArrowRight: 'next-lap' } as Record<string, 'prev-lap' | 'next-lap'>,
+
+    /** Digit → playback speed; the same values the settings panel offers. */
+    speed: { Digit1: 0.5, Digit2: 1, Digit3: 1.5, Digit4: 2 } as Record<string, number>,
+
+    /** WASD → direction of the look offset, x right and y up. */
+    look: { KeyW: [ 0, 1 ], KeyA: [ -1, 0 ], KeyS: [ 0, -1 ], KeyD: [ 1, 0 ]} as Record<string, readonly [number, number]>,
+
+    /** How far held keys push the view, in the -1..1 pan range. */
+    lookLimit: 0.55,
+
+    /** 1/s: how fast the offset builds while a key is held. */
+    lookPushRate: 7,
+
+    /** 1/s: how fast it eases back once released. */
+    lookReturnRate: 4,
+  },
+
   frameLoop: {
 
     /** How early (ms) a capped frame may arrive and still run. */
@@ -182,7 +216,7 @@ export const CONFIG = {
 
     /** Allowed discrete choices surfaced in the settings UI. */
     resolutionChoices: [ AUTO_RESOLUTION, 0.15, 0.33, 0.5, 0.75, 1 ] as const,
-    speedChoices:      [ 1, 2, 4 ] as const,
+    speedChoices:      [ 0.5, 1, 1.5, 2 ] as const,
     frameRateChoices:  [ 30, 60, 120, 0 ] as const, // 0 = Unlimited
   },
 

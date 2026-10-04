@@ -31,7 +31,7 @@ export default function IndexPage () {
 
     <footer className="index-footer">
       <span>{`// ${process.env.NODE_ENV === 'production' ? 'live' : 'dev'} — hover a tile to wake it, stills stand in where it can't`}</span>
-      <SettingsButton />
+      <SettingsButton side="top" />
     </footer>
   </main>
 }

@@ -118,10 +118,15 @@ export interface JourneyDebugState {
   seeking: boolean;
 
   /** True once the seeked frame has actually been drawn. */
-  ready:    boolean;
-  width:    number;
-  height:   number;
-  fps:      number;
+  ready:  boolean;
+  width:  number;
+  height: number;
+  fps:    number;
+  paused: boolean;
+  speed:  number;
+
+  /** The look input the shaders receive as uPointer, x right and y up. */
+  pan:      [number, number];
   uniforms: Record<string, number | number[]>;
 }
 

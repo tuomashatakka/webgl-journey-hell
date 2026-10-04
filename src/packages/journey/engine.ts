@@ -134,6 +134,7 @@ export interface JourneyEngine {
   togglePause(): void;
 
   act(action: TransportAction): void;
+  skip(seconds: number): void;
   scrub(fraction: number): void;
   release(): void;
 
@@ -343,6 +344,9 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
     width:    size.w,
     height:   size.h,
     fps:      fps.value,
+    paused,
+    speed:    host.settings().speed,
+    pan:      [ host.pan.pointer().x, host.pan.pointer().y ],
     uniforms: debugUniforms,
   })
 
@@ -603,9 +607,14 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
       paused = !paused
       host.onPaused(paused)
       host.audio()?.setPaused?.(paused)
+
+      // A held frame draws nothing, so nothing else would tell the debug readout.
+      if (host.debug().debug)
+        publishDebugState(debugState())
     },
 
     act:     action => transport.request(action),
+    skip:    seconds => transport.skip(seconds),
     scrub:   fraction => transport.scrub(fraction),
     release: () => transport.release(),
     debugState,

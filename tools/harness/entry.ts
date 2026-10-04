@@ -41,7 +41,7 @@ declare global {
 }
 
 function publishStatus (journey: string, label: string, width = 0, height = 0): void {
-  publishDebugState({ journey, time: 0, label, seeking: true, ready: true, width, height, fps: 0, uniforms: {}})
+  publishDebugState({ journey, time: 0, label, seeking: true, ready: true, width, height, fps: 0, paused: false, speed: 1, pan: [ 0, 0 ], uniforms: {}})
 }
 
 /** Compile every registry preview shader; one error line per failure. */
@@ -142,6 +142,9 @@ async function main (): Promise<void> {
     width:    canvas.width,
     height:   canvas.height,
     fps:      0,
+    paused:   false,
+    speed:    1,
+    pan:      [ 0, 0 ],
     uniforms: custom,
   })
 }

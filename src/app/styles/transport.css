@@ -235,13 +235,6 @@
             "state   state";
     column-gap: 10px;
   }
-
-  /* The readout would run into the buttons on the HUD row; the top right
-       corner is free. */
-  #fps-display {
-    top:    28px;
-    bottom: auto;
-  }
 }
 
 
@@ -256,15 +249,13 @@
 /* Every piece of chrome fades and stops taking the pointer — the pointer is
    for looking around. Keyboard focus brings a control back, so tabbing to one
    still shows it; Esc leaves fullscreen and brings them all back. */
-#app-container[data-fullscreen] .hud,
-#app-container[data-fullscreen] #settings-btn {
+#app-container[data-fullscreen] .hud {
   opacity:        0;
   pointer-events: none;
 }
 
 
-#app-container[data-fullscreen] .hud:focus-visible,
-#app-container[data-fullscreen] #settings-btn:focus-visible {
+#app-container[data-fullscreen] .hud:focus-visible {
   opacity: 1;
 }
 
@@ -272,17 +263,4 @@
 /* Separate: a browser without :has() drops only this rule, not the above. */
 #app-container[data-fullscreen] .hud:has(:focus-visible) {
   opacity: 1;
-}
-
-
-/* ---- index page: the gear lives at the foot of the document ------------ */
-/*
- * #settings-btn is absolutely positioned for the journey HUD row, so on the
- * index page it would ignore its place in the DOM entirely. Scope it back into
- * flow here rather than forking the component.
- */
-.index-footer #settings-btn {
-  position:   static;
-  display:    block;
-  margin:     18px auto 0;
 }

@@ -17,22 +17,10 @@
 // through the current lap; arrow keys step it when focused.
 
 import { CONFIG } from '@wjh/config/config'
-import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
-import type { TransportView } from '@wjh/journey/engine'
+import { useCallback, useImperativeHandle, useRef, useState } from 'react'
 import type { TransportAction, TransportMode } from '@wjh/journey/transport'
+import { useJourneyRuntimeContext } from './JourneyRuntimeContext'
 
-
-interface TransportHandle {
-  update(view: TransportView): void;
-}
-
-interface Props {
-  paused:        boolean;
-  onTogglePause: () => void;
-  onAction:      (action: TransportAction) => void;
-  onScrub:       (fraction: number) => void;
-  onRelease:     () => void;
-}
 
 const MODE_TEXT: Record<TransportMode | 'paused', string> = {
   play:   '▶ PLAY',
@@ -58,9 +46,9 @@ function counter (t: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTransport (
-  { paused, onTogglePause, onAction, onScrub, onRelease }, ref,
-) {
+export default function JourneyTransport () {
+  const { paused, togglePause: onTogglePause, act: onAction, scrub: onScrub, release: onRelease, transportRef } = useJourneyRuntimeContext()
+
   const rootRef    = useRef<HTMLElement>(null)
   const labelRef   = useRef<HTMLSpanElement>(null)
   const modeRef    = useRef<HTMLSpanElement>(null)
@@ -73,7 +61,7 @@ const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTran
   const last                = useRef({ label: '', mode: '', counter: '', ticks: '', progress: -1 })
   const progressRef         = useRef(0)
 
-  useImperativeHandle(ref, () => ({
+  useImperativeHandle(transportRef, () => ({
     update (view) {
       const l             = last.current
       const p             = Math.min(1, Math.max(0, view.progress))
@@ -205,6 +193,4 @@ const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTran
       )}
     </div>
   </aside>
-})
-
-export default JourneyTransport
+}

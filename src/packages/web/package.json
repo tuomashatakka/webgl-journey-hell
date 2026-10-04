@@ -12,6 +12,7 @@
     "./frameLoopManager": "./frameLoopManager.ts",
     "./glitchTitle": "./glitchTitle.ts",
     "./keyboard": "./keyboard.ts",
+    "./keymap": "./keymap.ts",
     "./panControl": "./panControl.ts"
   },
   "dependencies": {

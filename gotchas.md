@@ -54,6 +54,13 @@ Traps that have already cost time, in the order you are likely to hit them. The 
 * **The index previews share ONE WebGL context** (`ShaderPreviewLayer`) to stay under the browser's context cap.
 * **Signal-loss laps differ per journey** (`CONFIG.signal.lossLaps`: loop line 5, skybridges 2, scenic route 3, natatorium 5); the four journeys with a persistent ending trigger on entering it.
 
+## UI
+
+* **The first key press of a journey skips the title card**, and the key bindings are off until the opening is over. A driver must wait for `#journey-title-intro` to disappear before sending keys.
+* **A held frame publishes no debug state.** `togglePause` publishes it explicitly; anything else that changes while paused has to as well, or `window.__journeyDebug` goes stale.
+* **A toolbar button's tooltip is a popover and a stacking context traps panels.** The toolbar is positioned with a z-index, so anything that must cover the page (the settings panel) is portalled to the body.
+* **Slider, field and dialog keys belong to them.** `isKeyCaptured` (`@wjh/web/keyboard`) is what keeps arrows on a slider from seeking the journey and space on a dialog button from pausing it.
+
 ## Engine facts
 
 * The journeys are raymarched or rasterized by hand: zero 3D dependencies. "Real geometry" means a new renderer path (`geometryRenderer`), not a new shader.
