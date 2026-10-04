@@ -55,36 +55,11 @@ import { buildProps } from './props'
 import type { PropSet } from './props'
 import { bendGainAt, buildCity } from './city'
 import { DIAL, SPEEDO, TACHO, buildCockpit, dialNormal, dialPoint, drawDialFaces, needleAngle } from './cockpit'
-import {
-  blurFrag,
-  brightFrag,
-  cockpitFrag,
-  cockpitVert,
-  compositeFrag,
-  depthFrag,
-  jawFrag,
-  jawVert,
-  mawFrag,
-  meshVert,
-  postVert,
-  propDepthFrag,
-  propFrag,
-  propVert,
-  railFrag,
-  roadFrag,
-  seaFrag,
-  seaVert,
-  skyDomeFrag,
-  skyLutFrag,
-  skyVert,
-  sweepVert,
-  terrainFrag,
-  towerFrag,
-  towerVert,
-  tubeFrag,
-  waterFrag
-
-} from './shader'
+import { blurFrag, brightFrag, compositeFrag } from './shader/post'
+import { cockpitFrag, cockpitVert } from './shader/cockpit'
+import { depthFrag, meshVert, propDepthFrag, propFrag, propVert, seaFrag, seaVert, sweepVert, terrainFrag, towerFrag, towerVert } from './shader/world'
+import { jawFrag, jawVert, mawFrag, railFrag, roadFrag, tubeFrag, waterFrag } from './shader/maw'
+import { postVert, skyDomeFrag, skyLutFrag, skyVert } from './shader/sky'
 
 
 const FOV_BASE = 62 * Math.PI / 180

@@ -14,10 +14,60 @@
         "!src/packages/**"
       ]
     },
-    "src/packages/*": {
+    "src/packages/delta": {
       "entry": [
-        "*.test.mjs",
         "build.mjs"
+      ],
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/audio": {
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/gl": {
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/geometry": {
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/web": {
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/config": {
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/glsl": {
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/math": {
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/journey": {
+      "entry": [
+        "*.test.mjs"
+      ],
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    },
+    "src/packages/quality": {
+      "entry": [
+        "*.test.mjs"
       ],
       "project": [
         "*.{ts,mjs}"
