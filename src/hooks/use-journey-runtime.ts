@@ -40,7 +40,7 @@ import type { AudioEngineHandle } from '✦/hooks/use-audio-engine'
 import { useSettings } from '✦/components/SettingsProvider'
 import { NO_DEBUG, publishDebugState, readDebugParams } from '✦/lib/debugParams'
 import type { DebugParams, JourneyDebugState } from '✦/lib/debugParams'
-import { CRT_BYPASS, CRT_DEFAULTS, createContext, createCrtPass } from '✦/lib/gl'
+import { CRT_BYPASS, CRT_DEFAULTS, createContext, createCrtPass, takeGlFailure } from '✦/lib/gl'
 import type { CrtPass, CustomUniforms, QualityHints } from '✦/lib/gl'
 import { createJourneyTransport, evaluateFrame, hudLabel, seekSimulation } from '✦/lib/journey'
 import type {
@@ -93,6 +93,9 @@ export interface JourneyLoading {
 
   /** The journey cannot run here; the bar stays, saying why. */
   failed: boolean;
+
+  /** With `failed`: the compiler's own words, when it gave any. */
+  detail?: string;
 }
 
 /** What the prerendered page shows, before any script has run. */
@@ -358,7 +361,8 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     let teardown: (() => void) | null = null
     let timer: ReturnType<typeof setTimeout> | undefined
 
-    const fail = (status: string) => report({ progress: 0, status, done: false, failed: true })
+    const fail = (status: string) =>
+      report({ progress: 0, status, done: false, failed: true, detail: takeGlFailure() ?? undefined })
 
     const setup = (): (() => void) | null => {
       // Read straight from the query string: this can run before `dbg` lands,
@@ -367,6 +371,8 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
       // frame — on only while something is debugging.
       const boot = readDebugParams()
       const spec = definition.renderer
+      takeGlFailure()
+
       const gl   = createContext(canvas, spec.context, {
         ...spec.attributes,
         preserveDrawingBuffer: boot.debug || boot.t !== null,
@@ -391,8 +397,11 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
       crtRef.current     = createCrtPass(gl)
       overlayRef.current = createSignalOverlay()
 
-      loadRef.current.since = performance.now()
-      report({ progress: 0.6, status: renderer.ready ? 'LOADING TEXTURES' : 'WARMING UP', done: false, failed: false })
+      // A rebuild after a lost context is not a load: the bar is long gone.
+      if (!loadRef.current.done) {
+        loadRef.current.since = performance.now()
+        report({ progress: 0.6, status: renderer.ready ? 'LOADING TEXTURES' : 'WARMING UP', done: false, failed: false })
+      }
 
       const observer = new ResizeObserver(() => {
         resizeDue.current = true
@@ -425,9 +434,27 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
       }, 0)
     })
 
+    // A phone takes the context back when it wants the memory (another app,
+    // a long spell in the background) and the canvas goes black for good
+    // unless someone asks for it back: preventDefault is the asking. The
+    // frame loop idles with no renderer, and everything is rebuilt on return.
+    const onLost = (e: Event) => {
+      e.preventDefault()
+      teardown?.()
+      teardown = null
+    }
+    const onRestored = () => {
+      teardown?.()
+      teardown = setup()
+    }
+    canvas.addEventListener('webglcontextlost', onLost)
+    canvas.addEventListener('webglcontextrestored', onRestored)
+
     return () => {
       cancelAnimationFrame(raf)
       clearTimeout(timer)
+      canvas.removeEventListener('webglcontextlost', onLost)
+      canvas.removeEventListener('webglcontextrestored', onRestored)
       teardown?.()
     }
   }, [])

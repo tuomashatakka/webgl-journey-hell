@@ -2,7 +2,11 @@ import { SD_BOX, SMIN } from '✦/lib/glsl'
 
 
 export const fsScene = `
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
     precision highp float;
+    #else
+    precision mediump float;
+    #endif
     uniform vec2 iResolution;
     uniform float iTime;
     uniform float uIteration;
@@ -10,7 +14,24 @@ export const fsScene = `
     uniform float uPlayerZ;
     uniform float uHeavy;
 
+    // LITE is the phone build (and the fallback wherever the full one will
+    // not compile). Phone compilers inline every call and unroll every short
+    // loop, so the full shader becomes thirty-odd copies of map() — the AO
+    // taps, the normals, two reflection marches — which some of them cannot
+    // build at all. LITE marches as far as heavy effects off already does,
+    // lets the reflections see the fog, shares one AO between the lit
+    // branches and takes three AO taps: about eight copies.
+    #ifdef LITE
+    #define MAX_STEPS 50
+    #define AO_STEPS 3
+    #define AO_SPAN 0.3
+    #define AO_DECAY 0.5625
+    #else
     #define MAX_STEPS 120
+    #define AO_STEPS 5
+    #define AO_SPAN 0.15
+    #define AO_DECAY 0.75
+    #endif
     #define MAX_DIST 150.0
     #define SURF_DIST 0.01
 
@@ -797,14 +818,24 @@ export const fsScene = `
     float calcAO(vec3 p, vec3 n, float ignoreWater) {
         float occ = 0.0;
         float sca = 1.0;
-        for(int i = 0; i < 5; i++) {
-            float h = 0.02 + 0.15 * float(i);
+        for(int i = 0; i < AO_STEPS; i++) {
+            float h = 0.02 + AO_SPAN * float(i);
             float d = map(p + h * n, ignoreWater).x;
             occ += (h - d) * sca;
-            sca *= 0.75;
+            sca *= AO_DECAY;
         }
-        return clamp(1.0 - 2.5 * occ, 0.0, 1.0);
+        return clamp(1.0 - 2.5 * occ * (5.0 / float(AO_STEPS)), 0.0, 1.0);
     }
+
+    #ifdef LITE
+    // What a reflection would have found, without marching for it: the room
+    // itself, as dimly as the full build lights what its reflections hit —
+    // ceilings at the ambient term, walls a little above it. (Distance fog is
+    // the primary hit's to apply, as it is for the real thing.)
+    vec3 cheapReflection(vec3 p, vec3 dir) {
+        return getBiomeColor(p.z + 6.0) * mix(0.28, 0.42, 1.0 - abs(dir.y));
+    }
+    #endif
 
     void main() {
         vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
@@ -906,6 +937,7 @@ export const fsScene = `
             vec3 p = ro + rd * t;
             vec2 res = map(p, 0.0);
 
+        #ifndef LITE
             // Accumulate volumetric oxblood vein/smoke glow during sector 666 falls (heavy effects only)
             if (uHeavy > 0.5) {
                 float l_g, s_g, dc_g, sa_g, sb_g, bl_g, lZ_g, sLen_g, iF_g, iC_g;
@@ -928,6 +960,7 @@ export const fsScene = `
                     godRayAccum += fCrack * exp(-heightAboveFloor * 0.28) * 0.02 * (1.0 + 3.0 * decayFactor);
                 }
             }
+        #endif
 
             if (res.x < SURF_DIST) { matID = res.y; break; }
             if (t > MAX_DIST) break;
@@ -945,9 +978,16 @@ export const fsScene = `
             float l_p, s_p, dc_p, sa_p, sb_p, bl_p, lZ_p, sLen_p, fA_p, iC_p;
             getSegmentData(p.z, l_p, s_p, dc_p, sa_p, sb_p, bl_p, lZ_p, sLen_p, fA_p, iC_p);
 
+        #ifdef LITE
+            float aoHit = max(calcAO(p, n, 0.0), 0.35);
+            #define HIT_AO aoHit
+        #else
+            #define HIT_AO max(calcAO(p, n, 0.0), 0.35)
+        #endif
+
             if (s_p == 666.0) {
                 // Unified ABYSS palette: oxblood rock + glowing lava-blood veins, cross-faded across set-pieces.
-                float ao = max(calcAO(p, n, 0.0), 0.35);
+                float ao = HIT_AO;
                 float dif = max(dot(n, sunDir), 0.0);
 
                 vec3 tint = mix(pieceTint(sa_p), pieceTint(sb_p), bl_p);
@@ -968,6 +1008,10 @@ export const fsScene = `
 
                 float fresnel = pow(1.0 - max(dot(waterNormal, -rd), 0.0), 5.0);
                 vec3 waterReflDir = reflect(rd, waterNormal);
+            #ifdef LITE
+                vec3 reflCol = cheapReflection(p, waterReflDir);
+            #else
+                vec3 reflCol = fogColor;
                 float wt = 0.1;
 
                 for (int i = 0; i < 40; i++) {
@@ -978,7 +1022,6 @@ export const fsScene = `
                     wt += wres.x;
                 }
 
-                vec3 reflCol = fogColor;
                 if (wt < 40.0) {
                     vec3 wp = p + waterReflDir * wt;
                     vec3 wn = calcNormal(wp, 1.0);
@@ -986,6 +1029,7 @@ export const fsScene = `
                     vec3 rAlbedo = getBiomeColor(wp.z);
                     reflCol = rAlbedo * (rDif * 0.6 + 0.4) * calcAO(wp, wn, 1.0);
                 }
+            #endif
 
                 vec3 refrCol = (s_p == 666.0) ? vec3(0.3, 0.01, 0.02) : vec3(0.01, 0.12, 0.16);
                 refrCol = getBiomeColor(p.z) * 0.2 + refrCol * 0.8;
@@ -993,7 +1037,7 @@ export const fsScene = `
                 col = mix(refrCol, reflCol, mix(0.12, 0.88, fresnel));
             } else {
                 float dif = max(dot(n, sunDir), 0.0);
-                float ao = max(calcAO(p, n, 0.0), 0.35);
+                float ao = HIT_AO;
 
                 vec3 albedo = getBiomeColor(p.z);
 
@@ -1048,6 +1092,10 @@ export const fsScene = `
                         col = crystalGlowVal;
                     } else {
                         vec3 refDir = reflect(rd, n);
+                    #ifdef LITE
+                        vec3 refCol = cheapReflection(p, refDir);
+                    #else
+                        vec3 refCol = fogColor;
                         float rt = 0.05;
                         for (int i = 0; i < 40; i++) {
                             vec3 rp = p + refDir * rt;
@@ -1057,7 +1105,6 @@ export const fsScene = `
                             rt += rres.x;
                         }
 
-                        vec3 refCol = fogColor;
                         if (rt < 50.0) {
                             vec3 rp = p + refDir * rt;
                             vec3 wn = calcNormal(rp, 0.0);
@@ -1067,6 +1114,7 @@ export const fsScene = `
                             float rFog = 1.0 - exp(-0.02 * rt);
                             refCol = mix(refCol, getBiomeColor(rp.z + 30.0), rFog);
                         }
+                    #endif
 
                         float fresnel = pow(1.0 - max(dot(n, -rd), 0.0), 5.0);
                         float refAmount = mix(0.15, 0.85, fresnel);
@@ -1109,7 +1157,11 @@ export const fsScene = `
 `
 
 export const fsPost = `
+    #ifdef GL_FRAGMENT_PRECISION_HIGH
     precision highp float;
+    #else
+    precision mediump float;
+    #endif
     uniform sampler2D uTexture;
     uniform vec2 iResolution;
     uniform float iTime;

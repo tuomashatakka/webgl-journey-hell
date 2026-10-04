@@ -137,7 +137,23 @@
     display: none;
 }
 #journey-loader[data-failed] .jl-status {
+    max-width: 88vw;
     color: #ff5a5a;
+    white-space: normal;
+    justify-content: center;
+    text-align: center;
+}
+/* What the compiler said. Selectable, so it can go into a bug report from a
+   phone with no console. */
+.jl-detail {
+    max-width: min(560px, 88vw);
+    font-size: 10px;
+    line-height: 1.5;
+    letter-spacing: 1px;
+    text-align: center;
+    color: rgba(255, 90, 90, 0.75);
+    overflow-wrap: anywhere;
+    user-select: text;
 }
 @media (prefers-reduced-motion: reduce) {
     .jl-bar::after {

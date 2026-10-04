@@ -14,6 +14,27 @@ import type { CustomUniforms, FrameUniforms } from './uniforms'
 import { uploadCustomUniforms } from './uniforms'
 
 
+let lastFailure: string | null = null
+
+/**
+ * The last compile or link failure since this was last called, and clear it.
+ * The console has the full log; this is for putting the gist of it in front
+ * of someone with no console — a phone, where a shader that its compiler
+ * refuses is otherwise just a black screen.
+ */
+export function takeGlFailure (): string | null {
+  const failure = lastFailure
+  lastFailure   = null
+  return failure
+}
+
+/** The first line that says anything, trimmed for a status line. */
+function gist (log: string): string {
+  const line = log.split('\n').map(l => l.trim())
+    .find(l => l.length > 0) ?? log
+  return line.length > 180 ? `${line.slice(0, 177)}...` : line
+}
+
 /**
  * Compile one stage. A failed compile with a null or empty info log almost
  * always means the context was lost (a reused canvas whose context had been
@@ -31,6 +52,7 @@ export function compileShader (gl: AnyGl, type: number, source: string, tag = 'g
       ? 'context lost — cannot compile'
       : log || 'no info log (context likely lost or unavailable)'
     console.error(`[${tag}] compile error:`, reason)
+    lastFailure = `${tag} ${type === gl.VERTEX_SHADER ? 'vertex' : 'fragment'} shader: ${gist(reason)}`
     gl.deleteShader(shader)
     return null
   }
@@ -67,7 +89,9 @@ export function linkProgram (gl: AnyGl, vertexSource: string, fragmentSource: st
   gl.bindAttribLocation(program, 0, 'position')
   gl.linkProgram(program)
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.error(`[${tag}] link error:`, gl.getProgramInfoLog(program))
+    const log = gl.getProgramInfoLog(program) || 'no info log'
+    console.error(`[${tag}] link error:`, log)
+    lastFailure = `${tag} link: ${gist(log)}`
     gl.deleteProgram(program)
     gl.deleteShader(vs)
     gl.deleteShader(fs)

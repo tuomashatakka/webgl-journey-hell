@@ -569,6 +569,22 @@ scale is not a constant (`lib/quality`):
   the FPS readout write to the DOM directly instead of re-rendering React sixteen
   times a second; and a paused journey stops drawing until something it shows
   actually changes (the last frame stays on the canvas).
+* **The heaviest shader has a light build.** Phone compilers inline every call
+  and unroll every short loop, so the liminal raymarcher, whose `map()` is
+  reached from thirty-odd places once its normals, AO taps and two reflection
+  marches are counted, came out too big for some of them to build at all (a
+  black screen on Chrome for Android). Phones get its `LITE` build: the march
+  only as long as heavy-effects-off already made it, three AO taps shared by
+  every lit branch, and reflections taken from the room's own colour instead of
+  marched for. About eight copies of `map()`, and three times the frame rate.
+  Anything else builds the full shader and falls back to `LITE` if its compiler
+  refuses.
+* **A shader that will not compile says so.** The loading bar shows the
+  compiler's own first line (`lib/gl`'s `takeGlFailure`), selectable, so a phone
+  with no console can still say what went wrong.
+* **A lost context comes back.** A phone takes the GL context back when it wants
+  the memory; the runtime asks for it back and rebuilds the renderer when it
+  returns, instead of leaving the canvas black.
 
 ## the page
 

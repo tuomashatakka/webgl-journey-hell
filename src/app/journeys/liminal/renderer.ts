@@ -3,15 +3,24 @@
 // Two passes on WebGL 1: the corridor is raymarched into an 8-bit target the
 // size of the canvas, then the post pass (fisheye, chromatic split, the loop
 // fades) draws it to the screen. The shared CRT pass goes over the top.
+//
+// The scene comes in two builds (see LITE at the top of fsScene). A phone gets
+// the light one outright; anything else tries the full one and falls back to
+// the light one if its compiler will not take it.
 
 import { QUAD_VS_100, createFullscreenQuad, createGlProgram, createRenderTarget, rgba8 } from '✦/lib/gl'
 import type { AnyGl, RenderTarget } from '✦/lib/gl'
 import type { JourneyRenderer } from '✦/lib/journey'
+import { detectDevice } from '✦/lib/quality'
 import { fsPost, fsScene } from './shaders'
 
 
+const fsSceneLite = `#define LITE\n${fsScene}`
+
+
 export function createLiminalRenderer (gl: AnyGl, canvas: HTMLCanvasElement): JourneyRenderer | null {
-  const scene = createGlProgram(gl, QUAD_VS_100, fsScene, 'liminal')
+  const full  = detectDevice().mobile ? null : createGlProgram(gl, QUAD_VS_100, fsScene, 'liminal')
+  const scene = full ?? createGlProgram(gl, QUAD_VS_100, fsSceneLite, 'liminal-lite')
   const post  = createGlProgram(gl, QUAD_VS_100, fsPost, 'liminal')
   if (!scene || !post) {
     scene?.dispose()

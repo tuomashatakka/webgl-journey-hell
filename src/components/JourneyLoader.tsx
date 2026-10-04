@@ -15,7 +15,7 @@ import type { JourneyLoading } from '✦/hooks/use-journey-runtime'
 /** How long the bar takes to fade once loaded; the shell unmounts it after. */
 export const LOADER_FADE_MS = 450
 
-export default function JourneyLoader ({ progress, status, done, failed }: JourneyLoading) {
+export default function JourneyLoader ({ progress, status, done, failed, detail }: JourneyLoading) {
   const p   = Math.min(1, Math.max(0, progress))
   const pct = Math.round(p * 100)
 
@@ -38,5 +38,7 @@ export default function JourneyLoader ({ progress, status, done, failed }: Journ
       {/* Padded with figure spaces — a digit's width — so the % stays put. */}
       {!failed && <span className="jl-pct">{String(pct).padStart(3, ' ')}%</span>}
     </p>
+
+    {failed && detail && <p className="jl-detail">{detail}</p>}
   </div>
 }
