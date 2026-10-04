@@ -56,10 +56,10 @@ const LEGACY_KEY = 'liminal-graphics-settings-v1'
 /** Static defaults: what the prerender and a desktop get. */
 export const DEFAULT_SETTINGS: GraphicsSettings = {
   resolution:   AUTO_RESOLUTION,
-  speed:        1.0,
+  speed:        1,
   heavyEffects: true,
-  brightness:   1.0,
-  contrast:     1.0,
+  brightness:   1,
+  contrast:     1,
   maxFrameRate: 60,
   gyroscope:    true,
   crt:          true,
@@ -71,8 +71,8 @@ export function deviceDefaults (): GraphicsSettings {
 }
 
 /** Allowed discrete choices surfaced in the settings UI. */
-export const RESOLUTION_CHOICES = [ AUTO_RESOLUTION, 0.15, 0.33, 0.5, 0.75, 1.0 ] as const
-export const SPEED_CHOICES = [ 1.0, 2.0, 4.0 ] as const
+export const RESOLUTION_CHOICES = [ AUTO_RESOLUTION, 0.15, 0.33, 0.5, 0.75, 1 ] as const
+export const SPEED_CHOICES = [ 1, 2, 4 ] as const
 export const FRAME_RATE_CHOICES = [ 30, 60, 120, 0 ] as const // 0 = Unlimited
 
 function coerce (parsed: Partial<GraphicsSettings> | null | undefined, defaults: GraphicsSettings): GraphicsSettings {
@@ -132,7 +132,7 @@ export function saveSettings (settings: GraphicsSettings) {
 export function resolutionLabel (res: number): string {
   if (res === AUTO_RESOLUTION)
     return 'AUTO'
-  return res === 1.0 ? '1.0x (NATIVE)' : `${res}x`
+  return res === 1 ? '1.0x (NATIVE)' : `${res}x`
 }
 
 /** Human label for a max-frame-rate value. */

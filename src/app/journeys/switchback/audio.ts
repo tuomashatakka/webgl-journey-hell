@@ -42,7 +42,7 @@ import { PHASE_WRAP } from './kinematics'
 const GLIDE = 0.45
 
 /** Glide for the room change, which happens at a portal and should be quick. */
-const ROOM_GLIDE = 0.30
+const ROOM_GLIDE = 0.3
 
 const EPS = 0.004
 
@@ -50,7 +50,7 @@ const EPS = 0.004
  * Rail length. Longer than the sleeper pitch, because sleepers are not what you
  * hear — the joints between rails are, and they come every other bay.
  */
-const JOINT_PITCH = 5.0
+const JOINT_PITCH = 5
 
 /** Wheelbase, as the gap between the two impacts of one joint. */
 const WHEELBASE = 1.9
@@ -72,12 +72,12 @@ interface RoomTone {
 }
 
 const ROOMS: RoomTone[] = [
-  { time: 0.011, fb: 0.80, damp: 3200, wet: 0.55 }, // platform — tile flutter
-  { time: 0.038, fb: 0.34, damp: 900, wet: 0.30 }, // drift — earth eats it
-  { time: 0.210, fb: 0.74, damp: 6000, wet: 0.62 }, // void — a lattice, all of it steel
+  { time: 0.011, fb: 0.8, damp: 3200, wet: 0.55 }, // platform — tile flutter
+  { time: 0.038, fb: 0.34, damp: 900, wet: 0.3 }, // drift — earth eats it
+  { time: 0.21, fb: 0.74, damp: 6000, wet: 0.62 }, // void — a lattice, all of it steel
   { time: 0.145, fb: 0.62, damp: 2600, wet: 0.52 }, // concourse — a shopping centre
-  { time: 0.330, fb: 0.80, damp: 4200, wet: 0.70 }, // chapel — a nave
-  { time: 0.090, fb: 0.10, damp: 8000, wet: 0.08 }, // overlook — open air, and it is a shock
+  { time: 0.33, fb: 0.8, damp: 4200, wet: 0.7 }, // chapel — a nave
+  { time: 0.09, fb: 0.1, damp: 8000, wet: 0.08 }, // overlook — open air, and it is a shock
 ]
 
 export class SwitchbackAudioEngine extends JourneyAudio {
@@ -171,7 +171,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
 
     // A second, longer tap at an incommensurate ratio, so the two never line up
     // into a pitch. 3.7 rather than 4 is the whole of that.
-    this.tail = this.ctx.createDelay(2.0)
+    this.tail = this.ctx.createDelay(2)
     this.tail.delayTime.setValueAtTime(ROOMS[0].time * 3.7, now)
 
     this.tailFb = this.ctx.createGain()
@@ -205,7 +205,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     this.rollLP.Q.setValueAtTime(1.4, now)
 
     this.rollGain = this.ctx.createGain()
-    this.rollGain.gain.setValueAtTime(0.0, now)
+    this.rollGain.gain.setValueAtTime(0, now)
 
     src.connect(this.rollLP)
     this.rollLP.connect(this.rollGain)
@@ -232,7 +232,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     this.squealBP      = this.ctx.createBiquadFilter()
     this.squealBP.type = 'bandpass'
     this.squealBP.frequency.setValueAtTime(2100, now)
-    this.squealBP.Q.setValueAtTime(26.0, now)
+    this.squealBP.Q.setValueAtTime(26, now)
 
     // Two slow wobbles at incommensurate rates, so it never settles into a tone.
     for (const [ rate, amt ] of [[ 3.1, 120 ], [ 7.7, 60 ]]) {
@@ -247,7 +247,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     }
 
     this.squeal = this.ctx.createGain()
-    this.squeal.gain.setValueAtTime(0.0, now)
+    this.squeal.gain.setValueAtTime(0, now)
 
     src.connect(this.squealBP)
     this.squealBP.connect(this.squeal)
@@ -273,7 +273,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     this.windLP.Q.setValueAtTime(0.6, now)
 
     this.windGain = this.ctx.createGain()
-    this.windGain.gain.setValueAtTime(0.0, now)
+    this.windGain.gain.setValueAtTime(0, now)
 
     src.connect(this.windLP)
     this.windLP.connect(this.windGain)
@@ -288,9 +288,9 @@ export class SwitchbackAudioEngine extends JourneyAudio {
 
     const now      = this.ctx.currentTime
     this.motorGain = this.ctx.createGain()
-    this.motorGain.gain.setValueAtTime(0.0, now)
+    this.motorGain.gain.setValueAtTime(0, now)
 
-    for (const [ f, a ] of [[ 47, 1.0 ], [ 94, 0.34 ], [ 141, 0.16 ]]) {
+    for (const [ f, a ] of [[ 47, 1 ], [ 94, 0.34 ], [ 141, 0.16 ]]) {
       const osc = this.ctx.createOscillator()
       osc.type  = 'sawtooth'
       osc.frequency.setValueAtTime(f, now)
@@ -322,7 +322,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
 
     const now      = this.ctx.currentTime
     this.muzakGain = this.ctx.createGain()
-    this.muzakGain.gain.setValueAtTime(0.0, now)
+    this.muzakGain.gain.setValueAtTime(0, now)
 
     const lp = this.ctx.createBiquadFilter()
     lp.type  = 'lowpass'
@@ -332,7 +332,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
 
     // F, A, C, E — and every voice detuned by a different amount, so the chord
     // beats against itself instead of sounding played.
-    for (const [ f, det ] of [[ 174.6, 0 ], [ 220.0, 7 ], [ 261.6, -5 ], [ 329.6, 11 ]]) {
+    for (const [ f, det ] of [[ 174.6, 0 ], [ 220, 7 ], [ 261.6, -5 ], [ 329.6, 11 ]]) {
       const osc = this.ctx.createOscillator()
       osc.type  = 'triangle'
       osc.frequency.setValueAtTime(f, now)
@@ -344,7 +344,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
       wow.frequency.setValueAtTime(0.23 + f * 0.0004, now)
 
       const wowAmt = this.ctx.createGain()
-      wowAmt.gain.setValueAtTime(9.0, now)
+      wowAmt.gain.setValueAtTime(9, now)
       wow.connect(wowAmt)
       wowAmt.connect(osc.detune)
       wow.start()
@@ -367,9 +367,9 @@ export class SwitchbackAudioEngine extends JourneyAudio {
 
     const now     = this.ctx.currentTime
     this.naveGain = this.ctx.createGain()
-    this.naveGain.gain.setValueAtTime(0.0, now)
+    this.naveGain.gain.setValueAtTime(0, now)
 
-    for (const [ f, a ] of [[ 55.0, 1.0 ], [ 82.4, 0.7 ], [ 110.0, 0.45 ], [ 164.8, 0.20 ]]) {
+    for (const [ f, a ] of [[ 55, 1 ], [ 82.4, 0.7 ], [ 110, 0.45 ], [ 164.8, 0.2 ]]) {
       const osc = this.ctx.createOscillator()
       osc.type  = 'sine'
       osc.frequency.setValueAtTime(f, now)
@@ -410,10 +410,10 @@ export class SwitchbackAudioEngine extends JourneyAudio {
         const bp = this.ctx.createBiquadFilter()
         bp.type  = 'bandpass'
         bp.frequency.setValueAtTime(180, now)
-        bp.Q.setValueAtTime(8.0, now)
+        bp.Q.setValueAtTime(8, now)
 
         const env = this.ctx.createGain()
-        env.gain.setValueAtTime(0.0, now)
+        env.gain.setValueAtTime(0, now)
         env.gain.linearRampToValueAtTime(0.09, now + 0.6)
         env.gain.exponentialRampToValueAtTime(0.0001, now + 2.6)
 
@@ -442,7 +442,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
       return
 
     const now = this.ctx.currentTime
-    const gap = WHEELBASE / Math.max(this.speed, 1.0)
+    const gap = WHEELBASE / Math.max(this.speed, 1)
 
     for (let axle = 0; axle < 2; axle++) {
       const src = this.noiseSource(false)
@@ -459,11 +459,11 @@ export class SwitchbackAudioEngine extends JourneyAudio {
       const ring = this.ctx.createBiquadFilter()
       ring.type  = 'bandpass'
       ring.frequency.setValueAtTime(1500 + Math.random() * 900, at)
-      ring.Q.setValueAtTime(14.0, at)
+      ring.Q.setValueAtTime(14, at)
 
-      const g   = level * (axle === 0 ? 1.0 : 0.72)
+      const g   = level * (axle === 0 ? 1 : 0.72)
       const env = this.ctx.createGain()
-      env.gain.setValueAtTime(0.0, at)
+      env.gain.setValueAtTime(0, at)
       env.gain.linearRampToValueAtTime(g, at + 0.004)
       env.gain.exponentialRampToValueAtTime(0.0001, at + 0.13)
 
@@ -491,10 +491,10 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     const bp = this.ctx.createBiquadFilter()
     bp.type  = 'bandpass'
     bp.frequency.setValueAtTime(900 + Math.random() * 500, now)
-    bp.Q.setValueAtTime(9.0, now)
+    bp.Q.setValueAtTime(9, now)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
+    env.gain.setValueAtTime(0, now)
     env.gain.linearRampToValueAtTime(0.11, now + 0.002)
     env.gain.exponentialRampToValueAtTime(0.0001, now + 0.055)
 
@@ -550,7 +550,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     let fired = 0
     while (this.travel >= JOINT_PITCH && fired < 3) {
       this.travel -= JOINT_PITCH
-      this.joint(0.05 + Math.min(this.speed / 18, 1.0) * 0.13)
+      this.joint(0.05 + Math.min(this.speed / 18, 1) * 0.13)
       fired++
     }
     if (this.travel > JOINT_PITCH * 4)
@@ -560,8 +560,8 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     // speed the chain runs at, not at the speed the hill goes past.
     if (this.chain > 0.01) {
       this.ratchet += 0.0166 * 7.5
-      while (this.ratchet >= 1.0) {
-        this.ratchet -= 1.0
+      while (this.ratchet >= 1) {
+        this.ratchet -= 1
         this.clack()
       }
     }
@@ -569,7 +569,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
       this.ratchet = 0
 
     // --- continuous layers ---
-    const v = Math.min(this.speed / 20, 1.0)
+    const v = Math.min(this.speed / 20, 1)
 
     // Wheels on rail, with no rail. The bed goes with the track: leaving it
     // running through the fall is the audible version of drawing the sleepers
@@ -580,22 +580,22 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     this.rampCut(this.rollLP?.frequency, 240 + v * 1600, now, 'lastRollCut')
 
     // Bank is v^2 * curvature, so this is the flange loading, near enough.
-    const load = Math.min(Math.abs(atm[3]) / 0.45, 1.0)
+    const load = Math.min(Math.abs(atm[3]) / 0.45, 1)
     this.ramp(this.squeal?.gain, load * load * 0.075 * v * onRail, now, 'lastSqueal')
 
     // Wind: speed, and how little building there is around it.
     // Wind: speed, and how little building there is around it. In the shaft it
     // is the only thing left, so it opens all the way and stays there.
-    const open = this.secType === 2 || this.secType === 5 || inFall > 0.5 ? 1.0 : 0.22
+    const open = this.secType === 2 || this.secType === 5 || inFall > 0.5 ? 1 : 0.22
     this.ramp(this.windGain?.gain, (v * v * 0.13 + inFall * 0.17) * open, now, 'lastWind')
     this.rampCut(this.windLP?.frequency, 420 + v * 1400 + inFall * 900, now, 'lastWindCut')
 
     // A brake run is a chain that is slower than you are. It gets no motor.
     const lifting = this.chain > 0.01 && this.chain > this.speed - 0.4
-    this.ramp(this.motorGain?.gain, lifting ? 0.055 : 0.0, now, 'lastMotor')
+    this.ramp(this.motorGain?.gain, lifting ? 0.055 : 0, now, 'lastMotor')
 
-    this.ramp(this.muzakGain?.gain, this.secType === 3 ? 0.055 : 0.0, now, 'lastMuzak')
-    this.ramp(this.naveGain?.gain, this.secType === 4 ? 0.10 : 0.0, now, 'lastNave')
+    this.ramp(this.muzakGain?.gain, this.secType === 3 ? 0.055 : 0, now, 'lastMuzak')
+    this.ramp(this.naveGain?.gain, this.secType === 4 ? 0.1 : 0, now, 'lastNave')
 
     this.setRoom(now)
 

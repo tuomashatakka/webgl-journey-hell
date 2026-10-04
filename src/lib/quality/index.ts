@@ -39,5 +39,5 @@ export function scaleRange (device: DeviceProfile = detectDevice()): ScaleRange 
       : { min: 0.35, max: Math.min(1, dprCap * 0.7), start: 0.7 }
   return device.tier === 1
     ? { min: 0.4, max: dprCap * 0.6, start: 0.85 }
-    : { min: 0.5, max: dprCap * 0.75, start: 1.0 }
+    : { min: 0.5, max: dprCap * 0.75, start: 1 }
 }

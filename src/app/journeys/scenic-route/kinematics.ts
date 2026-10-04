@@ -90,7 +90,7 @@ const LOOK_AHEAD = 1.1
 const LOOK_MAX   = 0.42
 
 // --- the gearbox ------------------------------------------------------------
-const GEAR_RATIOS = [ 3.6, 2.1, 1.4, 1.0, 0.8, 0.65 ]
+const GEAR_RATIOS = [ 3.6, 2.1, 1.4, 1, 0.8, 0.65 ]
 const FINAL_DRIVE = 3.9
 const WHEEL_R     = 0.32
 const RPM_IDLE    = 850
@@ -285,7 +285,7 @@ export class ScenicRide implements JourneySimulation {
     this.shake   = this.fallW * Math.min(1, this.v / 40)
 
     // Signed curvature and its vertical twin, from the tangent's rate of turn.
-    this.curv = signedCurvature(curve, s, 1.0)
+    this.curv = signedCurvature(curve, s, 1)
 
     const fa = curve.frameAtDistance(s - 1)
     const fb = curve.frameAtDistance(s + 1)
@@ -331,12 +331,12 @@ export class ScenicRide implements JourneySimulation {
 
     if (h > 0) {
       // Body sway: a damped spring toward the felt lateral load.
-      this.swayV += (aLat * 0.012 - this.sway * 9.0 - this.swayV * 3.2) * h
+      this.swayV += (aLat * 0.012 - this.sway * 9 - this.swayV * 3.2) * h
       this.sway  += this.swayV * h
 
       // Heave: airtime lifts the head off the seat; a compression pushes it down.
       const heaveT = -(nUp / G - 1) * 0.055
-      this.heaveV += ((heaveT - this.heave) * 60.0 - this.heaveV * 9.0) * h
+      this.heaveV += ((heaveT - this.heave) * 60 - this.heaveV * 9) * h
       this.heave  += this.heaveV * h
 
       // Head roll against the load, eased.

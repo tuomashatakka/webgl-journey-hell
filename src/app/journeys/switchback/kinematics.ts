@@ -197,21 +197,21 @@ export const SECTIONS: Section[] = [
     type:   TYPE_PLATFORM,
     turn:   [ 0.16, 0.02, -0.12 ],
     grade:  [ -20 * D, -4 * D, 0, 16 * D ],
-    lift:   [ 5.5, 3.0, 3.4 ], // brake · crawl · chain
-    bore:   6.0,
+    lift:   [ 5.5, 3, 3.4 ], // brake · crawl · chain
+    bore:   6,
     ceilH:  4.6,
     floorD: 0.45,
     lamp:   8,
     lampY:  4.36,
     grime:  0.45,
-    sky:    0.0,
+    sky:    0,
   },
   {
     id:     2,
     name:   'THE CHALK DRIFT',
     len:    78,
     type:   TYPE_DRIFT,
-    turn:   [ 0.28, -0.30, 0.20 ],
+    turn:   [ 0.28, -0.3, 0.2 ],
     grade:  [ 16 * D, -1 * D, -9 * D, -14 * D ],
     lift:   [ 3.6, 0, 0 ], // the platform's chain runs on over the crest
     bore:   3.4,
@@ -219,15 +219,15 @@ export const SECTIONS: Section[] = [
     floorD: 0.38,
     lamp:   8,
     lampY:  2.25,
-    grime:  0.60,
-    sky:    0.10, // the vents let just enough daylight in to be worse than none
+    grime:  0.6,
+    sky:    0.1, // the vents let just enough daylight in to be worse than none
   },
   {
     id:     3,
     name:   'THE SCAFFOLD VOID',
     len:    96,
     type:   TYPE_SCAFFOLD,
-    turn:   [ -0.10, 0.27, 0.27, -0.18 ],
+    turn:   [ -0.1, 0.27, 0.27, -0.18 ],
     grade:  [ -14 * D, -28 * D, -18 * D, -6 * D, -3 * D ],
     lift:   [ 0, 0, 0, 0 ],
     bore:   OPEN,
@@ -236,23 +236,23 @@ export const SECTIONS: Section[] = [
     lamp:   16,
     lampY:  3.4,
     grime:  0.75,
-    sky:    0.0, // open, but to nothing — there is no sun out there
+    sky:    0, // open, but to nothing — there is no sun out there
   },
   {
     id:     4,
     name:   'THE CARPET CONCOURSE',
     len:    84,
     type:   TYPE_CONCOURSE,
-    turn:   [ 0.30, 0.30, 0.14 ],
+    turn:   [ 0.3, 0.3, 0.14 ],
     grade:  [ -3 * D, 3 * D, -1 * D, -7 * D ],
     lift:   [ 0, 0, 0 ],
-    bore:   11.0,
+    bore:   11,
     ceilH:  10.5,
     floorD: 0.55,
     lamp:   10,
     lampY:  10.1,
     grime:  0.35,
-    sky:    0.30, // clerestory: enough sunset gets in to light the carpet
+    sky:    0.3, // clerestory: enough sunset gets in to light the carpet
   },
   {
     id:     5,
@@ -263,11 +263,11 @@ export const SECTIONS: Section[] = [
     grade:  [ -7 * D, 1 * D, 7 * D, 11 * D ],
     lift:   [ 0, 4.2, 4.2 ], // the second chain, and the slowest the ride gets
     bore:   7.5,
-    ceilH:  16.0,
-    floorD: 0.60,
+    ceilH:  16,
+    floorD: 0.6,
     lamp:   20,
     lampY:  5.2,
-    grime:  0.50,
+    grime:  0.5,
     sky:    0.12,
   },
   {
@@ -277,14 +277,14 @@ export const SECTIONS: Section[] = [
     type:   TYPE_OVERLOOK,
     turn:   [ 0.22, -0.24, 0.22, -0.12 ],
     grade:  [ 11 * D, -1 * D, -8 * D, -16 * D, -20 * D ],
-    lift:   [ 6.0, 0, 0, 0 ], // the chapel's chain runs on over the crest
+    lift:   [ 6, 0, 0, 0 ], // the chapel's chain runs on over the crest
     bore:   OPEN,
     ceilH:  OPEN,
     floorD: OPEN,
     lamp:   16,
     lampY:  2.6,
     grime:  0.25,
-    sky:    1.0,
+    sky:    1,
   },
 ]
 
@@ -331,7 +331,7 @@ const MAX_CURV = 1 / 44
  * swings much past a radian inside the visible range has left the +Z half-space,
  * and no quadratic in z can follow it out of there.
  */
-const MAX_WINDOW_TURN = 1.0
+const MAX_WINDOW_TURN = 1
 
 const G = 9.81
 
@@ -339,7 +339,7 @@ const G = 9.81
 const DRAG = 0.0075
 
 /** Rolling resistance. Small, and the only reason the ride would ever valley. */
-const ROLL_RES = 0.010
+const ROLL_RES = 0.01
 
 /**
  * The cart is not allowed to stop, however the physics feels about it. A gravity
@@ -465,9 +465,9 @@ export const FALL_SECTION: Section = {
   ceilH:  OPEN,
   floorD: OPEN,
   lamp:   64,
-  lampY:  9.0,
-  grime:  1.0,
-  sky:    0.0,
+  lampY:  9,
+  grime:  1,
+  sky:    0,
 }
 
 // ---- precomputed route tables ---------------------------------------------
@@ -916,7 +916,7 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
 
   // The rider's head lags the car. Tracked as state rather than derived so the
   // lag is real lag and not a scaled copy of the input.
-  const headRoll = mix(headRollPrev, capped * 0.30, 0.06)
+  const headRoll = mix(headRollPrev, capped * 0.3, 0.06)
 
   // Rail joints. Amplitude grows with speed and with how bad the road has got.
   const wear  = clamp01(lapF * 0.3) * 0.5 + 0.5
@@ -1035,7 +1035,7 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
     joltY,
     // Lead the turn: a rider looks where the track is going, and at 20 m/s the
     // track is going somewhere well before the car is.
-    lookYaw:   Math.max(-0.30, Math.min(0.30, curv * 26)),
+    lookYaw:   Math.max(-0.3, Math.min(0.3, curv * 26)),
     lookPitch: Math.max(-0.16, Math.min(0.16, -grade * 0.22)),
     chain:     b.sec.lift[b.beat],
     bend,
@@ -1045,7 +1045,7 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
     section,
     name:      section.name,
     lightFail: Math.min(0.92, lapF * 0.34),
-    decay:     Math.min(1, lapF * 0.30),
+    decay:     Math.min(1, lapF * 0.3),
     pitch:     clamp01(lapF / PITCH_LAPS),
     inFall,
     fall,
@@ -1184,7 +1184,7 @@ export function assertRouteSane (): string[] {
  */
 export function createSwitchbackSimulation (): JourneySimulation {
   let s    = 0
-  let v    = 9.0
+  let v    = 9
   let roll = 0
 
   // Counted inside the simulation, not by the shell: seekSimulation replays
@@ -1198,9 +1198,9 @@ export function createSwitchbackSimulation (): JourneySimulation {
       console.warn('[switchback route]', p)
   }
 
-  const uSecA = new Array<number>(12).fill(0) // z0, z1, type, bore
-  const uSecB = new Array<number>(12).fill(0) // ceilH, floorD, lamp, grime
-  const uSecC = new Array<number>(12).fill(0) // sky, id, lit, lampY
+  const uSecA = Array.from({ length: 12 }).fill(0) // z0, z1, type, bore
+  const uSecB = Array.from({ length: 12 }).fill(0) // ceilH, floorD, lamp, grime
+  const uSecC = Array.from({ length: 12 }).fill(0) // sky, id, lit, lampY
   const uBend = [ 0, 0, 0, 0 ]
   const uCart = [ 0, 0, 0, 0 ]
   const uRide = [ 0, 0, 0, 0 ]
@@ -1285,7 +1285,7 @@ export function createSwitchbackSimulation (): JourneySimulation {
         uSecB[o]     = slot.ceilH
         uSecB[o + 1] = slot.floorD
         uSecB[o + 2] = slot.lamp
-        uSecB[o + 3] = mix(slot.grime, 1.0, state.decay * 0.6)
+        uSecB[o + 3] = mix(slot.grime, 1, state.decay * 0.6)
 
         uSecC[o]     = slot.sky
         uSecC[o + 1] = slot.id

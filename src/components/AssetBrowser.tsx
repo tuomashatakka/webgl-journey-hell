@@ -34,8 +34,6 @@ const MAP_MODES = [
   { id: 'metalness', label: 'Metalness' },
 ] as const
 
-type ModeId = typeof MAP_MODES[number]['id']
-
 const VERT = `#version 300 es
 layout(location = 0) in vec2 aPos;
 out vec2 vUv;
@@ -142,10 +140,19 @@ void main () {
 }
 `
 
+type ModeId = typeof MAP_MODES[number]['id']
+
 interface Slot {
   el:    HTMLElement;
   kind:  0 | 1;
   index: number;
+}
+
+type PreviewProps = {
+  id:       string;
+  kind:     0 | 1;
+  index:    number;
+  register: (key: string, slot: Slot | null) => void;
 }
 
 function useAssetCanvas (mode: ModeId, light: string) {
@@ -244,13 +251,6 @@ function useAssetCanvas (mode: ModeId, light: string) {
   }, [])
 
   return { canvasRef, register }
-}
-
-type PreviewProps = {
-  id:       string;
-  kind:     0 | 1;
-  index:    number;
-  register: (key: string, slot: Slot | null) => void;
 }
 
 function Preview ({ id, kind, index, register }: PreviewProps) {

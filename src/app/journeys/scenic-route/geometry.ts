@@ -233,8 +233,8 @@ export function carveAt (idx: SpineIndex, x: number, h: number, z: number): numb
     return 1
 
   const R  = tubeRadius(n.s - idx.tube.s0, n.s)
-  const dr = n.d / (R * 1.15 + 1.0) - 1
-  const du = Math.abs(h - (n.y + 0.42 * R)) / (R + 1.0) - 1
+  const dr = n.d / (R * 1.15 + 1) - 1
+  const du = Math.abs(h - (n.y + 0.42 * R)) / (R + 1) - 1
   return Math.max(dr, du)
 }
 

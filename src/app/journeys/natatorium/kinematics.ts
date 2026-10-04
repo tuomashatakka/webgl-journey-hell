@@ -101,13 +101,13 @@ export const SECTIONS: Section[] = [
     id:    1,
     name:  'THE SHALLOW END',
     len:   26,
-    halfW: 9.0,
+    halfW: 9,
     ceilH: 4.2,
     drop:  0.05,
     turn:  -18 * D,
     type:  TYPE_TILE,
     grime: 0.35,
-    lamp:  6.0,
+    lamp:  6,
     speed: 5.2,
   },
   {
@@ -115,25 +115,25 @@ export const SECTIONS: Section[] = [
     name:  'TILE CORRIDOR',
     len:   16,
     halfW: 1.6,
-    ceilH: 3.0,
-    drop:  0.10,
+    ceilH: 3,
+    drop:  0.1,
     turn:  90 * D,
     type:  TYPE_GUTTER,
     grime: 0.55,
-    lamp:  4.0,
-    speed: 6.0,
+    lamp:  4,
+    speed: 6,
   },
   {
     id:    3,
     name:  'THE LANE POOL',
     len:   34,
-    halfW: 11.0,
+    halfW: 11,
     ceilH: 6.5,
     drop:  0.15,
     turn:  -35 * D,
     type:  TYPE_TILE,
-    grime: 0.30,
-    lamp:  7.0,
+    grime: 0.3,
+    lamp:  7,
     speed: 4.6,
   },
   {
@@ -145,7 +145,7 @@ export const SECTIONS: Section[] = [
     drop:  0.35,
     turn:  55 * D,
     type:  TYPE_GUTTER,
-    grime: 0.70,
+    grime: 0.7,
     lamp:  3.5,
     speed: 5.4,
   },
@@ -153,13 +153,13 @@ export const SECTIONS: Section[] = [
     id:    5,
     name:  'THE GRAND HALL',
     len:   40,
-    halfW: 16.0,
-    ceilH: 13.0,
+    halfW: 16,
+    ceilH: 13,
     drop:  0.15,
     turn:  -70 * D,
     type:  TYPE_VAULT,
     grime: 0.25,
-    lamp:  9.0,
+    lamp:  9,
     speed: 4.2,
   },
   {
@@ -171,17 +171,17 @@ export const SECTIONS: Section[] = [
     drop:  0.25,
     turn:  110 * D,
     type:  TYPE_LOCKER,
-    grime: 0.60,
+    grime: 0.6,
     lamp:  4.5,
-    speed: 5.0,
+    speed: 5,
   },
   {
     id:    7,
     name:  'THE PLANT ROOM',
     len:   24,
     halfW: 6.5,
-    ceilH: 5.0,
-    drop:  0.20,
+    ceilH: 5,
+    drop:  0.2,
     turn:  -90 * D,
     type:  TYPE_PLANT,
     grime: 0.75,
@@ -194,26 +194,26 @@ export const SECTIONS: Section[] = [
     id:    8,
     name:  'THE STAIR DOWN',
     len:   16,
-    halfW: 2.0,
+    halfW: 2,
     ceilH: 3.4,
-    drop:  0.30,
+    drop:  0.3,
     turn:  40 * D,
     type:  TYPE_RAW,
-    grime: 0.80,
-    lamp:  4.0,
+    grime: 0.8,
+    lamp:  4,
     speed: 3.6,
   },
   {
     id:    9,
     name:  'THE DIVING WELL',
     len:   26,
-    halfW: 10.0,
-    ceilH: 9.0,
-    drop:  2.50,
+    halfW: 10,
+    ceilH: 9,
+    drop:  2.5,
     turn:  -120 * D,
     type:  TYPE_TILE,
     grime: 0.45,
-    lamp:  8.0,
+    lamp:  8,
     speed: 3.4,
   },
   {
@@ -222,24 +222,24 @@ export const SECTIONS: Section[] = [
     len:   18,
     halfW: 1.8,
     ceilH: 2.8,
-    drop:  1.50,
+    drop:  1.5,
     turn:  85 * D,
     type:  TYPE_RAW,
-    grime: 0.90,
-    lamp:  5.0,
-    speed: 4.0,
+    grime: 0.9,
+    lamp:  5,
+    speed: 4,
   },
   {
     id:    11,
     name:  'THE CISTERN',
     len:   30,
-    halfW: 13.0,
+    halfW: 13,
     ceilH: 7.5,
-    drop:  0.80,
+    drop:  0.8,
     turn:  -60 * D,
     type:  TYPE_RAW,
     grime: 0.85,
-    lamp:  11.0,
+    lamp:  11,
     speed: 2.8,
   },
   {
@@ -254,7 +254,7 @@ export const SECTIONS: Section[] = [
     drop:  -6.35,
     turn:  95 * D,
     type:  TYPE_RAW,
-    grime: 0.70,
+    grime: 0.7,
     lamp:  4.5,
     speed: 3.8,
   },
@@ -337,8 +337,8 @@ const RISE_TO   = 10 // THE CISTERN
  * you are at a tenth of contrast, and the whole performance would be happening
  * where nobody can see it.
  */
-const SIGHT  = 12.0
-const SETTLE = 3.0
+const SIGHT  = 12
+const SETTLE = 3
 
 export function deployAt (ahead: number): number {
   return smootherstep(SIGHT, SETTLE, ahead)
@@ -385,7 +385,7 @@ function lerp3 (a: Vec3, b: Vec3, t: number): Vec3 {
  * two one-sided formulas meet exactly at the boundary.
  */
 function cornerHalf (a: Section, b: Section): number {
-  return Math.min(6.0, Math.min(a.len, b.len) * 0.3)
+  return Math.min(6, Math.min(a.len, b.len) * 0.3)
 }
 
 /** A point in the NEXT section's frame, expressed in the current one. */
@@ -666,11 +666,11 @@ export function getNatatoriumState (dist: number): NatatoriumState {
 
   // Wading is slow, and slower the deeper it gets. Base speed rides the corner
   // blend too, so the pace eases between rooms instead of stepping.
-  const wade  = 1.0 - 0.55 * clamp01(depth / (EYE * 1.1))
+  const wade  = 1 - 0.55 * clamp01(depth / (EYE * 1.1))
   const speed = blendScalar(idx, localZ, s => s.speed) * Math.max(0.28, wade)
 
   // The walk cycle stops once you are swimming rather than wading.
-  const stride = 1.0 - 0.75 * clamp01(depth / EYE)
+  const stride = 1 - 0.75 * clamp01(depth / EYE)
   const bob    = Math.abs(Math.sin(dist * 1.7)) * 0.045 * stride
 
   // Route distance to each resident section's entry. The previous section's is
@@ -703,7 +703,7 @@ export function getNatatoriumState (dist: number): NatatoriumState {
     // the horizon pumps on every gentle pool-deck fall.
     pitch:   Math.atan2(dy, hyp) * 0.65 +
              Math.sin(dist * 0.85) * 0.012 * stride -
-             (1.0 - above) * 0.10,
+             (1 - above) * 0.1,
     roll: Math.sin(dist * 0.31) * 0.012 +
            Math.max(-0.14, Math.min(0.14, bank * 0.55)),
     slots,
@@ -784,10 +784,10 @@ export function createNatatoriumSimulation (): JourneySimulation {
   // Packed in place every frame, never reallocated. Three slots x three vec4.
   // Separate arrays indexed by a bare loop variable rather than one array with
   // computed indices: both are legal GLSL ES 1.00, only one is well-trodden.
-  const uSecA = new Array<number>(12).fill(0) // cos, sin, tx, tz
-  const uSecB = new Array<number>(12).fill(0) // ty, halfW, ceilH, len
-  const uSecC = new Array<number>(12).fill(0) // slope, type, grime, lampPitch
-  const uSecD = new Array<number>(12).fill(0) // deploy, aisleY, sectionId, -
+  const uSecA = Array.from({ length: 12 }).fill(0) // cos, sin, tx, tz
+  const uSecB = Array.from({ length: 12 }).fill(0) // ty, halfW, ceilH, len
+  const uSecC = Array.from({ length: 12 }).fill(0) // slope, type, grime, lampPitch
+  const uSecD = Array.from({ length: 12 }).fill(0) // deploy, aisleY, sectionId, -
   const uCam  = [ 0, 0, 0, 0 ]
   const uLook = [ 0, 0, 0, 0 ]
   const uWave = [ 0, 0, 0, 0 ]

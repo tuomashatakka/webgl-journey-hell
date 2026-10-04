@@ -257,8 +257,8 @@ const WHEEL = { x: 0, y: 0.93, z: 0.66, R: 0.17, tilt: 30 * Math.PI / 180 }
 
 /** The dashboard's (z, y) profile, windscreen base to the knee roll. */
 const DASH: [ number, number ][] = [
-  [ 1.30, 0.855 ], [ 1.12, 0.905 ], [ 0.98, 0.945 ], [ 0.86, 0.962 ], [ 0.76, 0.955 ],
-  [ 0.70, 0.93 ], [ 0.655, 0.885 ], [ 0.635, 0.82 ], [ 0.63, 0.74 ], [ 0.645, 0.66 ],
+  [ 1.3, 0.855 ], [ 1.12, 0.905 ], [ 0.98, 0.945 ], [ 0.86, 0.962 ], [ 0.76, 0.955 ],
+  [ 0.7, 0.93 ], [ 0.655, 0.885 ], [ 0.635, 0.82 ], [ 0.63, 0.74 ], [ 0.645, 0.66 ],
   [ 0.68, 0.59 ], [ 0.72, 0.53 ],
 ]
 
@@ -285,7 +285,7 @@ export function buildCockpit (): Cockpit {
     return [ p.x, p.y, p.z ]
   }
   // A bezel ring around the face, then the body.
-  for (const [ u0, v0, u1, v1 ] of [[ -0.03, -0.12, 1.03, -0.02 ], [ -0.03, 1.02, 1.03, 1.12 ], [ -0.03, -0.12, 0.0, 1.12 ], [ 1.0, -0.12, 1.03, 1.12 ]]) {
+  for (const [ u0, v0, u1, v1 ] of [[ -0.03, -0.12, 1.03, -0.02 ], [ -0.03, 1.02, 1.03, 1.12 ], [ -0.03, -0.12, 0, 1.12 ], [ 1, -0.12, 1.03, 1.12 ]]) {
     const a = dialPoint(u0, v0, -0.008)
     const c = dialPoint(u1, v0, -0.008)
     const d = dialPoint(u1, v1, -0.008)
@@ -318,25 +318,25 @@ export function buildCockpit (): Cockpit {
   }
 
   // The column shroud and its stalks.
-  bar(cabin, [ 0, 0.85, 0.80 ], [ 0, 0.92, 0.68 ], 0.048, TAG.PLASTIC)
+  bar(cabin, [ 0, 0.85, 0.8 ], [ 0, 0.92, 0.68 ], 0.048, TAG.PLASTIC)
   bar(cabin, [ -0.04, 0.905, 0.73 ], [ -0.16, 0.935, 0.75 ], 0.007, TAG.PLASTIC)
   bar(cabin, [ 0.04, 0.905, 0.73 ], [ 0.16, 0.925, 0.75 ], 0.007, TAG.PLASTIC)
   bevelBox(cabin, -0.165, 0.936, 0.75, 0.012, 0.008, 0.012, 0.003, TAG.PLASTIC)
   bevelBox(cabin, 0.165, 0.926, 0.75, 0.012, 0.008, 0.012, 0.003, TAG.PLASTIC)
 
   // Vents: two on the dash face beside the binnacle, two by the doors.
-  vent(cabin, -0.40, 0.905, 0.66, 0.055, 0.026)
-  vent(cabin, 0.40, 0.905, 0.66, 0.055, 0.026)
-  vent(cabin, -0.86, 0.90, 0.665, 0.05, 0.026)
-  vent(cabin, 0.86, 0.90, 0.665, 0.05, 0.026)
+  vent(cabin, -0.4, 0.905, 0.66, 0.055, 0.026)
+  vent(cabin, 0.4, 0.905, 0.66, 0.055, 0.026)
+  vent(cabin, -0.86, 0.9, 0.665, 0.05, 0.026)
+  vent(cabin, 0.86, 0.9, 0.665, 0.05, 0.026)
 
   // The centre stack: a moulded face with the radio, its knobs and a heater
   // slider row, going down into the console with the gear lever.
   bevelBox(cabin, 0, 0.78, 0.66, 0.15, 0.13, 0.035, 0.012, TAG.PLASTIC)
   quad(cabin, [ -0.12, 0.83, 0.622 ], [ 0.12, 0.83, 0.622 ], [ 0.12, 0.875, 0.622 ], [ -0.12, 0.875, 0.622 ], TAG.LAMP, 3, 3)
   box(cabin, 0, 0.8525, 0.626, 0.125, 0.027, 0.004, TAG.PLASTIC)
-  knob(cabin, -0.10, 0.76, 0.622, 0.016, 0.018, 12, TAG.CHROME)
-  knob(cabin, 0.10, 0.76, 0.622, 0.016, 0.018, 12, TAG.CHROME)
+  knob(cabin, -0.1, 0.76, 0.622, 0.016, 0.018, 12, TAG.CHROME)
+  knob(cabin, 0.1, 0.76, 0.622, 0.016, 0.018, 12, TAG.CHROME)
   for (let i = 0; i < 5; i++)
     box(cabin, -0.05 + i * 0.025, 0.76, 0.618, 0.008, 0.007, 0.008, TAG.PLASTIC)
   for (let i = 0; i < 3; i++) {
@@ -353,9 +353,9 @@ export function buildCockpit (): Cockpit {
     const x = sgn * 0.98
     box(cabin, x, 0.78, 0.05, 0.03, 0.34, 0.75, TAG.PLASTIC)
     box(cabin, sgn * 0.93, 0.79, 0.02, 0.06, 0.03, 0.2, TAG.LEATHER)
-    box(cabin, sgn * 0.955, 1.115, 0.0, 0.035, 0.012, 0.72, TAG.PLASTIC)
+    box(cabin, sgn * 0.955, 1.115, 0, 0.035, 0.012, 0.72, TAG.PLASTIC)
     bar(cabin, [ sgn * 0.945, 0.9, 0.24 ], [ sgn * 0.945, 0.9, 0.36 ], 0.008, TAG.CHROME)
-    box(cabin, sgn * 0.947, 0.9, 0.30, 0.004, 0.012, 0.014, TAG.PLASTIC)
+    box(cabin, sgn * 0.947, 0.9, 0.3, 0.004, 0.012, 0.014, TAG.PLASTIC)
     knob(cabin, sgn * 0.945, 0.62, 0.62, 0.05, 0.004, 16, TAG.PLASTIC)
     // Door pull.
     bar(cabin, [ sgn * 0.93, 0.83, -0.18 ], [ sgn * 0.93, 0.83, -0.02 ], 0.012, TAG.PLASTIC)
@@ -375,13 +375,13 @@ export function buildCockpit (): Cockpit {
   quad(cabin, [ -0.105, 1.378, 0.548 ], [ 0.105, 1.378, 0.548 ], [ 0.105, 1.442, 0.548 ], [ -0.105, 1.442, 0.548 ], TAG.MIRROR)
 
   // The bonnet, seen over the dash: paint with a centre crease, and wipers.
-  quad(cabin, [ -0.98, 0.87, 1.25 ], [ -0.15, 0.91, 1.25 ], [ -0.15, 0.8, 3.0 ], [ -0.9, 0.74, 3.0 ], TAG.PAINT)
-  quad(cabin, [ -0.15, 0.91, 1.25 ], [ 0.15, 0.91, 1.25 ], [ 0.15, 0.8, 3.0 ], [ -0.15, 0.8, 3.0 ], TAG.PAINT)
-  quad(cabin, [ 0.15, 0.91, 1.25 ], [ 0.98, 0.87, 1.25 ], [ 0.9, 0.74, 3.0 ], [ 0.15, 0.8, 3.0 ], TAG.PAINT)
+  quad(cabin, [ -0.98, 0.87, 1.25 ], [ -0.15, 0.91, 1.25 ], [ -0.15, 0.8, 3 ], [ -0.9, 0.74, 3 ], TAG.PAINT)
+  quad(cabin, [ -0.15, 0.91, 1.25 ], [ 0.15, 0.91, 1.25 ], [ 0.15, 0.8, 3 ], [ -0.15, 0.8, 3 ], TAG.PAINT)
+  quad(cabin, [ 0.15, 0.91, 1.25 ], [ 0.98, 0.87, 1.25 ], [ 0.9, 0.74, 3 ], [ 0.15, 0.8, 3 ], TAG.PAINT)
   bar(cabin, [ -0.75, 0.88, 1.23 ], [ -0.1, 0.89, 1.21 ], 0.012, TAG.PLASTIC)
   bar(cabin, [ 0.05, 0.89, 1.21 ], [ 0.7, 0.88, 1.23 ], 0.012, TAG.PLASTIC)
-  bar(cabin, [ -0.42, 0.885, 1.22 ], [ -0.42, 0.87, 1.30 ], 0.008, TAG.PLASTIC)
-  bar(cabin, [ 0.38, 0.885, 1.22 ], [ 0.38, 0.87, 1.30 ], 0.008, TAG.PLASTIC)
+  bar(cabin, [ -0.42, 0.885, 1.22 ], [ -0.42, 0.87, 1.3 ], 0.008, TAG.PLASTIC)
+  bar(cabin, [ 0.38, 0.885, 1.22 ], [ 0.38, 0.87, 1.3 ], 0.008, TAG.PLASTIC)
 
   // The wheel: leather rim, three flat spokes, a padded hub with an emblem.
   const wheel = createMeshBuilder()

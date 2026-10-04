@@ -93,23 +93,23 @@ export const SURF = {
   tile:        tex(MAT.TILE, [ 0.96, 0.92, 0.82 ]),
   tileGreen:   tex(MAT.TILE, [ 0.55, 0.72, 0.62 ]),
   floor:       tex(MAT.FLOOR, [ 0.78, 0.76, 0.72 ]),
-  terrazzo:    tex(MAT.TERRAZZO, [ 0.86, 0.84, 0.80 ]),
+  terrazzo:    tex(MAT.TERRAZZO, [ 0.86, 0.84, 0.8 ]),
   panel:       tex(MAT.PANEL, [ 0.9, 0.9, 0.88 ]),
   panelDark:   tex(MAT.PANEL, [ 0.42, 0.42, 0.42 ]),
   concrete:    tex(MAT.CONCRETE, [ 0.85, 0.84, 0.82 ]),
   concreteDim: tex(MAT.CONCRETE, [ 0.48, 0.47, 0.45 ]),
-  concreteWet: tex(MAT.CONCRETE, [ 0.30, 0.31, 0.30 ], { rough: 0.35 }),
-  brick:       tex(MAT.BRICK, [ 0.92, 0.84, 0.80 ]),
-  brickSoot:   tex(MAT.BRICK, [ 0.36, 0.32, 0.30 ], { rough: 0.8 }),
-  ballast:     tex(MAT.BALLAST, [ 0.72, 0.70, 0.68 ]),
+  concreteWet: tex(MAT.CONCRETE, [ 0.3, 0.31, 0.3 ], { rough: 0.35 }),
+  brick:       tex(MAT.BRICK, [ 0.92, 0.84, 0.8 ]),
+  brickSoot:   tex(MAT.BRICK, [ 0.36, 0.32, 0.3 ], { rough: 0.8 }),
+  ballast:     tex(MAT.BALLAST, [ 0.72, 0.7, 0.68 ]),
   ballastDark: tex(MAT.BALLAST, [ 0.34, 0.33, 0.32 ]),
   ballastWet:  tex(MAT.BALLAST, [ 0.22, 0.22, 0.22 ], { rough: 0.45 }),
   steel:       tex(MAT.STEEL, [ 0.62, 0.62, 0.64 ], { pom: false }),
-  lining:      tex(MAT.STEEL, [ 0.30, 0.29, 0.28 ], { rough: 1.1 }),
-  corrugated:  tex(MAT.CORRUGATED, [ 0.75, 0.78, 0.80 ]),
-  corrugRust:  tex(MAT.CORRUGATED, [ 0.62, 0.48, 0.40 ]),
+  lining:      tex(MAT.STEEL, [ 0.3, 0.29, 0.28 ], { rough: 1.1 }),
+  corrugated:  tex(MAT.CORRUGATED, [ 0.75, 0.78, 0.8 ]),
+  corrugRust:  tex(MAT.CORRUGATED, [ 0.62, 0.48, 0.4 ]),
   wood:        tex(MAT.WOOD, [ 0.55, 0.48, 0.42 ], { pom: false }),
-  rock:        tex(MAT.ROCK, [ 0.62, 0.60, 0.58 ]),
+  rock:        tex(MAT.ROCK, [ 0.62, 0.6, 0.58 ]),
   plaster:     tex(MAT.PLASTER, [ 0.88, 0.86, 0.82 ]),
   plasterDamp: tex(MAT.PLASTER, [ 0.55, 0.62, 0.58 ]),
   hazard:      tex(MAT.HAZARD, [ 1, 1, 1 ], { pom: false }),
@@ -117,30 +117,30 @@ export const SURF = {
   coping:      tex(MAT.CONCRETE, [ 1.1, 1.08, 1.04 ], { pom: false }),
 
   void:      paint([ 0, 0, 0 ], 1),
-  yellow:    paint([ 0.80, 0.56, 0.04 ], 0.55),
+  yellow:    paint([ 0.8, 0.56, 0.04 ], 0.55),
   white:     paint([ 0.86, 0.86, 0.84 ], 0.45),
   black:     paint([ 0.018, 0.018, 0.02 ], 0.55),
   darkGrey:  paint([ 0.06, 0.06, 0.065 ], 0.5),
   green:     paint([ 0.04, 0.16, 0.08 ], 0.5),
   red:       paint([ 0.62, 0.04, 0.03 ], 0.45),
   blue:      paint([ 0.02, 0.06, 0.32 ], 0.45),
-  greyPaint: paint([ 0.30, 0.31, 0.32 ], 0.5, { metal: 0.3 }),
+  greyPaint: paint([ 0.3, 0.31, 0.32 ], 0.5, { metal: 0.3 }),
   cream:     paint([ 0.72, 0.68, 0.58 ], 0.7),
 
-  rail:   { ...tex(MAT.STEEL, [ 0.55, 0.50, 0.46 ], { pom: false }), mode: Mode.RAIL },
+  rail:   { ...tex(MAT.STEEL, [ 0.55, 0.5, 0.46 ], { pom: false }), mode: Mode.RAIL },
   poster: { ...paint([ 1, 1, 1 ], 0.35), mode: Mode.POSTER },
 
   fluoro:       glow([ 5.5, 5.3, 4.8 ]),
-  sodium:       glow([ 9.0, 4.6, 1.4 ]),
-  bulb:         glow([ 7.0, 4.6, 2.2 ]),
-  cold:         glow([ 2.4, 3.6, 6.0 ]),
-  greenTube:    glow([ 3.0, 5.2, 4.2 ]),
-  redLamp:      glow([ 8.0, 0.7, 0.4 ], Mode.SIGNAL),
+  sodium:       glow([ 9, 4.6, 1.4 ]),
+  bulb:         glow([ 7, 4.6, 2.2 ]),
+  cold:         glow([ 2.4, 3.6, 6 ]),
+  greenTube:    glow([ 3, 5.2, 4.2 ]),
+  redLamp:      glow([ 8, 0.7, 0.4 ], Mode.SIGNAL),
   signal:       glow([ 1, 1, 1 ], Mode.SIGNAL),
-  sign:         glow([ 2.0, 2.0, 2.0 ]),
-  windows:      { ...tex(MAT.PANEL, [ 0.42, 0.40, 0.38 ], { pom: false }), mode: Mode.WINDOWS },
-  windowsBrick: { ...tex(MAT.BRICK, [ 0.40, 0.33, 0.30 ], { pom: false }), mode: Mode.WINDOWS },
-  rack:         { ...tex(MAT.STEEL, [ 0.10, 0.10, 0.11 ], { pom: false }), mode: Mode.RACK },
+  sign:         glow([ 2, 2, 2 ]),
+  windows:      { ...tex(MAT.PANEL, [ 0.42, 0.4, 0.38 ], { pom: false }), mode: Mode.WINDOWS },
+  windowsBrick: { ...tex(MAT.BRICK, [ 0.4, 0.33, 0.3 ], { pom: false }), mode: Mode.WINDOWS },
+  rack:         { ...tex(MAT.STEEL, [ 0.1, 0.1, 0.11 ], { pom: false }), mode: Mode.RACK },
   carriage:     { ...paint([ 0.55, 0.56, 0.58 ], 0.4, { metal: 0.4 }), mode: Mode.CARRIAGE },
 } satisfies Record<string, Surface>
 
@@ -192,15 +192,15 @@ export function profilesFor (theme: Theme): Profile[] {
         closed: true,
         points: [
           pp(-3.7, -0.38, 'ballast', 0.55),
-          pp(1.30, -0.38, 'concreteDim', 0.5),
-          pp(1.30, 0.92, 'coping'),
+          pp(1.3, -0.38, 'concreteDim', 0.5),
+          pp(1.3, 0.92, 'coping'),
           pp(1.62, 0.92, 'yellow'),
           pp(2.15, 0.92, 'floor'),
           pp(9.6, 0.92, 'tile', 0.6),
           pp(9.6, 3.6, 'plaster'),
           pp(9.6, 5.5, 'panel', 0.8),
           pp(8.8, 6.3, 'panel', 0.85),
-          pp(-3.0, 6.3, 'panel', 0.85),
+          pp(-3, 6.3, 'panel', 0.85),
           pp(-3.7, 5.6, 'tile', 0.8),
         ],
       }]
@@ -236,22 +236,22 @@ export function profilesFor (theme: Theme): Profile[] {
       return [{
         closed: true,
         points: [
-          pp(-9.0, -0.38, 'concreteDim', 0.7),
-          pp(21.0, -0.38, 'concrete', 0.55),
-          pp(21.0, 1.0, 'terrazzo'),
-          pp(R, 1.0, 'plaster', 0.6),
-          pp(R, 5.0, 'panelDark', 0.7),
-          pp(R - 3.2, 5.0, 'darkGrey'),
+          pp(-9, -0.38, 'concreteDim', 0.7),
+          pp(21, -0.38, 'concrete', 0.55),
+          pp(21, 1, 'terrazzo'),
+          pp(R, 1, 'plaster', 0.6),
+          pp(R, 5, 'panelDark', 0.7),
+          pp(R - 3.2, 5, 'darkGrey'),
           pp(R - 3.2, 5.6, 'terrazzo'),
           pp(R, 5.6, 'plaster', 0.6),
           ...vault.slice(0, -1),
           pp(L, spring, 'plaster'),
           pp(L, 5.6, 'terrazzo', 0.6),
           pp(L + 3.2, 5.6, 'darkGrey'),
-          pp(L + 3.2, 5.0, 'panelDark'),
-          pp(L, 5.0, 'plaster', 0.7),
-          pp(L, 1.0, 'terrazzo', 0.6),
-          pp(-9.0, 1.0, 'concrete'),
+          pp(L + 3.2, 5, 'panelDark'),
+          pp(L, 5, 'plaster', 0.7),
+          pp(L, 1, 'terrazzo', 0.6),
+          pp(-9, 1, 'concrete'),
         ],
       }]
     }
@@ -264,10 +264,10 @@ export function profilesFor (theme: Theme): Profile[] {
         points: [
           pp(-60, 10.4, 'dirt'),
           pp(-8.6, 10.4, 'coping'),
-          pp(-8.0, 10.1, 'panel', 0.9),
-          pp(-5.0, -0.38, 'ballast', 0.55),
-          pp(5.0, -0.38, 'panel', 0.55),
-          pp(8.0, 10.1, 'coping', 0.9),
+          pp(-8, 10.1, 'panel', 0.9),
+          pp(-5, -0.38, 'ballast', 0.55),
+          pp(5, -0.38, 'panel', 0.55),
+          pp(8, 10.1, 'coping', 0.9),
           pp(8.6, 10.4, 'dirt'),
           pp(60, 10.4, 'dirt'),
         ],
@@ -346,8 +346,8 @@ export function profilesFor (theme: Theme): Profile[] {
       return [{
         closed: true,
         points: [
-          pp(-2.4, -0.30, 'steel'),
-          pp(2.4, -0.30, 'steel'),
+          pp(-2.4, -0.3, 'steel'),
+          pp(2.4, -0.3, 'steel'),
           pp(2.4, -0.95, 'steel'),
           pp(-2.4, -0.95, 'steel'),
         ],
@@ -498,10 +498,10 @@ function refine (profile: Profile): PP[] {
     if (len > 1.4) {
       if (concave[i]) {
         out.push(lerp(0.22 / len, 0.66))
-        out.push(lerp(0.70 / len, 0.88))
+        out.push(lerp(0.7 / len, 0.88))
       }
       if (concave[(i + 1) % n]) {
-        out.push(lerp(1 - 0.70 / len, 0.88))
+        out.push(lerp(1 - 0.7 / len, 0.88))
         out.push(lerp(1 - 0.22 / len, 0.66))
       }
     }
@@ -777,8 +777,8 @@ export interface UnitSpec {
 }
 
 export const UNITS: Record<string, UnitSpec> = {
-  sleeperConcrete: { surface: 'concreteDim', cell: 0.9, build: b => b.box(0, -0.10, 0, 1.30, 0.09, 0.13) },
-  sleeperWood:     { surface: 'wood', cell: 0.9, build: b => b.box(0, -0.10, 0, 1.32, 0.08, 0.13) },
+  sleeperConcrete: { surface: 'concreteDim', cell: 0.9, build: b => b.box(0, -0.1, 0, 1.3, 0.09, 0.13) },
+  sleeperWood:     { surface: 'wood', cell: 0.9, build: b => b.box(0, -0.1, 0, 1.32, 0.08, 0.13) },
   rail:            {
     surface: 'rail',
     cell:    0,
@@ -845,7 +845,7 @@ export const UNITS: Record<string, UnitSpec> = {
 
   rib: { surface: 'lining', cell: 0.9, build: b => ribRing(b, 1.55, 2.9, 0.14, 0.09, 36, -0.72, Math.PI + 0.72) },
 
-  shutter:      { surface: 'corrugRust', cell: 1.0, build: b => b.box(0, 1.85, 0, 0.06, 1.85, 2.6) },
+  shutter:      { surface: 'corrugRust', cell: 1, build: b => b.box(0, 1.85, 0, 0.06, 1.85, 2.6) },
   shopSign:     { surface: 'poster', cell: 0, build: b => b.box(0, 4.35, 0, 0.18, 0.35, 2.6) },
   railPost:     { surface: 'greyPaint', cell: 0, build: b => b.box(0, 0.55, 0, 0.03, 0.55, 0.03) },
   railTop:      { surface: 'greyPaint', cell: 0, build: b => b.box(0, 1.1, 0, 0.04, 0.03, 1.05) },
@@ -855,7 +855,7 @@ export const UNITS: Record<string, UnitSpec> = {
     surface: 'concreteDim',
     cell:    3.5,
     build:   b => {
-      b.box(0, 10.0, 0, 15.5, 0.55, 4.6) // deck
+      b.box(0, 10, 0, 15.5, 0.55, 4.6) // deck
       b.box(-14.6, 11.2, 0, 0.3, 0.7, 4.6)
       b.box(14.6, 11.2, 0, 0.3, 0.7, 4.6)
       b.box(0, 8.95, -3.6, 15.5, 0.5, 0.45) // edge beams
@@ -883,13 +883,13 @@ export const UNITS: Record<string, UnitSpec> = {
     } },
 
   annexColumn: { surface: 'concreteDim', cell: 1.4, build: b => b.box(0, 2.3, 0, 0.36, 2.7, 0.36) },
-  beam:        { surface: 'panelDark', cell: 2.5, build: b => b.box(0, 4.55, 0, 16.0, 0.35, 0.3) },
+  beam:        { surface: 'panelDark', cell: 2.5, build: b => b.box(0, 4.55, 0, 16, 0.35, 0.3) },
   tubeLight:   { surface: 'greenTube', cell: 0, build: b => b.box(0, 4.1, 0, 0.05, 0.03, 0.75) },
 
-  pier: { surface: 'brick', cell: 3.0, build: b => b.box(0, -9.5, 0, 4.1, 6.7, 1.1) },
+  pier: { surface: 'brick', cell: 3, build: b => b.box(0, -9.5, 0, 4.1, 6.7, 1.1) },
   arch: {
     surface: 'brickSoot',
-    cell:    3.0,
+    cell:    3,
     build:   b => {
       // A barrel vault spanning between two piers 12 m apart (local z), its
       // crown under the deck soffit. Seen from below it is the viaduct.
@@ -919,7 +919,7 @@ export const UNITS: Record<string, UnitSpec> = {
     surface: 'carriage',
     cell:    1.8,
     build:   b => {
-      b.box(0, 2.0, 0, 1.4, 1.45, 8.6)
+      b.box(0, 2, 0, 1.4, 1.45, 8.6)
       b.box(0, 3.5, 0, 1.25, 0.08, 8.4)
     },
   },
@@ -930,7 +930,7 @@ export const UNITS: Record<string, UnitSpec> = {
       b.box(0, 0.42, 5.8, 1.1, 0.32, 1.2)
     } },
   mast: { surface: 'steel',
-    cell:    2.0,
+    cell:    2,
     build:   b => {
       cylY(b, 0, 0, 22, 0, 0.22, 8)
       b.box(0, 22.2, 0, 1.6, 0.12, 0.35)
@@ -962,7 +962,7 @@ export const UNITS: Record<string, UnitSpec> = {
     },
   },
   trestleRailPost: { surface: 'steel', cell: 0, build: b => b.box(0, 0.5, 0, 0.035, 0.5, 0.035) },
-  trestleRail:     { surface: 'steel', cell: 0, build: b => b.box(0, 1.0, 0, 0.03, 0.03, 1.5) },
+  trestleRail:     { surface: 'steel', cell: 0, build: b => b.box(0, 1, 0, 0.03, 0.03, 1.5) },
   redLamp:         { surface: 'redLamp', cell: 0, build: b => sphere(b, 0, 2.6, 0, 0.13, 6) },
   redPost:         { surface: 'darkGrey', cell: 0, build: b => cylY(b, 0, -0.3, 2.5, 0, 0.05, 6) },
 }

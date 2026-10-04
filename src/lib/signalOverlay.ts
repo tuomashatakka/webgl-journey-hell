@@ -57,8 +57,8 @@ function warningTriangle (ctx: CanvasRenderingContext2D, cx: number, cy: number,
   ctx.stroke()
 
   ctx.beginPath()
-  ctx.moveTo(cx, cy - h * 0.10)
-  ctx.lineTo(cx, cy + h * 0.20)
+  ctx.moveTo(cx, cy - h * 0.1)
+  ctx.lineTo(cx, cy + h * 0.2)
   ctx.lineWidth = Math.max(1, r * 0.15)
   ctx.stroke()
 

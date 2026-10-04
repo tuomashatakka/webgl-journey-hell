@@ -213,7 +213,7 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
               max="2.0"
               step="0.05"
               value={ settings.brightness }
-              onChange={ e => onChange({ ...settings, brightness: parseFloat(e.target.value) }) } />
+              onChange={ e => onChange({ ...settings, brightness: Number.parseFloat(e.target.value) }) } />
 
             <span className="settings-slider-val">{(settings.brightness * 100).toFixed(0)}%</span>
           </p>
@@ -235,7 +235,7 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
               max="2.0"
               step="0.05"
               value={ settings.contrast }
-              onChange={ e => onChange({ ...settings, contrast: parseFloat(e.target.value) }) } />
+              onChange={ e => onChange({ ...settings, contrast: Number.parseFloat(e.target.value) }) } />
 
             <span className="settings-slider-val">{(settings.contrast * 100).toFixed(0)}%</span>
           </p>

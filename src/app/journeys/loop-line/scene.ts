@@ -258,7 +258,7 @@ export function createLoopLineScene (
   circuits.mainBays.forEach((span, i) => {
     const dressing = dressBay(circuits, span, false, SEED + i * 131)
     // Shells overlap their successor by a metre so no seam opens on a curve.
-    bays.push(buildBay(circuits.main, circuits.mainBays, i, [ span.s0, span.s1 + 1.0 ], dressing))
+    bays.push(buildBay(circuits.main, circuits.mainBays, i, [ span.s0, span.s1 + 1 ], dressing))
   })
 
   // The chord: its bore between the two portal planes, plus its own track from
@@ -387,7 +387,7 @@ export function createLoopLineScene (
   const cabParts: { key: SurfaceKey; build: (b: MeshBuilder) => void }[] = [
     { key:   'black',
       build: b => {
-        b.box(0, -0.79, 0.92, 2.2, 0.06, 0.30)
+        b.box(0, -0.79, 0.92, 2.2, 0.06, 0.3)
         b.box(0, -0.725, 1.21, 2.2, 0.012, 0.02)
       } },
   ]
@@ -899,7 +899,7 @@ export function createLoopLineScene (
         gl.activeTexture(gl.TEXTURE0)
         gl.bindTexture(gl.TEXTURE_2D, src.tex)
         downProg!.uniform2f('uTexel', 1 / src.width, 1 / src.height)
-        downProg!.uniform1f('uThreshold', i === 0 ? 1.0 : -1)
+        downProg!.uniform1f('uThreshold', i === 0 ? 1 : -1)
         if (i === 1)
           downProg!.uniform1f('uDecode', 0)
         drawQuad()
@@ -913,7 +913,7 @@ export function createLoopLineScene (
         gl.activeTexture(gl.TEXTURE0)
         gl.bindTexture(gl.TEXTURE_2D, bloom[i].tex)
         upProg!.uniform2f('uTexel', 1 / bloom[i].width, 1 / bloom[i].height)
-        upProg!.uniform1f('uRadius', 1.0)
+        upProg!.uniform1f('uRadius', 1)
         drawQuad()
       }
       gl.disable(gl.BLEND)

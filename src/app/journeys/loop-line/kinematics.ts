@@ -176,7 +176,7 @@ class LoopLineRide implements JourneySimulation {
     // Body sway: a damped spring driven by the lateral acceleration the car is
     // not banking away.
     const lateral = this.speed * this.speed * curv - G * Math.sin(bank)
-    this.swayV   += (lateral * 0.010 - this.sway * 7.0 - this.swayV * 2.6) * h
+    this.swayV   += (lateral * 0.01 - this.sway * 7 - this.swayV * 2.6) * h
     this.sway    += this.swayV * h
 
     const wear  = clamp01(this.lapF * 0.16)
@@ -184,7 +184,7 @@ class LoopLineRide implements JourneySimulation {
     // Rail joints at fixed places: hashed on distance, so the same joint is
     // in the same metre forever.
     const jitter = (hash1(Math.floor(joint)) - 0.5) * 2
-    this.shake   = jitter * (0.010 + wear * 0.07) * (0.4 + Math.abs(Math.sin(joint * Math.PI)) * 0.6)
+    this.shake   = jitter * (0.01 + wear * 0.07) * (0.4 + Math.abs(Math.sin(joint * Math.PI)) * 0.6)
 
     this.roll += (bank * HEAD_ROLL - this.roll) * (1 - Math.exp(-h / 0.28))
 

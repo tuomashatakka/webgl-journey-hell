@@ -82,7 +82,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     if (!this.ctx || !this.main)
       return
 
-    const delay = this.ctx.createDelay(1.0)
+    const delay = this.ctx.createDelay(1)
     delay.delayTime.setValueAtTime(0.42, this.ctx.currentTime)
 
     this.delayFb = this.ctx.createGain()
@@ -117,7 +117,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     this.droneFilt      = this.ctx.createBiquadFilter()
     this.droneFilt.type = 'lowpass'
     this.droneFilt.frequency.setValueAtTime(95, this.ctx.currentTime)
-    this.droneFilt.Q.setValueAtTime(3.0, this.ctx.currentTime)
+    this.droneFilt.Q.setValueAtTime(3, this.ctx.currentTime)
 
     this.droneGain = this.ctx.createGain()
     this.droneGain.gain.setValueAtTime(0.16, this.ctx.currentTime)
@@ -154,7 +154,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     sweep.start()
 
     this.hazeGain = this.ctx.createGain()
-    this.hazeGain.gain.setValueAtTime(0.0, this.ctx.currentTime)
+    this.hazeGain.gain.setValueAtTime(0, this.ctx.currentTime)
 
     src.connect(this.hazeFilt)
     this.hazeFilt.connect(this.hazeGain)
@@ -174,10 +174,10 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     const band = this.ctx.createBiquadFilter()
     band.type  = 'bandpass'
     band.frequency.setValueAtTime(240, this.ctx.currentTime)
-    band.Q.setValueAtTime(9.0, this.ctx.currentTime)
+    band.Q.setValueAtTime(9, this.ctx.currentTime)
 
     this.creakGain = this.ctx.createGain()
-    this.creakGain.gain.setValueAtTime(0.0, this.ctx.currentTime)
+    this.creakGain.gain.setValueAtTime(0, this.ctx.currentTime)
 
     osc.connect(band)
     band.connect(this.creakGain)
@@ -211,7 +211,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     osc.frequency.exponentialRampToValueAtTime(70, now + 0.12)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
+    env.gain.setValueAtTime(0, now)
     env.gain.linearRampToValueAtTime(gain, now + 0.006)
     env.gain.exponentialRampToValueAtTime(0.0001, now + 0.22)
 
@@ -226,8 +226,8 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
       if (!this.ctx)
         return
       if (!this.isMuted && Math.random() < 0.55)
-        this.plop(0.10 + Math.random() * 0.16)
-      this.after(240 + Math.random() * 1400 * (1.0 - this.plopDensity), tick)
+        this.plop(0.1 + Math.random() * 0.16)
+      this.after(240 + Math.random() * 1400 * (1 - this.plopDensity), tick)
     }
     this.after(900, tick)
   }
@@ -247,10 +247,10 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     const band = this.ctx.createBiquadFilter()
     band.type  = 'bandpass'
     band.frequency.setValueAtTime(1800 + Math.random() * 2600, now)
-    band.Q.setValueAtTime(6.0, now)
+    band.Q.setValueAtTime(6, now)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
+    env.gain.setValueAtTime(0, now)
     env.gain.linearRampToValueAtTime(0.06 + Math.random() * 0.05, now + 0.001)
     env.gain.exponentialRampToValueAtTime(0.0001, now + 0.02 + Math.random() * 0.03)
 
@@ -265,7 +265,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     src.stop(now + 0.08)
   }
 
-  private clickDensity = 0.0
+  private clickDensity = 0
 
   private scheduleClicks (): void {
     const tick = () => {
@@ -290,9 +290,9 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     osc.frequency.exponentialRampToValueAtTime(freq * 0.6, now + 0.16)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
+    env.gain.setValueAtTime(0, now)
     env.gain.linearRampToValueAtTime(gain, now + 0.012)
-    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.30)
+    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.3)
 
     osc.connect(env)
     env.connect(this.main)
@@ -300,7 +300,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     osc.stop(now + 0.34)
   }
 
-  private beatAmount = 0.0
+  private beatAmount = 0
 
   private scheduleHeartbeat (): void {
     const tick = () => {
@@ -316,7 +316,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     this.after(2000, tick)
   }
 
-  private beatSlow = 0.0
+  private beatSlow = 0
 
   /** A soft burst of spores — fired when the stage changes under you. */
   private burst (): void {
@@ -335,8 +335,8 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     band.Q.setValueAtTime(1.2, now)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
-    env.gain.linearRampToValueAtTime(0.30, now + 0.05)
+    env.gain.setValueAtTime(0, now)
+    env.gain.linearRampToValueAtTime(0.3, now + 0.05)
     env.gain.exponentialRampToValueAtTime(0.0001, now + 1.6)
 
     src.connect(band)
@@ -378,17 +378,17 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     this.ramp(this.droneFilt?.frequency, 95 + descent * 260 + rot * 90, now, 'lastCutoff')
     this.ramp(this.droneGain?.gain, 0.16 + descent * 0.12 + rot * 0.06, now, 'lastDrone')
     this.ramp(this.hazeGain?.gain,
-              0.04 + (stage === STAGE_CATHEDRAL ? 0.16 : 0.0) + rot * 0.09 + descent * 0.05,
+              0.04 + (stage === STAGE_CATHEDRAL ? 0.16 : 0) + rot * 0.09 + descent * 0.05,
               now, 'lastHaze')
     this.ramp(this.creakGain?.gain,
-              stage === STAGE_NURSERY || stage === STAGE_MARROW ? 0.05 + rot * 0.03 : 0.0,
+              stage === STAGE_NURSERY || stage === STAGE_MARROW ? 0.05 + rot * 0.03 : 0,
               now, 'lastCreak')
 
     if (this.delayFb)
       this.delayFb.gain.setTargetAtTime(0.12 + descent * 0.42, now, GLIDE)
 
     // The drone falls toward 32 Hz through the abyss.
-    this.droneLow?.frequency.setTargetAtTime(41.2 - descent * 9.0, now, 1.5)
+    this.droneLow?.frequency.setTargetAtTime(41.2 - descent * 9, now, 1.5)
     this.droneHigh?.frequency.setTargetAtTime(42.5 - descent * 9.4, now, 1.5)
 
     const fleshy      = stage === STAGE_FRUITING || stage === STAGE_HOST
@@ -397,8 +397,8 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
 
     // Heartbeat: audible wherever the walls are alive, and it drags to a halt
     // in COMPOST, where the simulation has already stopped moving you.
-    this.beatAmount = Math.min(1.0, (fleshy ? 0.9 : 0.25) + rot * 0.5) * (0.55 + 0.9 * breath)
-    this.beatSlow   = stage === STAGE_COMPOST ? Math.min(1.0, descent * 1.2) : 0.0
+    this.beatAmount = Math.min(1, (fleshy ? 0.9 : 0.25) + rot * 0.5) * (0.55 + 0.9 * breath)
+    this.beatSlow   = stage === STAGE_COMPOST ? Math.min(1, descent * 1.2) : 0
   }
 
   /** setTargetAtTime with an epsilon guard, keyed by the field caching the last write. */
@@ -411,7 +411,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     if (!param)
       return
 
-    const scale = key === 'lastCutoff' ? 1.0 : 200.0
+    const scale = key === 'lastCutoff' ? 1 : 200
     if (Math.abs(value - this[key]) * scale < EPS)
       return
     this[key] = value

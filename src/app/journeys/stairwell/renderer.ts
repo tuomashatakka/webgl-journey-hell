@@ -32,13 +32,13 @@ interface ActLight {
 
 /** Index 6 is purgatory. */
 const ACTS: ActLight[] = [
-  { sky: 'DAWN', yaw: -0.30, sun: 5.0, exposure: 0.95 },
-  { sky: 'OVERCAST', yaw: -0.20, sun: 0.8, exposure: 1.35 },
-  { sky: 'DAY', yaw: -0.38, sun: 7.0, exposure: 0.8 },
-  { sky: 'EVENING', yaw: -0.36, sun: 6.0, exposure: 0.85 },
-  { sky: 'HAZE', yaw: -0.24, sun: 5.0, exposure: 0.75 },
-  { sky: 'AURORA', yaw: 0.0, sun: 0.0, exposure: 2.4 },
-  { sky: 'OVERCAST', yaw: 0.35, sun: 0.0, exposure: 1.3 },
+  { sky: 'DAWN', yaw: -0.3, sun: 5, exposure: 0.95 },
+  { sky: 'OVERCAST', yaw: -0.2, sun: 0.8, exposure: 1.35 },
+  { sky: 'DAY', yaw: -0.38, sun: 7, exposure: 0.8 },
+  { sky: 'EVENING', yaw: -0.36, sun: 6, exposure: 0.85 },
+  { sky: 'HAZE', yaw: -0.24, sun: 5, exposure: 0.75 },
+  { sky: 'AURORA', yaw: 0, sun: 0, exposure: 2.4 },
+  { sky: 'OVERCAST', yaw: 0.35, sun: 0, exposure: 1.3 },
 ]
 
 const LENGTHS = [ ...STAIRWELL_SECTIONS.map(s => s.end - s.start), PURGATORY_LENGTH ]

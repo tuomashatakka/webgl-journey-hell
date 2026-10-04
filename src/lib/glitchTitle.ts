@@ -54,11 +54,11 @@ export interface GlitchTitle {
 /** Seconds: fade in until IN, hold until HOLD, torn out by OUT. */
 const IN   = 1.15
 const HOLD = 2.75
-const OUT  = 4.0
+const OUT  = 4
 
 const CALM_IN   = 0.8
 const CALM_HOLD = 2.2
-const CALM_OUT  = 3.0
+const CALM_OUT  = 3
 
 /** Byte-corrupted variants, from barely damaged to wrecked. */
 const VARIANTS = 6

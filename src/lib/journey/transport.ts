@@ -107,7 +107,7 @@ const SEEK_DT = 1 / 20
 
 /** How long you must be *into* a section (or lap) before going back restarts it. */
 const GRACE_SECTION = 1.5
-const GRACE_LOOP    = 3.0
+const GRACE_LOOP    = 3
 
 const FLASH_SECONDS = 0.28
 

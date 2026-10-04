@@ -21,11 +21,11 @@ import type { Route } from './course'
 export const JAW_BASE   = 0.42
 export const JAW_PER_LAP = 0.13
 
+export interface V3 { x: number; y: number; z: number }
+
 export function jawAngleAt (lapF: number): number {
   return JAW_BASE + Math.min(lapF, 3) * JAW_PER_LAP
 }
-
-export interface V3 { x: number; y: number; z: number }
 
 export interface Jaw {
   builder: MeshBuilder;
@@ -227,7 +227,7 @@ export const ROCK_START = 210
 /** Inner radius of the throat and cave by arc length. */
 export function tubeRadius (t: number, s: number): number {
   const throat = 30 + (11 - 30) * smooth01(t / 120)
-  const cave   = 10.5 + 3.5 * Math.sin(s * 0.031) + 2.2 * Math.sin(s * 0.077 + 1.0) + 1.5 * Math.sin(s * 0.19 + 2.0)
+  const cave   = 10.5 + 3.5 * Math.sin(s * 0.031) + 2.2 * Math.sin(s * 0.077 + 1) + 1.5 * Math.sin(s * 0.19 + 2)
   const w      = smooth01((t - 90) / 110)
   return Math.max(6.5, throat * (1 - w) + cave * w)
 }
@@ -338,7 +338,7 @@ export function buildMaw (route: Route): Maw {
       builder: jawShell(basis, Math.PI * 1.06, Math.PI * 1.94, 46, 2),
       hinge:   hingeAt(-36),
       axis,
-      share:   1.0,
+      share:   1,
     },
     mouth: basis.m,
     s0,

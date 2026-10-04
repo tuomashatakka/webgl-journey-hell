@@ -105,7 +105,7 @@ const CULL_DIST = 1700
 const HEAD_DROP = 95
 
 /** Jaw angle (rad, lower jaw's share) that shuts the mouth before the car is off the lip. */
-const JAW_SHUT = 1.0
+const JAW_SHUT = 1
 
 
 /** How far above the river's spine the land is raised inland: over the vault (1.42 × the widest ring), falling to the road at the portal. */
@@ -234,7 +234,7 @@ export function createScenicRouteScene (
   const roadArrays = finishSweep(sweepProfile(route.curve, {
     s0:        route.spans[0].s0,
     s1:        route.spans[3].s1,
-    step:      2.0,
+    step:      2,
     profile,
     sectionAt: s => {
       sectionWeights(route, s, w)
@@ -310,7 +310,7 @@ export function createScenicRouteScene (
   const railArrays = finishSweep(sweepProfile(route.curve, {
     s0:      route.spans[3].s0 + 6,
     s1:      route.spans[3].s1 - 4,
-    step:    2.0,
+    step:    2,
     profile: (s: number): ProfilePoint[] => {
       lookParamsAt(route, s, w, look)
 
@@ -856,7 +856,7 @@ export function createScenicRouteScene (
       // The wheel by steer: a lock and a half each way over the steer range.
       cockpitP.uniform3f('uPivot', cockpit.wheelCentre.x, cockpit.wheelCentre.y, cockpit.wheelCentre.z)
       cockpitP.uniform3f('uAxis', cockpit.wheelAxis.x, cockpit.wheelAxis.y, cockpit.wheelAxis.z)
-      cockpitP.uniform1f('uAngle', -car[2] * 2.6 + fall[3] * 0.09 * Math.sin(time * 31.0))
+      cockpitP.uniform1f('uAngle', -car[2] * 2.6 + fall[3] * 0.09 * Math.sin(time * 31))
       wheelMesh.draw(gl)
       // Needles by reading.
       cockpitP.uniform3f('uAxis', dialN.x, dialN.y, dialN.z)

@@ -33,7 +33,7 @@ const PURGATORY_SETTLE = 30
 const PURGATORY_BLOOM = 60
 
 /** Speed at the exact instant the fall ends. Both sides of the seam use it. */
-const PURGATORY_ENTRY_SPEED = 1.0
+const PURGATORY_ENTRY_SPEED = 1
 
 /** Steady-state walking pace in purgatory. Slower than any act; nothing is arrived at. */
 const PURGATORY_DRIFT = 1.6
@@ -54,7 +54,7 @@ export const STAIRWELL_SECTIONS: readonly StairwellSection[] = [
   { id: 0, start: 0, end: 70, speed: 6.2, name: 'I · THE SPILLWAY THRESHOLD', short: 'spillway' },
   { id: 1, start: 70, end: 155, speed: 4.2, name: 'II · PROTEAN WEATHER BRIDGE', short: 'storm' },
   { id: 2, start: 155, end: 235, speed: 5.4, name: 'III · THE TURBINE CANYON', short: 'turbines' },
-  { id: 3, start: 235, end: 325, speed: 5.0, name: 'IV · CONVEYOR ESCARPMENT', short: 'quarry' },
+  { id: 3, start: 235, end: 325, speed: 5, name: 'IV · CONVEYOR ESCARPMENT', short: 'quarry' },
   { id: 4, start: 325, end: 410, speed: 4.6, name: 'V · THE COOLING FIELD', short: 'cooling' },
   { id: 5, start: 410, end: 500, speed: 4.1, name: 'VI · THE SHEAR HORIZON', short: 'shear' },
 ] as const
@@ -178,7 +178,7 @@ export function getStairwellState (z: number): StairwellState {
   // The eased traversal counter. Ramping over the closing fifth of the loop —
   // rather than over the tail of the sixth act alone, as it used to — is what
   // makes the reset arrive as a slide instead of a step.
-  const decay  = loop + smoothstep(0.80, 1.0, loopProgress)
+  const decay  = loop + smoothstep(0.8, 1, loopProgress)
   const next   = actAfter(section.id, loop)
   const finale = loop === LOOP_COUNT - 1 && section.id === 5
     ? smoothstep(0.04, 0.96, progress)
@@ -249,7 +249,7 @@ export function getWalkSpeed (z: number): number {
     // Land exactly on the purgatory entry speed rather than decaying toward a
     // standstill. The seam between the fall and the drift has to be continuous
     // in the first derivative too, or the scan picks it up as a discontinuity.
-    speed += (PURGATORY_ENTRY_SPEED - speed) * smoothstep(0.72, 1.0, state.sectionProgress)
+    speed += (PURGATORY_ENTRY_SPEED - speed) * smoothstep(0.72, 1, state.sectionProgress)
   }
 
   return Math.max(0.08, speed)

@@ -648,7 +648,7 @@ export function createClosedCurve (
     // couple of LUT cells: small enough to be local, wide enough that the
     // linear interpolation between stored frames does not dominate the result.
     curvatureAtDistance (s: number): number {
-      const eps = Math.max(1.0, total / (frames.length - 1) * 2)
+      const eps = Math.max(1, total / (frames.length - 1) * 2)
       const a   = frameAt(s - eps, curvA)
       const b   = frameAt(s + eps, curvB)
       tmpA.x    = b.forward.x - a.forward.x

@@ -107,10 +107,10 @@ export const SECTIONS: Section[] = [
     tau:        2.5,
     throttle:   1,
     gW:         0.15,
-    cD:         0.0020,
-    exposure:   0.0,
+    cD:         0.002,
+    exposure:   0,
     sky:        1,
-    fog:        [ 0.62, 0.66, 0.70 ],
+    fog:        [ 0.62, 0.66, 0.7 ],
     fogDensity: 0.0008,
     roadHalf:   3.4,
     surface:    0,
@@ -124,13 +124,13 @@ export const SECTIONS: Section[] = [
     // labouring up a hill in second, and that equilibrium — not the target —
     // is the number worth knowing.
     vTarget:    15,
-    tau:        3.0,
+    tau:        3,
     throttle:   1,
-    gW:         0.20,
-    cD:         0.0020,
-    exposure:   0.0,
+    gW:         0.2,
+    cD:         0.002,
+    exposure:   0,
     sky:        1,
-    fog:        [ 0.60, 0.64, 0.68 ],
+    fog:        [ 0.6, 0.64, 0.68 ],
     fogDensity: 0.0012,
     roadHalf:   3.6,
     surface:    0,
@@ -140,15 +140,15 @@ export const SECTIONS: Section[] = [
     name:       'DOWNTOWN',
     kind:       Kind.DOWNTOWN,
     vTarget:    32,
-    tau:        3.0,
+    tau:        3,
     throttle:   0.3,
-    gW:         1.0,
+    gW:         1,
     cD:         0.0012,
     exposure:   -0.2,
     sky:        1,
-    fog:        [ 0.66, 0.60, 0.56 ],
+    fog:        [ 0.66, 0.6, 0.56 ],
     fogDensity: 0.0014,
-    roadHalf:   4.0,
+    roadHalf:   4,
     surface:    0,
   },
   {
@@ -158,12 +158,12 @@ export const SECTIONS: Section[] = [
     vTarget:    28,
     tau:        2.5,
     throttle:   1,
-    gW:         0.30,
+    gW:         0.3,
     cD:         0.0016,
-    exposure:   0.0,
+    exposure:   0,
     sky:        1,
-    fog:        [ 0.66, 0.70, 0.74 ],
-    fogDensity: 0.0010,
+    fog:        [ 0.66, 0.7, 0.74 ],
+    fogDensity: 0.001,
     roadHalf:   3.6,
     surface:    0,
   },
@@ -174,13 +174,13 @@ export const SECTIONS: Section[] = [
     // Same as the coast road's: the throttle blends to zero across the lip, and
     // a target that also blended down would brake the car before the edge.
     vTarget:    28,
-    tau:        1.0,
+    tau:        1,
     throttle:   0,
-    gW:         1.0,
+    gW:         1,
     cD:         0.0004,
     exposure:   0.2,
     sky:        1,
-    fog:        [ 0.66, 0.70, 0.74 ],
+    fog:        [ 0.66, 0.7, 0.74 ],
     fogDensity: 0.0008,
     roadHalf:   3.6,
     surface:    2,
@@ -192,13 +192,13 @@ export const SECTIONS: Section[] = [
     vTarget:    14,
     tau:        1.2,
     throttle:   1,
-    gW:         0.30,
-    cD:         0.0090,
+    gW:         0.3,
+    cD:         0.009,
     exposure:   0.8,
     sky:        0,
     fog:        [ 0.16, 0.03, 0.025 ],
     fogDensity: 0.011,
-    roadHalf:   3.0,
+    roadHalf:   3,
     surface:    3,
   },
   {
@@ -206,15 +206,15 @@ export const SECTIONS: Section[] = [
     name:       'THE UNDERTOW',
     kind:       Kind.UNDERTOW,
     vTarget:    13,
-    tau:        3.0,
+    tau:        3,
     throttle:   1,
-    gW:         0.0,
-    cD:         0.0060,
+    gW:         0,
+    cD:         0.006,
     exposure:   1.3,
     sky:        0,
     fog:        [ 0.02, 0.05, 0.06 ],
     fogDensity: 0.008,
-    roadHalf:   3.0,
+    roadHalf:   3,
     surface:    4,
   },
 ]
@@ -241,7 +241,7 @@ export function bankGainAt (lapF: number): number {
 
 /** Per-lap speed: targets up, drag down. */
 export const SPEED_LAP = 0.08
-export const DRAG_LAP  = 0.20
+export const DRAG_LAP  = 0.2
 
 /** Metres between bank table samples. */
 export const BANK_STEP = 0.5
@@ -417,17 +417,17 @@ const BANK_KNOTS: BankKnot[] = [
   // I — camber into each wiggle.
   K(0, 0.02, 0), K(0, 0.16, 2.5), K(0, 0.32, 3), K(0, 0.47, 3), K(0, 0.62, 2.5), K(0, 0.78, 2), K(0, 0.94, 0),
   // II — a long constant-radius climb.
-  K(1, 0.08, 0), K(1, 0.40, 6), K(1, 0.72, 5), K(1, 0.96, 0),
+  K(1, 0.08, 0), K(1, 0.4, 6), K(1, 0.72, 5), K(1, 0.96, 0),
   // III — the helix. 40° here is the reference the laps are heard against.
   K(2, 0.04, 0), K(2, 0.13, 20), K(2, 0.28, 40), K(2, 0.46, 40), K(2, 0.64, 40), K(2, 0.78, 20), K(2, 0.94, 0),
   // IV — mild, then the headland right-hander.
-  K(3, 0.06, 0), K(3, 0.30, 3), K(3, 0.55, 3), K(3, 0.80, 6), K(3, 0.97, 4),
+  K(3, 0.06, 0), K(3, 0.3, 3), K(3, 0.55, 3), K(3, 0.8, 6), K(3, 0.97, 4),
   // V — the tumble. Not a turn, so signed by hand.
-  K(4, 0.10, 6, false), K(4, 0.45, 14, false), K(4, 0.80, 22, false), K(4, 0.98, 25, false),
+  K(4, 0.1, 6, false), K(4, 0.45, 14, false), K(4, 0.8, 22, false), K(4, 0.98, 25, false),
   // VI — settle, then the turn back.
-  K(5, 0.06, 22, false), K(5, 0.30, 6, false), K(5, 0.55, 26), K(5, 0.80, 14), K(5, 0.97, 0),
+  K(5, 0.06, 22, false), K(5, 0.3, 6, false), K(5, 0.55, 26), K(5, 0.8, 14), K(5, 0.97, 0),
   // VII — level. The float dynamics roll the car, not the table.
-  K(6, 0.05, 0), K(6, 0.50, 0), K(6, 0.96, 0),
+  K(6, 0.05, 0), K(6, 0.5, 0), K(6, 0.96, 0),
 ]
 
 // ---------------------------------------------------------------------------
@@ -481,7 +481,7 @@ function arcLengthOfPoint (curve: ClosedCurve, p: Vec3): number {
  * for a right-hand turn. Central difference over ±h, which also makes it the
  * quantity the steering wheel and the sway spring want.
  */
-export function signedCurvature (curve: ClosedCurve, s: number, h = 1.0): number {
+export function signedCurvature (curve: ClosedCurve, s: number, h = 1): number {
   const a = curve.frameAtDistance(s - h)
   const b = curve.frameAtDistance(s + h)
   // Level right at s: forward × worldUp, normalised.

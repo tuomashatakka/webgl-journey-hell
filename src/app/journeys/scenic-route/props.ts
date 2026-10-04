@@ -56,7 +56,7 @@ export interface PropSet {
 }
 
 /** Road half width plus the verge: how close to a spine anything may stand. */
-const ROAD_CLEAR = 3.2 + 1.0
+const ROAD_CLEAR = 3.2 + 1
 
 function hash (n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453
@@ -327,17 +327,17 @@ function trunk (): MeshBuilder {
   const b = createMeshBuilder()
   taperY(b, 0.28, 0.15, 4.8, 9)
   bar(b, [ 0, 3.6, 0 ], [ 1.5, 5.8, 0.9 ], 0.07)
-  bar(b, [ 0, 3.9, 0 ], [ -1.4, 6.1, -1.0 ], 0.07)
-  bar(b, [ 0, 4.4, 0 ], [ 0.3, 8.0, -0.4 ], 0.06)
+  bar(b, [ 0, 3.9, 0 ], [ -1.4, 6.1, -1 ], 0.07)
+  bar(b, [ 0, 4.4, 0 ], [ 0.3, 8, -0.4 ], 0.06)
   return b
 }
 
 /** Four lobes: a broad middle, two shoulders, a crown. */
 function canopy (): MeshBuilder {
   const b = createMeshBuilder()
-  lobe(b, 0, 6.6, 0, 3.0, 2.5, 3.0, 1)
+  lobe(b, 0, 6.6, 0, 3, 2.5, 3, 1)
   lobe(b, 1.6, 5.7, 0.9, 2.1, 1.8, 2.1, 2)
-  lobe(b, -1.5, 6.0, -1.1, 2.2, 1.9, 2.2, 3)
+  lobe(b, -1.5, 6, -1.1, 2.2, 1.9, 2.2, 3)
   lobe(b, 0.3, 8.3, -0.4, 1.8, 1.5, 1.8, 4)
   return b
 }
@@ -356,7 +356,7 @@ function turbineTower (): MeshBuilder {
 function pier (): MeshBuilder {
   const b = createMeshBuilder()
   taperY(b, 1.35, 1.05, 1, 12)
-  boxT(b, 0, 1, 0, 3.0, 0.02, 1.4)
+  boxT(b, 0, 1, 0, 3, 0.02, 1.4)
   return b
 }
 
@@ -372,7 +372,7 @@ function turbineRotor (): MeshBuilder {
     const s = Math.sin(a)
     const P = (x: number, y: number, z: number): V3 => [ x * c - y * s, x * s + y * c, z ]
     // Root at r 1.0, chord 1.2, thick 0.32; tip at r 14.5, chord 0.35, thick 0.08.
-    const root  = 1.0
+    const root  = 1
     const tip   = 14.5
     const w     = (y: number) => 0.6 + (0.175 - 0.6) * (y - root) / (tip - root)
     const t     = (y: number) => 0.16 + (0.04 - 0.16) * (y - root) / (tip - root)

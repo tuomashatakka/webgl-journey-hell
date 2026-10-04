@@ -154,12 +154,12 @@ class Dresser {
 }
 
 // Lamp colours, linear, before power.
-const WARM_WHITE: [ number, number, number ] = [ 1.0, 0.86, 0.68 ]
-const TUNGSTEN: [ number, number, number ]   = [ 1.0, 0.62, 0.30 ]
-const SODIUM: [ number, number, number ]     = [ 1.0, 0.52, 0.16 ]
-const GREENISH: [ number, number, number ]   = [ 0.70, 1.0, 0.84 ]
-const COLD: [ number, number, number ]       = [ 0.52, 0.74, 1.0 ]
-const RED: [ number, number, number ]        = [ 1.0, 0.10, 0.06 ]
+const WARM_WHITE: [ number, number, number ] = [ 1, 0.86, 0.68 ]
+const TUNGSTEN: [ number, number, number ]   = [ 1, 0.62, 0.3 ]
+const SODIUM: [ number, number, number ]     = [ 1, 0.52, 0.16 ]
+const GREENISH: [ number, number, number ]   = [ 0.7, 1, 0.84 ]
+const COLD: [ number, number, number ]       = [ 0.52, 0.74, 1 ]
+const RED: [ number, number, number ]        = [ 1, 0.1, 0.06 ]
 
 /**
  * Track for one stretch of one circuit: sleepers, rails, conductor rail.
@@ -255,10 +255,10 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
 
     case Theme.CONCOURSE: {
       for (let s = s0 + 3; s < s1 - 3; s += 5.6) {
-        d.put('shutter', s, 23.92, 1.0)
-        d.put('shopSign', s, 23.8, 1.0, { tint: Math.floor(R() * 8) })
-        d.put('shutter', s + 2.8, -11.92, 1.0)
-        d.put('shopSign', s + 2.8, -11.8, 1.0, { tint: Math.floor(R() * 8) })
+        d.put('shutter', s, 23.92, 1)
+        d.put('shopSign', s, 23.8, 1, { tint: Math.floor(R() * 8) })
+        d.put('shutter', s + 2.8, -11.92, 1)
+        d.put('shopSign', s + 2.8, -11.8, 1, { tint: Math.floor(R() * 8) })
       }
       for (let s = s0 + 1; s < s1; s += 2.1) {
         d.put('railPost', s, 20.85, 5.6)
@@ -304,7 +304,7 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
             d.put('annexColumn', s, r, -0.38)
         }
         for (const r of [ 0.2, 11 ]) {
-          const lamp = d.lamp(s, r, 4.0, GREENISH, 3.2, 13)
+          const lamp = d.lamp(s, r, 4, GREENISH, 3.2, 13)
           d.put('tubeLight', s, r, 0, { seed: lamp.roll })
         }
       }
@@ -378,18 +378,18 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
       for (let s = s0 + 3; s < s1; s += 6.5)
         d.put('bent', s, 0, -0.95)
       for (let s = s0 + 0.75; s < s1; s += 1.5) {
-        d.put('trestleRailPost', s, 2.32, -0.30)
-        d.put('trestleRailPost', s, -2.32, -0.30)
+        d.put('trestleRailPost', s, 2.32, -0.3)
+        d.put('trestleRailPost', s, -2.32, -0.3)
       }
       for (let s = s0 + 1.5; s < s1; s += 3) {
-        d.put('trestleRail', s, 2.32, -0.30)
-        d.put('trestleRail', s, -2.32, -0.30)
+        d.put('trestleRail', s, 2.32, -0.3)
+        d.put('trestleRail', s, -2.32, -0.3)
       }
       for (let s = s0 + 12; s < s1; s += 28) {
         const r    = Math.round((s - s0) / 28) % 2 ? 2.9 : -2.9
         const lamp = d.lamp(s, r, 2.3, RED, 3.4, 16)
-        d.put('redPost', s, r, -0.30)
-        d.put('redLamp', s, r, -0.30, { seed: lamp.roll })
+        d.put('redPost', s, r, -0.3)
+        d.put('redLamp', s, r, -0.3, { seed: lamp.roll })
       }
       break
     }

@@ -25,13 +25,13 @@ import type { CustomUniforms } from '✦/lib/gl'
 
 const RAMP = 0.08
 
-function weightAt (surface: number, centre: number): number {
-  return Math.max(0, 1 - Math.abs(surface - centre))
-}
-
 interface Voice {
   gain:    GainNode;
   filter?: BiquadFilterNode;
+}
+
+function weightAt (surface: number, centre: number): number {
+  return Math.max(0, 1 - Math.abs(surface - centre))
 }
 
 export class ScenicRouteAudio extends JourneyAudio {
@@ -136,7 +136,7 @@ export class ScenicRouteAudio extends JourneyAudio {
     // Cave: water rush and an echo bus for the drips.
     this.cave            = this.voice(ctx, this.noise(ctx, buf), 'lowpass', 420, 0.7)
 
-    const echo           = ctx.createDelay(1.0)
+    const echo           = ctx.createDelay(1)
     echo.delayTime.value = 0.27
 
     const fb      = ctx.createGain()

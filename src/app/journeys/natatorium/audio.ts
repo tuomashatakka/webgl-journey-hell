@@ -146,7 +146,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     sweep.start()
 
     this.roomGain = this.ctx.createGain()
-    this.roomGain.gain.setValueAtTime(0.10, now)
+    this.roomGain.gain.setValueAtTime(0.1, now)
 
     src.connect(band)
     band.connect(this.roomGain)
@@ -174,7 +174,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     lp.Q.setValueAtTime(1.2, now)
 
     this.sloshGain = this.ctx.createGain()
-    this.sloshGain.gain.setValueAtTime(0.0, now)
+    this.sloshGain.gain.setValueAtTime(0, now)
 
     for (const [ rate, amt ] of [[ 0.13, 0.35 ], [ 0.31, 0.22 ]]) {
       const lfo = this.ctx.createOscillator()
@@ -206,7 +206,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     const band = this.ctx.createBiquadFilter()
     band.type  = 'bandpass'
     band.frequency.setValueAtTime(4800, now)
-    band.Q.setValueAtTime(11.0, now)
+    band.Q.setValueAtTime(11, now)
 
     this.buzzGain = this.ctx.createGain()
     this.buzzGain.gain.setValueAtTime(0.02, now)
@@ -224,7 +224,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
 
     const now    = this.ctx.currentTime
     this.humGain = this.ctx.createGain()
-    this.humGain.gain.setValueAtTime(0.0, now)
+    this.humGain.gain.setValueAtTime(0, now)
     this.humGain.connect(this.dry)
 
     for (const [ f, a ] of [[ 50, 0.5 ], [ 100, 0.3 ], [ 150, 0.14 ]]) {
@@ -256,7 +256,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     lp.frequency.setValueAtTime(90, now)
 
     this.rumbleGain = this.ctx.createGain()
-    this.rumbleGain.gain.setValueAtTime(0.0, now)
+    this.rumbleGain.gain.setValueAtTime(0, now)
 
     src.connect(lp)
     lp.connect(this.rumbleGain)
@@ -280,7 +280,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     osc.frequency.exponentialRampToValueAtTime(240, now + 0.06)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
+    env.gain.setValueAtTime(0, now)
     env.gain.linearRampToValueAtTime(0.16, now + 0.004)
     env.gain.exponentialRampToValueAtTime(0.0001, now + 0.18)
 
@@ -325,9 +325,9 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     band.Q.setValueAtTime(1.1, now)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
-    env.gain.linearRampToValueAtTime(0.14 * (1.0 - sub * 0.45), now + 0.01 + sub * 0.06)
-    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.30 + sub * 0.4)
+    env.gain.setValueAtTime(0, now)
+    env.gain.linearRampToValueAtTime(0.14 * (1 - sub * 0.45), now + 0.01 + sub * 0.06)
+    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.3 + sub * 0.4)
 
     src.connect(band)
     band.connect(env)
@@ -362,7 +362,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
           const band = this.ctx.createBiquadFilter()
           band.type  = 'bandpass'
           band.frequency.setValueAtTime(2600, now)
-          band.Q.setValueAtTime(24.0, now)
+          band.Q.setValueAtTime(24, now)
 
           const trill = this.ctx.createOscillator()
           trill.frequency.setValueAtTime(18, now)
@@ -375,9 +375,9 @@ export class NatatoriumAudioEngine extends JourneyAudio {
           trill.stop(now + 0.5)
 
           const env = this.ctx.createGain()
-          env.gain.setValueAtTime(0.0, now)
-          env.gain.linearRampToValueAtTime(0.10, now + 0.03)
-          env.gain.setValueAtTime(0.10, now + 0.30)
+          env.gain.setValueAtTime(0, now)
+          env.gain.linearRampToValueAtTime(0.1, now + 0.03)
+          env.gain.setValueAtTime(0.1, now + 0.3)
           env.gain.exponentialRampToValueAtTime(0.0001, now + 0.5)
 
           src.connect(band)
@@ -406,7 +406,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     const above = look[2]
     const now   = this.ctx.currentTime
 
-    this.submerged = 1.0 - above
+    this.submerged = 1 - above
     this.depth     = look[3]
     this.secType   = wave[3]
 
@@ -427,11 +427,11 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     this.flutterLP?.frequency.setTargetAtTime(2400 - sub * 2100, now, GLIDE)
 
     this.ramp(this.rumbleGain?.gain, sub * 0.34, now, 'lastRumble')
-    this.ramp(this.sloshGain?.gain, 0.05 + Math.min(this.depth, 2.0) * 0.10, now, 'lastSlosh')
-    this.ramp(this.buzzGain?.gain, (1.0 - sub) * 0.024, now, 'lastBuzz')
+    this.ramp(this.sloshGain?.gain, 0.05 + Math.min(this.depth, 2) * 0.1, now, 'lastSlosh')
+    this.ramp(this.buzzGain?.gain, (1 - sub) * 0.024, now, 'lastBuzz')
     this.ramp(
       this.humGain?.gain,
-      this.secType === TYPE_PLANT ? 0.055 : this.secType === TYPE_RAW ? 0.022 : 0.0,
+      this.secType === TYPE_PLANT ? 0.055 : this.secType === TYPE_RAW ? 0.022 : 0,
       now, 'lastHum',
     )
   }

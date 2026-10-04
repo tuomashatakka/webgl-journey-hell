@@ -127,13 +127,13 @@ export function createFoundrySimulation (): JourneySimulation {
   let signalAge = 0
 
   // Scratch buffers — packed in place every frame, never reallocated.
-  const debris  = new Array<number>(24).fill(0)
-  const debrisQ = new Array<number>(24).fill(0)
+  const debris  = Array.from({ length: 24 }).fill(0)
+  const debrisQ = Array.from({ length: 24 }).fill(0)
   const folds   = [
-    new Array<number>(4).fill(0),
-    new Array<number>(4).fill(0),
-    new Array<number>(4).fill(0),
-    new Array<number>(4).fill(0),
+    Array.from({ length: 4 }).fill(0),
+    Array.from({ length: 4 }).fill(0),
+    Array.from({ length: 4 }).fill(0),
+    Array.from({ length: 4 }).fill(0),
   ]
 
   return {

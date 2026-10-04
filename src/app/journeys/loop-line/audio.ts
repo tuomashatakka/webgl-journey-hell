@@ -59,7 +59,7 @@ import { clamp01 } from '✦/lib/math'
 const GLIDE = 0.45
 
 /** Glide for the room crossfade, which happens at a portal and should be quick. */
-const ROOM_GLIDE = 0.30
+const ROOM_GLIDE = 0.3
 
 const EPS = 0.004
 
@@ -90,11 +90,11 @@ interface RoomTone {
 const ROOMS: RoomTone[] = [
   { time: 0.013, fb: 0.82, damp: 3800, wet: 0.52 }, // 0 — PLATFORM SIX, tiled flutter
   { time: 0.042, fb: 0.36, damp: 850, wet: 0.32 }, // 1 — THE CONCOURSE, big vaulted
-  { time: 0.000, fb: 0.00, damp: 8000, wet: 0.00 }, // 2 — THE CUT, open air, no tail
+  { time: 0, fb: 0, damp: 8000, wet: 0 }, // 2 — THE CUT, open air, no tail
   { time: 0.016, fb: 0.45, damp: 1400, wet: 0.28 }, // 3 — THE ANNEX, flooded chamber
-  { time: 0.008, fb: 0.20, damp: 6000, wet: 0.15 }, // 4 — THE STACKS, machine hall
-  { time: 0.000, fb: 0.00, damp: 8000, wet: 0.02 }, // 5 — THE TURNBACK, open void
-  { time: 0.008, fb: 0.55, damp: 1200, wet: 0.40 }, // 6 — THE CHORD, close bore
+  { time: 0.008, fb: 0.2, damp: 6000, wet: 0.15 }, // 4 — THE STACKS, machine hall
+  { time: 0, fb: 0, damp: 8000, wet: 0.02 }, // 5 — THE TURNBACK, open void
+  { time: 0.008, fb: 0.55, damp: 1200, wet: 0.4 }, // 6 — THE CHORD, close bore
 ]
 
 //
@@ -105,12 +105,12 @@ const ROOMS: RoomTone[] = [
 //
 const SYLLABLES: [number, number][][] = [
   [[ 280, 0.11 ], [ 310, 0.09 ], [ 260, 0.13 ]], // PLATFORM SIX
-  [[ 250, 0.10 ], [ 300, 0.10 ], [ 270, 0.09 ], [ 320, 0.11 ]], // THE CONCOURSE
-  [[ 290, 0.12 ], [ 260, 0.10 ]], // THE CUT
-  [[ 270, 0.09 ], [ 310, 0.11 ], [ 250, 0.10 ], [ 290, 0.08 ], [ 330, 0.09 ]], // THE ANNEX
-  [[ 300, 0.10 ], [ 260, 0.12 ], [ 320, 0.09 ]], // THE STACKS
-  [[ 260, 0.11 ], [ 290, 0.10 ], [ 270, 0.13 ], [ 310, 0.09 ]], // THE TURNBACK
-  [[ 280, 0.12 ], [ 310, 0.10 ], [ 250, 0.11 ], [ 300, 0.09 ], [ 270, 0.10 ], [ 320, 0.08 ]], // THE CHORD
+  [[ 250, 0.1 ], [ 300, 0.1 ], [ 270, 0.09 ], [ 320, 0.11 ]], // THE CONCOURSE
+  [[ 290, 0.12 ], [ 260, 0.1 ]], // THE CUT
+  [[ 270, 0.09 ], [ 310, 0.11 ], [ 250, 0.1 ], [ 290, 0.08 ], [ 330, 0.09 ]], // THE ANNEX
+  [[ 300, 0.1 ], [ 260, 0.12 ], [ 320, 0.09 ]], // THE STACKS
+  [[ 260, 0.11 ], [ 290, 0.1 ], [ 270, 0.13 ], [ 310, 0.09 ]], // THE TURNBACK
+  [[ 280, 0.12 ], [ 310, 0.1 ], [ 250, 0.11 ], [ 300, 0.09 ], [ 270, 0.1 ], [ 320, 0.08 ]], // THE CHORD
 ]
 
 
@@ -197,7 +197,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
     this.tapFb = this.ctx.createGain()
     this.tapFb.gain.setValueAtTime(ROOMS[0].fb, now)
 
-    this.tail = this.ctx.createDelay(2.0)
+    this.tail = this.ctx.createDelay(2)
     this.tail.delayTime.setValueAtTime(ROOMS[0].time * 3.7, now)
 
     this.tailFb = this.ctx.createGain()
@@ -229,14 +229,14 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     const now      = this.ctx.currentTime
     this.motorGain = this.ctx.createGain()
-    this.motorGain.gain.setValueAtTime(0.0, now)
+    this.motorGain.gain.setValueAtTime(0, now)
 
     const lp = this.ctx.createBiquadFilter()
     lp.type  = 'lowpass'
     lp.frequency.setValueAtTime(600, now)
-    lp.Q.setValueAtTime(5.0, now)
+    lp.Q.setValueAtTime(5, now)
 
-    for (const [ f, a ] of [[ 55, 1.0 ], [ 82, 0.38 ], [ 110, 0.18 ]]) {
+    for (const [ f, a ] of [[ 55, 1 ], [ 82, 0.38 ], [ 110, 0.18 ]]) {
       const osc = this.ctx.createOscillator()
       osc.type  = 'sawtooth'
       osc.frequency.setValueAtTime(f, now)
@@ -264,7 +264,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     const now      = this.ctx.currentTime
     this.muzakGain = this.ctx.createGain()
-    this.muzakGain.gain.setValueAtTime(0.0, now)
+    this.muzakGain.gain.setValueAtTime(0, now)
 
     const lp = this.ctx.createBiquadFilter()
     lp.type  = 'lowpass'
@@ -274,7 +274,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     // F, A, B, E — wrong-sounding intervals that read as a muzak recording
     // that nobody has been in to change.
-    for (const [ f, det ] of [[ 174.6, 0 ], [ 220.0, 8 ], [ 246.9, -6 ], [ 329.6, 12 ]]) {
+    for (const [ f, det ] of [[ 174.6, 0 ], [ 220, 8 ], [ 246.9, -6 ], [ 329.6, 12 ]]) {
       const osc = this.ctx.createOscillator()
       osc.type  = 'triangle'
       osc.frequency.setValueAtTime(f, now)
@@ -284,7 +284,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
       wow.frequency.setValueAtTime(0.21 + f * 0.0004, now)
 
       const wowAmt = this.ctx.createGain()
-      wowAmt.gain.setValueAtTime(8.0, now)
+      wowAmt.gain.setValueAtTime(8, now)
       wow.connect(wowAmt)
       wowAmt.connect(osc.detune)
       wow.start()
@@ -337,7 +337,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
     lp.Q.setValueAtTime(0.6, now)
 
     this.windGain = this.ctx.createGain()
-    this.windGain.gain.setValueAtTime(0.0, now)
+    this.windGain.gain.setValueAtTime(0, now)
 
     src.connect(lp)
     lp.connect(this.windGain)
@@ -358,9 +358,9 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     const now      = this.ctx.currentTime
     this.waterGain = this.ctx.createGain()
-    this.waterGain.gain.setValueAtTime(0.0, now)
+    this.waterGain.gain.setValueAtTime(0, now)
     this.splashGain = this.ctx.createGain()
-    this.splashGain.gain.setValueAtTime(0.0, now)
+    this.splashGain.gain.setValueAtTime(0, now)
 
     // Lapping water: AM-modulated filtered noise.
     const water = this.noiseSource(true)
@@ -397,11 +397,11 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     const now    = this.ctx.currentTime
     this.fanGain = this.ctx.createGain()
-    this.fanGain.gain.setValueAtTime(0.0, now)
+    this.fanGain.gain.setValueAtTime(0, now)
     this.coilGain = this.ctx.createGain()
-    this.coilGain.gain.setValueAtTime(0.0, now)
+    this.coilGain.gain.setValueAtTime(0, now)
     this.relayGain = this.ctx.createGain()
-    this.relayGain.gain.setValueAtTime(0.0, now)
+    this.relayGain.gain.setValueAtTime(0, now)
 
     this.buildFanLayers()
     this.buildCoilWhine()
@@ -432,7 +432,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
     lp.frequency.setValueAtTime(400, now)
 
     this.voidGain = this.ctx.createGain()
-    this.voidGain.gain.setValueAtTime(0.0, now)
+    this.voidGain.gain.setValueAtTime(0, now)
 
     src.connect(lp)
     lp.connect(this.voidGain)
@@ -459,10 +459,10 @@ export class LoopLineAudioEngine extends JourneyAudio {
     const bp = this.ctx.createBiquadFilter()
     bp.type  = 'bandpass'
     bp.frequency.setValueAtTime(350, now)
-    bp.Q.setValueAtTime(4.0, now)
+    bp.Q.setValueAtTime(4, now)
 
     this.boreGain = this.ctx.createGain()
-    this.boreGain.gain.setValueAtTime(0.0, now)
+    this.boreGain.gain.setValueAtTime(0, now)
 
     src.connect(bp)
     bp.connect(this.boreGain)
@@ -482,7 +482,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     const now = this.ctx.currentTime
 
-    for (const [ f, q ] of [[ 320, 3.0 ], [ 580, 4.5 ], [ 900, 2.8 ], [ 1400, 5.0 ]]) {
+    for (const [ f, q ] of [[ 320, 3 ], [ 580, 4.5 ], [ 900, 2.8 ], [ 1400, 5 ]]) {
       const bp = this.ctx.createBiquadFilter()
       bp.type  = 'bandpass'
       bp.frequency.setValueAtTime(f, now)
@@ -533,10 +533,10 @@ export class LoopLineAudioEngine extends JourneyAudio {
         const bp = this.ctx.createBiquadFilter()
         bp.type  = 'bandpass'
         bp.frequency.setValueAtTime(2200, now)
-        bp.Q.setValueAtTime(12.0, now)
+        bp.Q.setValueAtTime(12, now)
 
         const g = this.ctx.createGain()
-        g.gain.setValueAtTime(0.0, now)
+        g.gain.setValueAtTime(0, now)
         g.gain.linearRampToValueAtTime(0.12, now + 0.001)
         g.gain.exponentialRampToValueAtTime(0.0001, now + 0.02)
         src.connect(bp)
@@ -556,7 +556,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
     const tick = () => {
       if (!this.ctx || this.isMuted || this.bay !== 2)
         return
-      if (this.lapF < 2.0) {
+      if (this.lapF < 2) {
         const now = this.ctx.currentTime
         const osc = this.ctx.createOscillator()
         osc.type  = 'sine'
@@ -564,10 +564,10 @@ export class LoopLineAudioEngine extends JourneyAudio {
         const base = 1800 + Math.random() * 1600
         osc.frequency.setValueAtTime(base, now)
         osc.frequency.linearRampToValueAtTime(base * 1.15, now + 0.04)
-        osc.frequency.linearRampToValueAtTime(base * 0.88, now + 0.10)
+        osc.frequency.linearRampToValueAtTime(base * 0.88, now + 0.1)
 
         const g = this.ctx.createGain()
-        g.gain.setValueAtTime(0.0, now)
+        g.gain.setValueAtTime(0, now)
         g.gain.linearRampToValueAtTime(0.015, now + 0.01)
         g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12)
         osc.connect(g)
@@ -601,15 +601,15 @@ export class LoopLineAudioEngine extends JourneyAudio {
     this.formantF1      = this.ctx.createBiquadFilter()
     this.formantF1.type = 'bandpass'
     this.formantF1.frequency.setValueAtTime(400, now)
-    this.formantF1.Q.setValueAtTime(8.0, now)
+    this.formantF1.Q.setValueAtTime(8, now)
 
     this.formantF2      = this.ctx.createBiquadFilter()
     this.formantF2.type = 'bandpass'
     this.formantF2.frequency.setValueAtTime(2200, now)
-    this.formantF2.Q.setValueAtTime(12.0, now)
+    this.formantF2.Q.setValueAtTime(12, now)
 
     this.formantMix = this.ctx.createGain()
-    this.formantMix.gain.setValueAtTime(0.0, now)
+    this.formantMix.gain.setValueAtTime(0, now)
 
     this.formantF1Gain = this.ctx.createGain()
     this.formantF1Gain.gain.setValueAtTime(0.55, now)
@@ -634,7 +634,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
     if (!this.ctx || !this.dry)
       return
     this.chimeGain = this.ctx.createGain()
-    this.chimeGain.gain.setValueAtTime(0.0, this.ctx.currentTime)
+    this.chimeGain.gain.setValueAtTime(0, this.ctx.currentTime)
     this.chimeGain.connect(this.dry)
     this.chimeGain.connect(this.wet ?? this.dry)
   }
@@ -680,7 +680,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
       return
 
     const now  = this.ctx.currentTime
-    const gap  = WHEELBASE / Math.max(this.speed, 1.0)
+    const gap  = WHEELBASE / Math.max(this.speed, 1)
     const wear = clamp01(this.lapF * 0.35)
 
     for (let axle = 0; axle < 2; axle++) {
@@ -693,16 +693,16 @@ export class LoopLineAudioEngine extends JourneyAudio {
       const bp = this.ctx.createBiquadFilter()
       bp.type  = 'bandpass'
       bp.frequency.setValueAtTime(280 + wear * 400, at)
-      bp.Q.setValueAtTime(3.2 + wear * 4.0, at)
+      bp.Q.setValueAtTime(3.2 + wear * 4, at)
 
       const ring = this.ctx.createBiquadFilter()
       ring.type  = 'bandpass'
       ring.frequency.setValueAtTime(1500 + wear * 1200, at)
-      ring.Q.setValueAtTime(14.0 + wear * 10.0, at)
+      ring.Q.setValueAtTime(14 + wear * 10, at)
 
-      const g   = (0.035 + wear * 0.16) * (axle === 0 ? 1.0 : 0.72)
+      const g   = (0.035 + wear * 0.16) * (axle === 0 ? 1 : 0.72)
       const env = this.ctx.createGain()
-      env.gain.setValueAtTime(0.0, at)
+      env.gain.setValueAtTime(0, at)
       env.gain.linearRampToValueAtTime(g, at + 0.004)
       env.gain.exponentialRampToValueAtTime(0.0001, at + 0.11)
 
@@ -727,10 +727,10 @@ export class LoopLineAudioEngine extends JourneyAudio {
     const f2  = 1800 + pitch * 2.2
     this.formantF1?.frequency.setValueAtTime(f1, now)
     this.formantF2?.frequency.setValueAtTime(f2, now)
-    this.formantMix.gain.setValueAtTime(0.0, now)
+    this.formantMix.gain.setValueAtTime(0, now)
     this.formantMix.gain.linearRampToValueAtTime(0.14, now + 0.012)
     this.formantMix.gain.setValueAtTime(0.14, now + duration - 0.02)
-    this.formantMix.gain.linearRampToValueAtTime(0.0, now + duration)
+    this.formantMix.gain.linearRampToValueAtTime(0, now + duration)
   }
 
   /** The two-note door chime before each announcement. */
@@ -739,7 +739,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
       return
 
     const now = this.ctx.currentTime
-    this.chimeGain.gain.setValueAtTime(0.0, now)
+    this.chimeGain.gain.setValueAtTime(0, now)
 
     const notes = [ 698.5, 523.3 ]
     for (let i = 0; i < 2; i++) {
@@ -748,8 +748,8 @@ export class LoopLineAudioEngine extends JourneyAudio {
       osc.frequency.setValueAtTime(notes[i], now + i * 0.18)
 
       const env = this.ctx.createGain()
-      env.gain.setValueAtTime(0.0, now + i * 0.18)
-      env.gain.linearRampToValueAtTime(0.10, now + i * 0.18 + 0.008)
+      env.gain.setValueAtTime(0, now + i * 0.18)
+      env.gain.linearRampToValueAtTime(0.1, now + i * 0.18 + 0.008)
       env.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.18 + 0.35)
       osc.connect(env)
       env.connect(this.chimeGain)
@@ -791,7 +791,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
           ? Math.max(2, pattern.length - 2)
           : Math.max(2, pattern.length - 3)
 
-    const pitchDrift = lap >= 3 ? 1.0 - clamp01((lap - 3) * 0.15) : 1.0
+    const pitchDrift = lap >= 3 ? 1 - clamp01((lap - 3) * 0.15) : 1
 
     // Door chime, then the syllables.
     this.fireDoorChime()
@@ -891,36 +891,36 @@ export class LoopLineAudioEngine extends JourneyAudio {
     // --- continuous layers ---
 
     // Motor: pitch and filter track speed.
-    this.ramp(this.motorGain?.gain, 0.04 + Math.min(this.speed / 20, 1.0) * 0.14, now, 'motorGain')
+    this.ramp(this.motorGain?.gain, 0.04 + Math.min(this.speed / 20, 1) * 0.14, now, 'motorGain')
 
     // Concourse muzak.
-    this.ramp(this.muzakGain?.gain, this.bay === 1 ? 0.045 : 0.0, now, 'muzakGain')
+    this.ramp(this.muzakGain?.gain, this.bay === 1 ? 0.045 : 0, now, 'muzakGain')
 
     // Wind in the cut — open air.
-    const cutFactor = this.bay === 2 ? 1.0 : 0.0
-    this.ramp(this.windGain?.gain, cutFactor * 0.06 * Math.min(this.speed / 18, 1.0), now, 'windGain')
+    const cutFactor = this.bay === 2 ? 1 : 0
+    this.ramp(this.windGain?.gain, cutFactor * 0.06 * Math.min(this.speed / 18, 1), now, 'windGain')
 
     // Water in the annex — lapping rate tracks speed.
-    this.ramp(this.waterGain?.gain, this.bay === 3 ? 0.08 : 0.0, now, 'waterGain')
+    this.ramp(this.waterGain?.gain, this.bay === 3 ? 0.08 : 0, now, 'waterGain')
 
     // Splash in the annex — rate tracks speed.
-    const splashRate = this.bay === 3 ? Math.min(this.speed / 18, 1.0) * 0.05 : 0.0
+    const splashRate = this.bay === 3 ? Math.min(this.speed / 18, 1) * 0.05 : 0
     this.ramp(this.splashGain?.gain, splashRate, now, 'splashGain')
 
     // Fan walls in the stacks.
-    this.ramp(this.fanGain?.gain, this.bay === 4 ? 0.055 : 0.0, now, 'fanGain')
+    this.ramp(this.fanGain?.gain, this.bay === 4 ? 0.055 : 0, now, 'fanGain')
 
     // Coil whine in the stacks.
-    this.ramp(this.coilGain?.gain, this.bay === 4 ? 0.025 : 0.0, now, 'coilGain')
+    this.ramp(this.coilGain?.gain, this.bay === 4 ? 0.025 : 0, now, 'coilGain')
 
     // Relay clicks in the stacks — driven by schedule, just gate the gain.
-    this.ramp(this.relayGain?.gain, this.bay === 4 ? 1.0 : 0.0, now, 'relayGain')
+    this.ramp(this.relayGain?.gain, this.bay === 4 ? 1 : 0, now, 'relayGain')
 
     // Void — almost nothing on the trestle.
-    this.ramp(this.voidGain?.gain, this.bay === 5 ? 0.018 : 0.0, now, 'voidGain')
+    this.ramp(this.voidGain?.gain, this.bay === 5 ? 0.018 : 0, now, 'voidGain')
 
     // Bore — narrow, close, dry brick.
-    this.ramp(this.boreGain?.gain, this.bay === 6 ? 0.10 : 0.0, now, 'boreGain')
+    this.ramp(this.boreGain?.gain, this.bay === 6 ? 0.1 : 0, now, 'boreGain')
 
     // --- master degradation ---
     //
@@ -929,7 +929,7 @@ export class LoopLineAudioEngine extends JourneyAudio {
     // you are listening to it through a wall.
     const age = Math.min(this.lapF * 0.22, 0.62)
     this.masterLP?.frequency.setTargetAtTime(18000 * Math.pow(0.16, age), now, GLIDE)
-    this.wet?.gain.setTargetAtTime(0.45 + age * 0.50, now, GLIDE)
+    this.wet?.gain.setTargetAtTime(0.45 + age * 0.5, now, GLIDE)
 
     // Power-cut dropouts gated on uDecay[1] (lightFail).
     if (decay[1] > 0.05 && Math.sin(this.lapF * 47.3) > 0.98 - decay[1] * 0.15) {
@@ -961,10 +961,10 @@ export class LoopLineAudioEngine extends JourneyAudio {
     const bp = this.ctx.createBiquadFilter()
     bp.type  = 'bandpass'
     bp.frequency.setValueAtTime(600 + Math.random() * 400, now)
-    bp.Q.setValueAtTime(2.0, now)
+    bp.Q.setValueAtTime(2, now)
 
     const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0.0, now)
+    env.gain.setValueAtTime(0, now)
     env.gain.linearRampToValueAtTime(0.04, now + 0.008)
     env.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
     src.connect(bp)

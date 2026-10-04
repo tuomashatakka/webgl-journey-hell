@@ -82,9 +82,9 @@ const WALK_SPEED = 2.4 // m/s, a brisk walk
 const LEG_K      = 210 // leg-spring stiffness (per unit mass)
 const LEG_C      = 9 // leg-spring damping — low enough that the head rings
 const SWAY_K     = 74 // lateral sway stiffness, tuned to one stride period
-const SWAY_C     = 4.0
+const SWAY_C     = 4
 const HEEL_KICK  = 0.55 // m/s of head drop injected by each heel strike
-const SWAY_KICK  = 0.30 // m/s of lateral drift injected by weight transfer
+const SWAY_KICK  = 0.3 // m/s of lateral drift injected by weight transfer
 const TREMOR_K   = 130 // floor-tremor spring (impacts travel up it)
 const TREMOR_C   = 5.5
 
@@ -103,7 +103,7 @@ export const LIFT_STAND = 0.55
 export const WALK_START = LIFT_Z - LIFT_STAND
 
 /** Half-width of the square hoist shaft. */
-export const SHAFT_R = 3.0
+export const SHAFT_R = 3
 
 /** Shaft head, and the height the cage is at when the cable lets go. */
 export const SHAFT_HEAD_Y = 128
@@ -226,7 +226,7 @@ const OBLIVION_BITE = 118000
 const OBLIVION_CHATTER = 6.1
 
 /** What fraction of a full clamp one of those grabs is worth. */
-const OBLIVION_HOLD = 1.0
+const OBLIVION_HOLD = 1
 
 /** ½ρCdA down there. Terminal velocity works out at about 46 m/s. */
 const OBLIVION_DRAG = 4.2
@@ -731,8 +731,8 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
     hookOmega:    0,
     chain:        0.12,
     chainOmega:   0,
-    fold:         new Array<number>(SPAN_TILES).fill(0),
-    foldOmega:    new Array<number>(SPAN_TILES).fill(0),
+    fold:         Array.from({ length: SPAN_TILES }).fill(0),
+    foldOmega:    Array.from({ length: SPAN_TILES }).fill(0),
   }
 }
 
@@ -767,7 +767,7 @@ export function brakeForce (speed: number, engaged: number): number {
   const normal = 68000 * seat
   // Sliding friction falls off with speed (Stribeck-ish), so the cage grabs
   // harder as it slows — this is what produces the final juddering stop.
-  const mu = 0.52 + 0.30 / (1 + speed * 0.22)
+  const mu = 0.52 + 0.3 / (1 + speed * 0.22)
   return normal * mu
 }
 
@@ -917,11 +917,11 @@ function cageForce (s: FoundryState, dt: number): number {
     // less every second. Early on the two together very nearly cancel gravity,
     // so the cage hangs there shrieking and throwing a wall of sparks and
     // *almost* holds. Then it does not.
-    const seat = Math.min(1, s.brakeEngaged / 0.30)
+    const seat = Math.min(1, s.brakeEngaged / 0.3)
     const grip = Math.max(0, 1 - s.brakeEngaged / OBLIVION_GRIP)
     // Never all the way to nothing between grabs: the shoes stay in contact and
     // shriek the whole way down, they just stop being able to hold.
-    const grab = 0.30 + 0.70 * Math.max(0, Math.sin(s.brakeEngaged * OBLIVION_CHATTER)) ** 2
+    const grab = 0.3 + 0.7 * Math.max(0, Math.sin(s.brakeEngaged * OBLIVION_CHATTER)) ** 2
     const f    = OBLIVION_BITE * seat * grip * grab * OBLIVION_HOLD
 
     const needed = -CAGE_MASS * s.cageV / dt - force
@@ -948,7 +948,7 @@ function cageForce (s: FoundryState, dt: number): number {
     // cage down the last few metres onto the landing. The demand tapers with
     // the remaining travel, so it arrives *at* the floor rather than through it
     // and into the buffers.
-    const target = -Math.min(CREEP_SPEED, Math.max(0, s.y - LANDING_Y) * 4.0)
+    const target = -Math.min(CREEP_SPEED, Math.max(0, s.y - LANDING_Y) * 4)
     const servo  = CAGE_MASS * (target - s.cageV) / dt - force
     force += Math.max(0, Math.min(servo, CREEP_MAX_FORCE))
     s.spark = Math.min(1, 0.18 + speed / CREEP_SPEED * 0.22)
@@ -981,7 +981,7 @@ function cageForce (s: FoundryState, dt: number): number {
   }
 
   // Down, stopped and level with the hall: the gate can open.
-  if (s.creeping && s.y <= LANDING_Y + 0.05 && speed < 0.30) {
+  if (s.creeping && s.y <= LANDING_Y + 0.05 && speed < 0.3) {
     s.y          = LANDING_Y
     s.cageV      = 0
     s.mode       = MODE_SETTLE
@@ -1138,7 +1138,7 @@ function stepMechanisms (s: FoundryState, dt: number): void {
   // by the floor tremor instead, so your own footfalls set it swinging ----
   const chainLen = 2.4
   const chainAcc =
-    -(G + s.tremorV * 12.0) / chainLen * Math.sin(s.chain) - 0.42 * s.chainOmega
+    -(G + s.tremorV * 12) / chainLen * Math.sin(s.chain) - 0.42 * s.chainOmega
   s.chainOmega += chainAcc * dt
   s.chain += s.chainOmega * dt
 }
@@ -1202,7 +1202,7 @@ function stepSpan (s: FoundryState, dt: number): void {
 function stepRide (s: FoundryState, impactSum: number): void {
   const shakeMag = Math.min(
     1,
-    Math.abs(s.cageA) / 26 + impactSum * 0.05 + s.spark * 0.30,
+    Math.abs(s.cageA) / 26 + impactSum * 0.05 + s.spark * 0.3,
   )
   s.shakeX = shakeMag * Math.sin(s.y * 37.4 + s.crank * 5.1)
   s.shakeY = shakeMag * Math.sin(s.y * 51.7 - s.crank * 3.3)
@@ -1210,7 +1210,7 @@ function stepRide (s: FoundryState, impactSum: number): void {
   s.eyeY = s.y + EYE_HEIGHT + s.tremor * 0.5 + s.shakeY * 0.045
   s.sway = s.shakeX * 0.035
   s.yaw  = s.shakeX * 0.012
-  s.roll = s.shakeX * 0.030
+  s.roll = s.shakeX * 0.03
 
   // A hoist shaft is a closed box, so the speed is legible in one place only:
   // the wall streaming up past the gate. The gaze is pinned to it — dropping as
@@ -1218,7 +1218,7 @@ function stepRide (s: FoundryState, impactSum: number): void {
   // which leaves you looking into the hall exactly as the gate starts to move.
   const fast = smoothstep(2, 26, Math.abs(s.cageV))
 
-  s.pitch = -0.20 - 0.42 * fast + s.cageA * 0.0035
+  s.pitch = -0.2 - 0.42 * fast + s.cageA * 0.0035
 }
 
 /**
@@ -1239,7 +1239,7 @@ function stepWalker (s: FoundryState, dt: number): void {
   // Stepping out of the cage accelerates you to a pace; stepping back into it
   // at the end of the lap brings you to a stand inside it.
   const target = s.mode === MODE_WALK ? WALK_SPEED : 0
-  s.v += (target - s.v) * Math.min(1, dt * (target > 0 ? 1.4 : 4.0))
+  s.v += (target - s.v) * Math.min(1, dt * (target > 0 ? 1.4 : 4))
   s.dist += s.v * dt
 
   // Where that distance has actually put you. Off the span this is the identity
@@ -1260,7 +1260,7 @@ function stepWalker (s: FoundryState, dt: number): void {
     s.foot  = -s.foot
     // No two steps are identical, and the further the lap has decayed the more
     // the gait staggers.
-    s.bobV -= HEEL_KICK * (0.85 + 0.30 * hash11(n) + decay * 0.55 * hash11(n * 3.7))
+    s.bobV -= HEEL_KICK * (0.85 + 0.3 * hash11(n) + decay * 0.55 * hash11(n * 3.7))
     s.swayV += SWAY_KICK * s.foot * (0.9 + 0.2 * hash11(n * 1.7))
 
     const tile = tileUnderfoot(s)
@@ -1271,7 +1271,7 @@ function stepWalker (s: FoundryState, dt: number): void {
   // ---- leg spring and sway spring ----
   const tile   = tileUnderfoot(s)
   // Standing on the span you ride the plate: its hinge ring is your ground.
-  const ground = tile >= 0 ? (s.fold[tile] - 1) * 0.10 : 0
+  const ground = tile >= 0 ? (s.fold[tile] - 1) * 0.1 : 0
 
   s.bobV += (LEG_K * (ground - s.bob) - LEG_C * s.bobV) * dt
   s.bob += s.bobV * dt
@@ -1288,9 +1288,9 @@ function stepWalker (s: FoundryState, dt: number): void {
   // plate over a melt staring straight ahead, and a level gaze on the lateral
   // legs of the span points at nothing but the far wall — the walkway you are
   // actually standing on falls below the bottom of the frame.
-  s.pitch = -0.05 + s.bobV * 0.022 - s.tremorV * 0.010 - Math.abs(s.head) * 0.30
+  s.pitch = -0.05 + s.bobV * 0.022 - s.tremorV * 0.01 - Math.abs(s.head) * 0.3
   // ...and lean into them, a little, the way anyone does.
-  s.roll  = -s.sway * 0.50 + s.tremor * 0.40 - s.head * 0.10
+  s.roll  = -s.sway * 0.5 + s.tremor * 0.4 - s.head * 0.1
 
   const jolt = Math.min(1, Math.abs(s.tremorV) * 0.45)
   s.shakeX   = jolt * Math.sin(s.dist * 41.3 + s.crank * 5.1)

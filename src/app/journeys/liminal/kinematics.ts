@@ -4,10 +4,10 @@ import { mix, smoothstep } from '✦/lib/math'
 
 
 /** One traversal. The literals below predate this constant; it is not a rename. */
-export const LIMINAL_LOOP_Z = 500.0
+export const LIMINAL_LOOP_Z = 500
 
 /** Where the fourth traversal stops being a traversal. */
-export const LIMINAL_ABYSS_Z = 2000.0
+export const LIMINAL_ABYSS_Z = 2000
 
 /** Six sectors plus the abyss. Drives the transport bar's tick marks. */
 export const LIMINAL_SECTOR_COUNT = 7
@@ -56,24 +56,24 @@ function pieceAt (loop: number, k: number): number {
 // Floor depth target per setpiece id.
 function pieceDepth (id: number): number {
   if (id === 1)
-    return -15.0
+    return -15
   if (id === 2)
-    return -28.0
+    return -28
   if (id === 3)
-    return -45.0
+    return -45
   if (id === 4)
-    return -55.0
+    return -55
   if (id === 5)
-    return -62.0
+    return -62
   if (id === 6)
-    return -110.0
+    return -110
   if (id === 7)
-    return -180.0
+    return -180
   if (id === 8)
-    return -30.0
+    return -30
   if (id === 9)
-    return -350.0
-  return -30.0
+    return -350
+  return -30
 }
 
 // Eye height (camera offset above floor) per setpiece id.
@@ -108,8 +108,8 @@ function pieceFall (id: number): number {
   if (id === 7)
     return 0.9
   if (id === 9)
-    return 1.0
-  return 0.0
+    return 1
+  return 0
 }
 
 // Gentle per-piece horizontal sway.
@@ -138,15 +138,15 @@ function pieceSpeed (id: number): number {
   if (id === 4)
     return 4.5
   if (id === 5)
-    return 4.0
+    return 4
   if (id === 6)
-    return 5.0
+    return 5
   if (id === 7)
     return 3.5
   if (id === 8)
-    return 4.0
+    return 4
   if (id === 9)
-    return 6.0
+    return 6
   return 8.2
 }
 
@@ -177,29 +177,29 @@ function pieceName (id: number): string {
 // Fixed-length loop timeline definition (500.0 units per loop)
 export function getKinematicState (z: number): KinematicState {
   // If we reach the endless fall of the last Loop 3, we stay in it forever
-  if (z >= 2000.0) {
-    const localZ = z - 2000.0
-    const name   = localZ > 200.0
+  if (z >= 2000) {
+    const localZ = z - 2000
+    const name   = localZ > 200
       ? 'SECTOR 666: THE ABYSS (STOPPED)'
       : 'SECTOR 666: THE ABYSS — THE VOID'
     return {
       loop:      3,
       sector:    666,
-      descent:   1.0,
+      descent:   1,
       setpieceA: 9,
       setpieceB: 9,
-      blend:     0.0,
+      blend:     0,
       localZ,
-      secLen:    1000000.0,
-      fallAmt:   1.0 - smoothstep(0.0, 200.0, localZ) * 0.85,
+      secLen:    1000000,
+      fallAmt:   1 - smoothstep(0, 200, localZ) * 0.85,
       name
     }
   }
 
-  const loop = Math.floor(z / 500.0)
-  const lz   = z % 500.0
+  const loop = Math.floor(z / 500)
+  const lz   = z % 500
 
-  if (lz < 60.0)
+  if (lz < 60)
     return {
       loop,
       sector:    1,
@@ -208,11 +208,11 @@ export function getKinematicState (z: number): KinematicState {
       setpieceB: 0,
       blend:     0,
       localZ:    lz,
-      secLen:    60.0,
+      secLen:    60,
       fallAmt:   0,
       name:      'SECTOR 1: POOLROOMS'
     }
-  if (lz < 130.0)
+  if (lz < 130)
     return {
       loop,
       sector:    2,
@@ -220,12 +220,12 @@ export function getKinematicState (z: number): KinematicState {
       setpieceA: 0,
       setpieceB: 0,
       blend:     0,
-      localZ:    lz - 60.0,
-      secLen:    70.0,
+      localZ:    lz - 60,
+      secLen:    70,
       fallAmt:   0,
       name:      'SECTOR 2: THE DESCENT'
     }
-  if (lz < 210.0)
+  if (lz < 210)
     return {
       loop,
       sector:    3,
@@ -233,12 +233,12 @@ export function getKinematicState (z: number): KinematicState {
       setpieceA: 0,
       setpieceB: 0,
       blend:     0,
-      localZ:    lz - 130.0,
-      secLen:    80.0,
+      localZ:    lz - 130,
+      secLen:    80,
       fallAmt:   0,
       name:      'SECTOR 3: CRYSTAL CAVE'
     }
-  if (lz < 280.0)
+  if (lz < 280)
     return {
       loop,
       sector:    4,
@@ -246,12 +246,12 @@ export function getKinematicState (z: number): KinematicState {
       setpieceA: 0,
       setpieceB: 0,
       blend:     0,
-      localZ:    lz - 210.0,
-      secLen:    70.0,
+      localZ:    lz - 210,
+      secLen:    70,
       fallAmt:   0,
       name:      'SECTOR 4: IRON HYDRAULICS'
     }
-  if (lz < 360.0)
+  if (lz < 360)
     return {
       loop,
       sector:    5,
@@ -259,14 +259,14 @@ export function getKinematicState (z: number): KinematicState {
       setpieceA: 0,
       setpieceB: 0,
       blend:     0,
-      localZ:    lz - 280.0,
-      secLen:    80.0,
+      localZ:    lz - 280,
+      secLen:    80,
       fallAmt:   0,
       name:      'SECTOR 5: VOID LABYRINTH'
     }
 
   // Sector 6 / 666 transition zone (lz from 360.0 to 500.0, length 140)
-  const local666 = lz - 360.0
+  const local666 = lz - 360
   if (loop === 0)
     return {
       loop:      0,
@@ -276,16 +276,16 @@ export function getKinematicState (z: number): KinematicState {
       setpieceB: 0,
       blend:     0,
       localZ:    local666,
-      secLen:    140.0,
+      secLen:    140,
       fallAmt:   0,
       name:      'SECTOR 6: TRANSITION'
     }
 
   // Sector 666: continuous setpiece cross-fade model
   const localZ = local666 // 0..140
-  const secLen = 140.0
+  const secLen = 140
 
-  const descent = localZ / 140.0
+  const descent = localZ / 140
 
   const N         = pieceCount(loop)
   const slotF     = descent * N
@@ -293,7 +293,7 @@ export function getKinematicState (z: number): KinematicState {
   const frac      = slotF - slot
   const setpieceA = pieceAt(loop, slot)
   const setpieceB = pieceAt(loop, Math.min(slot + 1, N - 1))
-  const blend     = smoothstep(1.0 - PIECE_W, 1.0, frac)
+  const blend     = smoothstep(1 - PIECE_W, 1, frac)
   const fallAmt   = mix(pieceFall(setpieceA), pieceFall(setpieceB), blend)
 
   const dominant = blend < 0.5 ? setpieceA : setpieceB
@@ -318,29 +318,29 @@ export function getCamX (z: number): number {
   const state = getKinematicState(z)
 
   if (state.sector === 1)
-    return 0.0
+    return 0
   if (state.sector === 2) {
-    const s = smoothstep(5.0, 15.0, state.localZ) * (1.0 - smoothstep(55.0, 65.0, state.localZ))
-    return s * Math.sin(z * 0.15) * 4.0
+    const s = smoothstep(5, 15, state.localZ) * (1 - smoothstep(55, 65, state.localZ))
+    return s * Math.sin(z * 0.15) * 4
   }
   if (state.sector === 3) {
-    const s = smoothstep(0.0, 5.0, state.localZ) * (1.0 - smoothstep(75.0, 80.0, state.localZ))
+    const s = smoothstep(0, 5, state.localZ) * (1 - smoothstep(75, 80, state.localZ))
     return s * Math.sin(z * 0.4) * 1.5
   }
   if (state.sector === 4) {
-    const s = smoothstep(0.0, 10.0, state.localZ) * (1.0 - smoothstep(60.0, 70.0, state.localZ))
+    const s = smoothstep(0, 10, state.localZ) * (1 - smoothstep(60, 70, state.localZ))
     return s * Math.sin(z * 0.08) * 1.8
   }
   if (state.sector === 5) {
     // Elegant winding stair sway
     const t5 = state.localZ / state.secLen
-    return Math.sin(t5 * Math.PI * 3.0) * 3.5
+    return Math.sin(t5 * Math.PI * 3) * 3.5
   }
   if (state.sector === 6)
-    return 0.0
+    return 0
   if (state.sector === 666)
     return mix(pieceSway(state.setpieceA, z), pieceSway(state.setpieceB, z), state.blend)
-  return 0.0
+  return 0
 }
 
 // Camera vertical layout height offset
@@ -348,13 +348,13 @@ export function getCamOffset (z: number): number {
   const state = getKinematicState(z)
 
   if (state.sector === 2) {
-    if (state.localZ < 10.0)
-      return mix(1.8, 0.95, smoothstep(0.0, 10.0, state.localZ)); else if (state.localZ < 60.0)
+    if (state.localZ < 10)
+      return mix(1.8, 0.95, smoothstep(0, 10, state.localZ)); else if (state.localZ < 60)
       return 0.95; else
-      return mix(0.95, 1.0, smoothstep(60.0, 70.0, state.localZ))
+      return mix(0.95, 1, smoothstep(60, 70, state.localZ))
   }
   if (state.sector === 3)
-    return mix(1.0, 1.8, smoothstep(70.0, 80.0, state.localZ))
+    return mix(1, 1.8, smoothstep(70, 80, state.localZ))
   if (state.sector === 666)
     return mix(pieceEye(state.setpieceA), pieceEye(state.setpieceB), state.blend)
   return 1.8
@@ -365,48 +365,48 @@ export function getFloorY (z: number): number {
   const state = getKinematicState(z)
 
   if (state.sector === 1)
-    return 0.0
+    return 0
   if (state.sector === 2) {
     const t = state.localZ / state.secLen
-    return mix(0.0, -25.0, t * t * (3 - 2 * t))
+    return mix(0, -25, t * t * (3 - 2 * t))
   }
   if (state.sector === 3) {
     const t = state.localZ / state.secLen
-    return mix(-25.0, -125.0, t * t * (3 - 2 * t))
+    return mix(-25, -125, t * t * (3 - 2 * t))
   }
   if (state.sector === 4) {
     const t         = state.localZ / state.secLen
     const bridgeArc = Math.sin(t * Math.PI) * 7.5
-    return -125.0 + bridgeArc
+    return -125 + bridgeArc
   }
   if (state.sector === 5) {
-    if (state.localZ < 52.0) {
+    if (state.localZ < 52) {
       const stepSize    = 3.25
       const s           = state.localZ / stepSize
-      const smoothStair = Math.floor(s) + smoothstep(0.6, 1.0, s - Math.floor(s))
-      return -125.0 + smoothStair * 3.44
+      const smoothStair = Math.floor(s) + smoothstep(0.6, 1, s - Math.floor(s))
+      return -125 + smoothStair * 3.44
     }
-    else if (state.localZ < 72.0) {
-      const tFall = (state.localZ - 52.0) / 20.0
-      return mix(-70.0, -180.0, tFall * tFall)
+    else if (state.localZ < 72) {
+      const tFall = (state.localZ - 52) / 20
+      return mix(-70, -180, tFall * tFall)
     }
     else
-      return -180.0
+      return -180
   }
   if (state.sector === 6) {
-    const t = Math.max(0.0, Math.min(1.0, state.localZ / state.secLen))
-    return mix(-180.0, 0.0, smoothstep(0.0, 1.0, t))
+    const t = Math.max(0, Math.min(1, state.localZ / state.secLen))
+    return mix(-180, 0, smoothstep(0, 1, t))
   }
   if (state.sector === 666) {
     let depth = mix(pieceDepth(state.setpieceA), pieceDepth(state.setpieceB), state.blend)
     // Entry blend from sector 5 exit floor (-180) into the abyss.
-    depth = mix(-180.0, depth, smoothstep(0.0, 0.08, state.descent))
+    depth = mix(-180, depth, smoothstep(0, 0.08, state.descent))
     // Loop closure: return floor to 0 for the next loop's sector 1, except the loop 3 finale.
     if (state.loop < 3)
-      depth = mix(depth, 0.0, smoothstep(0.80, 1.0, state.descent))
+      depth = mix(depth, 0, smoothstep(0.8, 1, state.descent))
     return depth
   }
-  return 0.0
+  return 0
 }
 
 export function getCamY (z: number): number {
@@ -418,16 +418,16 @@ export function getWalkSpeed (z: number): number {
   const state = getKinematicState(z)
 
   // Finale endless fall: decay speed but never reach zero.
-  if (z >= 2000.0) {
-    const zFinale = z - 2000.0
-    return Math.max(0.15, mix(8.0, 0.15, smoothstep(0.0, 250.0, zFinale)))
+  if (z >= 2000) {
+    const zFinale = z - 2000
+    return Math.max(0.15, mix(8, 0.15, smoothstep(0, 250, zFinale)))
   }
 
   // Sector 5 Gravity Lab climbing: Super atmospheric crawling ascent, then collapse fall, then wading
   if (state.sector === 5) {
-    if (state.localZ < 52.0)
-      return 1.6; else if (state.localZ < 72.0)
-      return 18.0; else
+    if (state.localZ < 52)
+      return 1.6; else if (state.localZ < 72)
+      return 18; else
       return 3.5
   }
 
@@ -476,7 +476,7 @@ export function createLiminalRide (): LiminalRide {
         section:      state.sector,
         sectionCount: LIMINAL_SECTOR_COUNT,
         progress:     z >= LIMINAL_ABYSS_Z ? 1 : z % LIMINAL_LOOP_Z / LIMINAL_LOOP_Z,
-        terminal:     z >= LIMINAL_ABYSS_Z + 200.0,
+        terminal:     z >= LIMINAL_ABYSS_Z + 200,
         signalAge,
       }
     },
@@ -490,13 +490,13 @@ export function createLiminalRide (): LiminalRide {
 export function smoothIteration (z: number): number {
   const loop = getKinematicState(z).loop
   const d    = z % LIMINAL_LOOP_Z
-  if (d >= 480.0) {
-    const t = (d - 480.0) / 40.0
-    return loop + 3.0 * t * t - 2.0 * t * t * t
+  if (d >= 480) {
+    const t = (d - 480) / 40
+    return loop + 3 * t * t - 2 * t * t * t
   }
-  if (d < 20.0) {
-    const t = (d + 20.0) / 40.0
-    return loop - 1 + 3.0 * t * t - 2.0 * t * t * t
+  if (d < 20) {
+    const t = (d + 20) / 40
+    return loop - 1 + 3 * t * t - 2 * t * t * t
   }
   return loop
 }

@@ -30,14 +30,14 @@ class LiminalAudioEngine extends JourneyAudio {
 
       const filter = ctx.createBiquadFilter()
       filter.type  = 'lowpass'
-      filter.frequency.setValueAtTime(140.0, ctx.currentTime)
+      filter.frequency.setValueAtTime(140, ctx.currentTime)
       filter.Q.setValueAtTime(2.5, ctx.currentTime)
 
       this.lowpassLFO = ctx.createOscillator()
       this.lowpassLFO.frequency.setValueAtTime(0.08, ctx.currentTime)
 
       const lfoGain = ctx.createGain()
-      lfoGain.gain.setValueAtTime(110.0, ctx.currentTime)
+      lfoGain.gain.setValueAtTime(110, ctx.currentTime)
 
       this.lowpassLFO.connect(lfoGain)
       lfoGain.connect(filter.frequency)
@@ -64,7 +64,7 @@ class LiminalAudioEngine extends JourneyAudio {
 
       const droneFilter = ctx.createBiquadFilter()
       droneFilter.type  = 'lowpass'
-      droneFilter.frequency.setValueAtTime(80.0, ctx.currentTime)
+      droneFilter.frequency.setValueAtTime(80, ctx.currentTime)
 
       this.droneOscL.connect(droneFilter)
       this.droneOscR.connect(droneFilter)
@@ -102,16 +102,16 @@ class LiminalAudioEngine extends JourneyAudio {
 
       filter.type = 'bandpass'
       filter.frequency.setValueAtTime(1100 + Math.random() * 400, this.ctx.currentTime)
-      filter.Q.setValueAtTime(6.0, this.ctx.currentTime)
+      filter.Q.setValueAtTime(6, this.ctx.currentTime)
 
       osc.type        = 'sine'
 
-      const startFreq = 1600.0 + Math.random() * 800.0
-      const endFreq   = 400.0 + Math.random() * 200.0
+      const startFreq = 1600 + Math.random() * 800
+      const endFreq   = 400 + Math.random() * 200
       osc.frequency.setValueAtTime(startFreq, this.ctx.currentTime)
       osc.frequency.exponentialRampToValueAtTime(endFreq, this.ctx.currentTime + 0.08)
 
-      gain.gain.setValueAtTime(0.0, this.ctx.currentTime)
+      gain.gain.setValueAtTime(0, this.ctx.currentTime)
       gain.gain.linearRampToValueAtTime(0.35 + Math.random() * 0.4, this.ctx.currentTime + 0.005)
       gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.12)
 
@@ -141,9 +141,9 @@ class LiminalAudioEngine extends JourneyAudio {
       const gain = this.ctx.createGain()
 
       osc.type = 'sawtooth'
-      osc.frequency.setValueAtTime(10000.0 * Math.random(), this.ctx.currentTime)
+      osc.frequency.setValueAtTime(10000 * Math.random(), this.ctx.currentTime)
 
-      gain.gain.setValueAtTime(0.0, this.ctx.currentTime)
+      gain.gain.setValueAtTime(0, this.ctx.currentTime)
       gain.gain.linearRampToValueAtTime(0.18, this.ctx.currentTime + 0.001)
       gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.015)
 
@@ -171,42 +171,42 @@ class LiminalAudioEngine extends JourneyAudio {
 
     const z = typeof state?.uPlayerZ === 'number' ? state.uPlayerZ : 0
 
-    const loopVal = Math.floor(z / 500.0)
-    const lz      = z % 500.0
+    const loopVal = Math.floor(z / 500)
+    const lz      = z % 500
 
     let isWaterSegment        = false
     let isGlitchSegment       = false
     let isHeavyOrganicSegment = false
 
-    if (lz >= 60.0 && lz < 130.0)
+    if (lz >= 60 && lz < 130)
       isWaterSegment = true
-    if (lz >= 280.0 && lz < 360.0)
+    if (lz >= 280 && lz < 360)
       isWaterSegment = true
 
-    if (lz >= 360.0) {
+    if (lz >= 360) {
       if (loopVal > 0) {
         isGlitchSegment = true
 
-        const local666 = lz - 360.0
+        const local666 = lz - 360
 
         if (loopVal === 1)
-          if (local666 < 60.0)
+          if (local666 < 60)
             isHeavyOrganicSegment = true
           else
             isWaterSegment = true; else if (loopVal === 2) {
-          if (local666 >= 60.0 && local666 < 90.0)
+          if (local666 >= 60 && local666 < 90)
             isHeavyOrganicSegment = true
         }
         else {
-          if (local666 >= 40.0 && local666 < 60.0)
+          if (local666 >= 40 && local666 < 60)
             isHeavyOrganicSegment = true
-          if (local666 >= 100.0)
+          if (local666 >= 100)
             isGlitchSegment = true
         }
       }
     }
 
-    if (z >= 1890.0)
+    if (z >= 1890)
       isGlitchSegment = true
 
     const time = this.ctx.currentTime
@@ -222,10 +222,10 @@ class LiminalAudioEngine extends JourneyAudio {
     }
 
     if (this.droneOscL && this.droneOscR) {
-      const targetFreqL = isHeavyOrganicSegment ? 44.0 : 54.4
+      const targetFreqL = isHeavyOrganicSegment ? 44 : 54.4
       const targetFreqR = isHeavyOrganicSegment ? 44.6 : 55.2
-      this.droneOscL.frequency.setTargetAtTime(targetFreqL, time, 1.0)
-      this.droneOscR.frequency.setTargetAtTime(targetFreqR, time, 1.0)
+      this.droneOscL.frequency.setTargetAtTime(targetFreqL, time, 1)
+      this.droneOscR.frequency.setTargetAtTime(targetFreqR, time, 1)
     }
   }
 }

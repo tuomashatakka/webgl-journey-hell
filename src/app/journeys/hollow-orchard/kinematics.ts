@@ -41,12 +41,12 @@ export const STAGE_MYCELIAL  = 10
 export const STAGE_SEEDVAULT = 11
 export const STAGE_COMPOST   = 12
 
-export const ORCHARD_LOOP_Z = 660.0
-export const ABYSS_START_Z  = 530.0
+export const ORCHARD_LOOP_Z = 660
+export const ABYSS_START_Z  = 530
 export const ABYSS_LEN      = ORCHARD_LOOP_Z - ABYSS_START_Z // 130
 export const ABYSS_SLOTS    = 6
-export const SCAPE_W        = 12.0 // scape -> scape crossfade, world units
-export const PIECE_W        = 0.30 // setpiece crossfade, fraction of a slot
+export const SCAPE_W        = 12 // scape -> scape crossfade, world units
+export const PIECE_W        = 0.3 // setpiece crossfade, fraction of a slot
 export const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
 
 // ---- the route ------------------------------------------------------------
@@ -68,9 +68,9 @@ export const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
 //     the reciprocal of that or it steps through walls. s peaks at 0.95 here
 //     (a 43 degree heading swing), so the march runs at 0.48 rather than 0.55.
 export const PATH_K1 = Math.PI * 2 / ORCHARD_LOOP_Z * 2 // two long sweeps a loop
-export const PATH_A1 = 32.0
+export const PATH_A1 = 32
 export const PATH_K2 = Math.PI * 2 / ORCHARD_LOOP_Z * 5 // five tighter kinks
-export const PATH_A2 = 7.0
+export const PATH_A2 = 7
 
 /** Lateral offset of the route centreline at a distance along it. */
 export function pathX (z: number): number {
@@ -142,132 +142,132 @@ export const ORCHARD_STAGES: OrchardStage[] = [
   {
     id:    STAGE_NURSERY,
     name:  'SECTOR 1: THE NURSERY',
-    len:   90.0,
-    eye:   1.70,
+    len:   90,
+    eye:   1.7,
     speed: 7.5,
-    fall:  0.0,
+    fall:  0,
     sway:  0.5,
     bg:    [ 0.09, 0.075, 0.045 ],
-    key:   [ 1.00, 0.86, 0.58 ],
-    tint:  [ 0.92, 0.78, 0.50 ],
+    key:   [ 1, 0.86, 0.58 ],
+    tint:  [ 0.92, 0.78, 0.5 ],
   },
   {
     id:    STAGE_CATHEDRAL,
     name:  'SECTOR 2: SPORE CATHEDRAL',
-    len:   100.0,
-    eye:   1.80,
+    len:   100,
+    eye:   1.8,
     speed: 5.5,
-    fall:  0.0,
+    fall:  0,
     sway:  0.8,
-    bg:    [ 0.075, 0.055, 0.070 ],
-    key:   [ 1.00, 0.78, 0.42 ],
+    bg:    [ 0.075, 0.055, 0.07 ],
+    key:   [ 1, 0.78, 0.42 ],
     tint:  [ 0.95, 0.62, 0.38 ],
   },
   {
     id:    STAGE_MARROW,
     name:  'SECTOR 3: MARROW GROVE',
-    len:   90.0,
+    len:   90,
     eye:   1.65,
-    speed: 7.0,
-    fall:  0.0,
+    speed: 7,
+    fall:  0,
     sway:  0.6,
-    bg:    [ 0.060, 0.058, 0.075 ],
+    bg:    [ 0.06, 0.058, 0.075 ],
     key:   [ 0.92, 0.92, 0.86 ],
-    tint:  [ 0.88, 0.80, 0.72 ],
+    tint:  [ 0.88, 0.8, 0.72 ],
   },
   {
     id:    STAGE_ROOTS,
     name:  'SECTOR 4: THE ROOT LABYRINTH',
-    len:   100.0,
+    len:   100,
     eye:   1.15,
-    speed: 4.0,
-    fall:  0.0,
+    speed: 4,
+    fall:  0,
     sway:  1.1,
-    bg:    [ 0.030, 0.022, 0.030 ],
-    key:   [ 0.72, 0.52, 0.30 ],
-    tint:  [ 0.60, 0.34, 0.22 ],
+    bg:    [ 0.03, 0.022, 0.03 ],
+    key:   [ 0.72, 0.52, 0.3 ],
+    tint:  [ 0.6, 0.34, 0.22 ],
   },
   {
     id:    STAGE_FRUITING,
     name:  'SECTOR 5: FRUITING BODY',
-    len:   90.0,
-    eye:   1.40,
+    len:   90,
+    eye:   1.4,
     speed: 3.2,
-    fall:  0.0,
+    fall:  0,
     sway:  0.7,
     bg:    [ 0.075, 0.028, 0.038 ],
-    key:   [ 1.00, 0.55, 0.48 ],
-    tint:  [ 1.00, 0.38, 0.34 ],
+    key:   [ 1, 0.55, 0.48 ],
+    tint:  [ 1, 0.38, 0.34 ],
   },
   {
     id:    STAGE_TRANSIT,
     name:  'SECTOR 6: TRANSITION',
-    len:   60.0,
-    eye:   1.60,
-    speed: 6.0,
+    len:   60,
+    eye:   1.6,
+    speed: 6,
     fall:  0.15,
     sway:  1.4,
-    bg:    [ 0.040, 0.028, 0.050 ],
+    bg:    [ 0.04, 0.028, 0.05 ],
     key:   [ 0.85, 0.62, 0.55 ],
-    tint:  [ 0.72, 0.42, 0.60 ],
+    tint:  [ 0.72, 0.42, 0.6 ],
   },
 
   // ---- The abyss. Six evenly-split slots across ABYSS_LEN. ----
   {
     id:    STAGE_BLOOM,
     name:  'THE ABYSS — THE BLOOM',
-    len:   0.0,
-    eye:   1.20,
-    speed: 5.0,
-    fall:  0.90,
+    len:   0,
+    eye:   1.2,
+    speed: 5,
+    fall:  0.9,
     sway:  1.8,
-    bg:    [ 0.090, 0.040, 0.020 ],
-    key:   [ 1.00, 0.66, 0.30 ],
-    tint:  [ 1.00, 0.46, 0.22 ],
+    bg:    [ 0.09, 0.04, 0.02 ],
+    key:   [ 1, 0.66, 0.3 ],
+    tint:  [ 1, 0.46, 0.22 ],
   },
   {
     id:    STAGE_HOST,
     name:  'THE ABYSS — HOST',
-    len:   0.0,
+    len:   0,
     eye:   1.75,
-    speed: 4.0,
-    fall:  0.30,
+    speed: 4,
+    fall:  0.3,
     sway:  0.9,
-    bg:    [ 0.045, 0.030, 0.055 ],
-    key:   [ 0.88, 0.70, 0.62 ],
-    tint:  [ 0.95, 0.40, 0.42 ],
+    bg:    [ 0.045, 0.03, 0.055 ],
+    key:   [ 0.88, 0.7, 0.62 ],
+    tint:  [ 0.95, 0.4, 0.42 ],
   },
   {
     id:    STAGE_HARVEST,
     name:  'THE ABYSS — THE HARVEST',
-    len:   0.0,
-    eye:   1.60,
+    len:   0,
+    eye:   1.6,
     speed: 4.5,
-    fall:  0.10,
+    fall:  0.1,
     sway:  1.2,
     bg:    [ 0.055, 0.038, 0.022 ],
-    key:   [ 0.96, 0.74, 0.40 ],
-    tint:  [ 0.90, 0.50, 0.28 ],
+    key:   [ 0.96, 0.74, 0.4 ],
+    tint:  [ 0.9, 0.5, 0.28 ],
   },
   {
     id:    STAGE_MYCELIAL,
     name:  'THE ABYSS — MYCELIAL FALL',
-    len:   0.0,
-    eye:   0.90,
-    speed: 12.0,
-    fall:  1.00,
+    len:   0,
+    eye:   0.9,
+    speed: 12,
+    fall:  1,
     sway:  2.4,
-    bg:    [ 0.020, 0.016, 0.032 ],
-    key:   [ 0.80, 0.84, 1.00 ],
-    tint:  [ 0.66, 0.72, 1.00 ],
+    bg:    [ 0.02, 0.016, 0.032 ],
+    key:   [ 0.8, 0.84, 1 ],
+    tint:  [ 0.66, 0.72, 1 ],
   },
   {
     id:    STAGE_SEEDVAULT,
     name:  'THE ABYSS — SEED VAULT',
-    len:   0.0,
-    eye:   1.50,
-    speed: 5.0,
-    fall:  0.20,
+    len:   0,
+    eye:   1.5,
+    speed: 5,
+    fall:  0.2,
     sway:  0.6,
     bg:    [ 0.038, 0.026, 0.048 ],
     key:   [ 0.86, 0.72, 0.52 ],
@@ -276,14 +276,14 @@ export const ORCHARD_STAGES: OrchardStage[] = [
   {
     id:    STAGE_COMPOST,
     name:  'THE ABYSS — COMPOST',
-    len:   0.0,
-    eye:   1.30,
+    len:   0,
+    eye:   1.3,
     speed: 2.5,
-    fall:  0.60,
-    sway:  1.0,
+    fall:  0.6,
+    sway:  1,
     bg:    [ 0.014, 0.011, 0.016 ],
-    key:   [ 0.44, 0.36, 0.30 ],
-    tint:  [ 0.40, 0.24, 0.28 ],
+    key:   [ 0.44, 0.36, 0.3 ],
+    tint:  [ 0.4, 0.24, 0.28 ],
   },
 ]
 
@@ -362,10 +362,10 @@ export function getOrchardState (z: number): OrchardState {
 
   let stageA   = STAGE_NURSERY
   let stageB   = STAGE_NURSERY
-  let blend    = 0.0
+  let blend    = 0
   let localZ   = loopZ
   let stageLen = ORCHARD_STAGES[0].len
-  let descent  = 0.0
+  let descent  = 0
 
   if (loopZ < ABYSS_START_Z) {
     // --- Walking a scape. Crossfade over the last SCAPE_W units of the band. ---
@@ -393,7 +393,7 @@ export function getOrchardState (z: number): OrchardState {
 
     stageA   = STAGE_BLOOM + slot
     stageB   = STAGE_BLOOM + Math.min(slot + 1, ABYSS_SLOTS - 1)
-    blend    = smoothstep(1.0 - PIECE_W, 1.0, frac)
+    blend    = smoothstep(1 - PIECE_W, 1, frac)
     localZ   = frac * slotLen
     stageLen = slotLen
   }
@@ -402,7 +402,7 @@ export function getOrchardState (z: number): OrchardState {
   const b = stage(stageB)
 
   // Decay escalation. Loops stack it; the abyss adds the rest within a loop.
-  const rot = Math.min(1.0, loop * 0.33 + descent * 0.22)
+  const rot = Math.min(1, loop * 0.33 + descent * 0.22)
 
   const eyeY = mix(a.eye, b.eye, blend)
   const fall = mix(a.fall, b.fall, blend)
@@ -414,12 +414,12 @@ export function getOrchardState (z: number): OrchardState {
   // no special case in the state machine, just an integrand that hits 0.
   // Everything else (breath, spores, iTime) keeps running: you stop, it doesn't.
   const stalled = loop >= STALL_LOOP && stageA === STAGE_COMPOST
-  let speed     = mix(a.speed, b.speed, blend) * mix(1.0, 0.78, rot)
+  let speed     = mix(a.speed, b.speed, blend) * mix(1, 0.78, rot)
   if (stalled)
-    speed = mix(speed, 0.0, smoothstep(0.86, 0.955, descent))
+    speed = mix(speed, 0, smoothstep(0.86, 0.955, descent))
 
   // Breathing quickens in FRUITING BODY and HOST, and with rot.
-  const fleshy    = stageA === STAGE_FRUITING || stageA === STAGE_HOST ? 1.0 : 0.0
+  const fleshy    = stageA === STAGE_FRUITING || stageA === STAGE_HOST ? 1 : 0
   const breathHz  = mix(0.22, 0.52, Math.max(fleshy, rot * 0.6))
   const breath    = 0.5 + 0.5 * Math.sin(z * breathHz * 0.14)
   const breathAmp = 0.35 + 0.65 * Math.max(fleshy, rot)
@@ -444,21 +444,21 @@ export function getOrchardState (z: number): OrchardState {
     fall,
     // Face down the route. The wobble that used to be the entire heading is
     // still here, now riding on top of a real turn.
-    yaw:   Math.atan(pathDX(loopZ)) + Math.sin(loopZ * 0.021) * 0.10 * sway,
+    yaw:   Math.atan(pathDX(loopZ)) + Math.sin(loopZ * 0.021) * 0.1 * sway,
     pitch: -fall * 0.85,
     // Bank into the corner. Curvature, not heading: heading is periodic and
     // would roll the camera to one side for a third of the loop at a time.
     roll:  Math.sin(loopZ * 0.013) * 0.06 +
-          fall * 0.10 * Math.sin(loopZ * 0.09) +
-          Math.max(-0.11, Math.min(0.11, pathDDX(loopZ) * 7.0)),
-    bob:    Math.abs(Math.sin(loopZ * 0.55)) * 0.09 * (1.0 - fall) - 0.04,
+          fall * 0.1 * Math.sin(loopZ * 0.09) +
+          Math.max(-0.11, Math.min(0.11, pathDDX(loopZ) * 7)),
+    bob:    Math.abs(Math.sin(loopZ * 0.55)) * 0.09 * (1 - fall) - 0.04,
     breath: breath * breathAmp,
     spore:  clamp01(0.15 + fleshy * 0.25 + rot * 0.55 + (stageA === STAGE_CATHEDRAL ? 0.5 : 0)),
     wet:    clamp01(fleshy * 0.8 + rot * 0.5 + (stageA === STAGE_ROOTS ? 0.25 : 0)),
     glow:   clamp01(descent * 0.6 + rot * 0.4),
     // Palette lerps on the CPU so the shader carries no colour table at all,
     // then slides toward bruised violet as the rot escalates.
-    bg:     mix3(mix3(a.bg, b.bg, blend), [ 0.055, 0.020, 0.075 ], rot * 0.55),
+    bg:     mix3(mix3(a.bg, b.bg, blend), [ 0.055, 0.02, 0.075 ], rot * 0.55),
     key:    mix3(a.key, b.key, blend),
     tint:   mix3(mix3(a.tint, b.tint, blend), [ 0.72, 0.28, 0.85 ], rot * 0.4),
     name:   stalled && speed < 0.05 ? 'THE ABYSS — COMPOST (STOPPED)' : blend < 0.5 ? a.name : b.name,

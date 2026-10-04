@@ -155,7 +155,7 @@ export function finishSweep (arr: SweepArrays): SweepArrays {
  */
 function profileNormals (pts: ProfilePoint[], closed: boolean): number[] {
   const n     = pts.length
-  const out   = new Array<number>(n * 2).fill(0)
+  const out   = Array.from({ length: n * 2 }).fill(0)
   const edges = closed ? n : n - 1
   for (let e = 0; e < edges; e++) {
     const a  = pts[e]
