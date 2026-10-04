@@ -72,8 +72,6 @@
 //   uUp      (world up in the track's frame, sky of the current room)
 
 import { HASH21 } from '@wjh/glsl/hash'
-import { SD_BOX, SD_BOX2, SD_ROUND_BOX } from '@wjh/glsl/sdf'
-import { fbm2, valueNoise2 } from '@wjh/glsl/noise'
 import { foundationGlsl } from './glsl/foundation'
 import { roomsGlsl } from './glsl/rooms'
 import { sceneGlsl } from './glsl/scene'

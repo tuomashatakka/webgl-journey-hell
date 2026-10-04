@@ -21,7 +21,6 @@
 // `webgl2` contexts (withJourneyShell's `contextType`) and 1.00 compiles under
 // either.
 
-import { CONFIG } from '@wjh/config/config'
 import type { AnyGl } from './context'
 import { createGlProgram } from './program'
 import { QUAD_UV_VS_100, createFullscreenQuad } from './quad'

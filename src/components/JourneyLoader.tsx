@@ -9,7 +9,6 @@
 // is blocked compiling shaders, the one stretch of the load that cannot
 // report progress.
 
-import { CONFIG } from '@wjh/config/config'
 import type { JourneyLoading } from '@wjh/journey/engine'
 
 

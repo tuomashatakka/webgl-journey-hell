@@ -51,9 +51,7 @@
 // barrels, whole scanlines tear sideways and the grade rots toward oxblood.
 // Same road, one level deeper, worse every time round.
 
-import { HASH11, HASH21 } from '@wjh/glsl/hash'
-import { ROT, SD_BOX, SD_BOX2 } from '@wjh/glsl/sdf'
-import { fbm2, valueNoise2 } from '@wjh/glsl/noise'
+import { HASH21 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { decayGlsl } from './glsl/decay'
 import { hallsGlsl } from './glsl/halls'

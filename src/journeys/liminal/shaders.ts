@@ -1,4 +1,3 @@
-import { SD_BOX, SMIN } from '@wjh/glsl/sdf'
 import { coreGlsl } from './glsl/core'
 import { paletteGlsl } from './glsl/palette'
 import { setpiecesGlsl } from './glsl/setpieces'

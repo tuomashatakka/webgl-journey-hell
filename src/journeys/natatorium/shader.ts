@@ -29,9 +29,7 @@
 //   uLook    (pitch, roll, above, depth)
 //   uWave    (waterY-local, lap, dist, curType)
 
-import { HASH11, HASH21 } from '@wjh/glsl/hash'
-import { SD_BOX, SD_ROUND_BOX, SD_SPHERE } from '@wjh/glsl/sdf'
-import { valueNoise2 } from '@wjh/glsl/noise'
+import { HASH21 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { routeGlsl } from './glsl/route'
 import { fittingsGlsl } from './glsl/fittings'

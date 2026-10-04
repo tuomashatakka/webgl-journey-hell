@@ -145,7 +145,6 @@ export class ScenicRide implements JourneySimulation {
 
   // Gearbox.
   private gear = 0
-  private rpm = RPM_IDLE
   private rpmDisp = RPM_IDLE
 
   private readonly frame: Frame = newFrame()
@@ -246,7 +245,6 @@ export class ScenicRide implements JourneySimulation {
       }
       target = Math.max(RPM_IDLE, Math.min(RPM_MAX, rpm))
     }
-    this.rpm      = target
     // The needle lags the engine through the clutch.
     this.rpmDisp += (target - this.rpmDisp) * (1 - Math.exp(-h / CLUTCH_TAU))
   }

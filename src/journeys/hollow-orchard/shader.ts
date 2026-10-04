@@ -22,8 +22,7 @@
 // rather than an absolute Y ramp — which is precisely what lets the CPU own the
 // timeline without the shader duplicating it.
 
-import { HASH11, HASH21 } from '@wjh/glsl/hash'
-import { SD_BOX, SD_SPHERE, SMAX, SMIN } from '@wjh/glsl/sdf'
+import { HASH21 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { stagesGlsl } from './glsl/stages'
 import { dispatchGlsl } from './glsl/dispatch'

@@ -9,9 +9,6 @@
 // iResolution, iTime, uPointer, uHeavy (heavyEffects -> see-through glass),
 // uEnv (equirect env), uEnvLoaded.
 
-import { HASH21 } from '@wjh/glsl/hash'
-import { ROT, SD_BOX } from '@wjh/glsl/sdf'
-import { fbm2, valueNoise2 } from '@wjh/glsl/noise'
 import { foundationGlsl } from './glsl/foundation'
 import { structuresGlsl } from './glsl/structures'
 import { materialsGlsl } from './glsl/materials'

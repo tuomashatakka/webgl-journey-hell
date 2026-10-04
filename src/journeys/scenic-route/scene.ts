@@ -34,50 +34,34 @@ import { vector } from '@wjh/gl/uniforms'
 import type { JourneyRenderer } from '@wjh/journey/types'
 import { HIGH_QUALITY } from '@wjh/gl/uniforms'
 import { createFullscreenQuad } from '@wjh/gl/quad'
-import { createGlProgram } from '@wjh/gl/program'
-import { createPostChain, createRenderTarget, rgba8, sceneFormat } from '@wjh/gl/targets'
+import { createPostChain, createRenderTarget, rgba8 } from '@wjh/gl/targets'
 import type { GlProgram } from '@wjh/gl/program'
 import type { RenderTarget } from '@wjh/gl/targets'
-import { createMesh, createMeshFromArrays } from '@wjh/gl/mesh'
-import type { Mesh } from '@wjh/gl/mesh'
 import { invert, lookAt, multiply, perspective } from '@wjh/math/mat4'
 import type { Mat4 } from '@wjh/math/mat4'
-import { SWEEP_FLOATS, SWEEP_LAYOUT, finishSweep, levelFrame, sweepProfile } from '@wjh/geometry/sweep'
-import { newFrame } from '@wjh/geometry/curve'
-import type { ProfilePoint } from '@wjh/geometry/sweep'
 import type { FrameUniforms } from '@wjh/gl/uniforms'
-import { BANK_STEP, SECTION_COUNT, bankGainAt, getRoute, lookAt as lookParamsAt, sectionWeights } from './course'
-import type { LookParams } from './course'
-import { SEA_PATCH, buildFarMesh, buildNearChunks, buildSeaPatch, buildSeaQuad, buildSpineIndex } from './geometry'
-import { FLESH_END, ROCK_START, buildMaw, buildTube, jawAngleAt } from './maw'
-import type { Jaw } from './maw'
-import { buildProps } from './props'
-import type { PropSet } from './props'
-import { bendGainAt, buildCity } from './city'
-import { DIAL, SPEEDO, TACHO, buildCockpit, dialNormal, dialPoint, drawDialFaces, needleAngle } from './cockpit'
-import { blurFrag, brightFrag, compositeFrag } from './shader/post'
-import { cockpitFrag, cockpitVert } from './shader/cockpit'
-import { depthFrag, meshVert, propDepthFrag, propFrag, propVert, seaFrag, seaVert, sweepVert, terrainFrag, towerFrag, towerVert } from './shader/world'
-import { jawFrag, jawVert, mawFrag, railFrag, roadFrag, tubeFrag, waterFrag } from './shader/maw'
-import { postVert, skyDomeFrag, skyLutFrag, skyVert } from './shader/sky'
+import { BANK_STEP, bankGainAt, getRoute } from './course'
+import { SEA_PATCH } from './geometry'
+import { FLESH_END, ROCK_START, jawAngleAt } from './maw'
+import { bendGainAt } from './city'
 
 
 const FOV_BASE = 62 * Math.PI / 180
 
-/** Sky LUT size. Rows 0..63 are elevation, row 64 the sun's radiance. */
-const SKY_W = 128
-const SKY_H = 65
 
-/** Bank LUT texture width; rows wrap. */
-const BANK_TEX_W = 1024
+const SHADOW_HALF  = 170
+const SHADOW_DEPTH = 900
+
+
+import { createPrograms } from './scene/programs'
+import { createCockpitRig } from './scene/rig'
+import { createTargets } from './scene/textures'
+import { buildWorld } from './scene/world'
+import type { Drawable } from './scene/shared'
+import { MIRROR_W, MIRROR_H, SHADOW_SIZE } from './scene/shared'
 
 /** Linear exposure at 0 EV. */
 const EXPOSURE_BASE = 0.9
-
-/** The sun's depth map: size, and the half-width of the box it covers. */
-const SHADOW_SIZE  = 2048
-const SHADOW_HALF  = 170
-const SHADOW_DEPTH = 900
 
 /** Beyond this the fog has closed and a terrain chunk contributes nothing. */
 const CULL_DIST = 1700
@@ -87,22 +71,7 @@ const HEAD_DROP = 95
 
 /** Jaw angle (rad, lower jaw's share) that shuts the mouth before the car is off the lip. */
 const JAW_SHUT = 1
-
-
-/** How far above the river's spine the land is raised inland: over the vault (1.42 × the widest ring), falling to the road at the portal. */
-const PORTAL_LIFT = 30
-
-/** The rear-view pass: the mirror glass is 3.3:1. */
-const MIRROR_W = 320
-const MIRROR_H = 96
-
-interface Drawable {
-  mesh:   Mesh;
-  cx:     number;
-  cy:     number;
-  cz:     number;
-  radius: number;
-}
+import { cockpitPass, postPass } from './scene/post'
 
 /** Column-major orthographic projection into [-1,1]^3, right-handed. */
 function ortho (out: Mat4, half: number, near: number, far: number): Mat4 {
@@ -127,204 +96,20 @@ export function createScenicRouteScene (
   gl: WebGL2RenderingContext,
   canvas: HTMLCanvasElement,
 ): JourneyRenderer | null {
-  const skyLutP     = createGlProgram(gl, postVert, skyLutFrag)
-  const skyDomeP    = createGlProgram(gl, skyVert, skyDomeFrag)
-  const roadP       = createGlProgram(gl, sweepVert, roadFrag)
-  const roadDepthP  = createGlProgram(gl, sweepVert, depthFrag)
-  const terrainP    = createGlProgram(gl, meshVert, terrainFrag)
-  const meshDepthP  = createGlProgram(gl, meshVert, depthFrag)
-  const seaP        = createGlProgram(gl, seaVert, seaFrag)
-  const mawP        = createGlProgram(gl, sweepVert, mawFrag)
-  const jawP        = createGlProgram(gl, jawVert, jawFrag)
-  const jawDepthP   = createGlProgram(gl, jawVert, depthFrag)
-  const tubeP       = createGlProgram(gl, sweepVert, tubeFrag)
-  const waterP      = createGlProgram(gl, sweepVert, waterFrag)
-  const cockpitP    = createGlProgram(gl, cockpitVert, cockpitFrag)
-  const propP       = createGlProgram(gl, propVert, propFrag)
-  const propDepthP  = createGlProgram(gl, propVert, propDepthFrag)
-  const railP       = createGlProgram(gl, sweepVert, railFrag)
-  const towerP      = createGlProgram(gl, towerVert, towerFrag)
-  const towerDepthP = createGlProgram(gl, towerVert, depthFrag)
-  const brightP     = createGlProgram(gl, postVert, brightFrag)
-  const blurP       = createGlProgram(gl, postVert, blurFrag)
-  const compP       = createGlProgram(gl, postVert, compositeFrag)
-  if (!skyLutP || !skyDomeP || !roadP || !roadDepthP || !terrainP || !meshDepthP || !seaP ||
-    !propP || !propDepthP || !railP || !towerP || !towerDepthP || !brightP || !blurP || !compP ||
-    !mawP || !jawP || !jawDepthP || !tubeP || !waterP || !cockpitP)
+  const programs = createPrograms(gl)
+  if (!programs)
     return null
+
+  const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP } = programs
 
   const route = getRoute()
 
-  // --- the bank LUT ----------------------------------------------------------
-  // The same Float32Array the simulation reads, as R32F texels. texelFetch and a
-  // manual mix in the shader, so no float-filtering extension is involved and
-  // the GPU's answer is the CPU's to the bit.
-  const bankRows = Math.ceil(route.bankTable.length / BANK_TEX_W)
-  const bankData = new Float32Array(BANK_TEX_W * bankRows)
-  bankData.set(route.bankTable)
+  const { bankTex, skyTarget, skyTex, shadowTex, shadowFbo } = createTargets(gl, route)
 
-  const bankTex = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, bankTex)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, BANK_TEX_W, bankRows, 0, gl.RED, gl.FLOAT, bankData)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  const { roadMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
 
-  // --- the sky LUT -----------------------------------------------------------
-  const skyTarget = createRenderTarget(gl, SKY_W, SKY_H, sceneFormat(gl))
-  const skyTex    = skyTarget.tex
-  gl.bindTexture(gl.TEXTURE_2D, skyTex)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
-
-  // --- the shadow map --------------------------------------------------------
-  // A depth texture with hardware compare, LINEAR so the compare is bilinear.
-  const shadowTex = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, shadowTex)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, SHADOW_SIZE, SHADOW_SIZE, 0,
-                gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_MODE, gl.COMPARE_REF_TO_TEXTURE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_COMPARE_FUNC, gl.LEQUAL)
-
-  const shadowFbo = gl.createFramebuffer()
-  gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFbo)
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowTex, 0)
-  gl.drawBuffers([ gl.NONE ])
-  gl.readBuffer(gl.NONE)
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-
-  // --- the road --------------------------------------------------------------
-  // Swept once over the four road sections with the *level* frame; the vertex
-  // shader rolls it. Seven points: verge, shoulder, edge, crown, edge, shoulder,
-  // verge — walked left to right so the surface faces up.
-  const w                = new Float32Array(SECTION_COUNT)
-  const look: LookParams = { exposure: 0, sky: 1, fog: [ 0, 0, 0 ], fogDensity: 0, roadHalf: 3, surface: 0 }
-  const profile          = (s: number): ProfilePoint[] => {
-    lookParamsAt(route, s, w, look)
-
-    const hw = look.roadHalf
-    return [
-      [ -hw - 2.2, -0.22 ], [ -hw - 0.6, -0.07 ], [ -hw, 0 ], [ 0, 0.05 ],
-      [ hw, 0 ], [ hw + 0.6, -0.07 ], [ hw + 2.2, -0.22 ],
-    ]
-  }
-  const roadArrays = finishSweep(sweepProfile(route.curve, {
-    s0:        route.spans[0].s0,
-    s1:        route.spans[3].s1,
-    step:      2,
-    profile,
-    sectionAt: s => {
-      sectionWeights(route, s, w)
-
-      let best = 0
-      for (let i = 1; i < SECTION_COUNT; i++)
-        if (w[i] > w[best])
-          best = i
-      return best
-    },
-  }))
-  const roadMesh: Mesh = createMeshFromArrays(
-    gl, roadArrays.vertices, roadArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
-  )
-
-  // --- the land ----------------------------------------------------------------
-  // The land follows the road sections, and rises over the cave so the tunnel
-  // is under a hill; the hill falls back to road level at the seam, where the
-  // tube comes out of the ground as a portal.
-  const seam  = route.spans[6].s1
-  const spine = buildSpineIndex(route, [ 0, 1, 3, 6 ], 32, (section, s) => {
-    if (section !== 6)
-      return 0
-
-    const f = Math.min(1, Math.max(0, (s - (seam - 50)) / 44))
-    return PORTAL_LIFT * (1 - f * f * (3 - 2 * f))
-  })
-  // The land is carved away wherever it would pass through the throat or the
-  // cave: the tube's spine lets every terrain vertex know how far inside it is.
-  spine.tube = { idx: buildSpineIndex(route, [ 5, 6 ], 32), s0: route.spans[5].s0 }
-
-  const chunks: Drawable[] = buildNearChunks(spine).map(c => ({
-    mesh: createMesh(gl, c.builder), cx: c.cx, cy: c.cy, cz: c.cz, radius: c.radius,
-  }))
-  const far     = buildFarMesh(spine)
-  const farMesh = createMesh(gl, far.builder)
-  // The sea is whole: where the fish surfaces, seaVert drops the surface
-  // inside the mouth's footprint and heaps a bow wave around it.
-  const seaMesh   = createMesh(gl, buildSeaQuad())
-  const patchMesh = createMesh(gl, buildSeaPatch(SEA_PATCH.x, SEA_PATCH.z, SEA_PATCH.halfX, SEA_PATCH.halfZ, SEA_PATCH.cells))
-
-  // --- the maw -------------------------------------------------------------------
-  const maw      = buildMaw(route)
-  const mouthF   = levelFrame(route.curve, maw.s0, newFrame())
-  const mouthLen = Math.hypot(mouthF.forward.x, mouthF.forward.z) || 1
-  const mouthDir = [ mouthF.forward.x / mouthLen, mouthF.forward.z / mouthLen ]
-  const headMesh = createMeshFromArrays(
-    gl, maw.head.vertices, maw.head.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
-  )
-  const jaws: { jaw: Jaw; mesh: Mesh }[] = [ maw.upper, maw.lower ].map(jaw => ({
-    jaw, mesh: createMesh(gl, jaw.builder),
-  }))
-  const tube      = buildTube(route)
-  const tubeFront = createMeshFromArrays(gl, tube.front.vertices, tube.front.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
-  const tubeBack  = createMeshFromArrays(gl, tube.back.vertices, tube.back.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
-  const waterMesh = createMeshFromArrays(gl, tube.water.vertices, tube.water.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
-
-  // --- the props ---------------------------------------------------------------
-  const props: { set: PropSet; mesh: Mesh }[] = buildProps(route, spine).map(set => {
-    const mesh = createMesh(gl, set.builder, 2)
-    mesh.setInstances(gl, set.instances)
-    return { set, mesh }
-  })
-
-  // --- downtown ------------------------------------------------------------------
-  const city      = buildCity(route, spine)
-  const towerMesh = createMesh(gl, city.builder, 3)
-  towerMesh.setInstances(gl, city.instances)
-
-  // --- the coast guardrail -----------------------------------------------------
-  // A band on the sea side of section IV, swept like the road so the bank LUT
-  // rolls it with the surface it guards.
-  const railArrays = finishSweep(sweepProfile(route.curve, {
-    s0:      route.spans[3].s0 + 6,
-    s1:      route.spans[3].s1 - 4,
-    step:    2,
-    profile: (s: number): ProfilePoint[] => {
-      lookParamsAt(route, s, w, look)
-
-      const e = -(look.roadHalf + 0.6)
-      return [[ e, 0.78 ], [ e - 0.06, 0.6 ], [ e, 0.42 ]]
-    },
-  }))
-  const railMesh: Mesh = createMeshFromArrays(
-    gl, railArrays.vertices, railArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
-  )
-
-  // --- the cockpit -----------------------------------------------------------------
-  const cockpit    = buildCockpit()
-  const cabinMesh  = createMesh(gl, cockpit.cabin)
-  const wheelMesh  = createMesh(gl, cockpit.wheel)
-  const speedoMesh = createMesh(gl, cockpit.speedo)
-  const tachoMesh  = createMesh(gl, cockpit.tacho)
-  // The rear view for the mirror: a small colour target with its own depth.
-  const mirror = createRenderTarget(gl, MIRROR_W, MIRROR_H, rgba8(gl), { depth: true })
-
-  const dialTex    = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, dialTex)
-  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, drawDialFaces())
-  gl.generateMipmap(gl.TEXTURE_2D)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-
-  const carMat: Mat4 = new Float32Array(16)
-  const dialN        = dialNormal()
-  const speedoPivot  = dialPoint(SPEEDO.u, SPEEDO.v)
-  const tachoPivot   = dialPoint(TACHO.u, TACHO.v)
+  const rig                                                              = createCockpitRig(gl)
+  const { cabinMesh, wheelMesh, speedoMesh, tachoMesh, mirror, dialTex } = rig
 
   // --- post targets ------------------------------------------------------------
   // MSAA scene → resolve, then a bright pass and a separable blur ping-ponged
@@ -740,110 +525,8 @@ export function createScenicRouteScene (
 
       drawWorld(viewProj, camPos, [ fx, fy, fz ], invViewProj)
 
-      // --- 5. resolve ---
-      chain.resolve()
-
-      gl.disable(gl.DEPTH_TEST)
-      gl.disable(gl.CULL_FACE)
-
-      const bw = blur[0].width
-      const bh = blur[0].height
-
-      blur[0].bind()
-      brightP.use()
-      gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, chain.scene.tex)
-      brightP.uniform1i('uSrc', 0)
-      brightP.uniform1f('uThreshold', 0.82)
-      drawQuad()
-
-      blurP.use()
-      for (let pass = 0; pass < 2; pass++) {
-        blur[(pass + 1) % 2].bind()
-        gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, blur[pass % 2].tex)
-        blurP.uniform1i('uSrc', 0)
-        if (pass === 0)
-          blurP.uniform2f('uDir', 1.7 / bw, 0)
-        else
-          blurP.uniform2f('uDir', 0, 1.7 / bh)
-        drawQuad()
-      }
-
-      // --- 6. composite ---
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-      gl.viewport(0, 0, w, h)
-      compP.use()
-      gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, chain.scene.tex)
-      compP.uniform1i('uScene', 0)
-      gl.activeTexture(gl.TEXTURE1)
-      gl.bindTexture(gl.TEXTURE_2D, blur[0].tex)
-      compP.uniform1i('uBloom', 1)
-      compP.uniform1f('uExposure', exposure)
-      // The speed blur bites only past what the road ever reaches.
-      compP.uniform1f('uSpeedBlur', Math.max(0, Math.min(1, (ride[0] - 36) / 24)))
-      compP.uniform1f('uTime', time)
-      drawQuad()
-
-      // --- 7. the cockpit ---
-      // Straight onto the back buffer after the composite, with its own depth,
-      // so the world's speed blur never smears the dashboard. The car's frame
-      // is the model matrix: columns right, up, forward, position.
-      carMat.set([
-        carRight[0], carRight[1], carRight[2], 0,
-        carUp[0], carUp[1], carUp[2], 0,
-        carFwd[0], carFwd[1], carFwd[2], 0,
-        carPos[0], carPos[1], carPos[2], 1,
-      ])
-      gl.enable(gl.DEPTH_TEST)
-      gl.depthFunc(gl.LEQUAL)
-      gl.depthMask(true)
-      gl.clear(gl.DEPTH_BUFFER_BIT)
-      gl.enable(gl.CULL_FACE)
-      gl.cullFace(gl.BACK)
-      cockpitP.use()
-      cockpitP.uniformMatrix4fv('uViewProj', viewProj)
-      cockpitP.uniformMatrix4fv('uCarMat', carMat)
-      bindLit(cockpitP, camPos, sun, env, fogCol, time, shadowOn)
-      gl.activeTexture(gl.TEXTURE3)
-      gl.bindTexture(gl.TEXTURE_2D, dialTex)
-      cockpitP.uniform1i('uDial', 3)
-      gl.activeTexture(gl.TEXTURE4)
-      gl.bindTexture(gl.TEXTURE_2D, mirror.tex)
-      cockpitP.uniform1i('uMirror', 4)
-      cockpitP.uniform4f('uMirrorRect', -0.105, 1.378, 0.21, 0.064)
-      cockpitP.uniform4f('uDialRect', DIAL.cx, DIAL.cy, DIAL.cz, DIAL.w / 2)
-      cockpitP.uniform1f('uExposure', exposure)
-
-      // Warning lamps come on by lap: check engine, oil, temperature, then the
-      // reception lamp with the signal loss; the red ones blink.
-      const lapF = ride[1]
-      cockpitP.uniform4f('uLamps',
-                         lapF > 0.9 ? 1 : 0,
-                         lapF > 1.9 ? 1 : 0,
-                         lapF > 2.4 ? 1 : 0,
-                         loop[2] >= 3 ? 1 : 0,
-      )
-      cockpitP.uniform1f('uBlink', 0.55 + 0.45 * Math.sign(Math.sin(time * 5.5)))
-      cockpitP.uniform1f('uAngle', 0)
-      cockpitP.uniform3f('uPivot', 0, 0, 0)
-      cockpitP.uniform3f('uAxis', 0, 1, 0)
-      gl.disable(gl.CULL_FACE)
-      cabinMesh.draw(gl)
-      // The wheel by steer: a lock and a half each way over the steer range.
-      cockpitP.uniform3f('uPivot', cockpit.wheelCentre.x, cockpit.wheelCentre.y, cockpit.wheelCentre.z)
-      cockpitP.uniform3f('uAxis', cockpit.wheelAxis.x, cockpit.wheelAxis.y, cockpit.wheelAxis.z)
-      cockpitP.uniform1f('uAngle', -car[2] * 2.6 + fall[3] * 0.09 * Math.sin(time * 31))
-      wheelMesh.draw(gl)
-      // Needles by reading.
-      cockpitP.uniform3f('uAxis', dialN.x, dialN.y, dialN.z)
-      cockpitP.uniform3f('uPivot', speedoPivot.x, speedoPivot.y, speedoPivot.z)
-      cockpitP.uniform1f('uAngle', needleAngle(SPEEDO, ride[0] * 3.6))
-      speedoMesh.draw(gl)
-      cockpitP.uniform3f('uPivot', tachoPivot.x, tachoPivot.y, tachoPivot.z)
-      cockpitP.uniform1f('uAngle', needleAngle(TACHO, car[0] * 7800))
-      tachoMesh.draw(gl)
+      postPass(gl, { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time })
+      cockpitPass(gl, rig, { viewProj, camPos, sun, env, fogCol, time, shadowOn, exposure, ride, loop, car, fall, carPos, carFwd, carRight, carUp, cockpitP, bindLit })
     },
 
     dispose () {

@@ -48,11 +48,9 @@ export class ScenicRouteAudio extends JourneyAudio {
   private radioOsc:  OscillatorNode[] = []
   private staticV:   Voice | null = null
   private gullet:    Voice | null = null
-  private gulletLfo: OscillatorNode | null = null
   private cave:      Voice | null = null
   private echo:      DelayNode | null = null
   private nextDrip = 0
-  private lastTime = 0
 
   private noise (ctx: AudioContext, buf: AudioBuffer): AudioBufferSourceNode {
     const src  = ctx.createBufferSource()
@@ -132,7 +130,6 @@ export class ScenicRouteAudio extends JourneyAudio {
     lfo.connect(lfoGain)
     lfoGain.connect(this.gullet.gain.gain)
     lfo.start()
-    this.gulletLfo = lfo
 
     // Cave: water rush and an echo bus for the drips.
     this.cave            = this.voice(ctx, this.noise(ctx, buf), 'lowpass', 420, 0.7)
@@ -236,7 +233,6 @@ export class ScenicRouteAudio extends JourneyAudio {
       this.drip(ctx, wCave)
       this.nextDrip = time + 0.35 + Math.random() * 1.6
     }
-    this.lastTime = time
   }
 }
 

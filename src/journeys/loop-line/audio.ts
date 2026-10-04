@@ -23,7 +23,7 @@
 //    and every stall, and stays right if the frame rate does not. As the line
 //    ages the joints get brighter, louder and more irregular: by the late laps
 //    the track sounds broken rather than jointed. A cap of four per frame
-//   防止 a backgrounded tab from firing ten thousand at once on return.
+//    stops a backgrounded tab from firing ten thousand at once on return.
 //
 // 3. THE BAYS. Seven rooms with seven tones, crossfaded on one delay pair: a
 //    tiled slap-back on the platform, a dead-mall reverb in the concourse, open
@@ -51,63 +51,25 @@
 //    ducks for 100-200 ms.
 
 import { createRoomReverb } from '@wjh/audio/room'
-import type { RoomReverb, RoomTone } from '@wjh/audio/room'
+import type { RoomReverb } from '@wjh/audio/room'
 import { JourneyAudio } from '@wjh/audio/engine'
-import { driftingChord } from '@wjh/audio/nodes'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
 import { clamp01 } from '@wjh/math/scalar'
+import { birdChirp, doorChime, planAnnouncement, relayClick, splash, syllable } from './audio/events'
+import { GLIDE, buildBore, buildConcourse, buildFormant, buildMotor, buildShimmer, buildStacks, buildVoid, buildWater, buildWind } from './audio/layers'
+import type { FormantVoice } from './audio/layers'
+import { JOINT_PITCH, MAX_JOINTS, ROOMS, WHEELBASE } from './audio/patches'
 
-
-/** Glide for slow-moving continuous parameters. */
-const GLIDE = 0.45
 
 /** Glide for the room crossfade, which happens at a portal and should be quick. */
 const ROOM_GLIDE = 0.3
 
 
-/** Rail length in metres — joint impacts fire every JOINT_PITCH of travel. */
-const JOINT_PITCH = 12.5
-
-/** Bogie wheelbase in metres — the gap between the two impacts of one joint. */
-const WHEELBASE = 2.2
-
-/** Maximum joints to fire in a single update frame. */
-const MAX_JOINTS = 4
-
 /**
- * Seven rooms, one per bayId 0..6.
- *
- * THE CHORD's 8 ms tap is not a reverb — it is the sound of being in a pipe.
- * THE TURNBACK's near-zero wet is not a mistake — it is the absence that lets
- * the other rooms exist.
+ * The engine: it owns the nodes the layers return and the per-frame state, and
+ * drives them from the shader's uniforms. What each voice is made of is in
+ * `audio/layers`, the one-shots in `audio/events`, the data in `audio/patches`.
  */
-const ROOMS: RoomTone[] = [
-  { time: 0.013, fb: 0.82, damp: 3800, wet: 0.52 }, // 0 — PLATFORM SIX, tiled flutter
-  { time: 0.042, fb: 0.36, damp: 850, wet: 0.32 }, // 1 — THE CONCOURSE, big vaulted
-  { time: 0, fb: 0, damp: 8000, wet: 0 }, // 2 — THE CUT, open air, no tail
-  { time: 0.016, fb: 0.45, damp: 1400, wet: 0.28 }, // 3 — THE ANNEX, flooded chamber
-  { time: 0.008, fb: 0.2, damp: 6000, wet: 0.15 }, // 4 — THE STACKS, machine hall
-  { time: 0, fb: 0, damp: 8000, wet: 0.02 }, // 5 — THE TURNBACK, open void
-  { time: 0.008, fb: 0.55, damp: 1200, wet: 0.4 }, // 6 — THE CHORD, close bore
-]
-
-//
-// Syllable patterns for the formant announcement — one per bay. Each is 3-6
-// syllables defined as [frequency, duration] pairs. The pitches are deliberately
-// not in tune with each other; they are the cadence of a station announcement,
-// // not music.
-//
-const SYLLABLES: [number, number][][] = [
-  [[ 280, 0.11 ], [ 310, 0.09 ], [ 260, 0.13 ]], // PLATFORM SIX
-  [[ 250, 0.1 ], [ 300, 0.1 ], [ 270, 0.09 ], [ 320, 0.11 ]], // THE CONCOURSE
-  [[ 290, 0.12 ], [ 260, 0.1 ]], // THE CUT
-  [[ 270, 0.09 ], [ 310, 0.11 ], [ 250, 0.1 ], [ 290, 0.08 ], [ 330, 0.09 ]], // THE ANNEX
-  [[ 300, 0.1 ], [ 260, 0.12 ], [ 320, 0.09 ]], // THE STACKS
-  [[ 260, 0.11 ], [ 290, 0.1 ], [ 270, 0.13 ], [ 310, 0.09 ]], // THE TURNBACK
-  [[ 280, 0.12 ], [ 310, 0.1 ], [ 250, 0.11 ], [ 300, 0.09 ], [ 270, 0.1 ], [ 320, 0.08 ]], // THE CHORD
-]
-
-
 export class LoopLineAudioEngine extends JourneyAudio {
   protected readonly name = 'Loop Line'
   protected readonly bus = true
@@ -126,12 +88,12 @@ export class LoopLineAudioEngine extends JourneyAudio {
   private relayGain:  GainNode | null = null
   private voidGain:   GainNode | null = null
   private boreGain:   GainNode | null = null
+  private formant:    FormantVoice | null = null
 
 
   // Driven from the shader uniforms each frame.
   private speed = 0
   private lapF = 0
-  private shake = 0
   private bay = -1
   private travel = 0
   private lastBay = -1
@@ -143,18 +105,41 @@ export class LoopLineAudioEngine extends JourneyAudio {
   // ---- construction -------------------------------------------------------
 
   protected build (): void {
-    this.buildRoom()
-    this.buildMotor()
-    this.buildConcourse()
-    this.buildCut()
-    this.buildAnnex()
-    this.buildStacks()
-    this.buildTurnback()
-    this.buildChord()
-    this.buildFormant()
-    this.buildShimmer()
-  }
+    const { ctx, dry } = this
+    if (!ctx || !dry)
+      return
 
+    this.buildRoom()
+
+    // Where a voice's tail goes: the room's wet bus once it exists.
+    const wet = this.wet ?? dry
+
+    this.motorGain = buildMotor(ctx, dry)
+    this.muzakGain = buildConcourse(ctx, dry, wet)
+    this.buildCut(ctx, dry, wet)
+
+    const water     = buildWater(ctx, dry, wet, this.noiseSource(true))
+    this.waterGain  = water.water
+    this.splashGain = water.splash
+
+    const stacks   = buildStacks(ctx, dry, wet, this.noiseSource(true))
+    this.fanGain   = stacks.fan
+    this.coilGain  = stacks.coil
+    this.relayGain = stacks.relay
+    this.scheduleRelayClicks()
+
+    const turnback = this.noiseSource(true)
+    if (turnback)
+      this.voidGain = buildVoid(ctx, dry, turnback)
+
+    const bore = this.noiseSource(true)
+    if (bore)
+      this.boreGain = buildBore(ctx, dry, bore)
+
+    this.formant = buildFormant(ctx, dry, wet)
+    if (this.wet)
+      buildShimmer(ctx, this.wet)
+  }
 
   /**
    * One delay pair for all seven rooms, crossfaded rather than switched.
@@ -174,436 +159,41 @@ export class LoopLineAudioEngine extends JourneyAudio {
     this.wet  = this.room.wet
   }
 
-  // ---- bays: continuous layers --------------------------------------------
-
   /**
-   * THE MOTOR. Three detuned sawtooth oscillators through a resonant lowpass,
-   * pitch tracking speed. The Q on the filter is what makes it read as a
-   * chopper drive rather than a synth: each harmonic is a little resonant peak
-   * that moves with frequency, which is exactly what a DC-chopper inverter
-   * sounds like.
+   * THE CUT: wind, and the birds. Birds stop appearing after lap 2 — they were
+   * nesting in the cutting walls and they are gone now.
    */
-  private buildMotor (): void {
-    if (!this.ctx || !this.dry)
-      return
-
-    const now      = this.ctx.currentTime
-    this.motorGain = this.ctx.createGain()
-    this.motorGain.gain.setValueAtTime(0, now)
-
-    const lp = this.ctx.createBiquadFilter()
-    lp.type  = 'lowpass'
-    lp.frequency.setValueAtTime(600, now)
-    lp.Q.setValueAtTime(5, now)
-
-    for (const [ f, a ] of [[ 55, 1 ], [ 82, 0.38 ], [ 110, 0.18 ]]) {
-      const osc = this.ctx.createOscillator()
-      osc.type  = 'sawtooth'
-      osc.frequency.setValueAtTime(f, now)
-
-      const g = this.ctx.createGain()
-      g.gain.setValueAtTime(a, now)
-      osc.connect(g)
-      g.connect(lp)
-      osc.start()
-    }
-
-    lp.connect(this.motorGain)
-    this.motorGain.connect(this.dry)
-  }
-
-  /**
-   * THE CONCOURSE. A dead-mall muzak chord — every voice detuned and drifting,
-   * so the chord beats against itself rather than sounding played — plus an
-   * escalator's mechanical rumble, which is a low sawtooth drone at a fixed
-   * rate.
-   */
-  private buildConcourse (): void {
-    if (!this.ctx || !this.dry)
-      return
-
-    const now      = this.ctx.currentTime
-    this.muzakGain = this.ctx.createGain()
-    this.muzakGain.gain.setValueAtTime(0, now)
-
-    // F, A, B, E — wrong-sounding intervals that read as a muzak recording
-    // that nobody has been in to change.
-    driftingChord(this.ctx, this.muzakGain, {
-      voices:    [[ 174.6, 0 ], [ 220, 8 ], [ 246.9, -6 ], [ 329.6, 12 ]],
-      cutoff:    1000,
-      voiceGain: 0.18,
-      wowRate:   0.21,
-      wowDepth:  8,
-    })
-
-    // Escalator rumble — a fixed mechanical rate.
-    const rumble = this.ctx.createOscillator()
-    rumble.type  = 'sawtooth'
-    rumble.frequency.setValueAtTime(38, now)
-
-    const rumbleLP = this.ctx.createBiquadFilter()
-    rumbleLP.type  = 'lowpass'
-    rumbleLP.frequency.setValueAtTime(200, now)
-
-    const rumbleG = this.ctx.createGain()
-    rumbleG.gain.setValueAtTime(0.06, now)
-    rumble.connect(rumbleLP)
-    rumbleLP.connect(rumbleG)
-    rumbleG.connect(this.muzakGain)
-    rumble.start()
-
-    this.muzakGain.connect(this.dry)
-    this.muzakGain.connect(this.wet ?? this.dry)
-  }
-
-  /**
-   * THE CUT. Open air: wind, distant traffic, no reverb tail. Birds stop
-   * appearing after lap 2 — they were nesting in the cutting walls and they
-   * are gone now.
-   */
-  private buildCut (): void {
-    if (!this.ctx || !this.dry)
-      return
-
+  private buildCut (ctx: AudioContext, dry: AudioNode, wet: AudioNode): void {
     const src = this.noiseSource(true)
     if (!src)
       return
 
-    const now = this.ctx.currentTime
-
-    const lp = this.ctx.createBiquadFilter()
-    lp.type  = 'lowpass'
-    lp.frequency.setValueAtTime(700, now)
-    lp.Q.setValueAtTime(0.6, now)
-
-    this.windGain = this.ctx.createGain()
-    this.windGain.gain.setValueAtTime(0, now)
-
-    src.connect(lp)
-    lp.connect(this.windGain)
-    this.windGain.connect(this.dry)
-    this.windGain.connect(this.wet ?? this.dry)
-    src.start()
-
+    this.windGain = buildWind(ctx, dry, wet, src)
     this.scheduleBirds()
   }
 
-  /**
-   * THE ANNEX. Water — lapping and dripping, plus the motor heard through
-   * liquid (heavy lowpass), and a splash whose rate tracks speed.
-   */
-  private buildAnnex (): void {
-    if (!this.ctx || !this.dry)
-      return
+  // ---- scheduled one-shots --------------------------------------------------
 
-    const now      = this.ctx.currentTime
-    this.waterGain = this.ctx.createGain()
-    this.waterGain.gain.setValueAtTime(0, now)
-    this.splashGain = this.ctx.createGain()
-    this.splashGain.gain.setValueAtTime(0, now)
-
-    // Lapping water: AM-modulated filtered noise.
-    const water = this.noiseSource(true)
-    if (water) {
-      const waterBP = this.ctx.createBiquadFilter()
-      waterBP.type  = 'bandpass'
-      waterBP.frequency.setValueAtTime(400, now)
-      waterBP.Q.setValueAtTime(1.2, now)
-
-      const lfo = this.ctx.createOscillator()
-      lfo.frequency.setValueAtTime(0.6, now)
-
-      const lfoAmt = this.ctx.createGain()
-      lfoAmt.gain.setValueAtTime(0.08, now)
-      lfo.connect(lfoAmt)
-      lfoAmt.connect(this.waterGain.gain)
-      lfo.start()
-      water.connect(waterBP)
-      waterBP.connect(this.waterGain)
-      water.start()
-    }
-
-    this.waterGain.connect(this.dry)
-    this.waterGain.connect(this.wet ?? this.dry)
-  }
-
-  /**
-   * THE STACKS. Fan-wall noise — several detuned bandpass-filtered noise
-   * bands — plus coil whine and relay clicks.
-   */
-  private buildStacks (): void {
-    if (!this.ctx || !this.dry)
-      return
-
-    const now    = this.ctx.currentTime
-    this.fanGain = this.ctx.createGain()
-    this.fanGain.gain.setValueAtTime(0, now)
-    this.coilGain = this.ctx.createGain()
-    this.coilGain.gain.setValueAtTime(0, now)
-    this.relayGain = this.ctx.createGain()
-    this.relayGain.gain.setValueAtTime(0, now)
-
-    this.buildFanLayers()
-    this.buildCoilWhine()
-    this.buildRelayClicks()
-
-    this.fanGain.connect(this.dry)
-    this.fanGain.connect(this.wet ?? this.dry)
-    this.coilGain.connect(this.dry)
-    this.relayGain.connect(this.dry)
-  }
-
-  /**
-   * THE TURNBACK. Almost nothing. Open void, a far-off wind, the rail joints
-   * suddenly with no reflections at all. The absence should be conspicuous.
-   */
-  private buildTurnback (): void {
-    if (!this.ctx || !this.dry)
-      return
-
-    const src = this.noiseSource(true)
-    if (!src)
-      return
-
-    const now = this.ctx.currentTime
-
-    const lp = this.ctx.createBiquadFilter()
-    lp.type  = 'lowpass'
-    lp.frequency.setValueAtTime(400, now)
-
-    this.voidGain = this.ctx.createGain()
-    this.voidGain.gain.setValueAtTime(0, now)
-
-    src.connect(lp)
-    lp.connect(this.voidGain)
-    this.voidGain.connect(this.dry)
-    src.start()
-  }
-
-  /**
-   * THE CHORD. Extremely close, dead, dry brick. Heavy proximity — a narrow
-   * bore is loud. No lamps means no hum. Should feel like the walls are
-   * 30 cm away.
-   */
-  private buildChord (): void {
-    if (!this.ctx || !this.dry)
-      return
-
-    const src = this.noiseSource(true)
-    if (!src)
-      return
-
-    const now = this.ctx.currentTime
-
-    // Very tight resonant bandpass — a narrow bore amplifies the midrange.
-    const bp = this.ctx.createBiquadFilter()
-    bp.type  = 'bandpass'
-    bp.frequency.setValueAtTime(350, now)
-    bp.Q.setValueAtTime(4, now)
-
-    this.boreGain = this.ctx.createGain()
-    this.boreGain.gain.setValueAtTime(0, now)
-
-    src.connect(bp)
-    bp.connect(this.boreGain)
-    this.boreGain.connect(this.dry)
-    src.start()
-  }
-
-  // ---- sub-builders for THE STACKS ----------------------------------------
-
-  private buildFanLayers (): void {
-    if (!this.ctx || !this.fanGain)
-      return
-
-    const src = this.noiseSource(true)
-    if (!src)
-      return
-
-    const now = this.ctx.currentTime
-
-    for (const [ f, q ] of [[ 320, 3 ], [ 580, 4.5 ], [ 900, 2.8 ], [ 1400, 5 ]]) {
-      const bp = this.ctx.createBiquadFilter()
-      bp.type  = 'bandpass'
-      bp.frequency.setValueAtTime(f, now)
-      bp.Q.setValueAtTime(q, now)
-
-      const g = this.ctx.createGain()
-      g.gain.setValueAtTime(0.035, now)
-      src.connect(bp)
-      bp.connect(g)
-      g.connect(this.fanGain)
-    }
-    src.start()
-  }
-
-  private buildCoilWhine (): void {
-    if (!this.ctx || !this.coilGain)
-      return
-
-    const now = this.ctx.currentTime
-    const osc = this.ctx.createOscillator()
-    osc.type  = 'triangle'
-    osc.frequency.setValueAtTime(7800, now)
-
-    const lfo = this.ctx.createOscillator()
-    lfo.frequency.setValueAtTime(3.5, now)
-
-    const lfoAmt = this.ctx.createGain()
-    lfoAmt.gain.setValueAtTime(25, now)
-    lfo.connect(lfoAmt)
-    lfoAmt.connect(osc.frequency)
-    lfo.start()
-    osc.connect(this.coilGain)
-    osc.start()
-  }
-
-  private buildRelayClicks (): void {
-    if (!this.ctx || !this.relayGain)
-      return
-
+  private scheduleRelayClicks (): void {
     const tick = () => {
       if (!this.ctx || !this.noiseBuffer || this.isMuted)
         return
-      if (this.bay === 4) {
-        const now  = this.ctx.currentTime
-        const src  = this.ctx.createBufferSource()
-        src.buffer = this.noiseBuffer
-
-        const bp = this.ctx.createBiquadFilter()
-        bp.type  = 'bandpass'
-        bp.frequency.setValueAtTime(2200, now)
-        bp.Q.setValueAtTime(12, now)
-
-        const g = this.ctx.createGain()
-        g.gain.setValueAtTime(0, now)
-        g.gain.linearRampToValueAtTime(0.12, now + 0.001)
-        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.02)
-        src.connect(bp)
-        bp.connect(g)
-        g.connect(this.relayGain!)
-        src.start(now)
-        src.stop(now + 0.05)
-      }
+      if (this.bay === 4 && this.relayGain)
+        relayClick(this.ctx, this.noiseBuffer, this.relayGain)
       this.after(80 + Math.random() * 200, tick)
     }
     this.after(100, tick)
   }
 
-  // ---- sub-builder for THE CUT -------------------------------------------
-
   private scheduleBirds (): void {
     const tick = () => {
       if (!this.ctx || this.isMuted || this.bay !== 2)
         return
-      if (this.lapF < 2) {
-        const now = this.ctx.currentTime
-        const osc = this.ctx.createOscillator()
-        osc.type  = 'sine'
-
-        const base = 1800 + Math.random() * 1600
-        osc.frequency.setValueAtTime(base, now)
-        osc.frequency.linearRampToValueAtTime(base * 1.15, now + 0.04)
-        osc.frequency.linearRampToValueAtTime(base * 0.88, now + 0.1)
-
-        const g = this.ctx.createGain()
-        g.gain.setValueAtTime(0, now)
-        g.gain.linearRampToValueAtTime(0.015, now + 0.01)
-        g.gain.exponentialRampToValueAtTime(0.0001, now + 0.12)
-        osc.connect(g)
-        g.connect(this.dry!)
-        osc.start(now)
-        osc.stop(now + 0.15)
-      }
+      if (this.lapF < 2 && this.dry)
+        birdChirp(this.ctx, this.dry)
       this.after(800 + Math.random() * 3500, tick)
     }
     this.after(500, tick)
-  }
-
-  // ---- formant announcement ------------------------------------------------
-
-  /**
-   * The formant chain: a pulse source through two bandpass filters tuned to
-   * formant frequencies. The pulse is not a real glottal source — it is a
-   * convenience: harmonics at every integer multiple of the fundamental, which
-   * is exactly what the formants need to ring on.
-   */
-  private buildFormant (): void {
-    if (!this.ctx || !this.dry)
-      return
-
-    const now = this.ctx.currentTime
-
-    const src = this.ctx.createOscillator()
-    src.type  = 'sawtooth'
-    src.frequency.setValueAtTime(1, now)
-
-    this.formantF1      = this.ctx.createBiquadFilter()
-    this.formantF1.type = 'bandpass'
-    this.formantF1.frequency.setValueAtTime(400, now)
-    this.formantF1.Q.setValueAtTime(8, now)
-
-    this.formantF2      = this.ctx.createBiquadFilter()
-    this.formantF2.type = 'bandpass'
-    this.formantF2.frequency.setValueAtTime(2200, now)
-    this.formantF2.Q.setValueAtTime(12, now)
-
-    this.formantMix = this.ctx.createGain()
-    this.formantMix.gain.setValueAtTime(0, now)
-
-    this.formantF1Gain = this.ctx.createGain()
-    this.formantF1Gain.gain.setValueAtTime(0.55, now)
-    this.formantF2Gain = this.ctx.createGain()
-    this.formantF2Gain.gain.setValueAtTime(0.35, now)
-
-    src.connect(this.formantF1)
-    src.connect(this.formantF2)
-    this.formantF1.connect(this.formantF1Gain)
-    this.formantF2.connect(this.formantF2Gain)
-    this.formantF1Gain.connect(this.formantMix)
-    this.formantF2Gain.connect(this.formantMix)
-    this.formantMix.connect(this.dry)
-    this.formantMix.connect(this.wet ?? this.dry)
-    src.start()
-
-    // The door chime: a two-note descending interval, before each announcement.
-    this.buildDoorChime()
-  }
-
-  private buildDoorChime (): void {
-    if (!this.ctx || !this.dry)
-      return
-    this.chimeGain = this.ctx.createGain()
-    this.chimeGain.gain.setValueAtTime(0, this.ctx.currentTime)
-    this.chimeGain.connect(this.dry)
-    this.chimeGain.connect(this.wet ?? this.dry)
-  }
-
-  /** Very short shimmer for the tunnel and the formant announcements. */
-  private buildShimmer (): void {
-    if (!this.ctx || !this.wet)
-      return
-
-    const now = this.ctx.currentTime
-    const d   = this.ctx.createDelay(0.5)
-    d.delayTime.setValueAtTime(0.042, now)
-
-    const g = this.ctx.createGain()
-    g.gain.setValueAtTime(0.12, now)
-
-    const lp = this.ctx.createBiquadFilter()
-    lp.type  = 'lowpass'
-    lp.frequency.setValueAtTime(4000, now)
-
-    const bp = this.ctx.createBiquadFilter()
-    bp.type  = 'bandpass'
-    bp.frequency.setValueAtTime(2000, now)
-    bp.Q.setValueAtTime(2.5, now)
-    this.wet.connect(d)
-    d.connect(g)
-    g.connect(lp)
-    lp.connect(bp)
-    bp.connect(this.wet)
   }
 
   // ---- events -------------------------------------------------------------
@@ -625,108 +215,24 @@ export class LoopLineAudioEngine extends JourneyAudio {
     })
   }
 
-  /** One formant syllable. Pitch and duration are syllable-specific. */
-  private fireSyllable (pitch: number, duration: number): void {
-    if (!this.ctx || !this.formantMix)
-      return
-
-    const now = this.ctx.currentTime
-    const f1  = 380 + pitch * 0.25
-    const f2  = 1800 + pitch * 2.2
-    this.formantF1?.frequency.setValueAtTime(f1, now)
-    this.formantF2?.frequency.setValueAtTime(f2, now)
-    this.formantMix.gain.setValueAtTime(0, now)
-    this.formantMix.gain.linearRampToValueAtTime(0.14, now + 0.012)
-    this.formantMix.gain.setValueAtTime(0.14, now + duration - 0.02)
-    this.formantMix.gain.linearRampToValueAtTime(0, now + duration)
-  }
-
-  /** The two-note door chime before each announcement. */
-  private fireDoorChime (): void {
-    if (!this.ctx || !this.chimeGain)
-      return
-
-    const now = this.ctx.currentTime
-    this.chimeGain.gain.setValueAtTime(0, now)
-
-    const notes = [ 698.5, 523.3 ]
-    for (let i = 0; i < 2; i++) {
-      const osc = this.ctx.createOscillator()
-      osc.type  = 'sine'
-      osc.frequency.setValueAtTime(notes[i], now + i * 0.18)
-
-      const env = this.ctx.createGain()
-      env.gain.setValueAtTime(0, now + i * 0.18)
-      env.gain.linearRampToValueAtTime(0.1, now + i * 0.18 + 0.008)
-      env.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.18 + 0.35)
-      osc.connect(env)
-      env.connect(this.chimeGain)
-      osc.start(now + i * 0.18)
-      osc.stop(now + i * 0.18 + 0.4)
-    }
-  }
-
-  /**
-   * Fire a full announcement for the current bay. The degradation pipeline:
-   *   lap 0-1  — intact, original order
-   *   lap 1-2  — one syllable randomly dropped
-   *   lap 2-3  — syllables shuffled, two dropped
-   *   lap 3+   — all shuffled, three dropped, pitch drifts flat
-   */
+  /** The door chime, then the bay's syllables, as many and in whatever order this lap leaves. */
   private fireAnnouncement (): void {
     if (!this.ctx || this.bay < 0 || this.bay > 6)
       return
 
-    const pattern = SYLLABLES[this.bay]
-    const lap     = Math.floor(this.lapF)
-
-    // Deterministic shuffle seeded on (bay, lap).
-    const indices = pattern.map((_, i) => i)
-    const seed    = this.bay * 31 + lap * 7
-    for (let i = indices.length - 1; i > 0; i--) {
-      const j    = Math.floor((Math.sin(seed * (i + 1) * 0.7 + i) * 0.5 + 0.5) * (i + 1)) % (i + 1)
-      const tmp  = indices[i]
-      indices[i] = indices[j]
-      indices[j] = tmp
-    }
-
-    // Drop syllables as the lap rises.
-    const keep = lap < 1
-      ? pattern.length
-      : lap < 2
-        ? pattern.length - 1
-        : lap < 3
-          ? Math.max(2, pattern.length - 2)
-          : Math.max(2, pattern.length - 3)
-
-    const pitchDrift = lap >= 3 ? 1 - clamp01((lap - 3) * 0.15) : 1
-
-    // Door chime, then the syllables.
-    this.fireDoorChime()
-
-    const chimeDuration = 0.4
-    let t = chimeDuration
-    for (let i = 0; i < keep; i++) {
-      const idx            = indices[i]
-      const [ pitch, dur ] = pattern[idx]
-      const p              = pitch * pitchDrift
-      this.after(t * 1000, () => this.fireSyllable(p, dur))
-      t += dur + 0.03
-    }
+    if (this.formant)
+      doorChime(this.ctx, this.formant.chime)
+    for (const { pitch, duration, at } of planAnnouncement(this.bay, this.lapF))
+      this.after(at * 1000, () => {
+        if (this.ctx && this.formant)
+          syllable(this.ctx, this.formant, pitch, duration)
+      })
   }
 
   // ---- helpers ------------------------------------------------------------
 
-  private ramp (
-    param: AudioParam | undefined,
-    value: number,
-    now:   number,
-    _key:  'motorGain' | 'muzakGain' | 'windGain' | 'waterGain' | 'splashGain' |
-      'fanGain' | 'coilGain' | 'relayGain' | 'voidGain' | 'boreGain',
-  ): void {
-    if (!param)
-      return
-    param.setTargetAtTime(value, now, GLIDE)
+  private ramp (param: AudioParam | undefined, value: number, now: number): void {
+    param?.setTargetAtTime(value, now, GLIDE)
   }
 
   /**
@@ -740,10 +246,9 @@ export class LoopLineAudioEngine extends JourneyAudio {
       return
 
     const i       = Math.max(0, Math.min(ROOMS.length - 1, this.bay))
-    const r       = ROOMS[i]
     this.lastRoom = this.bay
 
-    this.room?.tune(r, now, ROOM_GLIDE)
+    this.room?.tune(ROOMS[i], now, ROOM_GLIDE)
   }
 
   // ---- per-frame ----------------------------------------------------------
@@ -762,7 +267,6 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     this.speed = ride[0]
     this.lapF  = ride[1]
-    this.shake = ride[2]
     this.bay   = Math.round(loop[3])
 
     // --- joints, off distance ---
@@ -794,36 +298,36 @@ export class LoopLineAudioEngine extends JourneyAudio {
     // --- continuous layers ---
 
     // Motor: pitch and filter track speed.
-    this.ramp(this.motorGain?.gain, 0.04 + Math.min(this.speed / 20, 1) * 0.14, now, 'motorGain')
+    this.ramp(this.motorGain?.gain, 0.04 + Math.min(this.speed / 20, 1) * 0.14, now)
 
     // Concourse muzak.
-    this.ramp(this.muzakGain?.gain, this.bay === 1 ? 0.045 : 0, now, 'muzakGain')
+    this.ramp(this.muzakGain?.gain, this.bay === 1 ? 0.045 : 0, now)
 
     // Wind in the cut — open air.
     const cutFactor = this.bay === 2 ? 1 : 0
-    this.ramp(this.windGain?.gain, cutFactor * 0.06 * Math.min(this.speed / 18, 1), now, 'windGain')
+    this.ramp(this.windGain?.gain, cutFactor * 0.06 * Math.min(this.speed / 18, 1), now)
 
     // Water in the annex — lapping rate tracks speed.
-    this.ramp(this.waterGain?.gain, this.bay === 3 ? 0.08 : 0, now, 'waterGain')
+    this.ramp(this.waterGain?.gain, this.bay === 3 ? 0.08 : 0, now)
 
     // Splash in the annex — rate tracks speed.
     const splashRate = this.bay === 3 ? Math.min(this.speed / 18, 1) * 0.05 : 0
-    this.ramp(this.splashGain?.gain, splashRate, now, 'splashGain')
+    this.ramp(this.splashGain?.gain, splashRate, now)
 
     // Fan walls in the stacks.
-    this.ramp(this.fanGain?.gain, this.bay === 4 ? 0.055 : 0, now, 'fanGain')
+    this.ramp(this.fanGain?.gain, this.bay === 4 ? 0.055 : 0, now)
 
     // Coil whine in the stacks.
-    this.ramp(this.coilGain?.gain, this.bay === 4 ? 0.025 : 0, now, 'coilGain')
+    this.ramp(this.coilGain?.gain, this.bay === 4 ? 0.025 : 0, now)
 
     // Relay clicks in the stacks — driven by schedule, just gate the gain.
-    this.ramp(this.relayGain?.gain, this.bay === 4 ? 1 : 0, now, 'relayGain')
+    this.ramp(this.relayGain?.gain, this.bay === 4 ? 1 : 0, now)
 
     // Void — almost nothing on the trestle.
-    this.ramp(this.voidGain?.gain, this.bay === 5 ? 0.018 : 0, now, 'voidGain')
+    this.ramp(this.voidGain?.gain, this.bay === 5 ? 0.018 : 0, now)
 
     // Bore — narrow, close, dry brick.
-    this.ramp(this.boreGain?.gain, this.bay === 6 ? 0.1 : 0, now, 'boreGain')
+    this.ramp(this.boreGain?.gain, this.bay === 6 ? 0.1 : 0, now)
 
     // --- master degradation ---
     //
@@ -846,45 +350,10 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     // Emit splash events — rate tracks speed.
     if (this.bay === 3 && this.splashGain) {
-      if (Math.random() < this.speed / 18 * 0.08)
-        this.fireSplash()
+      if (Math.random() < this.speed / 18 * 0.08 && this.ctx && this.dry && this.noiseBuffer)
+        splash(this.ctx, this.noiseBuffer, this.dry, this.wet ?? this.dry)
     }
   }
-
-  /** One water splash — a short burst of filtered noise. */
-  private fireSplash (): void {
-    if (!this.ctx || !this.dry || !this.noiseBuffer)
-      return
-
-    const now  = this.ctx.currentTime
-    const src  = this.ctx.createBufferSource()
-    src.buffer = this.noiseBuffer
-
-    const bp = this.ctx.createBiquadFilter()
-    bp.type  = 'bandpass'
-    bp.frequency.setValueAtTime(600 + Math.random() * 400, now)
-    bp.Q.setValueAtTime(2, now)
-
-    const env = this.ctx.createGain()
-    env.gain.setValueAtTime(0, now)
-    env.gain.linearRampToValueAtTime(0.04, now + 0.008)
-    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
-    src.connect(bp)
-    bp.connect(env)
-    env.connect(this.dry)
-    env.connect(this.wet ?? this.dry)
-    src.start(now)
-    src.stop(now + 0.1)
-  }
-
-  // ---- formant engine -----------------------------------------------------
-
-  private formantF1:     BiquadFilterNode | null = null
-  private formantF2:     BiquadFilterNode | null = null
-  private formantF1Gain: GainNode | null = null
-  private formantF2Gain: GainNode | null = null
-  private formantMix:    GainNode | null = null
-  private chimeGain:     GainNode | null = null
 }
 
 

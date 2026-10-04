@@ -42,11 +42,8 @@
 // (sun inscattering and extinction kept separate). Soft shadows are iq's
 // penumbra estimate along the shadow ray.
 
-import { MATERIAL_GLSL, SKY_GLSL, SURFACE_GLSL } from '@wjh/delta/glsl'
-import { SEAM_HALF } from './kinematics'
-import { ACES, SATURATE } from '@wjh/glsl/color'
-import { HASH11, HASH12 } from '@wjh/glsl/hash'
-import { ROT, SD_BOX } from '@wjh/glsl/sdf'
+import { ACES } from '@wjh/glsl/color'
+import { HASH12 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { shapeGlsl } from './glsl/shape'
 import { actsGlsl } from './glsl/acts'
