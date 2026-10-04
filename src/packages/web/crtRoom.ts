@@ -51,7 +51,7 @@ export interface CrtChannel {
 }
 
 /** The tube face's box in CSS pixels, relative to the canvas. */
-export interface ScreenRect {
+interface ScreenRect {
   x: number;
   y: number;
   w: number;
@@ -107,7 +107,7 @@ const unit  = (a: V3): V3 => {
 }
 
 /** Far enough back that the set fits a narrow screen's width. */
-export function cameraDistance (aspect: number): number {
+function cameraDistance (aspect: number): number {
   return Math.max(2.7, FOCAL / Math.max(0.2, aspect))
 }
 

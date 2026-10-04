@@ -105,26 +105,30 @@ finally {
   await harness?.close()
 }
 
-const num = (v, d) => v === undefined ? d : Number(v)
+function num (v, d) {
+  return v === undefined ? d : Number(v)
+}
 
-const hudFn = ids => ids.map(id => {
-  const el = document.getElementById(id)
-  if (!el)
-    return { id, present: false }
+function hudFn (ids) {
+  return ids.map(id => {
+    const el = document.getElementById(id)
+    if (!el)
+      return { id, present: false }
 
-  const r = el.getBoundingClientRect()
-  return {
-    id,
-    present: true,
-    text:    (el.textContent ?? '').trim(),
-    // The CENTRE is what the eye tracks, and for a centred overlay it is the
-    // thing that is supposed to be invariant while the width is not.
-    cx:      +((r.left + r.right) / 2).toFixed(1),
-    cy:      +((r.top + r.bottom) / 2).toFixed(1),
-    w:       +r.width.toFixed(1),
-    h:       +r.height.toFixed(1),
-  }
-})
+    const r = el.getBoundingClientRect()
+    return {
+      id,
+      present: true,
+      text:    (el.textContent ?? '').trim(),
+      // The CENTRE is what the eye tracks, and for a centred overlay it is the
+      // thing that is supposed to be invariant while the width is not.
+      cx:      +((r.left + r.right) / 2).toFixed(1),
+      cy:      +((r.top + r.bottom) / 2).toFixed(1),
+      w:       +r.width.toFixed(1),
+      h:       +r.height.toFixed(1),
+    }
+  })
+}
 
 // Flags arrive as STRINGS, and "0" is truthy in JavaScript — so `opts.hud ? …`
 // answered yes to --hud=0 and every "clean plate" ever taken with it came back
