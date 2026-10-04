@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A corridor seen head-on, receding into a red core: every journey here is
+       a way down. The frame splits into red and cyan like a picture on a
+       failing tube. -->
+  <rect width="64" height="64" rx="12" fill="#05060a"/>
+  <g fill="none" stroke-width="4">
+    <rect x="10" y="10" width="44" height="44" stroke="#ff2050" transform="translate(-1.6 0)"/>
+    <rect x="10" y="10" width="44" height="44" stroke="#00e5ff" transform="translate(1.6 0)"/>
+    <rect x="10" y="10" width="44" height="44" stroke="#00ffaa"/>
+  </g>
+  <path d="M12 12 23 23M52 12 41 23M12 52 23 41M52 52 41 41" stroke="#00ffaa" stroke-width="2.4" opacity=".55"/>
+  <rect x="22" y="22" width="20" height="20" fill="none" stroke="#00ffaa" stroke-width="3" opacity=".75"/>
+  <rect x="28" y="28" width="8" height="8" fill="#ff2050"/>
+</svg>
