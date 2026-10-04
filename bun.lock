@@ -75,6 +75,7 @@
         "@wjh/config": "workspace:*",
         "@wjh/gl": "workspace:*",
         "@wjh/math": "workspace:*",
+        "@wjh/quality": "workspace:*",
         "@wjh/web": "workspace:*",
       },
     },

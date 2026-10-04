@@ -7,6 +7,7 @@
   "sideEffects": false,
   "exports": {
     "./definition": "./definition.ts",
+    "./engine": "./engine.ts",
     "./frame": "./frame.ts",
     "./label": "./label.ts",
     "./seek": "./seek.ts",
@@ -19,6 +20,7 @@
     "@wjh/config": "workspace:*",
     "@wjh/gl": "workspace:*",
     "@wjh/math": "workspace:*",
+    "@wjh/quality": "workspace:*",
     "@wjh/web": "workspace:*"
   }
 }

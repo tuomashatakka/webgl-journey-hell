@@ -10,7 +10,7 @@
 // report progress.
 
 import { CONFIG } from '@wjh/config/config'
-import type { JourneyLoading } from '✦/hooks/use-journey-runtime'
+import type { JourneyLoading } from '@wjh/journey/engine'
 
 
 export default function JourneyLoader ({ progress, status, done, failed, detail }: JourneyLoading) {

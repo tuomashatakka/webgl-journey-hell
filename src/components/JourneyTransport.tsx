@@ -18,22 +18,11 @@
 
 import { CONFIG } from '@wjh/config/config'
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
+import type { TransportView } from '@wjh/journey/engine'
 import type { TransportAction, TransportMode } from '@wjh/journey/transport'
 
 
-interface TransportView {
-  mode:         TransportMode;
-  paused:       boolean;
-  loop:         number;
-  section:      number;
-  sectionCount: number;
-  progress:     number;
-  time:         number;
-  label:        string;
-  hasMarks:     boolean;
-}
-
-export interface TransportHandle {
+interface TransportHandle {
   update(view: TransportView): void;
 }
 
