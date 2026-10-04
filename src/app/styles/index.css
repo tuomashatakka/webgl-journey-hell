@@ -1,0 +1,233 @@
+/* ============================================================= */
+/* INDEX GRID LANDING PAGE                                        */
+/* ============================================================= */
+html, body {
+  background-color: #000;
+}
+
+
+.index-page {
+  min-height: 100vh;
+  width:      100%;
+  background:
+        radial-gradient(ellipse at 50% -20%, rgba(0, 255, 170, 0.06), transparent 60%),
+        #000;
+  color:         #fff;
+  font-family:   monospace;
+  padding:       64px 24px 48px;
+}
+
+
+.index-header {
+  text-align:    center;
+  margin-bottom: 48px;
+}
+
+
+.index-sigil {
+  color:            #00ffaa;
+  opacity:          0.4;
+  letter-spacing:   10px;
+  font-size:        12px;
+  margin-bottom:    18px;
+}
+
+
+.index-title {
+  font-family:      Georgia, serif;
+  font-size:        clamp(18px, 4vw, 34px);
+  letter-spacing:   4px;
+  color:            #fff;
+  text-shadow:      0 0 14px rgba(255, 255, 255, 0.4);
+}
+
+
+.index-subtitle {
+  margin-top:       12px;
+  color:            #00ffaa;
+  font-size:        11px;
+  letter-spacing:   4px;
+  text-transform:   uppercase;
+  opacity:          0.7;
+}
+
+
+.index-footer {
+  margin-top:       48px;
+  text-align:       center;
+  color:            rgba(255, 255, 255, 0.3);
+  font-size:        10px;
+  letter-spacing:   2px;
+}
+
+
+.journey-grid {
+  max-width:               1200px;
+  margin:                  0 auto;
+  display:                 grid;
+  grid-template-columns:   repeat(auto-fill, minmax(300px, 1fr));
+  gap:                     24px;
+}
+
+
+.journey-card {
+  position:          relative;
+  display:           block;
+  text-decoration:   none;
+  color:             #fff;
+  background:        #07080b;
+  border:            1px solid #1a1e24;
+  overflow:          hidden;
+  transition:        border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+
+.journey-card:hover,
+.journey-card:focus-visible {
+  border-color:   var(--accent, #00ffaa);
+  box-shadow:     0 0 24px -4px var(--accent, #00ffaa);
+  transform:      translateY(-2px);
+  outline:        none;
+}
+
+
+.journey-card__poster {
+  position:       relative;
+  width:          100%;
+  aspect-ratio:   16 / 10;
+  overflow:       hidden;
+}
+
+
+.journey-card__img {
+  object-fit: cover;
+  transition: transform 0.4s ease, opacity 0.25s ease;
+}
+
+
+.journey-card:hover .journey-card__img {
+  transform: scale(1.04);
+}
+
+
+/* Empty slot the shared preview <canvas> is appended into on hover. */
+.journey-card__mount {
+  position:         absolute;
+  inset:            0;
+  pointer-events:   none;
+}
+
+
+/* CRT scanline veil — painted above the poster AND the live preview. */
+.journey-card__scan {
+  position:         absolute;
+  inset:            0;
+  pointer-events:   none;
+  opacity:          0.5;
+  background:
+        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%),
+        linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 4px, 3px 100%;
+}
+
+
+.journey-card__body {
+  padding: 16px 18px 18px;
+}
+
+
+.journey-card__title {
+  position:         relative;
+  font-family:      monospace;
+  font-size:        13px;
+  font-weight:      bold;
+  letter-spacing:   2px;
+  text-transform:   uppercase;
+  color:            #fff;
+}
+
+
+/* Glitch the title on hover, reusing the journey's glitchAnim keyframes. */
+.journey-card:hover .journey-card__title::before,
+.journey-card:hover .journey-card__title::after {
+  content:    attr(data-text);
+  position:   absolute;
+  top:        0;
+  left:       0;
+  width:      100%;
+  overflow:   hidden;
+}
+
+
+.journey-card:hover .journey-card__title::before {
+  left:          2px;
+  text-shadow:   -2px 0 #ff0055;
+  animation:     glitchAnim1 0.8s 6 linear alternate-reverse;
+}
+
+
+.journey-card:hover .journey-card__title::after {
+  left:          -2px;
+  text-shadow:   -1px 0 #00ffff, 0 2px #ffff00;
+  animation:     glitchAnim2 0.7s 7 linear alternate-reverse;
+}
+
+
+.journey-card__tagline {
+  margin-top:    8px;
+  font-size:     11px;
+  line-height:   1.5;
+  color:         rgba(255, 255, 255, 0.5);
+}
+
+
+.journey-card__tags {
+  list-style:   none;
+  display:      flex;
+  flex-wrap:    wrap;
+  gap:          6px;
+  margin-top:   12px;
+}
+
+
+.journey-card__tag {
+  font-size:        9px;
+  letter-spacing:   1px;
+  text-transform:   uppercase;
+  padding:          2px 7px;
+  border:           1px solid #2d3139;
+  color:            rgba(255, 255, 255, 0.55);
+  transition:       color 0.25s ease, border-color 0.25s ease;
+}
+
+
+.journey-card:hover .journey-card__tag {
+  border-color: var(--accent, #00ffaa);
+  color:        var(--accent, #00ffaa);
+}
+
+
+/* Back-to-index link reused across journey routes (top-left). */
+#back-btn {
+  position:          absolute;
+  top:               20px;
+  left:              20px;
+  background:        rgba(0, 0, 0, 0.6);
+  border:            1px solid rgba(255, 255, 255, 0.25);
+  color:             #fff;
+  font-family:       monospace;
+  font-size:         11px;
+  letter-spacing:    2px;
+  padding:           8px 16px;
+  text-decoration:   none;
+  cursor:            pointer;
+  z-index:           10;
+  transition:        all 0.2s ease;
+}
+
+
+#back-btn:hover {
+  background:     #fff;
+  color:          #000;
+  border-color:   #fff;
+}

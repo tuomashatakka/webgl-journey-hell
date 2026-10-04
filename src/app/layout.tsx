@@ -1,6 +1,11 @@
 import { CONFIG } from '@wjh/config/config'
 import type { Metadata } from 'next'
-import './globals.css' // Global styles
+import './styles/base.css'
+import './styles/debug.css'
+import './styles/settings.css'
+import './styles/index.css'
+import './styles/transport.css'
+import './styles/assets.css'
 import { SettingsProvider } from '✦/components/SettingsProvider'
 
 

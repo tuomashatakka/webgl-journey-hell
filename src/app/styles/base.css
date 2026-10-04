@@ -1,0 +1,241 @@
+* {
+  box-sizing:   border-box;
+  margin:       0;
+  padding:      0;
+}
+
+
+/* A journey is the viewport: pinned to it, never scrolled. The canvas is
+   always 100vw x 100vh — the dynamic height where there is one, so a phone's
+   toolbars do not hide the bottom of it — and the runtime matches the backing
+   store to that box whenever it changes (a ResizeObserver; see
+   hooks/use-journey-runtime). */
+#app-container {
+  position:           fixed;
+  inset:              0;
+  width:              100vw;
+  height:             100vh;
+  background-color:   #000;
+  overflow:           hidden;
+  font-family:        monospace;
+  user-select:        none;
+    /* The row the HUD buttons sit on, above the transport. */
+  --hud-row: 84px;
+}
+
+
+#gl-canvas {
+  position:   absolute;
+  top:        0;
+  left:       0;
+  width:      100vw;
+  height:     100vh;
+  z-index:    0;
+  display:    block;
+}
+
+
+@supports (height: 100dvh) {
+  #app-container,
+  #gl-canvas {
+    height: 100dvh;
+  }
+}
+
+
+#crt-overlay {
+  position:          absolute;
+  top:               0;
+  left:              0;
+  width:             100%;
+  height:            100%;
+  z-index:           5;
+  pointer-events:    none;
+  background:        linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size:   100% 4px, 3px 100%;
+}
+
+
+/* The glitching type (components/GlitchTitle). The title card is over
+   everything, HUD included, until it tears itself away; taps reach the window
+   listener that skips it, so the canvas itself takes no pointer events. A
+   section heading sits over the journey, under the chrome, and unmounts once
+   it has torn out. */
+#journey-title-intro,
+#journey-section-heading {
+  position:         fixed;
+  inset:            0;
+  width:            100%;
+  height:           100%;
+  pointer-events:   none;
+}
+
+
+#journey-title-intro {
+  z-index: 40;
+}
+
+
+#journey-section-heading {
+  z-index: 8;
+}
+
+
+/* ---- the loading bar (components/JourneyLoader) ------------------------ */
+/* Before the title card, over it: black, a hairline bar, a status line. In
+   the prerendered HTML, so it is the first thing a journey's page shows. */
+#journey-loader {
+  position:          fixed;
+  inset:             0;
+  z-index:           45;
+  display:           flex;
+  flex-direction:    column;
+  align-items:       center;
+  justify-content:   center;
+  gap:               14px;
+  background:        #000;
+  color:             rgba(255, 255, 255, 0.55);
+  font-family:       monospace;
+  transition:        opacity 0.45s ease;
+}
+
+
+#journey-loader[data-done] {
+  opacity:        0;
+  pointer-events: none;
+}
+
+
+.jl-bar {
+  position:     relative;
+  width:        min(320px, 70vw);
+  height:       2px;
+  overflow:     hidden;
+  background:   rgba(255, 255, 255, 0.12);
+}
+
+
+.jl-fill {
+  position:           absolute;
+  inset:              0;
+  background:         var(--accent, #fff);
+  transform:          scaleX(0);
+  transform-origin:   left center;
+  transition:         transform 0.35s ease-out;
+}
+
+
+/* A highlight sweeping the bar the whole time. A transform animation runs on
+   the compositor, so it keeps moving while the main thread is blocked
+   compiling shaders — the one stage that cannot report its progress. */
+.jl-bar::after {
+  content:       "";
+  position:      absolute;
+  top:           0;
+  bottom:        0;
+  left:          0;
+  width:         30%;
+  background:    linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation:     jlSweep 1.3s linear infinite;
+  will-change:   transform;
+}
+
+
+@keyframes jlSweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+
+
+.jl-status {
+  display:          flex;
+  gap:              14px;
+  font-size:        10px;
+  letter-spacing:   3px;
+  text-transform:   uppercase;
+  white-space:      nowrap;
+}
+
+
+.jl-pct {
+  color:       var(--accent, #fff);
+  white-space: pre;
+}
+
+
+#journey-loader[data-failed] .jl-bar::after {
+  display: none;
+}
+
+
+#journey-loader[data-failed] .jl-status {
+  max-width:         88vw;
+  color:             #ff5a5a;
+  white-space:       normal;
+  justify-content:   center;
+  text-align:        center;
+}
+
+
+/* What the compiler said. Selectable, so it can go into a bug report from a
+   phone with no console. */
+.jl-detail {
+  max-width:        min(560px, 88vw);
+  font-size:        10px;
+  line-height:      1.5;
+  letter-spacing:   1px;
+  text-align:       center;
+  color:            rgba(255, 90, 90, 0.75);
+  overflow-wrap:    anywhere;
+  user-select:      text;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .jl-bar::after {
+    display: none;
+  }
+}
+
+
+#fullscreen-btn {
+  position:         absolute;
+  bottom:           var(--hud-row, 84px);
+  left:             20px;
+  background:       rgba(0, 0, 0, 0.6);
+  border:           1px solid rgba(255, 255, 255, 0.25);
+  color:            #fff;
+  font-family:      monospace;
+  font-size:        11px;
+  letter-spacing:   2px;
+  padding:          8px 16px;
+  cursor:           pointer;
+  z-index:          10;
+  outline:          none;
+  transition:       all 0.2s ease;
+}
+
+
+#fullscreen-btn:hover {
+  background:     #fff;
+  color:          #000;
+  border-color:   #fff;
+}
+
+
+#fps-display {
+  position:         absolute;
+  bottom:           var(--hud-row, 84px);
+  right:            20px;
+  color:            rgba(255, 255, 255, 0.45);
+  font-family:      monospace;
+  font-size:        11px;
+  letter-spacing:   1px;
+  pointer-events:   none;
+  z-index:          10;
+  transition:       opacity 0.35s ease;
+}

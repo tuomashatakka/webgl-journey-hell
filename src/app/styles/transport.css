@@ -1,0 +1,287 @@
+/* ---- the transport (components/JourneyTransport) ----------------------- */
+/*
+ * A tape deck pinned to the bottom of every journey. The rest of the HUD is
+ * hand-placed absolutes stacking left-to-right along the bottom edge, so this
+ * takes the edge for itself and the others sit on the row above it (bottom:
+ * var(--hud-row) rather than 20px). They stay pixel-fixed, which is what the
+ * `hud` acceptance check in tools/journey.mjs measures.
+ *
+ * The head is a grid — buttons, then the play state and the section it is in
+ * as one line, then the counter. On a narrow screen the state line drops under
+ * the buttons, and the HUD row moves up to clear it.
+ */
+
+#journey-transport {
+  position:         absolute;
+  bottom:           0;
+  left:             0;
+  right:            0;
+  z-index:          12;
+  padding:          8px 20px 14px;
+  display:          flex;
+  flex-direction:   column;
+  gap:              7px;
+  font-family:      monospace;
+  background:       linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0));
+  transition:       opacity 0.35s ease;
+}
+
+
+.jt-head {
+  display:                 grid;
+  grid-template-columns:   auto minmax(0, 1fr) auto;
+  grid-template-areas:     "buttons state counter";
+  align-items:             center;
+  column-gap:              16px;
+  row-gap:                 6px;
+}
+
+
+.jt-buttons {
+  grid-area:   buttons;
+  display:     flex;
+  gap:         6px;
+}
+
+
+.jt-btn {
+  width:         38px;
+  height:        26px;
+  background:    rgba(0, 0, 0, 0.6);
+  border:        1px solid rgba(255, 255, 255, 0.25);
+  color:         #fff;
+  font-family:   monospace;
+  font-size:     11px;
+  line-height:   1;
+  cursor:        pointer;
+  outline:       none;
+  transition:    all 0.15s ease;
+}
+
+
+.jt-btn:hover {
+  background:     #fff;
+  color:          #000;
+  border-color:   #fff;
+}
+
+
+.jt-btn:focus-visible {
+  border-color: var(--accent, #fff);
+  box-shadow:   0 0 0 1px var(--accent, #fff);
+}
+
+
+.jt-btn:active {
+  transform: translateY(1px);
+}
+
+
+/* Paused: the button that resumes is the lit one. */
+.jt-pause[aria-pressed="true"] {
+  color:        var(--accent, #fff);
+  border-color: var(--accent, #fff);
+}
+
+
+.jt-pause[aria-pressed="true"]:hover {
+  color: #000;
+}
+
+
+/* The play state, and the section it is in, read as one line. */
+.jt-state {
+  grid-area:        state;
+  min-width:        0;
+  display:          flex;
+  gap:              12px;
+  align-items:      baseline;
+  font-size:        10px;
+  letter-spacing:   2px;
+}
+
+
+.jt-mode {
+  flex:  none;
+  color: var(--accent, #fff);
+    /* Fixed width, so the section name does not shuffle sideways every time
+       the state changes. */
+  min-width: 80px;
+}
+
+
+.jt-label {
+  flex:             1 1 auto;
+  min-width:        0;
+  overflow:         hidden;
+  white-space:      nowrap;
+  text-overflow:    ellipsis;
+  color:            rgba(255, 255, 255, 0.6);
+  letter-spacing:   3px;
+  text-transform:   uppercase;
+}
+
+
+.jt-counter {
+  grid-area:        counter;
+  justify-self:     end;
+  color:            rgba(255, 255, 255, 0.4);
+  font-size:        10px;
+  letter-spacing:   2px;
+}
+
+
+.jt-track {
+  position:     relative;
+  height:       6px;
+  background:   rgba(255, 255, 255, 0.09);
+  border:       1px solid rgba(255, 255, 255, 0.16);
+  cursor:       pointer;
+    /* The bar is a slider: a drag on it scrubs, it must not scroll the page. */
+  touch-action: none;
+  outline:      none;
+}
+
+
+/* A target a finger can hit: the bar stays six pixels, the hit area does not. */
+.jt-track::before {
+  content:    "";
+  position:   absolute;
+  inset:      -12px 0;
+}
+
+
+.jt-track:focus-visible {
+  border-color: var(--accent, #fff);
+}
+
+
+.jt-fill {
+  position:     absolute;
+  top:          0;
+  left:         0;
+  width:        100%;
+  height:       100%;
+  background:   var(--accent, #fff);
+  opacity:      0.75;
+    /* Written every frame as a transform: compositor-only, no layout. */
+  transform:          scaleX(0);
+  transform-origin:   left center;
+  will-change:        transform;
+  pointer-events:     none;
+}
+
+
+.jt-tick {
+  position:         absolute;
+  top:              0;
+  width:            1px;
+  height:           100%;
+  background:       rgba(0, 0, 0, 0.75);
+  pointer-events:   none;
+}
+
+
+/* Jumping or scrubbing: flash the readout, tint the tape. */
+#journey-transport:is([data-mode="flash"], [data-mode="scrub"]) .jt-mode {
+  animation: jtBlink 0.28s steps(1) infinite;
+}
+
+
+#journey-transport:is([data-mode="flash"], [data-mode="scrub"]) .jt-track {
+  border-color: var(--accent, #fff);
+}
+
+
+/* Paused: a slow blink, like a deck's on-screen PAUSE. */
+#journey-transport[data-mode="paused"] .jt-mode {
+  animation: jtBlink 1.1s steps(1) infinite;
+}
+
+
+@keyframes jtBlink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0.25;
+  }
+}
+
+
+/* Fingers, not cursors: bigger buttons, a thicker tape. */
+@media (pointer: coarse) {
+  .jt-btn {
+    width:         46px;
+    height:        34px;
+    font-size:     13px;
+  }
+
+  .jt-track {
+    height: 10px;
+  }
+}
+
+
+@media (width <= 620px) {
+  #app-container {
+    --hud-row: 106px;
+  }
+
+  .jt-head {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+            "buttons counter"
+            "state   state";
+    column-gap: 10px;
+  }
+
+  /* The readout would run into the buttons on the HUD row; the top right
+       corner is free. */
+  #fps-display {
+    top:    28px;
+    bottom: auto;
+  }
+}
+
+
+@media (width <= 360px) {
+  .jt-btn {
+    width: 40px;
+  }
+}
+
+
+/* ---- fullscreen: the picture alone ------------------------------------- */
+/* Every piece of chrome fades and stops taking the pointer — the pointer is
+   for looking around. Keyboard focus brings a control back, so tabbing to one
+   still shows it; Esc leaves fullscreen and brings them all back. */
+#app-container[data-fullscreen] .hud,
+#app-container[data-fullscreen] #settings-btn {
+  opacity:        0;
+  pointer-events: none;
+}
+
+
+#app-container[data-fullscreen] .hud:focus-visible,
+#app-container[data-fullscreen] #settings-btn:focus-visible {
+  opacity: 1;
+}
+
+
+/* Separate: a browser without :has() drops only this rule, not the above. */
+#app-container[data-fullscreen] .hud:has(:focus-visible) {
+  opacity: 1;
+}
+
+/* ---- index page: the gear lives at the foot of the document ------------ */
+/*
+ * #settings-btn is absolutely positioned for the journey HUD row, so on the
+ * index page it would ignore its place in the DOM entirely. Scope it back into
+ * flow here rather than forking the component.
+ */
+.index-footer #settings-btn {
+  position:   static;
+  display:    block;
+  margin:     18px auto 0;
+}

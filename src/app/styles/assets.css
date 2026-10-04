@@ -1,0 +1,232 @@
+/* --- Δ — the asset library (/assets) ------------------------------------- */
+
+/* The page is its own stacking context; the shared canvas sits at -1 inside
+   it, above the page's black but under every word on it. At z-index 0 a fixed
+   canvas paints over all the in-flow text, which is not positioned. */
+.assets-canvas {
+  position:         fixed;
+  inset:            0;
+  width:            100vw;
+  height:           100vh;
+  z-index:          -1;
+  pointer-events:   none;
+}
+
+
+.assets-page {
+  position:      relative;
+  z-index:       0;
+  background:    #000;
+  min-height:    100vh;
+  color:         #fff;
+  font-family:   monospace;
+  padding:       64px 24px 48px;
+}
+
+
+.assets-back {
+  margin-top:       14px;
+  font-size:        11px;
+  letter-spacing:   2px;
+}
+
+
+.assets-back a {
+  color:           rgba(255, 255, 255, 0.6);
+  text-decoration: none;
+}
+
+
+.assets-back a:hover {
+  color: #00ffaa;
+}
+
+
+.assets-controls {
+  max-width:         1200px;
+  margin:            0 auto 40px;
+  display:           flex;
+  flex-wrap:         wrap;
+  gap:               24px;
+  justify-content:   center;
+}
+
+
+/* A list of options with a ring on the right, the checked one filled. */
+.assets-radio {
+  min-width:       280px;
+  border:          0;
+  border-radius:   18px;
+  padding:         10px 0;
+  background:      #25242a;
+  box-shadow:      0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+
+.assets-radio legend {
+  padding:          0 20px;
+  font-size:        10px;
+  letter-spacing:   3px;
+  text-transform:   uppercase;
+  color:            rgba(255, 255, 255, 0.45);
+  float:            left;
+  width:            100%;
+  margin-bottom:    4px;
+}
+
+
+.assets-radio__option {
+  display:           flex;
+  align-items:       center;
+  justify-content:   space-between;
+  gap:               16px;
+  padding:           12px 20px;
+  font-family:       system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size:         16px;
+  font-weight:       600;
+  color:             #f2f1f6;
+  cursor:            pointer;
+  clear:             both;
+}
+
+
+.assets-radio__option:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+
+.assets-radio__option input {
+  appearance:      none;
+  width:           22px;
+  height:          22px;
+  flex:            none;
+  margin:          0;
+  border:          2.5px solid #f2f1f6;
+  border-radius:   50%;
+  display:         grid;
+  place-items:     center;
+  cursor:          pointer;
+}
+
+
+.assets-radio__option input::before {
+  content:         "";
+  width:           12px;
+  height:          12px;
+  border-radius:   50%;
+  background:      #c9b6ff;
+  transform:       scale(0);
+  transition:      transform 0.15s ease;
+}
+
+
+.assets-radio__option input:checked {
+  border-color: #c9b6ff;
+}
+
+
+.assets-radio__option input:checked::before {
+  transform: scale(1);
+}
+
+
+.assets-radio__option input:focus-visible {
+  outline:        2px solid #00ffaa;
+  outline-offset: 3px;
+}
+
+
+.assets-heading {
+  max-width:        1200px;
+  margin:           32px auto 16px;
+  font-size:        11px;
+  letter-spacing:   4px;
+  text-transform:   uppercase;
+  color:            #00ffaa;
+  opacity:          0.8;
+}
+
+
+.assets-grid {
+  max-width:               1200px;
+  margin:                  0 auto;
+  padding:                 0;
+  list-style:              none;
+  display:                 grid;
+  grid-template-columns:   repeat(auto-fill, minmax(220px, 1fr));
+  gap:                     20px;
+}
+
+
+.assets-grid--wide {
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+}
+
+
+.asset-card {
+  border:          1px solid rgba(255, 255, 255, 0.08);
+  border-radius:   10px;
+  overflow:        hidden;
+}
+
+
+.asset-card__preview {
+  aspect-ratio: 1;
+}
+
+
+.assets-grid--wide .asset-card__preview {
+  aspect-ratio: 16 / 9;
+}
+
+
+.asset-card__body {
+  display:          flex;
+  flex-direction:   column;
+  gap:              4px;
+  padding:          12px 14px 14px;
+  background:       rgba(10, 10, 12, 0.92);
+  font-size:        11px;
+  color:            rgba(255, 255, 255, 0.6);
+}
+
+
+.asset-card__body strong {
+  color:         #fff;
+  font-size:     13px;
+  font-weight:   600;
+}
+
+
+.asset-card__body code {
+  color: #c9b6ff;
+}
+
+
+.asset-card__body a {
+  color:           rgba(255, 255, 255, 0.45);
+  text-decoration: none;
+}
+
+
+.asset-card__body a:hover {
+  color: #00ffaa;
+}
+
+
+.index-assets-link {
+  margin-top:       14px;
+  font-size:        11px;
+  letter-spacing:   3px;
+}
+
+
+.index-assets-link a {
+  color:           rgba(201, 182, 255, 0.75);
+  text-decoration: none;
+}
+
+
+.index-assets-link a:hover {
+  color: #c9b6ff;
+}

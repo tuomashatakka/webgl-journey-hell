@@ -2,7 +2,7 @@
 
 // Global graphics & controls panel. Presentational: it receives `settings` and
 // an `onChange` and renders against the existing #settings-* / .settings-* CSS
-// in app/globals.css. Mounted by SettingsButton (grid + journeys) and by the
+// in app/styles/settings.css. Mounted by SettingsButton (grid + journeys) and by the
 // bespoke liminal route.
 
 import { CONFIG } from '@wjh/config/config'

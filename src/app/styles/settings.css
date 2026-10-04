@@ -1,0 +1,53 @@
+/* BRIGHTNESS SLIDER STYLES */
+.settings-slider-row {
+  display:    block;
+  margin-top: 8px;
+}
+
+
+.settings-slider {
+  -webkit-appearance:   none;
+  appearance:           none;
+  width:                100%;
+  max-width:            220px;
+  height:               4px;
+  background:           #2d3139;
+  outline:              none;
+  border:               none;
+  vertical-align:       middle;
+  margin-right:         12px;
+  display:              inline-block;
+}
+
+
+.settings-slider::-webkit-slider-thumb {
+  -webkit-appearance:   none;
+  appearance:           none;
+  width:                12px;
+  height:               12px;
+  background:           #00ffaa;
+  border:               1px solid #000;
+  cursor:               pointer;
+  transition:           background 0.2s ease;
+}
+
+
+.settings-slider::-moz-range-thumb {
+  width:        12px;
+  height:       12px;
+  background:   #00ffaa;
+  border:       1px solid #000;
+  cursor:       pointer;
+  transition:   background 0.2s ease;
+}
+
+
+.settings-slider-val {
+  display:          inline-block;
+  font-family:      monospace;
+  font-size:        11px;
+  color:            #00ffaa;
+  vertical-align:   middle;
+  width:            45px;
+  text-align:       left;
+}
