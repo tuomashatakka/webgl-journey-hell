@@ -33,7 +33,7 @@ src/packages/*    generic engine code, one workspace package per concern   (no R
 | `@wjh/web` | `assetUrl`, `debugParams`, `frameLoopManager`, `panControl`, `glitchTitle`, `canvasText`, `keyboard` |
 | `@wjh/delta` | the CC0 asset library: manifest, loaders, GLSL, the asset-browser renderer, `build.mjs` |
 
-Package.json files are generated from the files present: `exports` lists every module, `dependencies` lists the `@wjh/*` packages it imports. `knip` fails if a module is unused, so a package never carries a file nobody imports.
+Each package.json lists every module in `exports` and the `@wjh/*` packages it imports in `dependencies`; both are maintained by hand. `knip` fails if a module is unused, so a package never carries a file nobody imports.
 
 ## The one data flow
 
