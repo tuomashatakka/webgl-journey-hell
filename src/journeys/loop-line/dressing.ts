@@ -20,8 +20,9 @@ import { mulberry32 } from '@wjh/math/rng'
 import type { ClosedCurve, Frame, Vec3 } from '@wjh/geometry/curve'
 import { BAYS, Theme } from './stations'
 import type { BaySpan, Circuits } from './stations'
-import { TIE_PITCH, portalFor } from './geometry'
-import type { SurfaceKey } from './geometry'
+import { TIE_PITCH } from './geometry/units'
+import { portalFor } from './geometry/profiles'
+import type { SurfaceKey } from './geometry/surfaces'
 
 
 /** Floats per instance: (pos, sx), (fwd, sy), (up, sz), (s, bay, seed, tint). */
