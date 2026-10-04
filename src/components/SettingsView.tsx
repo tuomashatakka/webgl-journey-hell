@@ -10,6 +10,7 @@ import { X as CloseIcon } from 'lucide-react'
 import {
   GraphicsSettings,
   RESOLUTION_CHOICES,
+  resolutionLabel,
   SPEED_CHOICES,
   FRAME_RATE_CHOICES,
   frameRateLabel,
@@ -61,7 +62,7 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
           <legend className="settings-label">RENDER RESOLUTION</legend>
 
           <p className="settings-description">
-            Scales the internal canvas width & height. Lower resolutions can improve framerate significantly.
+            Scales the internal canvas width & height. AUTO adapts it to hold the frame rate on this device; lower fixed values can improve framerate significantly.
           </p>
 
           <p className="settings-choices">
@@ -71,7 +72,7 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
                 type="button"
                 className={ `settings-choice-btn ${settings.resolution === res ? 'active' : ''}` }
                 onClick={ () => onChange({ ...settings, resolution: res }) }>
-                {res === 1.0 ? '1.0x (NATIVE)' : `${res}x`}
+                {resolutionLabel(res)}
               </button>
             )}
           </p>

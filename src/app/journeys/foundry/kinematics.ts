@@ -7,6 +7,7 @@
 // foot, of how far you have actually walked, so a slow-motion run reports the
 // same sections in the same order.
 
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
 import {
   advance,
   createFoundryState,
@@ -28,8 +29,6 @@ import {
   tileArc
 } from './physics'
 import type { FoundryState } from './physics'
-import type { JourneySimulation } from '✦/components/withShaderJourney'
-import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 export interface FoundrySection {

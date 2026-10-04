@@ -69,40 +69,18 @@
 // A small fraction of the bank is fed back into the ray basis as `headRoll`,
 // because a rider's head does lag the car, and because it is the shot.
 
-import type { JourneySimulation } from '✦/components/withShaderJourney'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
-import type { JourneyMarks } from '✦/lib/journeyTransport'
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
+// Every turn and every grade change in the table is eased with smootherstep —
+// zero first *and* second derivative at both ends — and nothing else, which is
+// what makes the whole railway C2 by construction. Curvature is a first
+// derivative of the eased quantity, so it vanishes at every beat boundary; the
+// bank angle is a function of curvature, so the car cannot snap into or out of
+// a roll at a join. The route table has no way to express a kink.
+import { clamp01, mix, smootherstep, smoothstep } from '✦/lib/math'
 
 
 const D = Math.PI / 180
-
-export function clamp01 (x: number): number {
-  return Math.max(0, Math.min(1, x))
-}
-
-export function mix (a: number, b: number, t: number): number {
-  return a * (1 - t) + b * t
-}
-
-export function smoothstep (edge0: number, edge1: number, x: number): number {
-  const t = clamp01((x - edge0) / (edge1 - edge0))
-  return t * t * (3 - 2 * t)
-}
-
-/**
- * Quintic smoothstep — zero first *and* second derivative at both ends.
- *
- * Every turn and every grade change in the table is eased with this and nothing
- * else, which is what makes the whole railway C2 by construction. Curvature is
- * a first derivative of the eased quantity, so it vanishes at every beat
- * boundary; the bank angle is a function of curvature, so the car cannot snap
- * into or out of a roll at a join. The route table has no way to express a
- * kink, so nobody can author one.
- */
-export function smootherstep (edge0: number, edge1: number, x: number): number {
-  const t = clamp01((x - edge0) / (edge1 - edge0))
-  return t * t * t * (t * (t * 6 - 15) + 10)
-}
 
 /** d/dt of smootherstep on the unit interval. Peaks at 15/8 in the middle. */
 function dSmootherstep (t: number): number {

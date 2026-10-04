@@ -14,19 +14,10 @@
 //               palette sickness and (falling) walk speed
 //   • fall    — per-stage pitch amount; the camera never flips, it leans
 
-import type { JourneySimulation } from '✦/components/withShaderJourney'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
-import type { JourneyMarks } from '✦/lib/journeyTransport'
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
+import { clamp01, mix, smoothstep } from '✦/lib/math'
 
-
-export function smoothstep (edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
-  return t * t * (3 - 2 * t)
-}
-
-export function mix (start: number, end: number, t: number): number {
-  return start * (1.0 - t) + end * t
-}
 
 function mix3 (a: RGB, b: RGB, t: number): RGB {
   return [ mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t) ]
@@ -471,10 +462,6 @@ export function getOrchardState (z: number): OrchardState {
     tint:   mix3(mix3(a.tint, b.tint, blend), [ 0.72, 0.28, 0.85 ], rot * 0.4),
     name:   stalled && speed < 0.05 ? 'THE ABYSS — COMPOST (STOPPED)' : blend < 0.5 ? a.name : b.name,
   }
-}
-
-function clamp01 (x: number): number {
-  return Math.max(0, Math.min(1, x))
 }
 
 /** HUD label. Loops are counted from 1 the way the other journeys count them. */

@@ -1,10 +1,3 @@
-export const vsQuad = `
-    attribute vec2 position;
-    void main() {
-        gl_Position = vec4(position, 0.0, 1.0);
-    }
-`
-
 export const fsScene = `
     precision highp float;
     uniform vec2 iResolution;
@@ -1126,7 +1119,6 @@ export const fsPost = `
     uniform vec2 uPointer;
     uniform float uIteration;
     uniform float uPlayerZ;
-    uniform float uBrightness;
 
     float hash(vec2 p) {
         return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
@@ -1288,7 +1280,7 @@ export const fsPost = `
                 fade = clamp(lzPost / 15.0, 0.0, 1.0);
             }
         }
-        col *= fade * uBrightness;
+        col *= fade;
 
         gl_FragColor = vec4(col, 1.0);
     }

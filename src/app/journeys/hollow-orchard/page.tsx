@@ -1,14 +1,7 @@
 'use client'
 
-import { withShaderJourney } from '✦/components/withShaderJourney'
-import { createHollowOrchardAudio } from './audio'
-import { createHollowOrchardSimulation } from './kinematics'
-import { hollowOrchardFrag } from './shader'
+import { withJourneyShell } from '✦/components/withJourneyShell'
+import journey from './journey'
 
 
-export default withShaderJourney(hollowOrchardFrag, {
-  accent:                '#d8a13a',
-  createAudioEngine:     createHollowOrchardAudio,
-  createSimulation:      createHollowOrchardSimulation,
-  sectionTitleClassName: 'hollow-orchard-sector-title',
-})
+export default withJourneyShell(journey)

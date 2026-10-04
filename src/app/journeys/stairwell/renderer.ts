@@ -12,15 +12,15 @@
 // sitting behind the camera. The current act's sky and the next act's are both
 // bound, because the next act is visible through the portal at the far seam.
 
-import { createGlProgram } from '✦/lib/glProgram'
-import type { GlProgram } from '✦/lib/glProgram'
-import type { JourneyRenderer } from '✦/components/withJourneyShell'
-import type { QuadFrameUniforms } from '✦/lib/shaderQuad'
+import type { JourneyRenderer } from '✦/lib/journey'
+import { QUAD_VS_300, createFullscreenQuad, createGlProgram, createRenderTarget, sceneFormat } from '✦/lib/gl'
+import type { FrameUniforms, RenderTarget } from '✦/lib/gl'
 import { createMaterialArrays, createSkyTexture } from 'Δ/gl'
 import type { SkyTexture } from 'Δ/gl'
 import { skyAsset, sunDirection } from 'Δ'
-import { fsPost, fsScene, vsQuad } from './shaders'
+import { fsPost, fsScene } from './shaders'
 import { PURGATORY_LENGTH, SEAM_HALF, STAIRWELL_SECTIONS } from './kinematics'
+import { smoothstep } from '✦/lib/math'
 
 
 interface ActLight {
@@ -43,11 +43,6 @@ const ACTS: ActLight[] = [
 
 const LENGTHS = [ ...STAIRWELL_SECTIONS.map(s => s.end - s.start), PURGATORY_LENGTH ]
 const SEAM    = SEAM_HALF
-
-function smoothstep (a: number, b: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
-  return t * t * (3 - 2 * t)
-}
 
 /**
  * The light comes from the sun's bearing in the photograph, but never from
@@ -77,8 +72,8 @@ export function createStairwellRenderer (
     return null
   }
 
-  const scene = createGlProgram(g2, vsQuad, fsScene)
-  const post  = createGlProgram(g2, vsQuad, fsPost)
+  const scene = createGlProgram(g2, QUAD_VS_300, fsScene, 'stairwell')
+  const post  = createGlProgram(g2, QUAD_VS_300, fsPost, 'stairwell')
   if (!scene || !post) {
     scene?.dispose()
     post?.dispose()
@@ -102,61 +97,20 @@ export function createStairwellRenderer (
     scene.uniform4f(`uSkyInfo${k}`, sky.exposure, act.yaw, act.sun, 0)
   }
 
-  const hdr  = !!g2.getExtension('EXT_color_buffer_float')
-  const quad = g2.createBuffer()
-  g2.bindBuffer(g2.ARRAY_BUFFER, quad)
-  g2.bufferData(g2.ARRAY_BUFFER, new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ]), g2.STATIC_DRAW)
-
-  const target = g2.createFramebuffer()
-  let texture: WebGLTexture | null = null
-  let tw                           = 0,
-    th                             = 0
+  // The scene target carries a full mip chain: the post pass takes its bloom
+  // from the wider levels instead of from a separate blur chain.
+  const format = sceneFormat(g2)
+  const quad   = createFullscreenQuad(g2)
+  let target: RenderTarget | null = null
 
   const resize = () => {
-    if (tw === canvas.width && th === canvas.height && texture)
+    if (target && target.width === canvas.width && target.height === canvas.height)
       return
-    tw = canvas.width
-    th = canvas.height
-    if (texture)
-      g2.deleteTexture(texture)
-    texture = g2.createTexture()
-    g2.bindTexture(g2.TEXTURE_2D, texture)
-
-    const levels = Math.floor(Math.log2(Math.max(tw, th))) + 1
-    g2.texStorage2D(g2.TEXTURE_2D, levels, hdr ? g2.RGBA16F : g2.RGBA8, tw, th)
-    g2.texParameteri(g2.TEXTURE_2D, g2.TEXTURE_MIN_FILTER, g2.LINEAR_MIPMAP_LINEAR)
-    g2.texParameteri(g2.TEXTURE_2D, g2.TEXTURE_MAG_FILTER, g2.LINEAR)
-    g2.texParameteri(g2.TEXTURE_2D, g2.TEXTURE_WRAP_S, g2.CLAMP_TO_EDGE)
-    g2.texParameteri(g2.TEXTURE_2D, g2.TEXTURE_WRAP_T, g2.CLAMP_TO_EDGE)
-    g2.bindFramebuffer(g2.FRAMEBUFFER, target)
-    g2.framebufferTexture2D(g2.FRAMEBUFFER, g2.COLOR_ATTACHMENT0, g2.TEXTURE_2D, texture, 0)
-    if (g2.checkFramebufferStatus(g2.FRAMEBUFFER) !== g2.FRAMEBUFFER_COMPLETE)
-      console.error('[stairwell] incomplete scene framebuffer')
-    g2.bindFramebuffer(g2.FRAMEBUFFER, null)
+    target?.dispose()
+    target = createRenderTarget(g2, canvas.width, canvas.height, format, { mips: true })
   }
 
-  const drawQuad = () => {
-    g2.bindBuffer(g2.ARRAY_BUFFER, quad)
-    g2.enableVertexAttribArray(0)
-    g2.vertexAttribPointer(0, 2, g2.FLOAT, false, 0, 0)
-    g2.drawArrays(g2.TRIANGLE_STRIP, 0, 4)
-  }
-
-  const uploadCommon = (prog: GlProgram, frame: QuadFrameUniforms) => {
-    prog.uniform2f('iResolution', canvas.width, canvas.height)
-    prog.uniform1f('iTime', frame.time)
-    prog.uniform2f('uPointer', frame.pointer?.x ?? 0, frame.pointer?.y ?? 0)
-    prog.uniform1f('uHeavy', frame.heavy ?? 1)
-
-    const custom = frame.custom ?? {}
-    for (const name in custom) {
-      const v = custom[name]
-      if (typeof v === 'number')
-        prog.uniform1f(name, v)
-    }
-  }
-
-  const num = (frame: QuadFrameUniforms, name: string): number => {
+  const num = (frame: FrameUniforms, name: string): number => {
     const v = frame.custom?.[name]
     return typeof v === 'number' ? v : 0
   }
@@ -187,10 +141,9 @@ export function createStairwellRenderer (
       // --- scene ---
       g2.disable(g2.BLEND)
       g2.disable(g2.DEPTH_TEST)
-      g2.bindFramebuffer(g2.FRAMEBUFFER, target)
-      g2.viewport(0, 0, tw, th)
+      target!.bind()
       scene.use()
-      uploadCommon(scene, frame)
+      scene.frame(frame, canvas.width, canvas.height, 1)
       materials.bind(g2, 0)
       scene.uniform1i('uMatColor', 0)
       scene.uniform1i('uMatNormal', 1)
@@ -199,30 +152,28 @@ export function createStairwellRenderer (
       bindAct('A', a, 3)
       bindAct('B', b, 4)
       bindAct('C', c, 5)
-      scene.uniform1f('uEncode', hdr ? 0 : 1)
-      drawQuad()
+      scene.uniform1f('uEncode', format.hdr ? 0 : 1)
+      quad.draw()
 
-      g2.bindTexture(g2.TEXTURE_2D, texture)
+      g2.bindTexture(g2.TEXTURE_2D, target!.tex)
       g2.generateMipmap(g2.TEXTURE_2D)
 
       // --- post ---
       g2.bindFramebuffer(g2.FRAMEBUFFER, null)
       g2.viewport(0, 0, canvas.width, canvas.height)
       post.use()
-      uploadCommon(post, frame)
+      post.frame(frame, canvas.width, canvas.height, 1)
       g2.activeTexture(g2.TEXTURE0)
-      g2.bindTexture(g2.TEXTURE_2D, texture)
+      g2.bindTexture(g2.TEXTURE_2D, target!.tex)
       post.uniform1i('uTexture', 0)
-      post.uniform1f('uDecode', hdr ? 0 : 1)
+      post.uniform1f('uDecode', format.hdr ? 0 : 1)
       post.uniform1f('uExposure', exposure)
-      drawQuad()
+      quad.draw()
     },
 
     dispose () {
-      g2.deleteBuffer(quad)
-      g2.deleteFramebuffer(target)
-      if (texture)
-        g2.deleteTexture(texture)
+      quad.dispose()
+      target?.dispose()
       materials.dispose(g2)
       skies.forEach(s => s.dispose(g2))
       scene.dispose()

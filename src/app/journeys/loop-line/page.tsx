@@ -1,14 +1,7 @@
 'use client'
 
-import { withGeometryJourney } from '✦/components/withGeometryJourney'
-import { createLoopLineAudio } from './audio'
-import { createLoopLineSimulation } from './kinematics'
-import { createLoopLineScene } from './scene'
+import { withJourneyShell } from '✦/components/withJourneyShell'
+import journey from './journey'
 
 
-export default withGeometryJourney(createLoopLineScene, {
-  accent:                '#b39dff',
-  createAudioEngine:     createLoopLineAudio,
-  createSimulation:      createLoopLineSimulation,
-  sectionTitleClassName: 'loop-line-sector-title',
-})
+export default withJourneyShell(journey)

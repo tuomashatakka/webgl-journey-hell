@@ -36,12 +36,12 @@
 // the front of a driverless train actually does, and what makes a bend read as
 // a bend instead of the world sliding sideways.
 
-import type { JourneySimulation } from '✦/components/withJourneyShell'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
 import type { Frame } from '✦/lib/curve'
-import type { JourneyMarks } from '✦/lib/journeyTransport'
 import type { BaySpan, Circuits } from './stations'
 import { DECAY_BAY, SWITCH_LAP, getCircuits, spanIndexAt } from './stations'
+import { clamp01, hash1, smootherstep } from '✦/lib/math'
 
 
 const G = 9.81
@@ -64,22 +64,6 @@ const HEAD_ROLL = 0.55
 /** How far ahead the head looks into a curve, metres, and how much it leans to it. */
 const LEAD     = 26
 const LEAD_MIX = 0.38
-
-export function clamp01 (x: number): number {
-  return Math.max(0, Math.min(1, x))
-}
-
-export function smootherstep (edge0: number, edge1: number, x: number): number {
-  const t = clamp01((x - edge0) / (edge1 - edge0))
-  return t * t * t * (t * (t * 6 - 15) + 10)
-}
-
-// Rail joints at fixed places: hashed on distance, so the same joint is in the
-// same metre forever.
-function hash1 (n: number): number {
-  const s = Math.sin(n * 127.1) * 43758.5453
-  return s - Math.floor(s)
-}
 
 /** The rupture channels, from lapF alone. Shared with the scene and the audio. */
 export function decayOf (lapF: number): [ number, number, number, number ] {
@@ -196,6 +180,8 @@ class LoopLineRide implements JourneySimulation {
 
     const wear   = clamp01(this.lapF * 0.16)
     const joint  = this.travelled / 12.5
+    // Rail joints at fixed places: hashed on distance, so the same joint is
+    // in the same metre forever.
     const jitter = (hash1(Math.floor(joint)) - 0.5) * 2
     this.shake   = jitter * (0.010 + wear * 0.07) * (0.4 + Math.abs(Math.sin(joint * Math.PI)) * 0.6)
 

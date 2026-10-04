@@ -41,9 +41,8 @@
 // down the bonnet. In the cave the car floats, and the same pose picks up the
 // water's heave, roll and a slow yaw drift on the eddies.
 
-import type { JourneySimulation } from '✦/components/withJourneyShell'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
-import type { JourneyMarks } from '✦/lib/journeyTransport'
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
 import type { Frame } from '✦/lib/curve'
 import { levelFrame, newFrame } from '✦/lib/sweep'
 import {
@@ -61,6 +60,7 @@ import {
 
 } from './course'
 import type { LookParams, Route, SpeedParams } from './course'
+import { clamp01, hash1, smootherstep } from '✦/lib/math'
 
 
 /**
@@ -97,21 +97,6 @@ const RPM_UP      = 6200
 const RPM_DOWN    = 2300
 const RPM_MAX     = 7800
 const CLUTCH_TAU  = 0.18
-
-export function clamp01 (x: number): number {
-  return Math.max(0, Math.min(1, x))
-}
-
-export function smootherstep (edge0: number, edge1: number, x: number): number {
-  const t = clamp01((x - edge0) / (edge1 - edge0))
-  return t * t * t * (t * (t * 6 - 15) + 10)
-}
-
-/** Deterministic hash, for fixed bumps in fixed places. */
-function hash1 (n: number): number {
-  const s = Math.sin(n * 127.1) * 43758.5453
-  return s - Math.floor(s)
-}
 
 /** Rotate v about unit axis k by angle a (Rodrigues), into out. */
 function rotate (

@@ -53,6 +53,7 @@
 
 import { createClosedCurve } from '✦/lib/curve'
 import type { ClosedCurve, Frame, Vec3 } from '✦/lib/curve'
+import { smootherstep } from '✦/lib/math'
 
 
 /** What a bay is built as. */
@@ -400,11 +401,6 @@ function ringPoints (y: number[]): Vec3[] {
     const a = i / RADII.length * Math.PI * 2
     return { x: r * Math.cos(a), y: y[i], z: r * Math.sin(a) }
   })
-}
-
-export function smootherstep (edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
-  return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
 /** A bay pinned to a concrete arc-length span on one particular circuit. */

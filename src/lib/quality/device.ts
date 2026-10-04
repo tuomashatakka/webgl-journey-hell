@@ -1,0 +1,52 @@
+// What kind of device this is, decided once.
+//
+// Only coarse facts the browser will tell anyone: a touch-first pointer, the
+// user agent's own claim to be mobile, the core count and (where exposed) the
+// memory. A raymarched journey at a phone's native resolution is several
+// million fragments a frame on a GPU a tenth the size of a desktop's, so the
+// split that matters is "phone or not", and within phones, "old or not".
+
+export interface DeviceProfile {
+
+  /** Touch-first device: a phone or a tablet. */
+  mobile: boolean;
+
+  /** Device pixel ratio, as reported. */
+  dpr: number;
+
+  /**
+   * 0 a phone, or any device with little memory or few cores; 1 a capable
+   * tablet or a small laptop; 2 a desktop-class machine.
+   */
+  tier: 0 | 1 | 2;
+}
+
+const SERVER_PROFILE: DeviceProfile = { mobile: false, dpr: 1, tier: 2 }
+
+let cached: DeviceProfile | null = null
+
+export function detectDevice (): DeviceProfile {
+  if (typeof window === 'undefined')
+    return SERVER_PROFILE
+  if (cached)
+    return cached
+
+  const nav    = navigator as Navigator & { deviceMemory?: number }
+  const ua     = nav.userAgent || ''
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  // iPadOS reports a desktop Safari user agent; touch points give it away.
+  const ipad   = (/Macintosh/).test(ua) && nav.maxTouchPoints > 1
+  const mobile = coarse || ipad || (/Android|iPhone|iPad|iPod|Mobile|Silk/i).test(ua)
+
+  const cores  = nav.hardwareConcurrency || 4
+  const memory = nav.deviceMemory ?? (mobile ? 4 : 8)
+
+  let tier: 0 | 1 | 2 = 2
+  if (mobile)
+    tier = cores >= 8 && memory >= 6 && !(/Android [4-8]\b/).test(ua) ? 1 : 0
+  else if (cores <= 4 || memory <= 4)
+    tier = 1
+
+  cached = { mobile, dpr: window.devicePixelRatio || 1, tier }
+  return cached
+}

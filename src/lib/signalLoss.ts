@@ -14,6 +14,8 @@
 // The seconds themselves are counted inside each journey's own `step`, and
 // arrive here through JourneyMarks.signalAge.
 
+import { smootherstep } from '✦/lib/math'
+
 /** Seconds in the ending before the picture starts to go. */
 export const SIGNAL_GRACE = 8
 
@@ -71,11 +73,6 @@ export interface SignalLoss {
 export function signalHash (n: number): number {
   const v = Math.sin(n * 127.1 + 311.7) * 43758.5453123
   return v - Math.floor(v)
-}
-
-function smootherstep (edge0: number, edge1: number, value: number): number {
-  const t = Math.max(0, Math.min(1, (value - edge0) / (edge1 - edge0)))
-  return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
 /**

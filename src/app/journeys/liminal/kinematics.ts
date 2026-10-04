@@ -1,4 +1,6 @@
-import type { JourneyMarks } from '✦/lib/journeyTransport'
+import type { CustomUniforms } from '✦/lib/gl'
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { mix, smoothstep } from '✦/lib/math'
 
 
 /** One traversal. The literals below predate this constant; it is not a rename. */
@@ -9,15 +11,6 @@ export const LIMINAL_ABYSS_Z = 2000.0
 
 /** Six sectors plus the abyss. Drives the transport bar's tick marks. */
 export const LIMINAL_SECTOR_COUNT = 7
-
-export function smoothstep (edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
-  return t * t * (3 - 2 * t)
-}
-
-export function mix (start: number, end: number, t: number): number {
-  return start * (1.0 - t) + end * t
-}
 
 export interface KinematicState {
   loop:      number;
@@ -487,5 +480,39 @@ export function createLiminalRide (): LiminalRide {
         signalAge,
       }
     },
+  }
+}
+
+/**
+ * The loop counter the shaders decay by, eased across each 500-unit boundary
+ * (±20 units) so the corridor's state slides rather than steps.
+ */
+export function smoothIteration (z: number): number {
+  const loop = getKinematicState(z).loop
+  const d    = z % LIMINAL_LOOP_Z
+  if (d >= 480.0) {
+    const t = (d - 480.0) / 40.0
+    return loop + 3.0 * t * t - 2.0 * t * t * t
+  }
+  if (d < 20.0) {
+    const t = (d + 20.0) / 40.0
+    return loop - 1 + 3.0 * t * t - 2.0 * t * t * t
+  }
+  return loop
+}
+
+/** The ride as the shell drives every journey: uniforms, label, marks. */
+export function createLiminalSimulation (): JourneySimulation {
+  const ride                = createLiminalRide()
+  const out: CustomUniforms = {}
+  return {
+    step: dt => ride.step(dt),
+    uniforms () {
+      out.uPlayerZ   = ride.z
+      out.uIteration = smoothIteration(ride.z)
+      return out
+    },
+    label: () => getKinematicState(ride.z).name,
+    marks: () => ride.marks(),
   }
 }

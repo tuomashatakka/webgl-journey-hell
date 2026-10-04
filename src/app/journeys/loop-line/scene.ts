@@ -33,15 +33,15 @@
 // behind your shoulder. The one open-to-open boundary, depot to trestle,
 // crossfades two night skies across sixty metres.
 
-import { createGlProgram } from '✦/lib/glProgram'
-import type { GlProgram } from '✦/lib/glProgram'
+import type { JourneyRenderer } from '✦/lib/journey'
+import { HIGH_QUALITY, createFullscreenQuad, createGlProgram, createPostChain } from '✦/lib/gl'
+import type { GlProgram } from '✦/lib/gl'
 import { createMesh, createMeshBuilder } from '✦/lib/mesh'
 import type { Mesh, MeshBuilder } from '✦/lib/mesh'
 import { invert, lookAt, multiply, perspective } from '✦/lib/mat4'
 import type { Mat4 } from '✦/lib/mat4'
 import type { ClosedCurve } from '✦/lib/curve'
-import type { JourneyRenderer } from '✦/components/withJourneyShell'
-import type { QuadFrameUniforms } from '✦/lib/shaderQuad'
+import type { FrameUniforms } from '✦/lib/gl'
 import { createMaterialArrays, createSkyTexture } from 'Δ/gl'
 import type { SkyTexture } from 'Δ/gl'
 import { skyAsset, sunDirection } from 'Δ'
@@ -65,6 +65,7 @@ import {
   skyVert
 
 } from './shader'
+import { smoothstep } from '✦/lib/math'
 
 
 /** A bay is skipped once its bounding sphere is this far into the fog. */
@@ -110,11 +111,6 @@ const IDENTITY = (s: number, bay: number): Float32Array => new Float32Array([
   0, 1, 0, 1,
   s, bay, 0, 0,
 ])
-
-function smoothstep (a: number, b: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
-  return t * t * (3 - 2 * t)
-}
 
 /** A bay's air and light, after whatever this lap has done to them. */
 function bayMedium (bay: Bay, decay: ArrayLike<number>, out: Float32Array): Float32Array {
@@ -406,109 +402,13 @@ export function createLoopLineScene (
   })
 
   // --- post targets ------------------------------------------------------------
-  const quad = gl.createBuffer()
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad)
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ]), gl.STATIC_DRAW)
-
-  const hdr     = !!gl.getExtension('EXT_color_buffer_float')
-  gl.getExtension('OES_texture_float_linear')
-
-  const colorFmt = hdr ? gl.RGBA16F : gl.RGBA8
-  const LEVELS   = 5
-
-  let width                               = 0,
-    height                                = 0
-  let msaaFbo: WebGLFramebuffer | null    = null
-  let msaaColor: WebGLRenderbuffer | null = null
-  let msaaDepth: WebGLRenderbuffer | null = null
-  let sceneFbo: WebGLFramebuffer | null   = null
-  let sceneTex: WebGLTexture | null       = null
-  const bloomFbo: (WebGLFramebuffer | null)[] = []
-  const bloomTex: (WebGLTexture | null)[]     = []
-  const bloomSize: [ number, number ][]       = []
-
-  const makeTex = (w: number, h: number): WebGLTexture => {
-    const t = gl.createTexture()!
-    gl.bindTexture(gl.TEXTURE_2D, t)
-    gl.texImage2D(gl.TEXTURE_2D, 0, colorFmt, w, h, 0, gl.RGBA, hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    return t
-  }
-
-  const release = () => {
-    if (msaaFbo)
-      gl.deleteFramebuffer(msaaFbo)
-    if (msaaColor)
-      gl.deleteRenderbuffer(msaaColor)
-    if (msaaDepth)
-      gl.deleteRenderbuffer(msaaDepth)
-    if (sceneFbo)
-      gl.deleteFramebuffer(sceneFbo)
-    if (sceneTex)
-      gl.deleteTexture(sceneTex)
-    bloomFbo.forEach(f => f && gl.deleteFramebuffer(f))
-    bloomTex.forEach(t => t && gl.deleteTexture(t))
-    bloomFbo.length  = 0
-    bloomTex.length  = 0
-    bloomSize.length = 0
-  }
-
-  const resize = (w: number, h: number) => {
-    if (w === width && h === height)
-      return
-    release()
-    width  = w
-    height = h
-
-    // MSAA on the scene, because geometry edges are the only aliased thing in
-    // the frame; resolved by blit so the result can be sampled.
-    const maxSamples = hdr
-      ? Math.max(0, ...Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) as Int32Array ?? [ 0 ]))
-      : gl.getParameter(gl.MAX_SAMPLES) as number
-    const samples = Math.min(4, maxSamples)
-
-    msaaColor = gl.createRenderbuffer()
-    gl.bindRenderbuffer(gl.RENDERBUFFER, msaaColor)
-    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, colorFmt, w, h)
-    msaaDepth = gl.createRenderbuffer()
-    gl.bindRenderbuffer(gl.RENDERBUFFER, msaaDepth)
-    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT24, w, h)
-    msaaFbo = gl.createFramebuffer()
-    gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msaaColor)
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msaaDepth)
-
-    sceneTex = makeTex(w, h)
-    sceneFbo = gl.createFramebuffer()
-    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0)
-
-    let bw = w,
-      bh   = h
-    for (let i = 0; i < LEVELS; i++) {
-      bw = Math.max(1, bw >> 1)
-      bh = Math.max(1, bh >> 1)
-
-      const t = makeTex(bw, bh)
-      const f = gl.createFramebuffer()
-      gl.bindFramebuffer(gl.FRAMEBUFFER, f)
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0)
-      bloomTex.push(t)
-      bloomFbo.push(f)
-      bloomSize.push([ bw, bh ])
-    }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
-  }
-
-  const drawQuad = () => {
-    gl.bindBuffer(gl.ARRAY_BUFFER, quad)
-    gl.enableVertexAttribArray(0)
-    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-  }
+  // MSAA on the scene, because geometry edges are the only aliased thing in the
+  // frame; resolved by blit so the result can be sampled, then a bloom chain.
+  // The quality tier decides the sample count and the chain's depth.
+  const quad     = createFullscreenQuad(gl)
+  const chain    = createPostChain(gl, { hdr: true, msaa: 4, bloomLevels: 5 })
+  const drawQuad = () => quad.draw()
+  const encoded  = () => chain.format.hdr ? 0 : 1
 
   // --- per-frame scratch -----------------------------------------------------------
   const proj: Mat4                         = new Float32Array(16)
@@ -615,7 +515,7 @@ export function createLoopLineScene (
     prog.uniform1i('uSkyA', 3)
     prog.uniform1i('uSkyB', 4)
     prog.uniform1f('uLift', 0)
-    prog.uniform1f('uEncode', hdr ? 0 : 1)
+    prog.uniform1f('uEncode', encoded())
   }
 
   /** Per-bay uniforms: its medium and its neighbours', its lamps, its rupture. */
@@ -702,10 +602,11 @@ export function createLoopLineScene (
       return materials.ready && [ ...skies.values() ].every(s => s.ready)
     },
 
-    draw ({ time, pointer, custom, heavy }: QuadFrameUniforms) {
+    draw ({ time, pointer, custom, heavy, quality }: FrameUniforms) {
       const w = canvas.width
       const h = canvas.height
-      resize(w, h)
+      const q = quality ?? HIGH_QUALITY
+      chain.resize(w, h, { msaa: q.msaa, bloomLevels: Math.max(2, q.bloomLevels) })
 
       const camPos   = (custom?.uCamPos as number[]) ?? [ 0, 2, 0 ]
       const camFwd   = (custom?.uCamFwd as number[]) ?? [ 0, 0, 1 ]
@@ -876,8 +777,7 @@ export function createLoopLineScene (
       }
 
       // --- geometry ---
-      gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
-      gl.viewport(0, 0, w, h)
+      chain.bindScene()
       gl.clearColor(camMed[0], camMed[1], camMed[2], 1)
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
@@ -978,25 +878,21 @@ export function createLoopLineScene (
       }
 
       // --- resolve ---
-      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msaaFbo)
-      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFbo)
-      gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+      chain.resolve()
 
       // --- bloom: down the chain, then back up it ---
       gl.disable(gl.DEPTH_TEST)
       gl.disable(gl.CULL_FACE)
       downProg!.use()
       downProg!.uniform1i('uSrc', 0)
-      downProg!.uniform1f('uDecode', hdr ? 0 : 1)
-      for (let i = 0; i < LEVELS; i++) {
-        const [ bw, bh ] = bloomSize[i]
-        const src        = i === 0 ? sceneTex : bloomTex[i - 1]
-        const [ sw, sh ] = i === 0 ? [ w, h ] : bloomSize[i - 1]
-        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[i])
-        gl.viewport(0, 0, bw, bh)
+      downProg!.uniform1f('uDecode', encoded())
+      const bloom = chain.bloom
+      for (let i = 0; i < bloom.length; i++) {
+        const src = i === 0 ? chain.scene : bloom[i - 1]
+        bloom[i].bind()
         gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, src)
-        downProg!.uniform2f('uTexel', 1 / sw, 1 / sh)
+        gl.bindTexture(gl.TEXTURE_2D, src.tex)
+        downProg!.uniform2f('uTexel', 1 / src.width, 1 / src.height)
         downProg!.uniform1f('uThreshold', i === 0 ? 1.0 : -1)
         if (i === 1)
           downProg!.uniform1f('uDecode', 0)
@@ -1006,14 +902,11 @@ export function createLoopLineScene (
       upProg!.uniform1i('uSrc', 0)
       gl.enable(gl.BLEND)
       gl.blendFunc(gl.ONE, gl.ONE)
-      for (let i = LEVELS - 1; i > 0; i--) {
-        const [ tw, th ] = bloomSize[i - 1]
-        const [ sw, sh ] = bloomSize[i]
-        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[i - 1])
-        gl.viewport(0, 0, tw, th)
+      for (let i = bloom.length - 1; i > 0; i--) {
+        bloom[i - 1].bind()
         gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, bloomTex[i])
-        upProg!.uniform2f('uTexel', 1 / sw, 1 / sh)
+        gl.bindTexture(gl.TEXTURE_2D, bloom[i].tex)
+        upProg!.uniform2f('uTexel', 1 / bloom[i].width, 1 / bloom[i].height)
         upProg!.uniform1f('uRadius', 1.0)
         drawQuad()
       }
@@ -1024,24 +917,24 @@ export function createLoopLineScene (
       gl.viewport(0, 0, w, h)
       compProg!.use()
       gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, sceneTex)
+      gl.bindTexture(gl.TEXTURE_2D, chain.scene.tex)
       compProg!.uniform1i('uScene', 0)
       gl.activeTexture(gl.TEXTURE1)
-      gl.bindTexture(gl.TEXTURE_2D, bloomTex[0])
+      gl.bindTexture(gl.TEXTURE_2D, bloom[0].tex)
       compProg!.uniform1i('uBloom', 1)
       compProg!.uniform4f('uDecay', decay[0], decay[1], decay[2], decay[3])
       compProg!.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
       compProg!.uniform1f('uTime', time)
       compProg!.uniform1f('uExposure', exposure)
-      compProg!.uniform1f('uDecode', hdr ? 0 : 1)
+      compProg!.uniform1f('uDecode', encoded())
       compProg!.uniform1f('uHeavy', hv)
       compProg!.uniform2f('uAspect', w / Math.max(1, h), 1)
       drawQuad()
     },
 
     dispose () {
-      release()
-      gl.deleteBuffer(quad)
+      chain.dispose()
+      quad.dispose()
       for (const br of bays)
         for (const d of br.draws)
           d.mesh.dispose(gl)

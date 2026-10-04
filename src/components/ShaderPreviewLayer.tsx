@@ -16,8 +16,8 @@ import {
 
 } from 'react'
 import type { ReactNode } from 'react'
-import { createShaderQuad } from '✦/lib/shaderQuad'
-import type { ShaderQuad } from '✦/lib/shaderQuad'
+import { createShaderQuad } from '✦/lib/gl'
+import type { ShaderQuad } from '✦/lib/gl'
 import { createPanControl } from '✦/lib/panControl'
 import type { PanControl } from '✦/lib/panControl'
 import type { Journey } from '✦/app/journeys/registry'

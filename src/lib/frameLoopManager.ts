@@ -12,10 +12,25 @@
 // published package later is a one-line import change.
 //
 // One global manager drives a single rAF loop shared by every registered
-// callback. setFixedFrameRate(fps) caps the executed rate (fps = 0 → uncapped);
-// when capped, deltaTime is delivered as a fixed timestep. This is what the
-// global "max frame rate" graphics setting drives (see components/SettingsProvider).
+// callback. setFixedFrameRate(fps) caps the executed rate (fps = 0 → uncapped).
+// This is what the global "max frame rate" graphics setting drives (see
+// components/SettingsProvider).
+//
+// Local changes from the vendored original, both found on phones:
+//
+//   • deltaTime is the *real* time since the last executed frame. The original
+//     delivered a fixed 1/fps when capped, so a device that could only manage
+//     20 fps under a 60 cap played every journey at a third of its speed.
+//   • the cap tolerates rAF jitter. A 60 cap on a 60 Hz display used to skip
+//     any frame that arrived 0.1 ms early — a dropped frame every few seconds.
 import { useEffect, useSyncExternalStore } from 'react'
+
+
+/** How early (ms) a capped frame may arrive and still run. */
+const JITTER_MS = 1.5
+
+/** Longest delta ever delivered. */
+const MAX_DELTA_MS = 100
 
 
 class FrameLoopManager {
@@ -25,6 +40,7 @@ class FrameLoopManager {
 
   private _animationFrameId:       number | null = null
   private _lastFrameTime:          number = 0
+  private _lastRunTime:            number = 0
   private _elapsedTimeAccumulator: number = 0
 
   public totalTime: number = 0
@@ -72,6 +88,7 @@ class FrameLoopManager {
     if (this.isPaused) {
       this.isPaused       = false
       this._lastFrameTime = performance.now() // Prevent large deltaTime jump
+      this._lastRunTime   = this._lastFrameTime
       this._notify()
     }
   }
@@ -111,6 +128,7 @@ class FrameLoopManager {
   private _start (): void {
     if (this._animationFrameId === null) {
       this._lastFrameTime    = performance.now()
+      this._lastRunTime      = this._lastFrameTime
       this._animationFrameId = requestAnimationFrame(this._loop)
     }
   }
@@ -133,16 +151,23 @@ class FrameLoopManager {
     this._lastFrameTime  = currentTime
     this._elapsedTimeAccumulator += currentDeltaMs
 
-    if (this._msPerFrame > 0 && this._elapsedTimeAccumulator < this._msPerFrame)
-      return
-
-    let actualDeltaMs = currentDeltaMs
     if (this._msPerFrame > 0) {
-      actualDeltaMs = this._msPerFrame
+      // Up to JITTER_MS early still counts as on time.
+      if (this._elapsedTimeAccumulator < this._msPerFrame - JITTER_MS)
+        return
       this._elapsedTimeAccumulator -= this._msPerFrame
+      // Fell more than a frame behind: drop the debt rather than trying to
+      // repay it with back-to-back frames.
+      if (this._elapsedTimeAccumulator > this._msPerFrame)
+        this._elapsedTimeAccumulator = 0
     }
 
-    this.deltaTime = actualDeltaMs / 1000
+    // Real elapsed time since the last frame that ran, capped so a hidden tab
+    // or a debugger pause cannot teleport a journey.
+    const elapsedMs   = currentTime - this._lastRunTime
+    this._lastRunTime = currentTime
+
+    this.deltaTime = Math.min(Math.max(elapsedMs, 0), MAX_DELTA_MS) / 1000
     this.totalTime += this.deltaTime
 
     // Execute callbacks
@@ -155,14 +180,16 @@ export type { FrameLoopManager }
 
 export const frameLoopManager = new FrameLoopManager()
 
-/** Register a callback that runs once per (capped) frame for the component's lifetime. */
+/**
+ * Register a callback that runs once per (capped) frame for the component's
+ * lifetime — synchronously inside the rAF callback, so a frame is drawn in the
+ * frame it was scheduled for rather than in a microtask after it.
+ */
 export const useFrameLoop = (callback: (manager: FrameLoopManager) => void) => {
-  // The vendored original wrapped this in useCallback(callback, [callback]) — a
-  // no-op pass-through. We depend on `callback` directly (callers pass a stable one).
   useEffect(() => {
-    frameLoopManager.registerAsyncCallback(callback)
+    frameLoopManager.registerSyncCallback(callback)
     return () => {
-      frameLoopManager.unregisterAsyncCallback(callback)
+      frameLoopManager.unregisterSyncCallback(callback)
     }
   }, [ callback ])
 }

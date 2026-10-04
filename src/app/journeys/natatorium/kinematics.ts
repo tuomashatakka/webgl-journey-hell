@@ -26,35 +26,14 @@
 // comes from the water instead — the building floods further every lap, so lap 1
 // you drown and resurface, lap 2 you barely surface, lap 3 you never do.
 
-import type { JourneySimulation } from '✦/components/withShaderJourney'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
-import type { JourneyMarks } from '✦/lib/journeyTransport'
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
+// The corner blend weights the two frames' path predictions with smootherstep,
+// whose second derivative also vanishes at the edges, so the blended path is
+// C2: the heading is C1, and the camera does not snap into and out of every
+// turn at the window edges.
+import { clamp01, mix, smootherstep, smoothstep } from '✦/lib/math'
 
-
-export function smoothstep (edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
-  return t * t * (3 - 2 * t)
-}
-
-/**
- * Quintic smoothstep. Its first *and* second derivatives vanish at both edges,
- * where the cubic's second derivative jumps. The corner blend weights the two
- * frames' path predictions with this, so the blended path is C2 — which makes
- * the heading (a first derivative) C1 and stops the camera from snapping into
- * and out of every turn at the window edges.
- */
-export function smootherstep (edge0: number, edge1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)))
-  return t * t * t * (t * (t * 6 - 15) + 10)
-}
-
-export function mix (start: number, end: number, t: number): number {
-  return start * (1.0 - t) + end * t
-}
-
-function clamp01 (x: number): number {
-  return Math.max(0, Math.min(1, x))
-}
 
 /** Shortest signed representation of an angle difference, in (-pi, pi]. */
 function wrapPi (a: number): number {

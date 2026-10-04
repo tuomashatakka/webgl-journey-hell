@@ -1,14 +1,7 @@
 'use client'
 
-import { withGeometryJourney } from '✦/components/withGeometryJourney'
-import { createScenicRouteSimulation } from './kinematics'
-import { createScenicRouteAudio } from './audio'
-import { createScenicRouteScene } from './scene'
+import { withJourneyShell } from '✦/components/withJourneyShell'
+import journey from './journey'
 
 
-export default withGeometryJourney(createScenicRouteScene, {
-  accent:                '#ffb054',
-  createSimulation:      createScenicRouteSimulation,
-  createAudioEngine:     createScenicRouteAudio,
-  sectionTitleClassName: 'scenic-route-sector-title',
-})
+export default withJourneyShell(journey)

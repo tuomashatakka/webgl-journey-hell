@@ -16,6 +16,8 @@
 // The controller is framework-free (the shared preview canvas on the landing
 // grid uses it directly); see hooks/use-pan-control.ts for the React wrapper.
 
+import { clamp, easeInOutCubic } from './math'
+
 /** Ordinary-motion follow rate, 1/s. Higher = tighter tracking of the pointer. */
 const FOLLOW_RATE = 16
 
@@ -115,11 +117,6 @@ export async function requestGyroscopePermission (): Promise<boolean> {
   }
   return orientationPermission === 'granted'
 }
-
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
-
-const easeInOutCubic = (t: number) =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
 
 /** Shortest signed distance between two angles, in degrees (-180..180]. */
 function angleDelta (a: number, b: number): number {

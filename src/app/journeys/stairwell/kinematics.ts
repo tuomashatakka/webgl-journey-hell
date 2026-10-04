@@ -1,5 +1,7 @@
-import type { JourneySimulation } from '✦/components/withJourneyShell'
-import type { JourneyMarks } from '✦/lib/journeyTransport'
+// smootherstep, not smoothstep, wherever an act hands over: zeroing the second
+// derivative as well is what removed the kick as a blend opened and closed.
+import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { clamp01, smootherstep, smoothstep } from '✦/lib/math'
 
 
 export const LOOP_LENGTH = 500
@@ -120,26 +122,6 @@ export interface StairwellState {
   inPurgatory:       boolean;
   purgatoryLap:      number;
   purgatoryProgress: number;
-}
-
-export function clamp01 (value: number): number {
-  return Math.max(0, Math.min(1, value))
-}
-
-export function smoothstep (edge0: number, edge1: number, value: number): number {
-  const t = clamp01((value - edge0) / (edge1 - edge0))
-  return t * t * (3 - 2 * t)
-}
-
-/**
- * Quintic ease. Zero first *and* second derivative at both ends, where
- * smoothstep only zeroes the first — which is why the act handoff used to show
- * a kick as the blend opened and closed. Nothing else about the transition
- * changed; it is the same crossfade over a longer, flatter curve.
- */
-export function smootherstep (edge0: number, edge1: number, value: number): number {
-  const t = clamp01((value - edge0) / (edge1 - edge0))
-  return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
 function seamDepth (localZ: number, length: number): number {

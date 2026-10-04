@@ -49,6 +49,8 @@
 // Units are SI: metres, seconds, kilograms. +Y is up, the walk runs along +Z,
 // and the hoist shaft rises above the landing at the head of the loading bay.
 
+import { smoothstep } from '✦/lib/math'
+
 const DT           = 1 / 120 // fixed integration step
 const MAX_SUBSTEPS = 6 // clamp so a stalled tab can't spiral
 
@@ -481,11 +483,6 @@ export function cyclic (z: number): number {
 export function cycDelta (to: number, from: number): number {
   const d = cyclic(to - from)
   return d > CYCLE_LEN * 0.5 ? d - CYCLE_LEN : d
-}
-
-function smoothstep (a: number, b: number, x: number): number {
-  const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
-  return t * t * (3 - 2 * t)
 }
 
 // --- the route --------------------------------------------------------------

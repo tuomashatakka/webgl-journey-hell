@@ -50,9 +50,9 @@
 //    plus an occasional power-cut dropout gated on uDecay[1] where everything
 //    ducks for 100-200 ms.
 
-import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
-import { clamp01 } from './kinematics'
+import type { JourneyAudioEngine } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
+import { clamp01 } from '✦/lib/math'
 
 
 type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }

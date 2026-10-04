@@ -20,7 +20,7 @@ import { MATERIALS, SKIES } from 'Δ'
 import { createMaterialArrays, createSkyTexture } from 'Δ/gl'
 import type { SkyTexture } from 'Δ/gl'
 import { MATERIAL_GLSL, SKY_GLSL, SURFACE_GLSL } from 'Δ/glsl'
-import { createGlProgram } from '✦/lib/glProgram'
+import { createGlProgram } from '✦/lib/gl'
 
 
 /** What a material card shows. Index is the shader's uMode. */

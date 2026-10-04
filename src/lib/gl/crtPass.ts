@@ -2,13 +2,16 @@
 // offset, aperture mask, vignette — and the VHS scrub treatment the transport
 // controls play over the top of it.
 //
-// The reason this is 200 lines and not a re-plumbing of eight renderers: every
-// journey already finishes its frame on the *default* framebuffer. A
+// The reason this reads the back buffer rather than being handed a target:
+// every journey already finishes its frame on the *default* framebuffer. A
 // conventional post chain would have to hand each renderer a target to draw
 // into instead, which means touching shaderQuad, the geometry path, and both
 // hand-rolled two-pass routes. So this pass reads what is already there —
 // copyTexSubImage2D pulls the back buffer into a texture mid-frame — and then
 // draws over it. Nothing upstream knows this exists.
+//
+// It is also where the display grade (brightness, contrast) is applied, so
+// that a canvas never carries a CSS filter.
 //
 //   renderer.draw(...)            // unchanged, presents to the back buffer
 //   copyTexSubImage2D(...)        // back buffer -> our texture
@@ -18,14 +21,10 @@
 // `webgl2` contexts (withJourneyShell's `contextType`) and 1.00 compiles under
 // either.
 
-const CRT_VS = `
-  attribute vec2 position;
-  varying vec2 vUv;
-  void main () {
-    vUv = position * 0.5 + 0.5;
-    gl_Position = vec4(position, 0.0, 1.0);
-  }
-`
+import type { AnyGl } from './context'
+import { createGlProgram } from './program'
+import { QUAD_UV_VS_100, createFullscreenQuad } from './quad'
+
 
 const CRT_FS = `
   precision highp float;
@@ -49,6 +48,13 @@ const CRT_FS = `
 
   /** The signal-loss caption, drawn on the CPU (lib/signalOverlay). Unit 1. */
   uniform sampler2D uOverlay;
+
+  /**
+   * The display grade: x brightness, y contrast — CSS's brightness() then
+   * contrast(), applied here so the canvas never needs a CSS filter (which
+   * costs a full-screen compositing pass per frame, at device resolution).
+   */
+  uniform vec2 uGrade;
 
   varying vec2 vUv;
 
@@ -232,11 +238,10 @@ const CRT_FS = `
     float v = 1.0 - dot(c, c) * uVignette;
     col *= clamp(v, 0.0, 1.0);
 
-    gl_FragColor = vec4(col * inside, 1.0);
+    col  = (col * inside * uGrade.x - 0.5) * uGrade.y + 0.5;
+    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
   }
 `
-
-const QUAD_VERTS = new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ])
 
 export interface CrtDrawOptions {
   time:       number;
@@ -251,6 +256,10 @@ export interface CrtDrawOptions {
 
   /** 0..1 how far the reception has failed. See lib/signalLoss. */
   signal: number;
+
+  /** Display brightness and contrast, CSS filter semantics. Default 1, 1. */
+  brightness?: number;
+  contrast?:   number;
 }
 
 export interface CrtPass {
@@ -270,26 +279,14 @@ export interface CrtPass {
   dispose(): void;
 }
 
-function compile (
-  gl:     WebGLRenderingContext,
-  type:   number,
-  source: string,
-): WebGLShader | null {
-  const shader = gl.createShader(type)
-  if (!shader)
-    return null
-  gl.shaderSource(shader, source)
-  gl.compileShader(shader)
-  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    const log    = gl.getShaderInfoLog(shader)
-    const reason = gl.isContextLost()
-      ? 'context lost — cannot compile'
-      : log || 'no info log (context likely lost or unavailable)'
-    console.error('[crtPass] compile error:', reason)
-    gl.deleteShader(shader)
-    return null
-  }
-  return shader
+function screenTexture (gl: AnyGl): WebGLTexture {
+  const tex = gl.createTexture()!
+  gl.bindTexture(gl.TEXTURE_2D, tex)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  return tex
 }
 
 /**
@@ -297,27 +294,12 @@ function compile (
  * which callers should treat as "render without it" rather than as fatal — the
  * journey underneath is complete on its own.
  */
-export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
-  const vs = compile(gl, gl.VERTEX_SHADER, CRT_VS)
-  const fs = compile(gl, gl.FRAGMENT_SHADER, CRT_FS)
-  if (!vs || !fs)
+export function createCrtPass (gl: AnyGl): CrtPass | null {
+  const prog = createGlProgram(gl, QUAD_UV_VS_100, CRT_FS, 'crtPass')
+  if (!prog)
     return null
 
-  const program = gl.createProgram()
-  if (!program)
-    return null
-  gl.attachShader(program, vs)
-  gl.attachShader(program, fs)
-  gl.linkProgram(program)
-  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-    console.error('[crtPass] link error:', gl.getProgramInfoLog(program))
-    gl.deleteProgram(program)
-    return null
-  }
-
-  const buffer = gl.createBuffer()
-  gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-  gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERTS, gl.STATIC_DRAW)
+  const quad = createFullscreenQuad(gl)
 
   // Two constraints meet here.
   //
@@ -329,37 +311,13 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
   // whose format needs a component the read buffer does not have is an
   // INVALID_OPERATION. It fails silently, the texture stays black, and every
   // journey renders as an empty tube. Match the read buffer's format instead.
-  const tex = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, tex)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
+  const tex = screenTexture(gl)
 
-  // The caption's texture. Uploaded from a 2D canvas rather than copied from the
-  // framebuffer, so unlike the capture texture above it can be — and has to be —
+  // The caption's texture. Uploaded from a 2D canvas rather than copied from
+  // the framebuffer, so unlike the capture texture it can be — and has to be —
   // RGBA: the alpha is what says where the caption is not.
-  const overlayTex = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, overlayTex)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  let hasOverlay = false
-
-  const posLoc      = gl.getAttribLocation(program, 'position')
-  const loc         = (name: string) => gl.getUniformLocation(program, name)
-  const uTex        = loc('uTex')
-  const uRes        = loc('uRes')
-  const uTime       = loc('uTime')
-  const uCurve      = loc('uCurve')
-  const uAberration = loc('uAberration')
-  const uScanline   = loc('uScanline')
-  const uVignette   = loc('uVignette')
-  const uScrub      = loc('uScrub')
-  const uScrubMix   = loc('uScrubMix')
-  const uSignal     = loc('uSignal')
-  const uOverlay    = loc('uOverlay')
+  const overlayTex = screenTexture(gl)
+  let hasOverlay   = false
 
   let texW = 0
   let texH = 0
@@ -386,8 +344,8 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
       gl.bindTexture(gl.TEXTURE_2D, overlayTex)
 
       // A canvas is top-down and a GL texture is bottom-up. The capture texture
-      // above comes from copyTexSubImage2D and is already in GL's order, so the
-      // flip has to happen here or the caption arrives upside down.
+      // comes from copyTexSubImage2D and is already in GL's order, so the flip
+      // has to happen here or the caption arrives upside down.
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source)
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false)
@@ -407,66 +365,45 @@ export function createCrtPass (gl: WebGLRenderingContext): CrtPass | null {
       // Grab the frame the journey just presented. This is the whole trick:
       // the back buffer is still intact until the compositor swaps it, so it
       // can be read now and written back to in the same pass.
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, tex)
       gl.copyTexSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, 0, w, h)
 
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, w, h)
       gl.disable(gl.DEPTH_TEST)
       gl.disable(gl.BLEND)
       gl.disable(gl.CULL_FACE)
 
-      gl.useProgram(program)
-      gl.bindBuffer(gl.ARRAY_BUFFER, buffer)
-      gl.enableVertexAttribArray(posLoc)
-      gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0)
-
-      if (uTex)
-        gl.uniform1i(uTex, 0)
-      if (uRes)
-        gl.uniform2f(uRes, w, h)
-      if (uTime)
-        gl.uniform1f(uTime, o.time)
-      if (uCurve)
-        gl.uniform1f(uCurve, o.curve)
-      if (uAberration)
-        gl.uniform1f(uAberration, o.aberration)
-      if (uScanline)
-        gl.uniform1f(uScanline, o.scanline)
-      if (uVignette)
-        gl.uniform1f(uVignette, o.vignette)
-      if (uScrub)
-        gl.uniform1f(uScrub, o.scrub)
-      if (uScrubMix)
-        gl.uniform1f(uScrubMix, o.scrubMix)
+      prog.use()
+      prog.uniform1i('uTex', 0)
+      prog.uniform2f('uRes', w, h)
+      prog.uniform1f('uTime', o.time)
+      prog.uniform1f('uCurve', o.curve)
+      prog.uniform1f('uAberration', o.aberration)
+      prog.uniform1f('uScanline', o.scanline)
+      prog.uniform1f('uVignette', o.vignette)
+      prog.uniform1f('uScrub', o.scrub)
+      prog.uniform1f('uScrubMix', o.scrubMix)
+      prog.uniform2f('uGrade', o.brightness ?? 1, o.contrast ?? 1)
 
       const showOverlay = hasOverlay && o.signal > 0.001
-      if (uSignal)
-        gl.uniform2f(uSignal, o.signal, showOverlay ? 1 : 0)
-      if (uOverlay)
-        gl.uniform1i(uOverlay, 1)
+      prog.uniform2f('uSignal', o.signal, showOverlay ? 1 : 0)
+      prog.uniform1i('uOverlay', 1)
       if (showOverlay) {
         gl.activeTexture(gl.TEXTURE1)
         gl.bindTexture(gl.TEXTURE_2D, overlayTex)
         gl.activeTexture(gl.TEXTURE0)
       }
 
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-
-      // Hand the attribute back. The geometry path binds its own arrays each
-      // frame, but leaving a stale enabled attrib pointing at our quad buffer
-      // is the kind of thing that only breaks on one driver.
-      gl.disableVertexAttribArray(posLoc)
+      quad.draw()
     },
 
     dispose () {
-      gl.deleteBuffer(buffer)
+      quad.dispose()
       gl.deleteTexture(tex)
       gl.deleteTexture(overlayTex)
-      gl.deleteProgram(program)
-      gl.deleteShader(vs)
-      gl.deleteShader(fs)
+      prog.dispose()
     },
   }
 }
@@ -481,9 +418,9 @@ export const CRT_DEFAULTS = {
 
 /**
  * The tube switched off, for when the CRT setting is off but the pass still has
- * to run. The signal loss is a story beat rather than a display treatment, so it
- * does not belong behind that toggle: curvature and scanlines go, the caption and
- * the tearing and the snow stay.
+ * to run — for the signal loss, which is a story beat rather than a display
+ * treatment, or for the display grade. Curvature and scanlines go; the
+ * caption, the tearing, the snow and the grade stay.
  */
 export const CRT_BYPASS = {
   curve:      0,

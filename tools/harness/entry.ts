@@ -6,52 +6,24 @@
 // works against it unchanged: same `?t=&w=&h=&pointer=&dt=` query, same
 // `window.__journeyDebug`, same `html[data-journey-ready="1"]` handshake. What
 // it skips is everything that is not the picture — React, Next's dev compiler,
-// the settings provider, the HUD, the CRT pass (which the shell suppresses
-// under `?t=` anyway). Cold start is a bun build of a few hundred kilobytes
-// rather than a Next dev server compiling the route, which is the difference
-// between a second and a minute.
+// the settings, the HUD, the title card, the CRT pass (which the shell skips
+// under `?t=` anyway). Cold start is a bun build rather than a Next dev server
+// compiling the route: a second rather than a minute.
 //
-// The draw is the shell's frozen path, line for line: seek the simulation in
-// fixed steps, attach uSignalLoss if the journey has ended, draw once, publish.
-// Anything that disagreed with withJourneyShell here would make the harness
-// lie, so it imports the same seek and the same signal model rather than
-// re-deriving them.
+// Every journey is here, because every journey is a definition
+// (app/journeys/<slug>/journey.ts) and the harness runs definitions exactly as
+// the shell does: same context, same renderer factory, same seek, same frame
+// evaluation (lib/journey). A harness that disagreed with the shell would lie.
+//
+// /journeys/previews compiles every landing-page preview shader in one WebGL 1
+// context and reports any that fail.
 
-import type { JourneyRenderer, JourneySimulation } from '✦/components/withJourneyShell'
-import { publishDebugState, readDebugParams, seekSimulation } from '✦/lib/debugParams'
-import { signalLossAt } from '✦/lib/signalLoss'
-import { createLoopLineScene } from '✦/app/journeys/loop-line/scene'
-import { createLoopLineSimulation } from '✦/app/journeys/loop-line/kinematics'
-import { createStairwellRenderer } from '✦/app/journeys/stairwell/renderer'
-import { createStairwellSimulation } from '✦/app/journeys/stairwell/kinematics'
+import { JOURNEY_DEFINITIONS } from '✦/app/journeys/definitions'
+import { JOURNEYS } from '✦/app/journeys/registry'
+import { publishDebugState, readDebugParams } from '✦/lib/debugParams'
+import { createContext, createShaderQuad } from '✦/lib/gl'
+import { evaluateFrame, seekSimulation } from '✦/lib/journey'
 
-
-type AnyGl = WebGLRenderingContext | WebGL2RenderingContext
-
-interface HarnessJourney {
-  context:    'webgl' | 'webgl2';
-  depth:      boolean;
-  renderer:   (gl: AnyGl, canvas: HTMLCanvasElement) => JourneyRenderer | null;
-  simulation: () => JourneySimulation;
-}
-
-// Journeys the harness can drive. Mirrors each page.tsx's HOC options — the
-// context type and depth are the only part of the shell a renderer can tell
-// apart. Add a line here to bring another journey under the bare tools.
-const JOURNEYS: Record<string, HarnessJourney> = {
-  'loop-line': {
-    context:    'webgl2',
-    depth:      true,
-    renderer:   (gl, c) => createLoopLineScene(gl as WebGL2RenderingContext, c),
-    simulation: createLoopLineSimulation,
-  },
-  'stairwell': {
-    context:    'webgl2',
-    depth:      false,
-    renderer:   createStairwellRenderer,
-    simulation: createStairwellSimulation,
-  },
-}
 
 const errors: string[] = []
 const origError        = console.error
@@ -66,25 +38,48 @@ declare global {
   }
 }
 
+function publishStatus (journey: string, label: string, width = 0, height = 0): void {
+  publishDebugState({ journey, time: 0, label, seeking: true, ready: true, width, height, fps: 0, uniforms: {}})
+}
+
+/** Compile every registry preview shader; one error line per failure. */
+function checkPreviews (): void {
+  const canvas  = document.createElement('canvas')
+  canvas.width  = 64
+  canvas.height = 64
+  document.body.appendChild(canvas)
+
+  const gl = createContext(canvas, 'webgl', { preserveDrawingBuffer: true })
+  if (!gl) {
+    errors.push('no webgl context')
+    return publishStatus('previews', 'BROKEN')
+  }
+  for (const j of JOURNEYS) {
+    const quad = createShaderQuad(gl, j.previewShader)
+    if (!quad) {
+      errors.push(`preview ${j.slug} failed to compile`)
+      continue
+    }
+    quad.draw({ time: 1.5, pointer: { x: 0, y: 0 }, heavy: 1 })
+    quad.dispose()
+  }
+  gl.finish()
+  publishStatus('previews', `PREVIEWS · ${JOURNEYS.length}`, 64, 64)
+}
+
 async function main (): Promise<void> {
   window.__harnessErrors = errors
 
-  const slug    = location.pathname.split('/').filter(Boolean)
+  const slug = location.pathname.split('/').filter(Boolean)
     .pop() ?? ''
-  const journey = JOURNEYS[slug]
+  if (slug === 'previews')
+    return checkPreviews()
+
+  const journey = JOURNEY_DEFINITIONS[slug]
   if (!journey) {
-    document.body.textContent = `no harness entry for "${slug}" — add it to tools/harness/entry.ts`
+    document.body.textContent = `no journey "${slug}" — see app/journeys/definitions.ts`
     errors.push(`unknown journey ${slug}`)
-    publishDebugState({ journey:  slug,
-      time:     0,
-      label:    'UNKNOWN',
-      seeking:  true,
-      ready:    true,
-      width:    0,
-      height:   0,
-      fps:      0,
-      uniforms: {}})
-    return
+    return publishStatus(slug, 'UNKNOWN')
   }
 
   const d       = readDebugParams()
@@ -93,40 +88,27 @@ async function main (): Promise<void> {
   canvas.height = d.h ?? 360
   document.body.appendChild(canvas)
 
-  const gl = canvas.getContext(journey.context, {
-    alpha:                 false,
-    antialias:             false,
-    depth:                 journey.depth,
+  const gl = createContext(canvas, journey.renderer.context, {
+    ...journey.renderer.attributes,
     preserveDrawingBuffer: true,
-  }) as AnyGl | null
+  })
   if (!gl) {
-    errors.push(`no ${journey.context} context`)
-    return
+    errors.push(`no ${journey.renderer.context} context`)
+    return publishStatus(slug, 'BROKEN')
   }
 
-  const renderer = journey.renderer(gl, canvas)
+  const renderer = journey.renderer.create(gl, canvas)
   if (!renderer) {
     errors.push('renderer factory returned null (a program failed to compile or link)')
-    publishDebugState({ journey:  slug,
-      time:     0,
-      label:    'BROKEN',
-      seeking:  true,
-      ready:    true,
-      width:    canvas.width,
-      height:   canvas.height,
-      fps:      0,
-      uniforms: {}})
-    return
+    return publishStatus(slug, 'BROKEN', canvas.width, canvas.height)
   }
 
   const t   = d.t ?? 0
-  const sim = journey.simulation()
+  const sim = journey.createSimulation?.() ?? null
   seekSimulation(sim, t, d.dt)
 
-  const marks  = sim.marks?.()
-  const custom = sim.uniforms()
-  if (marks?.signalAge)
-    custom.uSignalLoss = signalLossAt(marks.signalAge).level
+  const frame  = evaluateFrame(journey, sim, t)
+  const custom = frame.custom ?? {}
 
   // ?u.uName=1.5 (or =1,2,3 for a vector) overrides one uniform after the
   // seek — for bisecting a frame: hold everything else, change one input.
@@ -136,13 +118,14 @@ async function main (): Promise<void> {
       custom[key.slice(2)] = v.length === 1 ? v[0] : v
     }
 
-  // Assets load asynchronously (lib/materialLibrary). The shell holds its
-  // frozen frame on the same flag, so a plate is never of the placeholder.
+  // Assets load asynchronously (Δ). The shell holds its frozen frame on the
+  // same flag, so a plate is never of the placeholder.
   const deadline = performance.now() + 20_000
   while (renderer.ready && !renderer.ready() && performance.now() < deadline)
     await new Promise(r => setTimeout(r, 30))
 
-  // heavyEffects defaults on in lib/settings, so the harness does too.
+  // heavyEffects defaults on for a desktop in lib/settings, so the harness
+  // does too; ?heavy=0 renders the phone path.
   const heavy   = new URLSearchParams(location.search).get('heavy') === '0' ? 0 : 1
   const pointer = d.pointer ? { x: d.pointer[0], y: d.pointer[1] } : { x: 0, y: 0 }
   renderer.draw({ time: t, pointer, heavy, custom })
@@ -151,7 +134,7 @@ async function main (): Promise<void> {
   publishDebugState({
     journey:  slug,
     time:     t,
-    label:    sim.label?.() ?? '',
+    label:    frame.label,
     seeking:  true,
     ready:    true,
     width:    canvas.width,
@@ -163,13 +146,5 @@ async function main (): Promise<void> {
 
 main().catch(err => {
   errors.push(String(err?.stack ?? err))
-  publishDebugState({ journey:  '?',
-    time:     0,
-    label:    'CRASHED',
-    seeking:  true,
-    ready:    true,
-    width:    0,
-    height:   0,
-    fps:      0,
-    uniforms: {}})
+  publishStatus('?', 'CRASHED')
 })

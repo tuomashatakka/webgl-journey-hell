@@ -14,8 +14,8 @@
 // Layers: a wet sub-drone, a spore haze, wall plops, fibrous creak, chitin
 // clicks, a heartbeat, and a delay that opens as you fall.
 
-import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
+import type { JourneyAudioEngine } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
 import {
   STAGE_CATHEDRAL,
   STAGE_COMPOST,

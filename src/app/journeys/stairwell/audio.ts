@@ -1,5 +1,5 @@
-import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
-import type { CustomUniforms } from '✦/lib/shaderQuad'
+import type { JourneyAudioEngine } from '✦/lib/journey'
+import type { CustomUniforms } from '✦/lib/gl'
 
 
 function scalar (state: CustomUniforms | undefined, name: string): number {

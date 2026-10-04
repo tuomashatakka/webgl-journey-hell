@@ -2,18 +2,18 @@
 
 // The tape deck at the bottom of every journey.
 //
-// Sampled on an interval rather than driven from the frame loop, for the same
-// reason JourneyDebugPanel is: a journey redraws sixty times a second, and
-// putting React's reconciler on that path costs frames for a readout nobody can
-// read that fast. 60ms is quick enough that the fill still reads as continuous
-// once the CSS transition smooths between samples — and the transition is
-// switched off while shuttling, because there the bar is *supposed* to jump.
+// React renders its structure once; the shell then pushes the live state in
+// through `update()` every frame, which writes straight to the few DOM nodes
+// that change — text only when it differs, the fill as a compositor-only
+// transform. The previous version re-rendered the component sixteen times a
+// second through state, which on a phone was a measurable slice of the frame.
+//
+// The track is a slider: press (or touch) anywhere on it and drag to scrub
+// through the current lap; arrow keys step it when focused.
 
-import { useEffect, useRef, useState } from 'react'
-import type { TransportAction, TransportMode } from '✦/lib/journeyTransport'
+import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
+import type { TransportAction, TransportMode } from '✦/lib/journey'
 
-
-const SAMPLE_MS = 60
 
 export interface TransportView {
   mode:         TransportMode;
@@ -26,19 +26,31 @@ export interface TransportView {
   hasMarks:     boolean;
 }
 
+export interface TransportHandle {
+  update(view: TransportView): void;
+}
+
+interface Props {
+  onAction:  (action: TransportAction) => void;
+  onScrub:   (fraction: number) => void;
+  onRelease: () => void;
+}
+
 const MODE_TEXT: Record<TransportMode, string> = {
   play:  '▶  PLAY',
-  ff:    '▶▶ F.FWD',
-  rew:   '◀◀ REW',
   flash: '▸│ SKIP',
+  scrub: '◀▶ SCRUB',
 }
 
 const CONTROLS: { act: TransportAction; glyph: string; title: string }[] = [
-  { act: 'prev', glyph: '⏮', title: 'Previous section' },
-  { act: 'rew', glyph: '◀◀', title: 'Rewind to the start of the loop' },
-  { act: 'ff', glyph: '▶▶', title: 'Fast-forward to the start of the next loop' },
-  { act: 'next', glyph: '⏭', title: 'Next section' },
+  { act: 'prev-lap', glyph: '⏮', title: 'Back to the start of the lap' },
+  { act: 'prev', glyph: '◀◀', title: 'Previous chapter' },
+  { act: 'next', glyph: '▶▶', title: 'Next chapter' },
+  { act: 'next-lap', glyph: '⏭', title: 'Next lap' },
 ]
+
+/** Arrow-key scrub step, as a fraction of the lap. */
+const KEY_STEP = 0.02
 
 /** mm:ss — a tape counter, not a timestamp. */
 function counter (t: number): string {
@@ -46,36 +58,96 @@ function counter (t: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-interface Props {
-  getView:  () => TransportView;
-  onAction: (action: TransportAction) => void;
-}
+const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTransport ({ onAction, onScrub, onRelease }, ref) {
+  const rootRef    = useRef<HTMLElement>(null)
+  const labelRef   = useRef<HTMLSpanElement>(null)
+  const modeRef    = useRef<HTMLSpanElement>(null)
+  const counterRef = useRef<HTMLSpanElement>(null)
+  const fillRef    = useRef<HTMLDivElement>(null)
+  const trackRef   = useRef<HTMLDivElement>(null)
 
-export default function JourneyTransport ({ getView, onAction }: Props) {
-  const [ view, setView ] = useState<TransportView | null>(null)
-  const getViewRef        = useRef(getView)
-  getViewRef.current      = getView
+  // Only the tick layout goes through React; it changes once per journey.
+  const [ ticks, setTicks ] = useState<number[]>([])
+  const last                = useRef({ label: '', mode: 'play', counter: '', ticks: '', progress: -1 })
+  const progressRef         = useRef(0)
 
-  useEffect(() => {
-    const tick = () => setView(getViewRef.current())
-    tick()
+  useImperativeHandle(ref, () => ({
+    update (view) {
+      const l             = last.current
+      const p             = Math.min(1, Math.max(0, view.progress))
+      progressRef.current = p
 
-    const id = window.setInterval(tick, SAMPLE_MS)
-    return () => window.clearInterval(id)
-  }, [])
+      const label = view.label || '—'
+      if (label !== l.label && labelRef.current) {
+        labelRef.current.textContent = label
+        l.label                      = label
+      }
+      if (view.mode !== l.mode) {
+        if (modeRef.current)
+          modeRef.current.textContent = MODE_TEXT[view.mode]
+        rootRef.current?.setAttribute('data-mode', view.mode)
+        l.mode = view.mode
+      }
 
-  if (!view)
-    return null
+      const count = counter(view.time)
+      if (count !== l.counter && counterRef.current) {
+        counterRef.current.textContent = count
+        l.counter                      = count
+      }
+      if (Math.abs(p - l.progress) > 1e-4) {
+        if (fillRef.current)
+          fillRef.current.style.transform = `scaleX(${p})`
+        trackRef.current?.setAttribute('aria-valuenow', String(Math.round(p * 100)))
+        l.progress = p
+      }
 
-  const pct = `${Math.round(Math.min(1, Math.max(0, view.progress)) * 1000) / 10}%`
+      // One divider per internal section boundary.
+      const key = view.hasMarks ? String(view.sectionCount) : '0'
+      if (key !== l.ticks) {
+        l.ticks = key
+        setTicks(view.hasMarks && view.sectionCount > 1
+          ? Array.from({ length: view.sectionCount - 1 }, (_, i) => (i + 1) / view.sectionCount)
+          : [])
+      }
+    },
+  }), [])
 
-  // One divider per internal section boundary. Journeys that report a single
-  // section get a plain bar rather than a bar with a redundant tick at 0.
-  const ticks = view.hasMarks && view.sectionCount > 1
-    ? Array.from({ length: view.sectionCount - 1 }, (_, i) => (i + 1) / view.sectionCount)
-    : []
+  const fractionAt = (clientX: number): number => {
+    const rect = trackRef.current?.getBoundingClientRect()
+    if (!rect || rect.width <= 0)
+      return 0
+    return Math.min(1, Math.max(0, (clientX - rect.left) / rect.width))
+  }
 
-  return <aside id="journey-transport" data-mode={ view.mode }>
+  const onPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0)
+      return
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    onScrub(fractionAt(e.clientX))
+  }, [ onScrub ])
+
+  const onPointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      onScrub(fractionAt(e.clientX))
+  }, [ onScrub ])
+
+  const onPointerEnd = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId))
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    onRelease()
+  }, [ onRelease ])
+
+  const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    const step = e.key === 'ArrowRight' ? KEY_STEP : e.key === 'ArrowLeft' ? -KEY_STEP : 0
+    if (!step)
+      return
+    e.preventDefault()
+    onScrub(progressRef.current + step)
+    onRelease()
+  }, [ onScrub, onRelease ])
+
+  return <aside id="journey-transport" ref={ rootRef } data-mode="play">
     <div className="jt-head">
       <div className="jt-buttons">
         {CONTROLS.map(({ act, glyph, title }) =>
@@ -91,26 +163,35 @@ export default function JourneyTransport ({ getView, onAction }: Props) {
         )}
       </div>
 
-      <span className="jt-label">{view.label || '—'}</span>
+      <span className="jt-label" ref={ labelRef }>—</span>
 
       <span className="jt-state">
-        <span className="jt-mode">{MODE_TEXT[view.mode]}</span>
-        <span className="jt-counter">{counter(view.time)}</span>
+        <span className="jt-mode" ref={ modeRef }>{MODE_TEXT.play}</span>
+        <span className="jt-counter" ref={ counterRef }>00:00</span>
       </span>
     </div>
 
     <div
       className="jt-track"
-      role="progressbar"
-      aria-label="Loop position"
+      ref={ trackRef }
+      role="slider"
+      tabIndex={ 0 }
+      aria-label="Position in the lap — drag to scrub"
       aria-valuemin={ 0 }
       aria-valuemax={ 100 }
-      aria-valuenow={ Math.round(view.progress * 100) }>
-      <div className="jt-fill" style={{ width: pct }} />
+      aria-valuenow={ 0 }
+      onPointerDown={ onPointerDown }
+      onPointerMove={ onPointerMove }
+      onPointerUp={ onPointerEnd }
+      onPointerCancel={ onPointerEnd }
+      onKeyDown={ onKeyDown }>
+      <div className="jt-fill" ref={ fillRef } />
 
       {ticks.map(t =>
         <span key={ t } className="jt-tick" style={{ left: `${t * 100}%` }} />,
       )}
     </div>
   </aside>
-}
+})
+
+export default JourneyTransport

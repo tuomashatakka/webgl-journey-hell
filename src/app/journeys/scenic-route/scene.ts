@@ -30,16 +30,16 @@
 // because only the renderer knows the aspect ratio, and the pointer look is
 // applied here because where the rider looks must not change where the car is.
 
-import { createGlProgram } from '✦/lib/glProgram'
-import type { GlProgram } from '✦/lib/glProgram'
+import type { JourneyRenderer } from '✦/lib/journey'
+import { HIGH_QUALITY, createFullscreenQuad, createGlProgram, createPostChain, createRenderTarget, rgba8, sceneFormat } from '✦/lib/gl'
+import type { GlProgram, RenderTarget } from '✦/lib/gl'
 import { createMesh, createMeshFromArrays } from '✦/lib/mesh'
 import type { Mesh } from '✦/lib/mesh'
 import { invert, lookAt, multiply, perspective } from '✦/lib/mat4'
 import type { Mat4 } from '✦/lib/mat4'
 import { SWEEP_FLOATS, SWEEP_LAYOUT, finishSweep, levelFrame, newFrame, sweepProfile } from '✦/lib/sweep'
 import type { ProfilePoint } from '✦/lib/sweep'
-import type { JourneyRenderer } from '✦/components/withJourneyShell'
-import type { QuadFrameUniforms } from '✦/lib/shaderQuad'
+import type { FrameUniforms } from '✦/lib/gl'
 import { BANK_STEP, SECTION_COUNT, bankGainAt, getRoute, lookAt as lookParamsAt, sectionWeights } from './course'
 import type { LookParams } from './course'
 import { SEA_PATCH, buildFarMesh, buildNearChunks, buildSeaPatch, buildSeaQuad, buildSpineIndex } from './geometry'
@@ -123,20 +123,6 @@ interface Drawable {
   radius: number;
 }
 
-function makeTex (
-  gl: WebGL2RenderingContext, w: number, h: number,
-  internal: number, format: number, type: number, filter: number,
-): WebGLTexture | null {
-  const t = gl.createTexture()
-  gl.bindTexture(gl.TEXTURE_2D, t)
-  gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, null)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-  return t
-}
-
 /** Column-major orthographic projection into [-1,1]^3, right-handed. */
 function ortho (out: Mat4, half: number, near: number, far: number): Mat4 {
   out.fill(0)
@@ -205,16 +191,10 @@ export function createScenicRouteScene (
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
   // --- the sky LUT -----------------------------------------------------------
-  const floatExt = gl.getExtension('EXT_color_buffer_float')
-  const skyTex   = floatExt
-    ? makeTex(gl, SKY_W, SKY_H, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT, gl.LINEAR)
-    : makeTex(gl, SKY_W, SKY_H, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR)
+  const skyTarget = createRenderTarget(gl, SKY_W, SKY_H, sceneFormat(gl))
+  const skyTex    = skyTarget.tex
   gl.bindTexture(gl.TEXTURE_2D, skyTex)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
-
-  const skyFbo = gl.createFramebuffer()
-  gl.bindFramebuffer(gl.FRAMEBUFFER, skyFbo)
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, skyTex, 0)
 
   // --- the shadow map --------------------------------------------------------
   // A depth texture with hardware compare, LINEAR so the compare is bilinear.
@@ -349,16 +329,7 @@ export function createScenicRouteScene (
   const speedoMesh = createMesh(gl, cockpit.speedo)
   const tachoMesh  = createMesh(gl, cockpit.tacho)
   // The rear view for the mirror: a small colour target with its own depth.
-  const mirrorTex   = makeTex(gl, MIRROR_W, MIRROR_H, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR)
-  const mirrorDepth = gl.createRenderbuffer()
-  gl.bindRenderbuffer(gl.RENDERBUFFER, mirrorDepth)
-  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, MIRROR_W, MIRROR_H)
-
-  const mirrorFbo = gl.createFramebuffer()
-  gl.bindFramebuffer(gl.FRAMEBUFFER, mirrorFbo)
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mirrorTex, 0)
-  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, mirrorDepth)
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  const mirror = createRenderTarget(gl, MIRROR_W, MIRROR_H, rgba8(gl), { depth: true })
 
   const dialTex    = gl.createTexture()
   gl.bindTexture(gl.TEXTURE_2D, dialTex)
@@ -375,75 +346,20 @@ export function createScenicRouteScene (
   const tachoPivot   = dialPoint(TACHO.u, TACHO.v)
 
   // --- post targets ------------------------------------------------------------
-  const quad = gl.createBuffer()
-  gl.bindBuffer(gl.ARRAY_BUFFER, quad)
-  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ]), gl.STATIC_DRAW)
+  // MSAA scene → resolve, then a bright pass and a separable blur ping-ponged
+  // between two half-resolution targets. 8-bit throughout: this road is graded
+  // for an LDR image. The quality tier decides the MSAA sample count.
+  const quad  = createFullscreenQuad(gl)
+  const chain = createPostChain(gl, { hdr: false, msaa: 4, bloomLevels: 0 })
+  let blur: RenderTarget[] = []
 
-  let width  = 0
-  let height = 0
-
-  let msaaFbo: WebGLFramebuffer | null    = null
-  let msaaColor: WebGLRenderbuffer | null = null
-  let msaaDepth: WebGLRenderbuffer | null = null
-  let sceneFbo: WebGLFramebuffer | null   = null
-  let sceneTex: WebGLTexture | null       = null
-  const bloomFbo: (WebGLFramebuffer | null)[] = [ null, null ]
-  const bloomTex: (WebGLTexture | null)[]     = [ null, null ]
-
-  const releaseTargets = () => {
-    if (msaaFbo)
-      gl.deleteFramebuffer(msaaFbo)
-    if (msaaColor)
-      gl.deleteRenderbuffer(msaaColor)
-    if (msaaDepth)
-      gl.deleteRenderbuffer(msaaDepth)
-    if (sceneFbo)
-      gl.deleteFramebuffer(sceneFbo)
-    if (sceneTex)
-      gl.deleteTexture(sceneTex)
-    for (let i = 0; i < 2; i++) {
-      if (bloomFbo[i])
-        gl.deleteFramebuffer(bloomFbo[i])
-      if (bloomTex[i])
-        gl.deleteTexture(bloomTex[i])
-    }
-  }
-
-  const resize = (w: number, h: number) => {
-    if (w === width && h === height)
+  const resize = (w: number, h: number, msaa: number) => {
+    if (!chain.resize(w, h, { msaa, bloomLevels: 0 }))
       return
-    releaseTargets()
-    width  = w
-    height = h
-
-    const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) as number)
-
-    msaaColor = gl.createRenderbuffer()
-    gl.bindRenderbuffer(gl.RENDERBUFFER, msaaColor)
-    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, w, h)
-    msaaDepth = gl.createRenderbuffer()
-    gl.bindRenderbuffer(gl.RENDERBUFFER, msaaDepth)
-    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT24, w, h)
-
-    msaaFbo = gl.createFramebuffer()
-    gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msaaColor)
-    gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, msaaDepth)
-
-    sceneTex = makeTex(gl, w, h, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR)
-    sceneFbo = gl.createFramebuffer()
-    gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo)
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0)
-
+    blur.forEach(b => b.dispose())
     const bw = Math.max(1, w >> 1)
     const bh = Math.max(1, h >> 1)
-    for (let i = 0; i < 2; i++) {
-      bloomTex[i] = makeTex(gl, bw, bh, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR)
-      bloomFbo[i] = gl.createFramebuffer()
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[i])
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bloomTex[i], 0)
-    }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    blur = [ createRenderTarget(gl, bw, bh, rgba8(gl)), createRenderTarget(gl, bw, bh, rgba8(gl)) ]
   }
 
   // --- per-frame scratch -----------------------------------------------------
@@ -466,16 +382,9 @@ export function createScenicRouteScene (
   const target: [number, number, number]  = [ 0, 0, 1 ]
   const upv: [number, number, number]     = [ 0, 1, 0 ]
 
-  const drawQuad = (prog: GlProgram) => {
-    gl.bindBuffer(gl.ARRAY_BUFFER, quad)
+  const drawQuad = () => quad.draw()
 
-    const loc = prog.attrib('aPos')
-    gl.enableVertexAttribArray(loc)
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
-  }
-
-  const vec = (c: QuadFrameUniforms['custom'], k: string, d: number[]): number[] =>
+  const vec = (c: FrameUniforms['custom'], k: string, d: number[]): number[] =>
     (c?.[k] as number[] | undefined) ?? d
 
   /** The bank LUT on unit 0 for any program that sweeps. */
@@ -529,10 +438,10 @@ export function createScenicRouteScene (
   }
 
   return {
-    draw ({ time, pointer, heavy, custom }: QuadFrameUniforms) {
+    draw ({ time, pointer, heavy, custom, quality }: FrameUniforms) {
       const w = canvas.width
       const h = canvas.height
-      resize(w, h)
+      resize(w, h, (quality ?? HIGH_QUALITY).msaa)
 
       const camPos = vec(custom, 'uCamPos', [ 0, 0, 0 ])
       const camFwd = vec(custom, 'uCamFwd', [ 0, 0, 1 ])
@@ -601,15 +510,14 @@ export function createScenicRouteScene (
       gl.disable(gl.BLEND)
 
       // --- 1. the sky LUT ---
-      gl.bindFramebuffer(gl.FRAMEBUFFER, skyFbo)
-      gl.viewport(0, 0, SKY_W, SKY_H)
+      skyTarget.bind()
       gl.disable(gl.DEPTH_TEST)
       gl.disable(gl.CULL_FACE)
       skyLutP.use()
       skyLutP.uniform3f('uSunDir', sun[0], sun[1], sun[2])
       skyLutP.uniform1f('uCamAlt', Math.max(camPos[1] + 60, 2))
       gl.uniform2i(skyLutP.loc('uSteps'), isHeavy ? 10 : 5, isHeavy ? 4 : 2)
-      drawQuad(skyLutP)
+      drawQuad()
 
       // --- 2. the shadow map ---
       // An orthographic box centred ahead of the camera and looking down the
@@ -816,14 +724,13 @@ export function createScenicRouteScene (
         gl.activeTexture(gl.TEXTURE1)
         gl.bindTexture(gl.TEXTURE_2D, skyTex)
         skyDomeP.uniform1i('uSky', 1)
-        drawQuad(skyDomeP)
+        drawQuad()
         gl.depthMask(true)
       }
 
       // --- 2b. the rear view ---
       // Looking back along the car, wide, into the mirror's texture.
-      gl.bindFramebuffer(gl.FRAMEBUFFER, mirrorFbo)
-      gl.viewport(0, 0, MIRROR_W, MIRROR_H)
+      mirror.bind()
       gl.enable(gl.DEPTH_TEST)
       gl.depthFunc(gl.LEQUAL)
       gl.depthMask(true)
@@ -845,8 +752,7 @@ export function createScenicRouteScene (
       drawWorld(mirrorVP, camPos, [ -carFwd[0], -carFwd[1], -carFwd[2] ], mirrorInvVP)
 
       // --- 3. the world ---
-      gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
-      gl.viewport(0, 0, w, h)
+      chain.bindScene()
       gl.enable(gl.DEPTH_TEST)
       gl.depthFunc(gl.LEQUAL)
       gl.depthMask(true)
@@ -856,37 +762,33 @@ export function createScenicRouteScene (
       drawWorld(viewProj, camPos, [ fx, fy, fz ], invViewProj)
 
       // --- 5. resolve ---
-      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msaaFbo)
-      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFbo)
-      gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
+      chain.resolve()
 
       gl.disable(gl.DEPTH_TEST)
       gl.disable(gl.CULL_FACE)
 
-      const bw = Math.max(1, w >> 1)
-      const bh = Math.max(1, h >> 1)
+      const bw = blur[0].width
+      const bh = blur[0].height
 
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[0])
-      gl.viewport(0, 0, bw, bh)
+      blur[0].bind()
       brightP.use()
       gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, sceneTex)
+      gl.bindTexture(gl.TEXTURE_2D, chain.scene.tex)
       brightP.uniform1i('uSrc', 0)
       brightP.uniform1f('uThreshold', 0.82)
-      drawQuad(brightP)
+      drawQuad()
 
       blurP.use()
       for (let pass = 0; pass < 2; pass++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[(pass + 1) % 2])
-        gl.viewport(0, 0, bw, bh)
+        blur[(pass + 1) % 2].bind()
         gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, bloomTex[pass % 2])
+        gl.bindTexture(gl.TEXTURE_2D, blur[pass % 2].tex)
         blurP.uniform1i('uSrc', 0)
         if (pass === 0)
           blurP.uniform2f('uDir', 1.7 / bw, 0)
         else
           blurP.uniform2f('uDir', 0, 1.7 / bh)
-        drawQuad(blurP)
+        drawQuad()
       }
 
       // --- 6. composite ---
@@ -894,16 +796,16 @@ export function createScenicRouteScene (
       gl.viewport(0, 0, w, h)
       compP.use()
       gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, sceneTex)
+      gl.bindTexture(gl.TEXTURE_2D, chain.scene.tex)
       compP.uniform1i('uScene', 0)
       gl.activeTexture(gl.TEXTURE1)
-      gl.bindTexture(gl.TEXTURE_2D, bloomTex[0])
+      gl.bindTexture(gl.TEXTURE_2D, blur[0].tex)
       compP.uniform1i('uBloom', 1)
       compP.uniform1f('uExposure', exposure)
       // The speed blur bites only past what the road ever reaches.
       compP.uniform1f('uSpeedBlur', Math.max(0, Math.min(1, (ride[0] - 36) / 24)))
       compP.uniform1f('uTime', time)
-      drawQuad(compP)
+      drawQuad()
 
       // --- 7. the cockpit ---
       // Straight onto the back buffer after the composite, with its own depth,
@@ -929,7 +831,7 @@ export function createScenicRouteScene (
       gl.bindTexture(gl.TEXTURE_2D, dialTex)
       cockpitP.uniform1i('uDial', 3)
       gl.activeTexture(gl.TEXTURE4)
-      gl.bindTexture(gl.TEXTURE_2D, mirrorTex)
+      gl.bindTexture(gl.TEXTURE_2D, mirror.tex)
       cockpitP.uniform1i('uMirror', 4)
       cockpitP.uniform4f('uMirrorRect', -0.105, 1.378, 0.21, 0.064)
       cockpitP.uniform4f('uDialRect', DIAL.cx, DIAL.cy, DIAL.cz, DIAL.w / 2)
@@ -966,11 +868,11 @@ export function createScenicRouteScene (
     },
 
     dispose () {
-      releaseTargets()
-      gl.deleteBuffer(quad)
+      chain.dispose()
+      blur.forEach(b => b.dispose())
+      quad.dispose()
       gl.deleteTexture(bankTex)
-      gl.deleteTexture(skyTex)
-      gl.deleteFramebuffer(skyFbo)
+      skyTarget.dispose()
       gl.deleteTexture(shadowTex)
       gl.deleteFramebuffer(shadowFbo)
       roadMesh.dispose(gl)
@@ -986,9 +888,7 @@ export function createScenicRouteScene (
       speedoMesh.dispose(gl)
       tachoMesh.dispose(gl)
       gl.deleteTexture(dialTex)
-      gl.deleteTexture(mirrorTex)
-      gl.deleteRenderbuffer(mirrorDepth)
-      gl.deleteFramebuffer(mirrorFbo)
+      mirror.dispose()
       tubeFront.dispose(gl)
       tubeBack.dispose(gl)
       waterMesh.dispose(gl)

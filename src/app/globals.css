@@ -33,6 +33,17 @@
     background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
     background-size: 100% 4px, 3px 100%;
 }
+/* The opening title card (components/JourneyTitleIntro): over everything,
+   HUD included, until it tears itself away. Taps reach the window listener
+   that skips it, so the canvas itself takes no pointer events. */
+#journey-title-intro {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 40;
+    pointer-events: none;
+}
 #sector-title {
     position: absolute;
     top: 50%;
@@ -61,12 +72,12 @@
 #sector-title::before {
     left: 3px;
     text-shadow: -3px 0 #ff0055;
-    animation: glitchAnim1 0.8s infinite linear alternate-reverse;
+    animation: glitchAnim1 0.8s 6 linear alternate-reverse;
 }
 #sector-title::after {
     left: -3px;
     text-shadow: -2px 0 #00ffff, 0 3px #ffff00;
-    animation: glitchAnim2 0.7s infinite linear alternate-reverse;
+    animation: glitchAnim2 0.7s 7 linear alternate-reverse;
 }
 .skybridges-sector-title {
     font-family: "Arial", "Helvetica Neue", "Roboto Condensed", "Inter Tight", system-ui, sans-serif;
@@ -828,13 +839,13 @@ html, body {
 .journey-card:hover .journey-card__title::before {
     left: 2px;
     text-shadow: -2px 0 #ff0055;
-    animation: glitchAnim1 0.8s infinite linear alternate-reverse;
+    animation: glitchAnim1 0.8s 6 linear alternate-reverse;
 }
 
 .journey-card:hover .journey-card__title::after {
     left: -2px;
     text-shadow: -1px 0 #00ffff, 0 2px #ffff00;
-    animation: glitchAnim2 0.7s infinite linear alternate-reverse;
+    animation: glitchAnim2 0.7s 7 linear alternate-reverse;
 }
 
 .journey-card__tagline {
@@ -992,19 +1003,34 @@ html, body {
     height: 6px;
     background: rgba(255, 255, 255, 0.09);
     border: 1px solid rgba(255, 255, 255, 0.16);
-    overflow: hidden;
+    cursor: pointer;
+    /* The bar is a slider: a drag on it scrubs, it must not scroll the page. */
+    touch-action: none;
+    outline: none;
+}
+/* A target a finger can hit: the bar stays six pixels, the hit area does not. */
+.jt-track::before {
+    content: "";
+    position: absolute;
+    inset: -12px 0;
+}
+.jt-track:focus-visible {
+    border-color: var(--accent, #fff);
 }
 
 .jt-fill {
     position: absolute;
     top: 0;
     left: 0;
+    width: 100%;
     height: 100%;
     background: var(--accent, #fff);
     opacity: 0.75;
-    /* Sampled at 60ms; the transition is what makes that read as continuous.
-       While shuttling it is switched off — there the bar is meant to jump. */
-    transition: width 90ms linear;
+    /* Written every frame as a transform: compositor-only, no layout. */
+    transform: scaleX(0);
+    transform-origin: left center;
+    will-change: transform;
+    pointer-events: none;
 }
 
 .jt-tick {
@@ -1013,14 +1039,10 @@ html, body {
     width: 1px;
     height: 100%;
     background: rgba(0, 0, 0, 0.75);
+    pointer-events: none;
 }
 
-/* Shuttling: kill the smoothing, flash the readout, tint the tape. */
-#journey-transport[data-mode="ff"] .jt-fill,
-#journey-transport[data-mode="rew"] .jt-fill,
-#journey-transport[data-mode="flash"] .jt-fill {
-    transition: none;
-}
+/* Jumping or scrubbing: flash the readout, tint the tape. */
 #journey-transport:not([data-mode="play"]) .jt-mode {
     animation: jtBlink 0.28s steps(1) infinite;
 }
@@ -1036,6 +1058,18 @@ html, body {
 @media (max-width: 620px) {
     .jt-label {
         display: none;
+    }
+}
+
+/* Fingers, not cursors: bigger buttons, a thicker tape. */
+@media (pointer: coarse) {
+    .jt-btn {
+        width: 46px;
+        height: 34px;
+        font-size: 13px;
+    }
+    .jt-track {
+        height: 10px;
     }
 }
 

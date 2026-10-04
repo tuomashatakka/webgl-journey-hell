@@ -42,6 +42,7 @@
 
 import { createClosedCurve } from '✦/lib/curve'
 import type { ClosedCurve, Vec3 } from '✦/lib/curve'
+import { smootherstep } from '✦/lib/math'
 
 
 const D = Math.PI / 180
@@ -598,11 +599,6 @@ export function bankTableAt (route: Route, s: number): number {
 /** The roll of the road and the car at s on lap lapF. */
 export function bankAt (route: Route, s: number, lapF: number): number {
   return bankTableAt(route, s) * bankGainAt(lapF)
-}
-
-function smootherstep (e0: number, e1: number, x: number): number {
-  const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)))
-  return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
 /**
