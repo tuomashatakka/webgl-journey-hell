@@ -5,8 +5,8 @@ It never stops running because the timetable has no last train, and it comes bac
 round a little more broken every time.
 
 This is the repo's rasterized journey: actual triangles through a WebGL2 context
-with a depth buffer (`geometryRenderer` (lib/journey)), shaded from the Δ library
-— photographed CC0 surfaces and skies from ambientCG (`delta/`, see the README).
+with a depth buffer (`geometryRenderer`, `src/packages/journey/definition.ts`), shaded from the Δ library
+— photographed CC0 surfaces and skies from ambientCG (`src/packages/delta`, see `docs/asset-library.md`).
 
 ## Why a closed loop is allowed to cheat
 
@@ -128,14 +128,14 @@ camera passes through a mouth and the walls sweep past — motion, not a pop.
   with the car, lit by whatever it is passing.
 * HDR (`RGBA16F`, 4× MSAA) where `EXT_color_buffer_float` exists, Reinhard-
   encoded RGBA8 otherwise; a five-level bloom (13-tap down, tent up), a radial
-  speed smear at the frame's edges, ACES. All through `lib/gl`'s post chain, so
+  speed smear at the frame's edges, ACES. All through `src/packages/gl`'s post chain, so
   the sample count and the bloom depth follow the device's quality tier (no MSAA
   and three bloom levels on a phone).
 
 ## One scalar
 
 Everything that goes wrong is a function of `lapF` — the lap count plus a
-fractional part ramped across THE TURNBACK (`decayOf` in `kinematics.ts`). Shard
+fractional part ramped across THE TURNBACK (`decayOf` in `kinematics.ts` (per journey)). Shard
 displacement, dead lamps (a fitting and its light share one roll, so they die
 together, flickering for a while first), rot, chatter, speed, the flood, the
 city's windows, whether the points have thrown.

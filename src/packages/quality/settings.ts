@@ -1,11 +1,7 @@
-// Global graphics settings shared by every journey.
-//
-// These were originally the liminal-only settings (resolution / speed /
-// heavyEffects / brightness); they now live in the library so all journeys —
-// and the landing grid — read one source of truth. Added here: `contrast`,
-// `maxFrameRate`, and `gyroscope`. Brightness + contrast are applied universally
-// via a CSS filter on the canvas (see displayFilter), so they need no per-shader
-// uniform. maxFrameRate drives the shared frame loop's cap (see SettingsProvider).
+// Global graphics settings shared by every journey: one source of truth for the
+// journeys and the landing grid. Brightness and contrast are applied by the CRT
+// pass (packages/gl/crtPass), not a CSS filter, so no shader needs a uniform for
+// them. maxFrameRate drives the shared frame loop's cap (see SettingsProvider).
 
 import { CONFIG } from '@wjh/config/config'
 import { detectDevice } from './device'
@@ -15,7 +11,7 @@ export interface GraphicsSettings {
 
   /**
    * Internal canvas scale: CONFIG.settings.autoResolution (0) hands it to the adaptive
-   * governor (lib/quality); otherwise 0.15 | 0.33 | 0.5 | 0.75 | 1.0, a
+   * governor (packages/quality/governor); otherwise 0.15 | 0.33 | 0.5 | 0.75 | 1.0, a
    * fixed multiplier of the (dpr-capped) backing store.
    */
   resolution: number;
@@ -26,10 +22,10 @@ export interface GraphicsSettings {
   /** Liminal-only: volumetric glows + deep raymarch steps. Ignored by light journeys. */
   heavyEffects: boolean;
 
-  /** Display brightness, 0.5–2.0 (applied as a CSS filter). */
+  /** Display brightness, 0.5–2.0 (applied by the CRT pass). */
   brightness: number;
 
-  /** Display contrast, 0.5–2.0 (applied as a CSS filter). */
+  /** Display contrast, 0.5–2.0 (applied by the CRT pass). */
   contrast: number;
 
   /** Max rendered frames per second; 0 = uncapped. */

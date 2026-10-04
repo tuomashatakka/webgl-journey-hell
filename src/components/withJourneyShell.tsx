@@ -2,7 +2,7 @@
 
 // withJourneyShell(definition) — every journey route.
 //
-// A journey is declared once (app/journeys/<slug>/journey.ts) and its page is
+// A journey is declared once (src/journeys/<slug>/journey.ts) and its page is
 // one line: `export default withJourneyShell(definition)`. Everything that runs
 // it lives in hooks/use-journey-runtime; this file is only the view over that
 // engine — the canvas, the HUD, the transport, the overlays.
@@ -28,64 +28,25 @@
 //   • gyroscope   → device-orientation camera panning
 //   • crt         → the tube treatment (and the CSS scanline layer)
 //
-// The debug query parameters (lib/debugParams) are honoured here for every
+// The debug query parameters (web/debugParams) are honoured here for every
 // journey at once: ?t= freezes an instant, ?debug publishes state, ?hud=0
 // strips the chrome, ?w=&h= fix the backing store.
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { JourneyDefinition } from '@wjh/journey/definition'
 import { getJourney } from '✦/journeys/registry'
 import { useJourneyRuntime } from '✦/hooks/use-journey-runtime'
 import { detectDevice } from '@wjh/quality/device'
+import { useMounted } from '✦/hooks/use-mounted'
+import { useOpening } from '✦/hooks/use-opening'
+import { usePauseKey } from '✦/hooks/use-pause-key'
 import { useSettings } from './SettingsProvider'
 import SettingsButton from './SettingsButton'
 import JourneyDebugPanel from './JourneyDebugPanel'
 import JourneyTransport from './JourneyTransport'
-import { CONFIG } from '@wjh/config/config'
 import JourneyLoader from './JourneyLoader'
 import { SectionHeading, TitleCard } from './GlitchTitle'
 
-
-/** A key press that belongs to a field being typed in, not to the journey. */
-function typing (target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  return !!el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')
-}
-
-/**
- * Space pauses and resumes, wherever focus is — the way a player's space bar
- * does. Taken on keyup as well as keydown, so a focused button does not also
- * read the press as a click (the pause button would toggle twice).
- */
-function usePauseKey (toggle: () => void, enabled: boolean) {
-  useEffect(() => {
-    if (!enabled)
-      return
-
-    const isSpace = (e: KeyboardEvent) =>
-      (e.code === 'Space' || e.key === ' ') && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target)
-
-    const down = (e: KeyboardEvent) => {
-      if (!isSpace(e))
-        return
-      e.preventDefault()
-      if (!e.repeat)
-        toggle()
-    }
-    const up = (e: KeyboardEvent) => {
-      if (isSpace(e))
-        e.preventDefault()
-    }
-
-    window.addEventListener('keydown', down)
-    window.addEventListener('keyup', up)
-    return () => {
-      window.removeEventListener('keydown', down)
-      window.removeEventListener('keyup', up)
-    }
-  }, [ toggle, enabled ])
-}
 
 export function withJourneyShell (definition: JourneyDefinition) {
   const meta = getJourney(definition.slug)
@@ -97,34 +58,17 @@ export function withJourneyShell (definition: JourneyDefinition) {
     const accent                    = meta?.accent ?? '#ffffff'
 
     // The opening sequence plays once per mount.
-    const staged                          = dbg.hud && dbg.t === null
-    const [ loaderGone, setLoaderGone ]   = useState(false)
-    const [ introDone, setIntroDone ]     = useState(false)
-    const [ headingDone, setHeadingDone ] = useState(-1)
+    const staged  = dbg.hud && dbg.t === null
+    const opening = useOpening({ staged, hasCard: !!meta, loading, sectionKey: section.key, sectionNamed: !!section.name })
 
-    const opened      = loading.done && (introDone || !staged || !meta)
-    const showLoader  = staged && !loaderGone
-    const showIntro   = staged && loading.done && !introDone && !!meta
-    const showHeading = staged && opened && !!section.name && headingDone !== section.key
-
-    // The bar fades as the card comes up underneath it, then goes entirely.
-    useEffect(() => {
-      if (!loading.done)
-        return
-
-      const timer = setTimeout(() => setLoaderGone(true), CONFIG.ui.loaderFadeMs)
-      return () => clearTimeout(timer)
-    }, [ loading.done ])
-
-    usePauseKey(rt.togglePause, dbg.t === null && opened)
+    usePauseKey(rt.togglePause, dbg.t === null && opening.opened)
 
     // The CSS scanline layer is part of the look where the CRT is on; on a
     // low-tier phone it is a full-screen blend at native resolution that the
     // GL pass's own scanlines already cover. Decided after mount: the saved
     // settings and the device are client facts, and the prerendered HTML has
     // to match the first client render.
-    const [ mounted, setMounted ] = useState(false)
-    useEffect(() => setMounted(true), [])
+    const mounted = useMounted()
 
     const scanlines = !mounted || settings.crt && detectDevice().tier > 0
 
@@ -142,12 +86,12 @@ export function withJourneyShell (definition: JourneyDefinition) {
         </Link>
       }
 
-      {showHeading &&
+      {opening.showHeading &&
         <SectionHeading
           key={ section.key }
           title={ section.name }
           accent={ accent }
-          onDone={ () => setHeadingDone(section.key) } />
+          onDone={ opening.finishHeading } />
       }
 
       {dbg.hud &&
@@ -176,15 +120,15 @@ export function withJourneyShell (definition: JourneyDefinition) {
           onRelease={ rt.release } />
       }
 
-      {showIntro &&
+      {opening.showIntro && meta &&
         <TitleCard
           title={ meta.title }
           subtitle={ meta.tagline }
           accent={ meta.accent }
-          onDone={ () => setIntroDone(true) } />
+          onDone={ opening.finishIntro } />
       }
 
-      {showLoader && <JourneyLoader { ...loading } />}
+      {opening.showLoader && <JourneyLoader { ...loading } />}
       {dbg.debug && <JourneyDebugPanel getState={ () => window.__journeyDebug ?? rt.debugState() } />}
     </main>
   }

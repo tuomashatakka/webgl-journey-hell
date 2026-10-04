@@ -225,11 +225,11 @@ climbs (120–180, 330–360), bank into helix (420–480).
 
 ## 6. Files
 
-- `src/app/journeys/skybridges/shader.ts` — the scene (this spec realised).
-- `src/app/journeys/skybridges/kinematics.ts` — section names/Z windows (HUD);
+- `src/journeys/skybridges/shader.ts` and `glsl/` — the scene (this spec realised).
+- `src/journeys/skybridges/kinematics.ts` — section names/Z windows (HUD);
   must mirror the nine bands above.
-- `src/app/journeys/skybridges/page.tsx` — wires `envMapUrl`.
-- `src/lib/gl/shaderQuad.ts`, `src/lib/journey/definition.ts` — uniforms
+- `src/journeys/skybridges/journey.ts` — wires `envMapUrl` (static import of `assets/textures/skybridges-env.png`).
+- `src/packages/gl/shaderQuad.ts`, `src/packages/journey/definition.ts` — uniforms
   plumbing (`uEnv`, `uEnvLoaded`, `uHeavy`).
 
 ---
@@ -241,7 +241,7 @@ as its ending. Unlike the others, the signal loss here is not the point — it i
 the *consequence*. The star this whole run is lit by comes apart, and the picture
 failing is what that does to a camera pointed at it.
 
-`SIGNAL_LOSS_LAP = 2` (≈3½ minutes), not the 5 used elsewhere: an event nobody
+`CONFIG.signal.lossLaps.skybridges = 2` (≈3½ minutes), not the 5 used by the loop line and natatorium: an event nobody
 reaches is not an event.
 
 The whole sequence is keyed off one number, `uSignalLoss / SIGNAL_PEAK`, so it

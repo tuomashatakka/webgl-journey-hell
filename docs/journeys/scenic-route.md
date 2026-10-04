@@ -5,9 +5,9 @@ It goes off the cliff at the end, something down there has its mouth open, and
 the road comes out the other side of it. Three laps, and then the picture goes.
 
 This is the second rasterized journey in the repo (after `loop-line`), built on
-`geometryRenderer` (lib/journey): a WebGL2 context with a depth buffer, real
+`geometryRenderer` (`src/packages/journey`): a WebGL2 context with a depth buffer, real
 triangles, GLSL ES 3.00, MSAA + a post chain. It is **not** three.js — the repo
-has zero 3D dependencies and `lib/curve`, `lib/mesh`, `lib/mat4`, `lib/gl`
+has zero 3D dependencies and `src/packages/geometry/curve.ts`, `src/packages/geometry/meshBuilder.ts` and `src/packages/gl/mesh.ts`, `src/packages/math/mat4.ts`, `src/packages/gl`
 already cover everything a swept-road, instanced-city, lathe-monster scene needs.
 The `threejs-scenes` skill's patterns (on-rails path camera, path tubes, triplanar
 materials, instancing, bloom → grade → tonemap post chain, per-quality-tier
@@ -15,7 +15,7 @@ gating) are applied on raw WebGL2 without the library.
 
 ## Experience contract
 
-A closed 3.1 km circuit, one Catmull-Rom spline (`lib/curve`, `createClosedCurve`)
+A closed 3.1 km circuit, one Catmull-Rom spline (`src/packages/geometry/curve.ts`, `createClosedCurve`)
 through seven sections. The lap closes in space, in tangent (spline), in bank
 (authored C¹ table) and in every material and lighting parameter (all blended
 along arc length). The car is bolted to the spline like a coaster car to its
@@ -56,11 +56,11 @@ on screen to slide (loop-line's rule, same reasoning). Per lap:
 | dashboard | — | CHECK ENGINE | + OIL, TEMP in the red | warning lamps, pure function of lapF |
 | radio | a station | static creeping in | mostly static | audio only |
 
-`SIGNAL_LOSS_LAP = 3`: once the lap counter reaches three, `signalAge` accrues
-inside `step()` and `lib/signalLoss` does the rest — the fourth lap starts on the
+`CONFIG.signal.lossLaps.scenicRoute = 3`: once the lap counter reaches three, `signalAge` accrues
+inside `step()` and `src/packages/journey/signalLoss.ts` does the rest — the fourth lap starts on the
 county road at night and the picture fails there, eight seconds in. The
 simulation reports it through `JourneyMarks.signalAge`, never through a clock in
-the shell, because `?t=` replays from zero (see `lib/signalLoss`'s header).
+the shell, because `?t=` replays from zero (see `src/packages/journey/signalLoss.ts`'s header).
 
 ## The road, the ride
 
@@ -210,7 +210,7 @@ the same BRDF, and the shadows are real. Concretely:
   over daylight), ACES fit after
   [Narkowicz](https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/),
   a speed-driven radial blur that only bites in the fall, a light vignette. The
-  shared `lib/gl/crtPass` then adds curvature, aberration and the signal loss on top
+  shared `src/packages/gl/crtPass.ts` then adds curvature, aberration and the signal loss on top
   without knowing any of this exists.
 
 The sun is drawn as a small emissive disc *in the geometry pass*, depth-tested,
@@ -309,7 +309,7 @@ map, drops the atmosphere samples and the in-scatter, and skips the cloud layer.
 
 ## Determinism
 
-Every placement goes through `lib/rng`'s `mulberry32` with a section-salted seed.
+Every placement goes through `@wjh/math/rng`'s `mulberry32` with a section-salted seed.
 Nothing reads a clock or `Math.random`. Every animated quantity is a function of
 `s`, `lapF`, or the journey `time` the shell hands over. Two shots of the same
 `?t=` are byte-identical, dial needles and eddies included.
@@ -318,17 +318,17 @@ Nothing reads a clock or `Math.random`. Every animated quantity is a function of
 
 ```
 course.ts            sections, control points, bank knots, speed table, exposure/palette per section; buildRoute(), spanAt()
-kinematics.ts        JourneySimulation — integrator, lapF, gearbox, pose, float; uniforms(), label(), marks(); SIGNAL_LOSS_LAP
-geometry.ts          road sweep, terrain rings, tower + prop units, the maw, tube + river, sea grid, cockpit, dial texture
+kinematics.ts        JourneySimulation — integrator, lapF, gearbox, pose, float; uniforms(), label(), marks(); lossLaps.scenicRoute
+geometry.ts          terrain, spine index, sea (the road sweep is in src/packages/geometry/sweep.ts); props.ts + props/ the instanced props; maw.ts, cockpit.ts, city.ts
 scene.ts             JourneyRenderer — programs, targets (msaa, scene, bloom, shadow), the frame order above
-shader.ts            GLSL ES 3.00 chunks (noise, brdf, atmosphere, fog, shadow), world/sea/sky/cockpit/shadow/post programs; the ES 1.00 hover preview
+shader/              GLSL ES 3.00, one module per pass group: chunks (noise, brdf, atmosphere, shadow, lighting), sky, world, maw, cockpit, post; the ES 1.00 hover preview is in post.ts
 audio.ts             engine, tyres, wind, radio, the fall, the gullet, the cave — driven by the frame's uniforms
 kinematics.test.mjs  the derivative sweeps and invariants below
 ```
 
-Generalised from loop-line into `lib/` rather than copied: `lib/sweep.ts`
-(`sweepProfile` with a per-`s` profile function, `s` written to `uv.y`, and a
-`lathe`) and `lib/shadowMap.ts` (depth target + fitted ortho). loop-line keeps
+Generalised from loop-line into `src/packages/geometry/sweep.ts` rather than
+copied (`sweepProfile` with a per-`s` profile function, `s` written to `uv.y`);
+the depth target and fitted ortho for the sun's shadow live in `scene.ts`. loop-line keeps
 importing its own copy; it is not touched, and the probe-diff on it stays
 byte-identical.
 
@@ -340,7 +340,7 @@ the end of every phase — an external sync process mutates this tree.
 0. **Skeleton** — folder, `SPEC.md`, registry entry + hover preview, `page.tsx`,
    `.scenic-route-sector-title`, route + kinematics stubs on a flat spline. The
    route renders a sky and a grey ribbon.
-1. **The ride** — `course.ts` table, `kinematics.ts`, `kinematics.test.mjs`. Tune
+1. **The ride** — `course.ts` table, `kinematics.ts` (per journey), `kinematics.test.mjs`. Tune
    the motion against a wireframe road with `?debug=1` before any world exists.
 2. **Ground and air** — road sweep + materials, terrain rings + props, atmosphere,
    sun shadow, post chain. Sections I, II, IV look like a place.
@@ -350,15 +350,15 @@ the end of every phase — an external sync process mutates this tree.
 5. **Inside** — tube + flesh→rock, river strip, headlights + in-scatter, float
    dynamics, the culvert and the seam.
 6. **Cockpit** — meshes, dials, gearbox, warning lamps.
-7. **Hell** — every `lapF` rule in the table, `SIGNAL_LOSS_LAP`, audio.
+7. **Hell** — every `lapF` rule in the table, `lossLaps.scenicRoute`, audio.
 8. **Ship** — verification suite below, poster (`tools/shoot-posters.mjs`),
    README + registry docs.
 
 ## Deterministic verification
 
 ```bash
-bun test src/app/journeys/scenic-route/kinematics.test.mjs
-bun tools/verify-geometry.ts                      # extended for lib/sweep
+bun test src/journeys/scenic-route/kinematics.test.mjs
+bun tools/verify-geometry.ts                      # extended for geometry/sweep
 bun tools/journey.mjs probe scenic-route --from=0 --to=620 --step=10
 bun tools/journey.mjs scan  scenic-route --from=118 --to=132 --step=0.25   # the fall
 bun tools/journey.mjs shot  scenic-route --t=12 --w=1400 --h=860 --out=/tmp/county.png
@@ -393,7 +393,7 @@ the ones this repo has been bitten by:
   is authored so the headlit tube keeps a mean luminance above 12;
 * **scan spikes only at authored events** — the impact at the mouth and the
   culvert's daylight — and never at a section boundary;
-* **loop-line's probe is byte-identical** before and after the `lib/` additions.
+* **loop-line's probe is byte-identical** before and after the shared-package additions.
 
 ## As shipped
 
@@ -405,17 +405,17 @@ plan above. The plan is kept as written; this is the record.
 | file | holds |
 | --- | --- |
 | `course.ts` | sections, the closed curve, spans, bank LUT and gain, section weights, speed and look params, the sun |
-| `kinematics.ts` | `ScenicRide`: the speed model, gearbox, pose, float dynamics, uniforms, `uSignal` |
+| `kinematics.ts` (per journey) | `ScenicRide`: the speed model, gearbox, pose, float dynamics, uniforms, `uSignal` |
 | `geometry.ts` | height field, coastline, spine index with per-section lift, corridor pull, near/far terrain with a per-vertex carve value for the tube, sea quad and fine sea patch |
 | `props.ts` | instanced units and world-space strips: fence rails post to post, telegraph poles and wires, hay bales, the house on its plinth, lobed trees, turbines with rotors about the hub, piers, stalactites |
 | `city.ts` | downtown: unit-box towers with bend parameters per instance, `bendGainAt` |
 | `maw.ts` | the head (closed-profile sweep along the gullet), hinged jaws with baked teeth, the tube (throat into cave) and its water strip |
 | `cockpit.ts` | the cabin in the car's frame: moulded dash, binnacle, centre stack, door cards, wheel with spokes; dial faces on a Canvas2D, needle meshes |
 | `audio.ts` | synthesised engine, tyres, wind, radio, gullet, cave; follows the uniform map |
-| `shader.ts` | every GLSL program: sky LUT and dome, sweep/mesh/prop/tower/jaw/cockpit vertex shaders, all materials, post |
+| `shader/*.ts` | every GLSL program: sky LUT and dome, sweep/mesh/prop/tower/jaw/cockpit vertex shaders, all materials, post |
 | `scene.ts` | the renderer: sky LUT → shadow map → rear world pass into the mirror → world → dome → resolve/bloom/composite → cockpit |
 | `kinematics.test.mjs` | seventeen tests: derivative sweeps of bank, curvature, speed; lap timing; lap-seam continuity of the float; signal loss |
-| `lib/sweep.ts`, `lib/mesh.ts` | the level-frame profile sweep and the custom-layout mesh path; invariants in `tools/verify-geometry.ts` |
+| `src/packages/geometry/sweep.ts`, `src/packages/gl/mesh.ts` | the level-frame profile sweep and the custom-layout mesh path; invariants in `tools/verify-geometry.ts` |
 
 ### Constants that moved
 

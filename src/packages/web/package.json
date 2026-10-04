@@ -11,6 +11,7 @@
     "./debugParams": "./debugParams.ts",
     "./frameLoopManager": "./frameLoopManager.ts",
     "./glitchTitle": "./glitchTitle.ts",
+    "./keyboard": "./keyboard.ts",
     "./panControl": "./panControl.ts"
   },
   "dependencies": {

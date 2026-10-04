@@ -147,7 +147,7 @@ every rounded box corner and the texture visibly sheared.
 ## gates
 
 ```bash
-bun test src/app/journeys/foundry/physics.test.mjs
+bun test src/journeys/foundry/physics.test.mjs
 bun tools/journey.mjs probe foundry --from=0 --to=440 --step=8
 bun tools/journey.mjs scan  foundry --from=94 --to=114 --step=0.25   # the crossing
 bun tools/journey.mjs fps   foundry --at=20,100,390

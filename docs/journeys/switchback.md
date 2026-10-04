@@ -139,12 +139,12 @@ abruptness is the event.
   the section away.
 - eight seconds in, the signal starts to go and never comes back. shared rather
   than authored here — the shaft reports its seconds as `JourneyMarks.signalAge`
-  and `lib/signalLoss` does the rest.
+  and `src/packages/journey/signalLoss.ts` does the rest.
 
 ## deterministic verification
 
 ```bash
-bun test src/app/journeys/switchback/kinematics.test.mjs
+bun test src/journeys/switchback/kinematics.test.mjs
 bun tools/journey.mjs probe switchback --from=0 --to=280 --step=20
 bun tools/journey.mjs scan switchback --from=200 --to=210 --step=0.25
 bun tools/journey.mjs hud switchback --from=0 --to=240 --step=60

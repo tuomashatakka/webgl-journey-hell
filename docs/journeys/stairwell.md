@@ -79,7 +79,7 @@ scenery stops at the walls' faces: inside a seam there is only the wall and its
 bore. (a quarry stockpile happens to sit on the path at act IV's origin and
 filled the tunnel until it did.)
 
-the route table in `kinematics.ts` is the single source for act lengths and the
+the route table in `kinematics.ts` (per journey) is the single source for act lengths and the
 seam half-length (`SEAM_HALF`): the shader generates `actLen` from it and the
 renderer imports it, so the shader, the simulation and the exposure blend agree
 about where every seam is. the simulation also names each act's neighbours
@@ -139,7 +139,7 @@ purgatory.
 purgatory's geometry is the six acts recurring as ghosts on an 88-unit cycle, one
 material, still — `animTime()` stops the scenery clock — and quiet: the post
 interference is calmed rather than raised. a residue wall stands every 260 units
-like any other seam. eight seconds in, the signal starts to go (`lib/signalLoss`).
+like any other seam. eight seconds in, the signal starts to go (`src/packages/journey/signalLoss.ts`).
 
 ## rendering and audio
 
@@ -162,7 +162,7 @@ one quiet place on the route, and it is where the soundscape changes over.
 ## deterministic verification
 
 ```bash
-bun test src/app/journeys/stairwell/kinematics.test.mjs
+bun test src/journeys/stairwell/kinematics.test.mjs
 node tools/journey.mjs glsl stairwell --bare
 node tools/journey.mjs contact stairwell --bare --at=5,20,40,56,75,95 --cols=3
 node tools/journey.mjs scan stairwell --bare --from=11.50 --to=11.60 --step=0.01
