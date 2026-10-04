@@ -16,6 +16,16 @@
 //   uv     natatorium --t=30
 //   hud    natatorium --from=0 --to=60 --step=2
 //   fps    natatorium --at=11,24,48 --w=1200 --h=760
+//   contact loop-line --from=0 --to=120 --step=10 [--cols=4] --out=/tmp/sheet.jpg
+//   glsl   loop-line                  # compile every program, print errors, exit 1 on any
+//
+// `--bare` skips the dev server entirely: tools/harness/serve.mjs bundles the
+// journey's own renderer and simulation with bun and serves them on a plain
+// canvas, speaking the same ?t= / data-journey-ready protocol. It covers the
+// journeys listed in tools/harness/entry.ts, starts in about a second, and is
+// what to reach for when the question is "what does this frame look like" rather
+// than "does the route work". `contact` is the cheap way to look: one image, a
+// grid of small frames, each labelled with its time and section.
 //
 // `scan` is the one worth knowing about. It walks time in small increments and
 // measures how much the image changed between neighbouring frames. A journey is
@@ -38,8 +48,10 @@ import { mkdir, readdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { startHarness } from './harness/serve.mjs'
 
-const BASE = process.env.JOURNEY_BASE_URL ?? 'http://localhost:3000/webgl-journey-hell'
+// Reassigned by --bare to the in-process harness.
+let BASE = process.env.JOURNEY_BASE_URL ?? 'http://localhost:3000/webgl-journey-hell'
 
 // Small by default: these are measurements, not portfolio shots, and a 320x200
 // buffer resolves a popping wall just as well as a 4K one while running ~40x
@@ -78,6 +90,12 @@ function url (journey, t, opts, extra = {}) {
     q.set('dt', String(opts.dt))
   if (opts.pointer)
     q.set('pointer', String(opts.pointer))
+  if (opts.heavy !== undefined)
+    q.set('heavy', flag(opts.heavy, true) ? '1' : '0')
+  // --u.uName=value: a uniform override, honoured by the bare harness.
+  for (const [ k, v ] of Object.entries(opts))
+    if (k.startsWith('u.'))
+      q.set(k, String(v))
   return `${BASE}/journeys/${journey}?${q}`
 }
 
@@ -91,8 +109,14 @@ function url (journey, t, opts, extra = {}) {
  */
 async function seek (page, journey, t, opts, extra) {
   await page.goto(url(journey, t, opts, extra), { waitUntil: 'commit' })
-  await page.waitForSelector('html[data-journey-ready="1"]', { timeout: 30_000 })
-  return page.evaluate(() => window.__journeyDebug)
+  await page.waitForSelector('html[data-journey-ready="1"]', { timeout: 60_000 })
+  const dbg = await page.evaluate(() => window.__journeyDebug)
+  // The bare harness collects console.error into a list; a failed compile there
+  // still produces a frame (black), so the list is the only way to know.
+  const errs = await page.evaluate(() => window.__harnessErrors ?? [])
+  for (const e of errs.splice(0))
+    console.error(`  [harness] ${e.slice(0, 2000)}`)
+  return dbg
 }
 
 // NOTE: these run in the page, so they are passed to evaluate() as real
@@ -159,38 +183,59 @@ async function findChromium () {
   if (process.env.JOURNEY_CHROMIUM)
     return process.env.JOURNEY_CHROMIUM
 
-  const root = path.join(os.homedir(), 'Library/Caches/ms-playwright')
-  if (!existsSync(root))
-    return undefined
+  // macOS's cache, Linux's cache, and whatever PLAYWRIGHT_BROWSERS_PATH points
+  // at (cloud containers pre-install there).
+  const roots = [
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    path.join(os.homedir(), 'Library/Caches/ms-playwright'),
+    path.join(os.homedir(), '.cache/ms-playwright'),
+  ].filter(root => root && existsSync(root))
 
   const candidates = []
-  for (const dir of await readdir(root)) {
-    const rev = /^chromium(?:_headless_shell)?-(\d+)$/.exec(dir)
-    if (!rev)
-      continue
-    for (const exe of [
-      'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
-      'chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium',
-      'chrome-headless-shell-mac-arm64/chrome-headless-shell',
-      'chrome-headless-shell-mac/chrome-headless-shell',
-    ]) {
-      const full = path.join(root, dir, exe)
-      if (existsSync(full))
-        // Prefer full Chromium over the headless shell: the shell has no GPU
-        // process, and these pages are nothing but GPU.
-        candidates.push({ rev: Number(rev[1]), full, shell: exe.includes('headless-shell') })
+  for (const root of roots)
+    for (const dir of await readdir(root)) {
+      const rev = /^chromium(?:_headless_shell)?-(\d+)$/.exec(dir)
+      if (!rev)
+        continue
+      for (const exe of [
+        'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
+        'chrome-mac-arm64/Chromium.app/Contents/MacOS/Chromium',
+        'chrome-linux/chrome',
+        'chrome-headless-shell-mac-arm64/chrome-headless-shell',
+        'chrome-headless-shell-mac/chrome-headless-shell',
+        'chrome-linux/headless_shell',
+      ]) {
+        const full = path.join(root, dir, exe)
+        if (existsSync(full))
+          // Prefer full Chromium over the headless shell: the shell has no GPU
+          // process, and these pages are nothing but GPU.
+          candidates.push({ rev: Number(rev[1]), full, shell: exe.includes('headless') })
+      }
     }
-  }
   candidates.sort((a, b) => (a.shell - b.shell) || (b.rev - a.rev))
   return candidates[0]?.full
+}
+
+/**
+ * GL backend flags. A Mac has a GPU and ANGLE-on-Metal is what a user sees; a
+ * Linux box running this is almost always a headless container with no GPU at
+ * all, where the only WebGL2 there is comes from SwiftShader — slow, but exact
+ * and deterministic, which is all a plate comparison needs. JOURNEY_GL=gpu|swiftshader
+ * overrides the guess.
+ */
+function glArgs () {
+  const mode = process.env.JOURNEY_GL ?? (process.platform === 'linux' ? 'swiftshader' : 'gpu')
+  return mode === 'swiftshader'
+    ? [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ]
+    : [ '--use-gl=angle', '--enable-gpu', '--ignore-gpu-blocklist' ]
 }
 
 async function withBrowser (fn) {
   const browser = await chromium.launch({
     executablePath: await findChromium(),
-    // The journeys are WebGL; a software rasteriser would still render but the
-    // colours differ enough from a real GPU to make plate comparisons useless.
-    args: [ '--use-gl=angle', '--enable-gpu', '--ignore-gpu-blocklist' ],
+    // Compare plates only within one backend: SwiftShader and a real GPU agree
+    // on what is in the frame but not on the last bit of every colour.
+    args: glArgs(),
   })
   try {
     const page = await browser.newPage()
@@ -444,11 +489,105 @@ async function cmdUv (page, journey, opts) {
   console.log(`  h/v ratio         ${uv.ratio.toFixed(2)}   (far from 1.0 = smeared on one axis)`)
 }
 
-const COMMANDS = { shot: cmdShot, film: cmdFilm, probe: cmdProbe, scan: cmdScan, uv: cmdUv, hud: cmdHud, glyph: cmdGlyph, fps: cmdFps }
+/**
+ * A contact sheet: many instants, one image. The token-cheap way to look at a
+ * journey — a dozen sections in a single picture, each tile labelled with its
+ * time and HUD label, so "does every section read as itself" is one glance.
+ * Times come from --at=a,b,c or --from/--to/--step.
+ */
+async function cmdContact (page, journey, opts) {
+  const times = opts.at
+    ? String(opts.at).split(',').map(Number)
+    : (() => {
+        const out  = []
+        const from = num(opts.from, 0), to = num(opts.to, 60), step = num(opts.step, 10)
+        for (let t = from; t <= to + 1e-9; t += step)
+          out.push(+t.toFixed(3))
+        return out
+      })()
+  const cols  = num(opts.cols, 4)
+  const tiles = []
+  for (const t of times) {
+    const dbg  = await seek(page, journey, t, opts)
+    const data = await page.evaluate(() => document.querySelector('canvas').toDataURL('image/png'))
+    tiles.push({ t, label: dbg.label, data })
+    console.log(`  t=${String(t).padStart(7)}  ${dbg.label}`)
+  }
+
+  const sheet = await page.evaluate(async ({ tiles, cols }) => {
+    const imgs = await Promise.all(tiles.map(tile => new Promise(res => {
+      const im = new Image()
+      im.onload = () => res(im)
+      im.src    = tile.data
+    })))
+    const w = imgs[0].width, h = imgs[0].height, rows = Math.ceil(imgs.length / cols)
+    const c = document.createElement('canvas')
+    c.width  = cols * w + (cols + 1) * 2
+    c.height = rows * h + (rows + 1) * 2
+    const g = c.getContext('2d')
+    g.fillStyle = '#111'
+    g.fillRect(0, 0, c.width, c.height)
+    imgs.forEach((im, i) => {
+      const x = 2 + (i % cols) * (w + 2), y = 2 + Math.floor(i / cols) * (h + 2)
+      g.drawImage(im, x, y)
+      const text = `${tiles[i].t}s  ${tiles[i].label}`
+      g.font = `${Math.max(9, Math.round(h / 16))}px monospace`
+      g.fillStyle = 'rgba(0,0,0,0.6)'
+      g.fillRect(x, y + h - Math.round(h / 11), w, Math.round(h / 11))
+      g.fillStyle = '#fff'
+      g.fillText(text, x + 4, y + h - Math.round(h / 40))
+    })
+    return c.toDataURL('image/jpeg', 0.82)
+  }, { tiles, cols })
+
+  const out = opts.out ?? `/tmp/${journey}-contact.jpg`
+  await mkdir(path.dirname(out), { recursive: true })
+  await writeFile(out, Buffer.from(sheet.split(',')[1], 'base64'))
+  console.log(`-> ${out}`)
+}
+
+/**
+ * Compile check. Loads one instant and reports every console error the page
+ * raised while building its programs — a shader that fails to compile still
+ * leaves a (black) frame behind, so pixels alone cannot tell you. Exits 1 on
+ * any error, so it can gate a commit.
+ */
+async function cmdGlsl (page, journey, opts) {
+  const errors = []
+  page.on('console', m => {
+    if (m.type() === 'error')
+      errors.push(m.text())
+  })
+  const dbg = await seek(page, journey, num(opts.t, 0), { w: 64, h: 40, ...opts })
+  const harness = await page.evaluate(() => window.__harnessErrors ?? [])
+  const all = [ ...new Set([ ...errors, ...harness ]) ]
+  if (all.length) {
+    console.log(`${journey}: ${all.length} error(s)`)
+    process.exitCode = 1
+  }
+  else
+    console.log(`${journey}: ok  (${dbg.label})`)
+}
+
+const COMMANDS = {
+  shot: cmdShot, film: cmdFilm, probe: cmdProbe, scan: cmdScan, uv: cmdUv,
+  hud: cmdHud, glyph: cmdGlyph, fps: cmdFps, contact: cmdContact, glsl: cmdGlsl,
+}
 
 const { cmd, journey, opts } = parseArgs(process.argv.slice(2))
 if (!COMMANDS[cmd] || !journey) {
-  console.error('usage: node tools/journey.mjs <shot|film|probe|scan|uv|hud|fps> <journey> [--opts]')
+  console.error('usage: node tools/journey.mjs <shot|film|probe|scan|uv|hud|fps|contact|glsl> <journey> [--bare] [--opts]')
   process.exit(1)
 }
-await withBrowser(page => COMMANDS[cmd](page, journey, opts))
+
+let harness = null
+if (flag(opts.bare, false)) {
+  harness = await startHarness()
+  BASE    = harness.url
+}
+try {
+  await withBrowser(page => COMMANDS[cmd](page, journey, opts))
+}
+finally {
+  await harness?.close()
+}

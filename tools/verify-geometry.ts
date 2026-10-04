@@ -27,11 +27,11 @@
 //   * no triangle may straddle two fracture shards (catches a shard that stretches
 //     rather than moving rigidly).
 
-import { createClosedCurve } from '@/lib/curve'
-import type { Vec3 } from '@/lib/curve'
-import { getCircuits, BAYS, spanAt } from '@/app/journeys/loop-line/stations'
-import { SWEEP_FLOATS, finishSweep, levelFrame, newFrame, sweepProfile } from '@/lib/sweep'
-import { getRoute } from '@/app/journeys/scenic-route/course'
+import { createClosedCurve } from '✦/lib/curve'
+import type { Vec3 } from '✦/lib/curve'
+import { getCircuits } from '✦/app/journeys/loop-line/stations'
+import { SWEEP_FLOATS, finishSweep, levelFrame, newFrame, sweepProfile } from '✦/lib/sweep'
+import { getRoute } from '✦/app/journeys/scenic-route/course'
 
 
 let fails = 0
@@ -143,9 +143,10 @@ ok('frames orthonormal', worstOrtho < 1e-5, `worst ${worstOrtho.toExponential(2)
 // --- the circuit itself ---------------------------------------------------
 const c = getCircuits()
 console.log(`\nmain ${c.main.length.toFixed(1)} m   alt ${c.alt.length.toFixed(1)} m   ` +
-            `chord saves ${(c.main.length - c.alt.length).toFixed(1)} m`)
-ok('main loop is 1.0-1.6 km', c.main.length > 1000 && c.main.length < 1600)
-ok('chord is shorter than the cut', c.alt.length < c.main.length)
+            `(${c.mainBays.length} bays on main, ${c.altBays.length} on alt)`)
+ok('main loop is 1.8-2.4 km', c.main.length > 1800 && c.main.length < 2400)
+ok('alt skips THE CUT', !c.altBays.some(s => s.bay.name === 'THE CUT') &&
+   c.altBays.some(s => s.bay.name === 'THE CHORD'))
 
 // Bay spans must tile each circuit with no holes and no overlaps.
 for (const [ label, spans, len ] of [
@@ -163,25 +164,58 @@ for (const [ label, spans, len ] of [
      bad.map(b => b.bay.name).join(', ') || 'all ok')
 }
 
-// The junction must be at the same *place* on both circuits.
-const jm = c.main.pointAtDistance(c.junctionS)
-const ja = c.alt.pointAtDistance(c.altJunctionS)
-ok('junction coincides on both circuits', d(jm, ja) < 3.0, `${d(jm, ja).toFixed(3)} m apart`)
+// The shared-segment identity the handover and every alt boundary rest on:
+// before the points the circuits are the same curve at the same arc length,
+// after the rejoin they are the same curve at the same distance from the seam.
+{
+  let before = 0,
+    after    = 0
+  for (let s = 0; s < c.junctionS - 5; s += 7) {
+    const p = c.main.pointAtDistance(s),
+      q     = c.alt.pointAtDistance(s)
+    before = Math.max(before, d(p, q))
+  }
+  for (let s = c.rejoinMainS + 20; s < c.main.length; s += 7) {
+    const p = c.main.pointAtDistance(s)
+    const q = c.alt.pointAtDistance(c.rejoinAltS + (s - c.rejoinMainS))
+    after = Math.max(after, d(p, q))
+  }
+  // Not exactly zero: the last shared segment before the points feels the
+  // first displaced point through the spline's support. Fifty microns.
+  ok('circuits identical before the points', before < 1e-3, `${before.toExponential(2)} m`)
+  ok('circuits identical after the rejoin', after < 1e-6, `${after.toExponential(2)} m`)
+}
+
+// The two portals in each wall the chord passes through must stand apart, or
+// the chord's mouth is cut into the daylight portal.
+for (const [ label, mainS, altS ] of [
+  [ 'concourse end wall', c.mainBays[3].s0, c.chordStartAltS ],
+  [ 'annex start wall', c.mainBays[4].s0, c.chordEndAltS ]] as const) {
+  const w       = c.main.frameAtDistance(mainS)
+  const a       = c.alt.pointAtDistance(altS)
+  const lateral = (a.x - w.pos.x) * w.right.x + (a.y - w.pos.y) * w.right.y + (a.z - w.pos.z) * w.right.z
+  ok(`chord clears the main portal at the ${label}`, lateral > 9, `${lateral.toFixed(2)} m apart`)
+}
 
 console.log('\nmain bays:')
 for (const s of c.mainBays)
-  console.log(`  ${s.bay.name.padEnd(14)} ${s.s0.toFixed(0).padStart(5)} → ${s.s1.toFixed(0).padStart(5)} m  (${(s.s1 - s.s0).toFixed(0)} m)`)
+  console.log(`  ${s.bay.name.padEnd(20)} ${s.s0.toFixed(0).padStart(5)} → ${s.s1.toFixed(0).padStart(5)} m  (${(s.s1 - s.s0).toFixed(0)} m)`)
 console.log('alt bays:')
 for (const s of c.altBays)
-  console.log(`  ${s.bay.name.padEnd(14)} ${s.s0.toFixed(0).padStart(5)} → ${s.s1.toFixed(0).padStart(5)} m  (${(s.s1 - s.s0).toFixed(0)} m)`)
+  console.log(`  ${s.bay.name.padEnd(20)} ${s.s0.toFixed(0).padStart(5)} → ${s.s1.toFixed(0).padStart(5)} m  (${(s.s1 - s.s0).toFixed(0)} m)`)
 
-// Gradient sanity: a people-mover cannot climb a cliff.
-let maxGrade = 0
-for (let i = 0; i < 2000; i++) {
-  const f = c.main.frameAtDistance(i / 2000 * c.main.length)
-  maxGrade = Math.max(maxGrade, Math.abs(f.forward.y))
-}
-ok('max gradient under 12%', maxGrade < 0.12, `${(maxGrade * 100).toFixed(1)}%`)
+// Gradient and curvature sanity: a people-mover cannot climb a cliff or turn
+// on a sixpence.
+let maxGrade = 0,
+  minRadius  = Infinity
+for (const curve of [ c.main, c.alt ])
+  for (let i = 0; i < 3000; i++) {
+    const s = i / 3000 * curve.length
+    maxGrade  = Math.max(maxGrade, Math.abs(curve.frameAtDistance(s).forward.y))
+    minRadius = Math.min(minRadius, 1 / Math.max(1e-9, curve.curvatureAtDistance(s)))
+  }
+ok('max gradient under 10%', maxGrade < 0.10, `${(maxGrade * 100).toFixed(1)}%`)
+ok('min radius over 50 m', minRadius > 50, `${minRadius.toFixed(0)} m`)
 
 
 // --- mesh -----------------------------------------------------------------

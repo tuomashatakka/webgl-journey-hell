@@ -1,6 +1,6 @@
 'use client'
 
-import { withShaderJourney } from '@/components/withShaderJourney'
+import { withShaderJourney } from '✦/components/withShaderJourney'
 import { getSkybridgesMarks, getSkybridgesSectionName } from './kinematics'
 import { skybridgesFrag } from './shader'
 

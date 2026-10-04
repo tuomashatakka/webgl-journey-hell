@@ -10,9 +10,9 @@
 // carved out, a tall core inside the helix the road spirals around, and lower
 // blocks wherever the elevated road passes overhead.
 
-import { createMeshBuilder } from '@/lib/mesh'
-import type { MeshBuilder } from '@/lib/mesh'
-import { levelFrame, newFrame } from '@/lib/sweep'
+import { createMeshBuilder } from '✦/lib/mesh'
+import type { MeshBuilder } from '✦/lib/mesh'
+import { levelFrame, newFrame } from '✦/lib/sweep'
 import { signedCurvature } from './course'
 import type { Route } from './course'
 import { PLAZA, buildSpineIndex, nearestSpine, terrainHeight } from './geometry'

@@ -1,6 +1,6 @@
 'use client'
 
-import { withShaderJourney } from '@/components/withShaderJourney'
+import { withShaderJourney } from '✦/components/withShaderJourney'
 import { createNatatoriumAudio } from './audio'
 import { createNatatoriumSimulation } from './kinematics'
 import { natatoriumFrag } from './shader'

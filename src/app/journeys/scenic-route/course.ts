@@ -40,8 +40,8 @@
 // values, and keeps every section agreeing with its neighbour — the switchback
 // lesson, applied before the bug rather than after.
 
-import { createClosedCurve } from '@/lib/curve'
-import type { ClosedCurve, Vec3 } from '@/lib/curve'
+import { createClosedCurve } from '✦/lib/curve'
+import type { ClosedCurve, Vec3 } from '✦/lib/curve'
 
 
 const D = Math.PI / 180

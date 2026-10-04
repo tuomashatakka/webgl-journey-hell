@@ -16,13 +16,13 @@
 //
 // Usage (a journey page is three lines):
 //   'use client';
-//   import { withShaderJourney } from '@/components/withShaderJourney';
+//   import { withShaderJourney } from '✦/components/withShaderJourney';
 //   import { skybridgesFrag } from './shader';
 //   export default withShaderJourney(skybridgesFrag);
 //
 // For a journey made of actual triangles instead, see withGeometryJourney.
 
-import { createShaderQuad } from '@/lib/shaderQuad'
+import { createShaderQuad } from '✦/lib/shaderQuad'
 import { withJourneyShell } from './withJourneyShell'
 import type { ShaderJourneyOptions } from './withJourneyShell'
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { JOURNEYS } from '@/app/journeys/registry'
+import { JOURNEYS } from '✦/app/journeys/registry'
 import { PreviewProvider } from './ShaderPreviewLayer'
 import JourneyCard from './JourneyCard'
 

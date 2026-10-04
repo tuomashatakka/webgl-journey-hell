@@ -30,17 +30,17 @@
 //
 // Usage (a journey page is still three lines):
 //   'use client';
-//   import { withShaderJourney } from '@/components/withShaderJourney';
+//   import { withShaderJourney } from '✦/components/withShaderJourney';
 //   import { skybridgesFrag } from './shader';
 //   export default withShaderJourney(skybridgesFrag);
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import type { CustomUniforms, QuadFrameUniforms } from '@/lib/shaderQuad'
-import { useFrameLoop } from '@/lib/frameLoopManager'
-import usePanControl from '@/hooks/use-pan-control'
-import useAudioEngine from '@/hooks/use-audio-engine'
-import type { JourneyAudioEngine } from '@/hooks/use-audio-engine'
+import type { CustomUniforms, QuadFrameUniforms } from '✦/lib/shaderQuad'
+import { useFrameLoop } from '✦/lib/frameLoopManager'
+import usePanControl from '✦/hooks/use-pan-control'
+import useAudioEngine from '✦/hooks/use-audio-engine'
+import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
 import {
   useDisplayFilter,
   useFpsMeter,
@@ -48,19 +48,19 @@ import {
   useLatestRef,
   useResolutionResize
 
-} from '@/hooks/use-journey-runtime'
+} from '✦/hooks/use-journey-runtime'
 import { useSettings } from './SettingsProvider'
 import SettingsButton from './SettingsButton'
 import JourneyDebugPanel from './JourneyDebugPanel'
-import { NO_DEBUG, publishDebugState, readDebugParams, seekSimulation } from '@/lib/debugParams'
-import type { DebugParams } from '@/lib/debugParams'
-import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
-import type { CrtPass } from '@/lib/crtPass'
-import { signalLossAt } from '@/lib/signalLoss'
-import { createSignalOverlay } from '@/lib/signalOverlay'
-import type { SignalOverlay } from '@/lib/signalOverlay'
-import { createJourneyTransport } from '@/lib/journeyTransport'
-import type { JourneyMarks, JourneyTransport as Transport, TransportState } from '@/lib/journeyTransport'
+import { NO_DEBUG, publishDebugState, readDebugParams, seekSimulation } from '✦/lib/debugParams'
+import type { DebugParams } from '✦/lib/debugParams'
+import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '✦/lib/crtPass'
+import type { CrtPass } from '✦/lib/crtPass'
+import { signalLossAt } from '✦/lib/signalLoss'
+import { createSignalOverlay } from '✦/lib/signalOverlay'
+import type { SignalOverlay } from '✦/lib/signalOverlay'
+import { createJourneyTransport } from '✦/lib/journeyTransport'
+import type { JourneyMarks, JourneyTransport as Transport, TransportState } from '✦/lib/journeyTransport'
 import JourneyTransport from './JourneyTransport'
 import type { TransportView } from './JourneyTransport'
 
@@ -128,6 +128,14 @@ export interface JourneyRenderer {
 
   /** Release every GL resource the renderer owns. */
   dispose(): void;
+
+  /**
+   * Optional: false while the renderer is still waiting on something it loads
+   * asynchronously (lib/materialLibrary's textures). The frozen `?t=` path keeps
+   * redrawing but does not raise `data-journey-ready` until this is true, so a
+   * driver never captures the placeholder frame.
+   */
+  ready?(): boolean;
 }
 
 /**
@@ -497,7 +505,7 @@ export function withJourneyShell (
         time:     d.t!,
         label:    transportViewRef.current.label,
         seeking:  true,
-        ready:    true,
+        ready:    renderer.ready?.() ?? true,
         width:    canvasRef.current?.width ?? 0,
         height:   canvasRef.current?.height ?? 0,
         fps:      fpsRef.current,

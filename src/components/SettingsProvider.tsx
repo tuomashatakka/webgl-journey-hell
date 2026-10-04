@@ -20,9 +20,9 @@ import {
   saveSettings,
   DEFAULT_SETTINGS
 
-} from '@/lib/settings'
-import type { GraphicsSettings } from '@/lib/settings'
-import { frameLoopManager } from '@/lib/frameLoopManager'
+} from '✦/lib/settings'
+import type { GraphicsSettings } from '✦/lib/settings'
+import { frameLoopManager } from '✦/lib/frameLoopManager'
 
 
 interface SettingsAPI {

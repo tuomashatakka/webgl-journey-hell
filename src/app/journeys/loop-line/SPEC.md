@@ -1,179 +1,174 @@
 # THE LOOP LINE
 
-A driverless people-mover on a closed circuit of six stations, with no terminus.
+A driverless people-mover on a closed circuit of nine bays, with no terminus.
 It never stops running because the timetable has no last train, and it comes back
 round a little more broken every time.
 
-This is the first journey in the repo made of **actual triangles**. Everything
-else here is a raymarched SDF on a full-screen quad; this one rasterizes real
-geometry through a WebGL2 context with a depth buffer, via
-`components/withGeometryJourney`.
+This is the repo's rasterized journey: actual triangles through a WebGL2 context
+with a depth buffer (`components/withGeometryJourney`), shaded from the Δ library
+— photographed CC0 surfaces and skies from ambientCG (`delta/`, see the README).
 
 ## Why a closed loop is allowed to cheat
 
-The repo has three answers to "how do you turn forever without cost or float
-precision growing":
-
 | journey | approach |
 | --- | --- |
-| `stairwell` | re-anchors in GLSL — three sections resident, each rotated into the camera's frame |
-| `natatorium` | moves that table to the CPU and uploads an affine transform per section |
+| `stairwell` | joins acts in space, each in its own coordinates, through a wall |
+| `natatorium` | moves the section table to the CPU and uploads an affine transform per section |
 | `switchback` | rectifies: the camera never moves, the world shears around it |
 
-All three exist because the route is *unbounded*. A closed circuit is not. It is
-1.26 km long and then it is the same 1.26 km again — so this journey builds the
-whole thing, once, and lets an ordinary camera move through it.
-
-Everything the other three work hardest at simply evaporates. No turn-radius
-floor, because nothing is fitted to a quadratic. No coordinate drift, because arc
-length wraps at the loop length and the world never translates. And the track can
-cross over itself, which not one of the SDF journeys can express.
+All three exist because their routes are *unbounded*. A closed circuit is not. It
+is 2.08 km long and then it is the same 2.08 km again — so this journey builds the
+whole thing, once, and lets an ordinary camera move through it. No turn-radius
+floor, no coordinate drift, and a track that could cross itself.
 
 ## The circuit
 
-Authored in `stations.ts` as a polar radius table (readable as a diagram while
-tuning) plus an elevation profile keyed by loop fraction. Those two cannot be
-indexed the same way — one by bearing, one by arc length — so the curve is built
-twice: once flat, purely to learn each control point's arc-length fraction, and
-once for real with heights sampled at those fractions. Adding ±20 m to a 1260 m
-loop changes its length by well under a percent, so it is a fixed point reached
-in one step.
+| # | bay | the room | the light | how it fails |
+| --- | --- | --- | --- | --- |
+| 1 | PLATFORM SIX | cream subway tile, a platform with a yellow line, columns, benches, roundels, posters | warm fluorescent strips | the edge crumbles |
+| 2 | THE RUNNING TUNNEL | a bored tube, cast-iron rings, cable runs | a bulkhead every 16 m | the rings crack and slip |
+| 3 | THE CONCOURSE | a vaulted hall, terrazzo walkways, mezzanine galleries, shuttered shops; **the points** | big pendant globes | the vault comes loose |
+| 4 | THE CUT | a ten-metre cutting under the day, overbridges, fences on the crest | the noon sky (Δ `DAY`) and its sun | the sky comes down |
+| 5 | THE ANNEX | a low flooded interchange, rows of columns, beams | flickering green tubes | the water rises a step per lap |
+| 6 | THE VIADUCT | a brick viaduct on arches over a city at dusk | sodium lamps on the parapets, a thousand windows | the city goes dark |
+| 7 | THE STACKS | a machine hall through a corrugated building | cold strips and server LEDs | the racks advance |
+| 8 | THE DEPOT | a night yard: sidings, parked sets with lit windows, a shed | floodlight masts (Δ `NIGHT`) | the yard empties |
+| 9 | THE TURNBACK | a plate-girder trestle over nothing, ending in a cliff | red signal lamps, a deep-field sky | the structure leaves one member at a time |
 
-| # | bay | the room | how it fails |
-| --- | --- | --- | --- |
-| 1 | PLATFORM SIX | cream tile, sodium light, benches, a platform you could stand on | the edge crumbles into the trackbed |
-| 2 | THE CONCOURSE | vaulted retail mezzanine, shuttered units | the vault detaches and rotates |
-| 3 | THE CUT | a trench under a blown-white sky — the only daylight | the sky comes down |
-| 4 | THE ANNEX | flooded lower interchange, water to the axle boxes | the water rises a step per lap |
-| 5 | THE STACKS | a cold aisle through a machine hall, lit only by equipment | the racks advance inward |
-| 6 | THE TURNBACK | open steel trestle over black, no walls | the structure leaves one member at a time |
+Every open bay is fenced off from every other open bay by an enclosed one —
+noon, dusk and night do not agree, and the only way a sky can change without
+anyone seeing it change is while nobody can see the sky. DEPOT and TURNBACK are
+the one adjacent pair; they share a night and crossfade across sixty metres.
 
-`THE TURNBACK` is where the lap counter advances, and it is chosen for that: no
-walls, no ceiling, nothing but signal lamps, so a bay whose parameters are
-sliding is a bay with almost nothing on screen to slide.
+The plan is a polar radius table, elevation keyed by loop fraction (two passes
+— flat to learn each control point's arc fraction, then real), and the whole
+design curve is resampled every 9 m. Both circuits are splines through that one
+dense resampling.
 
 ## The chord
 
-There are **two** circuits, both built and drawn from the first frame. `MAIN`
-runs all six bays. `ALT` replaces the arc through THE CUT with a bowed chord at
-tunnel depth that never surfaces — `THE CHORD`, an unlined brick bore with no
-lighting of its own.
+`ALT` leaves `MAIN` inside THE CONCOURSE, is pulled toward the straight line to
+the rejoin and bowed further inward, sags into a shallow dip, and merges inside
+THE ANNEX: THE CHORD, an unlined brick bore with no light of its own. It skips
+THE CUT — the only daylight on the circuit. On lap one you ride past the point
+machine and see the chord's mouth in the concourse end wall beside the daylight
+portal; on lap three (`SWITCH_LAP = 2`, zero-based) it throws.
 
-A real point machine sits at the divergence, and on lap one you ride past it and
-see the chord's mouth curving away into the dark. On lap 3 it throws, and the
-line loses THE CUT: the switch trades the only daylight on the circuit for the
-only darkness. That is the entire argument for putting the chord *there* and not
-somewhere cheaper.
+Because both splines run through the same points outside the detour, and
+Catmull-Rom is local, they are the *same segments* there:
 
-The handover rebases arc length across the change of circuit. Get that wrong by a
-metre and the train teleports a metre, which at twenty metres a second is a frame
-you will absolutely see.
+```
+before the points    altS = mainS
+after the rejoin     altS = altLength - (mainLength - mainS)
+```
 
-The junction and rejoin fractions have to **bracket** where the two splines
-actually separate, not sit inside it: replacing six ring control points perturbs
-the curve for a segment either side of them, so the measured divergence runs
-373 m to 731 m of a 1262 m loop. Bracketing costs the chord the tail of THE
-CONCOURSE and most of THE ANNEX as well as all of THE CUT — which is left as it
-is, because it is honest and it is better. Taking the shortcut does not just cost
-you the daylight; it truncates the flooded interchange to a 63 m stub and shortens
-the lap. The late circuit is smaller and more wrong than the early one in more
-ways than one.
+The handover therefore needs no rebase at all — the points sit at the same arc
+length on both circuits — and every alt bay boundary is carried across exactly,
+without a nearest-point search that could snap a boundary onto the wrong branch.
+The chord's own span runs between the two portal planes it crosses (found by
+bisection), so the HUD says CONCOURSE until you are actually in the bore.
 
-Mapping the bay boundaries onto the alt circuit has an exact answer that needs no
-search. The obvious approach — take a boundary's world position on main, find the
-nearest arc length on alt — is wrong in a way that looks right: the chord runs
-close to the main line near both ends of its detour, so a boundary there snaps to
-the **wrong branch** and its bay collapses. It reported THE ANNEX as 127 m of a
-189 m room. But outside the detour the two circuits are not merely close, they are
-*the same control points*, so `altS = altLength - (mainLength - mainS)` after the
-rejoin, exactly, because the run from the rejoin to the seam is shared. THE STACKS
-and THE TURNBACK now measure 214 m and 227 m on both circuits, which is the check
-that the identity holds.
+`bun tools/verify-geometry.ts` checks the identity (50 µm before the points,
+1e-12 m after the rejoin), that the chord clears the daylight portal in both
+walls (13.8 m and 10.2 m), and that no grade exceeds 10% or radius falls below
+50 m.
+
+## Seamless rooms
+
+The old renderer gave each draw its own bay's fog and cleared to the camera's,
+so a doorway showed a hard line where one fog met the other and crossing a
+boundary changed the colour of everything at once. Now:
+
+* **The medium is a function of arc length.** Every vertex computes fog colour,
+  density, ambient and openness from its own `s`, blended across ±15 m of every
+  boundary from uniforms for its bay and both neighbours; the camera's medium
+  comes from the CPU by the same function. Fog is integrated as two
+  half-segments — the camera's air near, the surface's far — which is
+  continuous everywhere and right at both ends.
+* **Portals are cut per pixel.** Where a bay ends against a smaller mouth, a
+  facade or a cliff, a single quad carries the wall and the fragment shader cuts
+  the opening(s) from a polygon distance field, antialiased through
+  alpha-to-coverage. The concourse end wall has two: daylight, and the chord's
+  skewed mouth, projected onto the wall along the chord's own direction.
+* **The sky changes only where it cannot be seen**: an enclosed bay shows the
+  sky of the next open bay ahead, except for its first 25 m.
+* **Exposure is authored per bay** and blended across ±25 m — not metered,
+  because `?t=` must reproduce.
+
+`node tools/journey.mjs scan loop-line --bare` across every boundary measures
+the worst frame-to-frame change at 2.6–3.2× the baseline, exactly where the
+camera passes through a mouth and the walls sweep past — motion, not a pop.
+
+## Materials and light
+
+* Shells are profiles swept along the curve, one draw per surface. Texture `u`
+  runs along the track in metres, `v` up a wall and across a floor (so courses
+  stay horizontal on both walls), round a vault by perimeter.
+* **Ambient occlusion is baked into the sections**: concave corners are found
+  from the turn direction, extra points carry the gradient out into the face,
+  and the value rides in the *length* of the vertex normal. A crack in a wall
+  shows the **rock layer** — the main section pushed outward and left whole —
+  not the sky map behind everything.
+* Every Δ map is used: colour, normal (with a derivative-built tangent frame),
+  roughness (GGX), displacement (parallax occlusion close up), AO (on indirect
+  light only), metalness.
+* 24 lamps per draw — the bay's nearest to the camera, lamps ahead counted
+  nearer than lamps behind — plus the headlight, plus sky irradiance from the
+  map's mip chain and the map's own sun where the bay is open.
+* The eight lamps nearest the camera scatter into the air with Miles Macklin's
+  closed form (atan difference over closest approach), capped per lamp so a
+  floodlight does not turn the yard to soup.
+* Procedural surfaces where a photograph cannot do it: lit and dark windows by
+  instance seed (fading to their mean with distance), server LEDs blinking on
+  their own clocks, carriage window bands, posters and shop signs, a polished
+  running surface on the rails.
+* The flood is a level plane, not a track-following one: the annex is the bottom
+  of a dip, so the water lies only where the floor is below it.
+* A slim cab — a dashboard band and two pillars at the frame's edges — rides
+  with the car, lit by whatever it is passing.
+* HDR (`RGBA16F`, 4× MSAA) where `EXT_color_buffer_float` exists, Reinhard-
+  encoded RGBA8 otherwise; a five-level bloom (13-tap down, tent up), a radial
+  speed smear at the frame's edges, ACES.
 
 ## One scalar
 
 Everything that goes wrong is a function of `lapF` — the lap count plus a
-fractional part ramped smoothly across THE TURNBACK rather than stepped at the
-seam. From that one number: shard displacement, how many lamps have failed, how
-far the colour has rotted, bogie chatter, speed, and whether the switch has
-thrown.
+fractional part ramped across THE TURNBACK (`decayOf` in `kinematics.ts`). Shard
+displacement, dead lamps (a fitting and its light share one roll, so they die
+together, flickering for a while first), rot, chatter, speed, the flood, the
+city's windows, whether the points have thrown.
 
-Nothing keeps its own clock. Six subsystems each ageing on their own timer drift
-apart, and the moment they drift the ride stops reading as one place falling
-apart and starts reading as six effects.
-
-The **rates** matter more than the effects. At three times the shipped numbers
-the line was unrecognisable rubble by lap 4 — technically "more ruptured",
-actually just over, because a room that has stopped being a room cannot decay
-further and there is nowhere for lap 5 to go. As shipped, lap 2 is a place with
-something wrong with it, lap 4 is a place coming apart, and total collapse sits
-around lap 8, which nobody will reach. What has to be true is only that the next
-lap is always worse than this one.
-
-Measured, same bay, successive laps (`probe`, mean luminance):
-
-```
-LAP 1  84.5      LAP 4  61.4
-LAP 2  79.7      LAP 5  43.0
-LAP 3  72.4      LAP 6  40.3
-```
-
-## Why the rupture is vertex maths
-
-Meshes are pre-fractured at build time (`lib/mesh`'s `fracture`), which tags every
-triangle with its shard's centroid and a seeded axis. A single `uDecay` uniform
-then rotates and throws each shard about its own centroid **in the vertex
-shader**.
-
-Nothing is re-uploaded, ever. The consequence is measurable: 120 fps at
-1400×860 on lap 1, lap 3 and lap 5 alike. The world can come apart without the
-frame getting a single instruction more expensive, and because the displacement
-is a pure function of one uniform, `?t=320` reproduces it exactly.
-
-`fracture` un-welds first, unconditionally. A vertex shared by two triangles can
-only carry one shard, so a shared vertex on a shard boundary is dragged by
-whichever shard wrote it last and the two stay stitched together by it — a rigid
-break comes out stringy.
-
-## Resolving the owning bay
-
-`natatorium`'s `resolveSlot` and `switchback`'s `roomAt` both exist because of one
-mistake made twice: shading a surface with the *camera's* section parameters
-instead of the section the surface belongs to.
-
-A rasterizer makes this easy to get right — bay parameters are per-draw-call
-uniforms, and a bay's geometry is only ever submitted with its own — and just as
-easy to get wrong. The lamp arrays are the part that bites, and did: `MAX_LAMPS`
-originally uploaded the *first* 24 lamps of a bay, and THE STACKS carries 71 at
-3 m pitch, so mean luminance fell off a cliff from 111 to 9 halfway through a bay
-whose geometry had not changed. It now takes the nearest 24, found by one linear
-scan over an arc-length-ordered list.
+Meshes are pre-fractured at build time and displaced per shard in the vertex
+shader from that one number, so the last lap renders at the price of the first
+and `?t=320` reproduces it exactly. The spin is small on purpose: a slab that has
+turned five degrees reads as a wall that is failing; one that has turned thirty
+reads as confetti, and there is nowhere left for the next lap to go.
 
 ## Things that cost a debugging session
 
-* **`centroid` is a reserved interpolation qualifier in GLSL ES 3.00.** A
-  variable named it is a syntax error, and the shader silently fails to compile.
-* **Interior winding is the flipped case.** A profile traced left-to-right along
-  the floor and back along the ceiling, swept forward, produces quads whose front
-  faces point *away* from the axis — correct for a solid, inside-out for a bore.
-* **Profile point order is the whole content of a room.** Tracing the platform
-  riser outward before climbing the wall builds an interior wall standing in
-  front of the platform, hiding the thing the bay is named for.
-* **A backtick in a GLSL comment ends the template literal.** Twice.
+* **A draw's arc length must come from its vertices, not its instance.** The
+  flood was fogged by `s = 0` — THE CUT's daylight air — and rendered as a
+  white sheet.
+* **A fixed canvas at z-index 0 paints over in-flow text.** (The asset page.)
+* **`centroid`, `patch`, `active` and `sample` are reserved in GLSL ES 3.00.**
+* **Implicit derivatives inside a branch on a varying are undefined** — the sky
+  reflection is sampled by LOD for that reason.
+* **A prop basis built on the curve's `right` is a reflection.** Props use
+  left = up × forward.
+* **A backtick in a GLSL comment ends the template literal.**
 
 ## Files
 
 ```
-stations.ts    the polar layout, elevation profile, the six bays, both circuits
-kinematics.ts  JourneySimulation — integrates the train, owns lapF, packs uniforms
-geometry.ts    sweepProfile, the per-bay cross-sections, the unit props
-scene.ts       the JourneyRenderer — programs, culling, the frame, the post chain
-shader.ts      GLSL ES 3.00 geometry pass + post chain, and the WebGL1 hover preview
-audio.ts       traction motor, rail joints, per-bay beds, degrading announcements
+stations.ts    the plan, the profile, the nine bays, both circuits, the chord
+kinematics.ts  JourneySimulation: integrates the train, owns lapF, packs uniforms
+geometry.ts    surfaces, the cross-sections, the sweep, baked AO, rock layers, unit props
+dressing.ts    where every prop, lamp, building and headwall goes
+scene.ts       the renderer: build once, then medium, sky, lamps, draws, post
+shader.ts      GLSL ES 3.00 (geometry, sky, bloom, composite) + the ES 1.00 preview
+audio.ts       traction motor, rail joints, room tones, degrading announcements
 ```
 
-Note that `shader.ts` holds two different versions of GLSL on purpose: the journey
-is ES 3.00, but the landing-grid hover preview must be **ES 1.00**, because every
-card's preview shares one WebGL 1.0 context (`ShaderPreviewLayer`). The preview
-also has to self-drive from `iTime` alone — the grid attaches no simulation, so a
-preview reading `uRide` or `uDecay` renders a black card.
+The audio engine's rooms are *sounds*, not bays: `Bay.sound` maps nine bays onto
+its seven room tones (the tube sounds like the chord, the viaduct like the cut),
+and `uLoop[3]` carries the sound.

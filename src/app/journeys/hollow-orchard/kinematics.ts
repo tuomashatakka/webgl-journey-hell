@@ -14,9 +14,9 @@
 //               palette sickness and (falling) walk speed
 //   • fall    — per-stage pitch amount; the camera never flips, it leans
 
-import type { JourneySimulation } from '@/components/withShaderJourney'
-import type { CustomUniforms } from '@/lib/shaderQuad'
-import type { JourneyMarks } from '@/lib/journeyTransport'
+import type { JourneySimulation } from '✦/components/withShaderJourney'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 export function smoothstep (edge0: number, edge1: number, x: number): number {

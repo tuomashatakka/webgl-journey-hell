@@ -19,21 +19,36 @@ __watch 3 iterations and you'll see.__
 ## journeys
 
 The landing page (`/`) is an index grid of shader **journeys**. Each journey is
-its own route under `app/journeys/<slug>/`.
+its own route under `app/journeys/<slug>/`. `/assets` shows the Δ library.
+
+Two import aliases, both in `tsconfig.json` and honoured by Next, bun and tsc:
+
+| alias | points at | what |
+| --- | --- | --- |
+| `✦/…` | `src/…` | the app (it was `@/`) |
+| `Δ`, `Δ/…` | `delta/…` | the asset library, a standalone module |
 
 ```
-app/
+delta/                      # Δ — CC0 materials and skies from ambientCG (standalone module)
+  manifest.ts               # what the assets are: pure data, the single source
+  gl.ts                     # WebGL2 loaders: material texture arrays, mipmapped skies
+  glsl.ts                   # GLSL ES 3.00: every map sampled, POM, triplanar, GGX, sky
+  urls.ts                   # generated static imports (the bundler owns the files)
+  build.mjs                 # download + pack everything: `bun delta/build.mjs`
+  materials/, skies/        # the packed strips and the tonemapped sky maps
+src/app/
   page.tsx                  # index grid landing
+  assets/page.tsx           # Δ — every material as a lit sphere, every sky as a pan
   journeys/
     registry.ts             # journey metadata (single source of truth for the grid)
     liminal/                # THE LIMINAL JOURNEY (raymarched descent + audio)
-    stairwell/              # THE STAIRWELL (six-act industrial rupture + audio)
+    stairwell/              # THE STAIRWELL (six acts joined through walls, Δ-lit + audio)
     skybridges/             # SKYBRIDGES (collapsing glass spans over a cloud sea)
     foundry/                # THE FOUNDRY (seven halls, rigid-body physics, terminal fall)
     hollow-orchard/         # THE HOLLOW ORCHARD (fungal descent + audio)
     natatorium/             # THE NATATORIUM (flooded poolrooms, turning route + audio)
     switchback/             # THE SWITCHBACK (mine railway that tips over, then falls + audio)
-    loop-line/              # THE LOOP LINE (rasterized closed circuit, six stations + audio)
+    loop-line/              # THE LOOP LINE (rasterized closed circuit, nine bays, Δ-lit + audio)
     scenic-route/           # THE SCENIC ROUTE (rasterized coaster road, seven sections, cockpit + audio)
 components/
   JourneyGrid.tsx           # grid + shared-preview host
@@ -43,6 +58,7 @@ components/
   JourneyTransport.tsx      # the VHS transport bar (rewind / skip / fast-forward)
   withShaderJourney.tsx     # a journey that is one fragment shader (six of them)
   withGeometryJourney.tsx   # a journey that is actual triangles (loop-line, scenic-route)
+  AssetBrowser.tsx          # the /assets page: one shared canvas, scissored per card
 hooks/
   use-pan-control.ts        # pointer + gyroscope view panning (tweened)
   use-journey-runtime.ts    # settings ref, display filter, resize, FPS, fullscreen
@@ -57,9 +73,10 @@ lib/
   glProgram.ts              # WebGL2 program + lazily cached uniform locations
   rng.ts                    # mulberry32 + integer hashes, for reproducible decay
 tools/
-  shoot-posters.mjs         # re-capture public/journeys/<slug>.jpg from the live routes
-  journey.mjs               # drive a journey deterministically (shot/film/probe/scan/fps)
-  verify-geometry.ts        # invariant checks for lib/curve and lib/mesh
+  shoot-posters.mjs         # re-capture public/journeys/<slug>.jpg (live routes, or --bare)
+  journey.mjs               # drive a journey deterministically (shot/film/probe/scan/fps/contact/glsl)
+  harness/                  # --bare: a journey's renderer + simulation on a plain canvas, no Next
+  verify-geometry.ts        # invariant checks for lib/curve, lib/mesh and the loop line's circuits
 ```
 
 ### looking around
@@ -85,14 +102,16 @@ fed by `lib/panControl.ts`:
 Most journeys are a straight `+Z` scroll with the scenery changing around them.
 Three are not, and all three solve it differently:
 
-* **stairwell** keeps each act in section-local space. Its CPU simulation owns a
-  500-unit, six-act route and uploads section progress, transition, traversal,
-  rupture and purgatory state; the two-pass WebGL renderer only ever sees the
-  current act and its successor. The visible treads use a stepped height field,
-  while the camera and handrails follow the matching continuous slope. That
-  separation preserves the descent silhouette without quantising the camera onto
-  every tread — and it is what lets the stair *pitch over* every traversal, since
-  a single rise/run pair drives both. See `stairwell/SPEC.md`.
+* **stairwell** keeps each act in its own coordinates and joins them *in space*:
+  every act ends in a wall — a ribbed dam or a stratified cliff — with the stair
+  running through a strip-lit portal tunnel, and the next act stands beyond it,
+  shifted to meet the stair, visible through the far mouth. Which side of the
+  wall a ray ends on decides its sun, sky and air; the slope blends through the
+  tunnel with the rail height as its closed-form integral, so the camera is C¹
+  across the switch of coordinate systems at the wall's midline. Anything sampled
+  by position is sampled in a frame that does not change there, and three acts
+  are always built — this one, the next, and the next one's far wall — so
+  nothing arrives at the switch. See `stairwell/SPEC.md`.
 * **switchback** rectifies instead: the track is always straight ahead in the
   cart's own frame and the *world* bends around it, fitted to a quadratic in
   depth. Grade therefore lives in the up vector rather than in the geometry,
@@ -274,19 +293,42 @@ The overlay prints the uniforms grouped as the `vec4`s they are uploaded as,
 which is usually the fastest way to find out that a value you believed was
 varying is in fact pinned.
 
-`tools/journey.mjs` drives all of this from a shell (needs `bun add -d
-playwright-core`; it finds any Chromium already in the Playwright cache rather
-than insisting on the exact pinned build):
+`tools/journey.mjs` drives all of this from a shell. It finds any Chromium
+already in a Playwright cache — macOS's, Linux's, or `PLAYWRIGHT_BROWSERS_PATH`
+— rather than insisting on the exact pinned build, and on Linux, where it is
+almost always running in a container with no GPU, it asks for SwiftShader
+(`JOURNEY_GL=gpu|swiftshader` overrides the guess):
 
 ```
-node tools/journey.mjs shot  natatorium --t=30 --out=/tmp/a.png
-node tools/journey.mjs film  natatorium --from=26 --to=34 --step=0.5
-node tools/journey.mjs probe natatorium --from=0 --to=60 --step=2 [--json]
-node tools/journey.mjs scan  natatorium --from=4 --to=24 --step=0.4
-node tools/journey.mjs uv    natatorium --t=30
-node tools/journey.mjs hud   natatorium --from=0 --to=60 --step=2
-node tools/journey.mjs fps   natatorium --at=11,24,48 --w=1200 --h=760
+node tools/journey.mjs shot    natatorium --t=30 --out=/tmp/a.png
+node tools/journey.mjs film    natatorium --from=26 --to=34 --step=0.5
+node tools/journey.mjs probe   natatorium --from=0 --to=60 --step=2 [--json]
+node tools/journey.mjs scan    natatorium --from=4 --to=24 --step=0.4
+node tools/journey.mjs uv      natatorium --t=30
+node tools/journey.mjs hud     natatorium --from=0 --to=60 --step=2
+node tools/journey.mjs fps     natatorium --at=11,24,48 --w=1200 --h=760
+node tools/journey.mjs contact loop-line --bare --from=0 --to=140 --step=12 --cols=4
+node tools/journey.mjs glsl    stairwell --bare
 ```
+
+**`--bare` needs no dev server.** `tools/harness/serve.mjs` bundles the
+journey's own renderer and simulation with bun (the `✦` and `Δ` aliases
+resolve, Δ's images go through bun's file loader) and serves them on a plain
+canvas that speaks the same protocol — `?t=&w=&h=&pointer=&dt=`, `window.__journeyDebug`,
+`data-journey-ready` — so every command works against it unchanged. It starts
+in about a second where a Next dev server compiles for a minute, and the bundle
+is rebuilt on every page load, so an edited shader is in the next shot. It
+covers the journeys listed in `tools/harness/entry.ts` (loop-line, stairwell);
+add a line there for another. `node tools/harness/serve.mjs` runs it standalone
+for a browser.
+
+* **contact** is the cheap way to *look*: many instants in one image, each tile
+  labelled with its time and section. Twelve 320×180 tiles cost about what one
+  full-size screenshot does, and answer "does every section read as itself" in
+  a glance.
+* **glsl** loads one instant and reports every error raised while building the
+  programs — a shader that fails to compile still leaves a black frame, so
+  pixels cannot tell you — and exits 1 on any, so it can gate a commit.
 
 * **probe** prints mean luminance, the fraction of pure-black pixels and the
   fraction of blown-out ones per timestamp. `blown` is the one to watch: a wall
@@ -313,6 +355,15 @@ node tools/journey.mjs fps   natatorium --at=11,24,48 --w=1200 --h=760
   actually costs; a locked 60 tells you it is affordable but not by how much.
 
 The honest way to use these is against a baseline.
+
+The rewrites of the loop line and the stairwell were developed almost entirely
+this way: `glsl` after every shader edit, a `contact` sheet per round of
+changes, a `shot` only when a tile needed a closer look, and `scan` across every
+boundary to prove a transition before calling it smooth. To test a single
+switch, scan it at a fine step (`--step=0.01`): a pop is a fixed amount of
+change while motion shrinks with the step, so a pop that hides at 0.1 s stands
+out at 10 ms. Note that `scan` rebuilds the bundle per frame in `--bare` mode —
+do not edit while one runs.
 
 ### verifying the geometry primitives
 
@@ -347,11 +398,11 @@ the two columns settle arguments that screenshots do not.
 
 There is a fourth, and it is the one that cheats.
 
-* **loop-line** just builds the whole thing. The three approaches above all exist
-  because the route is *unbounded* — a descent, a corridor chain, a railway that
+* **loop-line** just builds the whole thing: nine bays and a chord, 2.08 km. The
+  three approaches above all exist because the route is *unbounded* — a descent, a corridor chain, a railway that
   runs forever — so no amount of geometry can cover it and the world has to be
   generated around a moving observer. A **closed circuit is not unbounded**. It is
-  1.26 km long and then it is the same 1.26 km again. So the entire loop is built
+  2.08 km long and then it is the same 2.08 km again. So the entire loop is built
   once, out of actual triangles, in real world space, and an ordinary camera moves
   through it.
 
@@ -364,8 +415,38 @@ There is a fourth, and it is the one that cheats.
   What it buys beyond that is rupture you can afford. Meshes are pre-fractured at
   build time and displaced per-shard in the *vertex* shader from one uniform, so
   the world comes apart with nothing re-uploaded and no instruction added to the
-  frame: 120 fps at 1400x860 on lap 1, lap 3 and lap 5 alike. See
+  frame: the last lap costs exactly what the first did. See
   `app/journeys/loop-line/SPEC.md`.
+
+### Δ — the asset library
+
+`delta/` is a standalone module (its own `package.json`, imported as `Δ`) holding
+every surface and sky the journeys borrow from the real world: fourteen CC0
+material sets and ten HDRI skies from [ambientCG](https://ambientcg.com), packed
+for WebGL2.
+
+* **Every map is used.** Each material set ships colour, displacement, normal,
+  roughness, ambient occlusion and (for metals) metalness; `bun delta/build.mjs`
+  downloads them and packs three 512-px strips — colour; normal.xy + roughness;
+  displacement + AO + metalness — one layer per material, uploaded as three
+  `TEXTURE_2D_ARRAY`s. `Δ/glsl` samples all of them: normal mapping on a
+  derivative-built tangent frame, GGX on the roughness, parallax occlusion on
+  the displacement, AO on indirect light only, metalness into the Fresnel.
+* **Skies are the HDRIs' tonemapped equirectangulars**, 2048×1024 JPEG, a tenth
+  the size of the EXR and decoded natively; the highlight range is lifted back
+  approximately in the shader, and irradiance comes from the mip chain. Each
+  sky records where its sun is in the photograph, so a journey's light comes
+  from where the picture says it does.
+* **The files are static imports** (`delta/urls.ts`, generated), so the bundler
+  owns them: Next emits them hashed under `_next/static/media` with the basePath
+  applied; bun's file loader does the same for the bare harness.
+* **Loading is asynchronous and renderers cannot wait**, so every loader returns
+  a one-texel placeholder at once and swaps the real texture in. A renderer may
+  implement `ready()`; the frozen `?t=` path does not raise
+  `data-journey-ready` until it is true, so no screenshot is of a placeholder.
+
+`/assets` shows the lot: every material as a lit sphere you can strip down to any
+one map, every sky as a slow pan, on one shared canvas.
 
 ### adding a new journey
 

@@ -2,9 +2,9 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { assetUrl } from '@/lib/assetUrl'
+import { assetUrl } from '✦/lib/assetUrl'
 import { useRef, useState } from 'react'
-import type { Journey } from '@/app/journeys/registry'
+import type { Journey } from '✦/app/journeys/registry'
 import { usePreview } from './ShaderPreviewLayer'
 
 

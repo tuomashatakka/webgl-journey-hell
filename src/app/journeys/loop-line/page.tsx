@@ -1,6 +1,6 @@
 'use client'
 
-import { withGeometryJourney } from '@/components/withGeometryJourney'
+import { withGeometryJourney } from '✦/components/withGeometryJourney'
 import { createLoopLineAudio } from './audio'
 import { createLoopLineSimulation } from './kinematics'
 import { createLoopLineScene } from './scene'

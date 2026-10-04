@@ -1,414 +1,436 @@
 // THE LOOP LINE — the renderer.
 //
-// The first rasterized journey in this repo. Everything else here resolves
-// visibility analytically along a ray inside a fragment shader; this one submits
-// triangles and lets the depth buffer sort it out, which is why it asks
-// withGeometryJourney for a WebGL2 context with a depth attachment.
+// The whole circuit is built at construction — two kilometres of station,
+// tube, hall, cutting, flood, viaduct and city, machine hall, yard and trestle,
+// every sleeper and window and server — and never rebuilt. A frame is a
+// handful of uniforms and the draws for whatever is within the fog:
 //
-// ---------------------------------------------------------------------------
-// What a frame costs
-// ---------------------------------------------------------------------------
-//
-// The whole circuit — 1.26 km of tunnel, trench, trestle and station, every
-// sleeper, every lamp housing, every rack — is built once at construction and
-// never rebuilt. A frame is then:
-//
-//   * one pass over at most three resident bays, each contributing one shell
-//     draw and one instanced draw per prop family;
-//   * a half-resolution bright pass and two separable blurs;
-//   * one composite.
-//
-// which lands around 30-45 draw calls. Nothing is uploaded per frame except a
-// handful of uniforms. The world coming apart costs *nothing* extra: shard
-// displacement is a vertex-shader function of one uniform, so the last lap
-// renders at exactly the price of the first. That property is the entire reason
-// the rupture is authored as vertex maths rather than as geometry swaps.
+//   sky (one quad) → the bays in reach, one draw per material and per prop
+//   family → the headwalls, their portals cut per pixel → the flood → the cab
+//   → MSAA resolve → five-level bloom → composite.
 //
 // ---------------------------------------------------------------------------
 // Resolving the owning bay — the repo's most repeated bug
 // ---------------------------------------------------------------------------
 //
-// natatorium's `resolveSlot` and switchback's `roomAt` both exist because of one
-// mistake made twice: shading a surface with the *camera's* section parameters
-// instead of the section the surface actually belongs to. A room seen through a
-// doorway then gets lit with the wrong width, the wrong ceiling height and the
-// wrong lamp pitch, and the instant the resident window advances every one of
-// those numbers changes under a picture that has not moved.
-//
-// A rasterizer makes this easy to get right and just as easy to get wrong. Right
-// is: bay parameters are per-DRAW-CALL uniforms, and a bay's geometry is only
-// ever submitted with its own. So looking down the line into the next bay shows
-// that bay lit by its own lamps in its own fog, because those triangles were
-// submitted by that bay's draw. The camera's own bay is never consulted for
-// anything except which draws to issue at all.
-//
-// The lamp arrays follow the same rule and are the part that would bite: a lamp
-// belongs to a bay, and a fragment is lit only by the lamps submitted with it.
-// Crossing a bay boundary therefore changes which lamps light which surfaces,
-// but never changes how any single surface was lit.
+// natatorium's `resolveSlot` and switchback's `roomAt` exist because surfaces
+// were shaded with the *camera's* section instead of their own. A rasterizer
+// makes the right answer natural: bay parameters are per-draw uniforms, and a
+// bay's geometry is only submitted with its own. What changed in this version
+// is that "its own" is no longer a constant across the bay: the medium is
+// blended by arc length per vertex (see shader.ts), with each draw supplying
+// its neighbours, so that a doorway between two rooms is a gradient and never
+// a seam. The camera's medium is computed here by the same function.
 //
 // ---------------------------------------------------------------------------
-// Where the camera comes from
+// Which sky
 // ---------------------------------------------------------------------------
 //
-// The simulation hands over a pose — position, forward, up — and not a matrix.
-// That is on purpose. It keeps the ?debug=1 panel readable (three vec3s you can
-// sanity-check by eye, against sixteen floats you cannot), it lets the audio
-// engine consume exactly the numbers the frame was drawn with, and it keeps the
-// projection a property of the renderer, which is the only thing that knows the
-// aspect ratio.
+// Open bays have skies and the skies disagree (noon, dusk, night, the void),
+// so the sky is only ever changed where it cannot be seen: an enclosed bay
+// shows the sky of the next open bay ahead — through its far portal — except
+// for its first twenty-five metres, where the portal you came in by is still
+// behind your shoulder. The one open-to-open boundary, depot to trestle,
+// crossfades two night skies across sixty metres.
 
-import { createGlProgram } from '@/lib/glProgram'
-import type { GlProgram } from '@/lib/glProgram'
-import { createMesh } from '@/lib/mesh'
-import type { Mesh } from '@/lib/mesh'
-import { lookAt, multiply, perspective } from '@/lib/mat4'
-import type { Mat4 } from '@/lib/mat4'
-import { mulberry32 } from '@/lib/rng'
-import type { ClosedCurve, Frame } from '@/lib/curve'
-import type { JourneyRenderer } from '@/components/withJourneyShell'
-import type { QuadFrameUniforms } from '@/lib/shaderQuad'
-import { OPEN, Rupture, Theme, getCircuits } from './stations'
-import type { BaySpan } from './stations'
+import { createGlProgram } from '✦/lib/glProgram'
+import type { GlProgram } from '✦/lib/glProgram'
+import { createMesh, createMeshBuilder } from '✦/lib/mesh'
+import type { Mesh, MeshBuilder } from '✦/lib/mesh'
+import { invert, lookAt, multiply, perspective } from '✦/lib/mat4'
+import type { Mat4 } from '✦/lib/mat4'
+import type { ClosedCurve } from '✦/lib/curve'
+import type { JourneyRenderer } from '✦/components/withJourneyShell'
+import type { QuadFrameUniforms } from '✦/lib/shaderQuad'
+import { createMaterialArrays, createSkyTexture } from 'Δ/gl'
+import type { SkyTexture } from 'Δ/gl'
+import { skyAsset, sunDirection } from 'Δ'
+import { BAYS, CHORD_BAY, REJOIN_BAY, Rupture, Theme, getCircuits, spanIndexAt } from './stations'
+import type { Bay, BaySpan, Circuits } from './stations'
+import { SURF, UNITS, buildUnit, fractureAll, profilesFor, rockLayer, sweepProfile } from './geometry'
+import type { Surface, SurfaceKey } from './geometry'
+import { INSTANCE_FLOATS, buildHeadwalls, chordTrack, dressBay } from './dressing'
+import type { Dressing, Headwall, Lamp } from './dressing'
 import {
-  Facing,
-  TIE_PITCH,
-  buildBench,
-  buildBent,
-  buildFence,
-  buildLamp,
-  buildRack,
-  buildRailPiece,
-  buildShutter,
-  buildSleeper,
-  buildUnit,
-  lampsFor,
-  profileFor,
-  sweepProfile
-
-} from './geometry'
-import type { Lamp, UnitMeshSpec } from './geometry'
-import {
-  blurFrag,
-  brightFrag,
+  MAX_HOLE,
+  MAX_LAMPS,
+  MAX_SCATTER,
+  bloomDownFrag,
+  bloomUpFrag,
   compositeFrag,
   loopLineFrag,
   loopLineVert,
-  postVert
+  postVert,
+  skyFrag,
+  skyVert
 
 } from './shader'
 
 
-/** Instance stride: iXform(4) + iParams(4). */
-const INSTANCE_FLOATS = 8
+/** A bay is skipped once its bounding sphere is this far into the fog. */
+const CULL_DIST = 420
 
-/** Hard cap in the fragment shader; the loop is bounded by a constant there. */
-const MAX_LAMPS = 24
+/** Medium blend half-width at a bay boundary, metres. */
+const BLEND = 15
 
-/** Beyond this the fog has closed and a bay contributes nothing. */
-const CULL_DIST = 300
+const FOV = 70 * Math.PI / 180
 
-const FOV = 68 * Math.PI / 180
+/** The sky map's yaw on this line: puts the noon sun ahead-left of THE CUT. */
+const SKY_YAW = 0.18
 
-interface PropFamily {
-  mesh:      Mesh;
-  instances: Float32Array;
-  count:     number;
+/** Seeds, so the build is the same on every load. */
+const SEED = 0x10091
+
+interface Draw {
+  mesh:    Mesh;
+  surface: Surface;
+  count:   number;
+
+  /** 0: the mesh's own uv (shells, headwalls); 1: box-mapped (props). */
+  mapping: number;
+  shell:   boolean;
 }
 
 interface BayRender {
-  span:  BaySpan;
-  shell: Mesh;
-
-  /** One instance for the shell, so the shared vertex format needs no branch. */
-  shellInstance: Float32Array;
-  families:      PropFamily[];
-  lamps:         Lamp[];
-
-  /** Bounding sphere, for culling. */
+  bay:    Bay;
+  span:   BaySpan;
+  spans:  BaySpan[];
+  index:  number;
+  draws:  Draw[];
+  lamps:  Lamp[];
   cx:     number;
   cy:     number;
   cz:     number;
   radius: number;
 }
 
-interface CircuitRender {
-  curve: ClosedCurve;
-  bays:  BayRender[];
+const IDENTITY = (s: number, bay: number): Float32Array => new Float32Array([
+  0, 0, 0, 1,
+  0, 0, 1, 1,
+  0, 1, 0, 1,
+  s, bay, 0, 0,
+])
+
+function smoothstep (a: number, b: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)))
+  return t * t * (3 - 2 * t)
 }
 
-function newFrame (): Frame {
-  return {
-    pos:     { x: 0, y: 0, z: 0 },
-    forward: { x: 0, y: 0, z: 1 },
-    up:      { x: 0, y: 1, z: 0 },
-    right:   { x: 1, y: 0, z: 0 },
-  }
-}
-
-/**
- * Place one instance. `tint` picks between the two albedos the fragment shader
- * blends, `seed` decorrelates a prop family's shard behaviour from its
- * neighbours', and `bayId` is what the rupture weights are indexed by.
- */
-function writeInstance (
-  out: number[], x: number, y: number, z: number,
-  yaw: number, scale: number, tint: number, seed: number, bayId: number,
-): void {
-  out.push(x, y, z, yaw, scale, tint, seed, bayId)
-}
-
-/** Yaw of a frame's forward vector, for orienting a prop along the track. */
-function yawOf (f: Frame): number {
-  return Math.atan2(f.forward.x, f.forward.z)
-}
-
-// --- per-bay dressing -----------------------------------------------------
-
-/**
- * The props a bay is furnished with, as instance data against a shared unit
- * mesh. Everything here walks the bay's own arc-length span and uses the
- * transported frame, so a prop sits square to the track wherever the track goes.
- */
-function dressBay (
-  curve: ClosedCurve, span: BaySpan, seed: number,
-): Map<string, number[]> {
-  const bay   = span.bay
-  const rand  = mulberry32(seed)
-  const frame = newFrame()
-  const out   = new Map<string, number[]>()
-  const at    = (k: string): number[] => {
-    let v = out.get(k)
-    if (!v) {
-      v = []
-      out.set(k, v)
-    }
-    return v
+/** A bay's air and light, after whatever this lap has done to them. */
+function bayMedium (bay: Bay, decay: ArrayLike<number>, out: Float32Array): Float32Array {
+  const rot = decay[2]
+  let [ r, g, b ] = bay.fog
+  let dens        = bay.fogDensity * (1 + rot * 0.6)
+  const [ ar, ag, ab ] = bay.ambient
+  let open = bay.open
+  if (bay.rupture === Rupture.ERASE) {
+    // The sky comes down: the cut's air thickens and whitens, a lap at a time,
+    // until the outside is a wall of light.
+    const e = Math.min(1, decay[0] * 1.6 + rot * 0.4)
+    dens *= 1 + e * 6
+    r += (1.1 - r) * e
+    g += (1.1 - g) * e
+    b += (1.1 - b) * e
+    open *= 1 - e * 0.3
   }
 
-  // Track: sleepers and rail, the length of every bay without exception. This
-  // is the one prop family the whole circuit shares, and it is what makes the
-  // route legible as a railway rather than as a series of rooms.
-  for (let s = span.s0; s < span.s1; s += TIE_PITCH) {
-    curve.frameAtDistance(s, frame)
-
-    const yaw = yawOf(frame)
-    writeInstance(at('sleeper'), frame.pos.x, frame.pos.y, frame.pos.z,
-                  yaw, 1, 0.75, rand(), bay.id)
-    writeInstance(at('rail'), frame.pos.x, frame.pos.y, frame.pos.z,
-                  yaw, 1, 1.0, rand(), bay.id)
-  }
-
-  // Lamps, as housings. The light itself is a uniform, not geometry.
-  let lampS = span.s0 + bay.lampPitch * 0.5
-  for (const lamp of lampsFor(curve, span, seed + 7)) {
-    curve.frameAtDistance(lampS, frame)
-    lampS += bay.lampPitch
-    // tint 2.0 = self-lit at strength 1.0, so the housing reads as the source
-    // of the pool it throws rather than as a slab floating in the dark.
-    writeInstance(at('lamp'), lamp.x, lamp.y, lamp.z,
-                  yawOf(frame), 1, 2.0, lamp.roll, bay.id)
-  }
-
-  switch (bay.theme) {
-    case Theme.TILE:
-      // Benches on the platform, facing the track.
-      for (let s = span.s0 + 6; s < span.s1 - 6; s += 11) {
-        curve.frameAtDistance(s, frame)
-
-        const off = bay.bore * 0.80
-        writeInstance(at('bench'),
-                      frame.pos.x + frame.right.x * off,
-                      frame.pos.y + frame.right.y * off - bay.floorD + 1.0,
-                      frame.pos.z + frame.right.z * off,
-                      yawOf(frame), 1, 0.4, rand(), bay.id)
-      }
-      break
-    case Theme.VAULT:
-      // Shuttered units along both haunches of the vault.
-      for (let s = span.s0 + 4; s < span.s1 - 4; s += 4.2)
-        for (const side of [ -1, 1 ]) {
-          curve.frameAtDistance(s, frame)
-
-          const off = side * bay.bore * 0.93
-          writeInstance(at('shutter'),
-                        frame.pos.x + frame.right.x * off,
-                        frame.pos.y + frame.right.y * off - bay.floorD,
-                        frame.pos.z + frame.right.z * off,
-                        yawOf(frame) + (side > 0 ? Math.PI : 0),
-                        1, 0.85, rand(), bay.id)
-        }
-      break
-    case Theme.CUT:
-      // Fence along both crests of the trench.
-      for (let s = span.s0 + 2; s < span.s1 - 2; s += 3)
-        for (const side of [ -1, 1 ]) {
-          curve.frameAtDistance(s, frame)
-
-          const off = side * 11.6
-          writeInstance(at('fence'),
-                        frame.pos.x + frame.right.x * off,
-                        frame.pos.y + frame.right.y * off + 9.2,
-                        frame.pos.z + frame.right.z * off,
-                        yawOf(frame), 1, 0.6, rand(), bay.id)
-        }
-      break
-    case Theme.MACHINE:
-      // Racks lining the cold aisle, tight enough to scrape at full rupture.
-      for (let s = span.s0 + 2; s < span.s1 - 2; s += 0.64)
-        for (const side of [ -1, 1 ]) {
-          curve.frameAtDistance(s, frame)
-
-          const off = side * (bay.bore - 1.5)
-          writeInstance(at('rack'),
-                        frame.pos.x + frame.right.x * off,
-                        frame.pos.y + frame.right.y * off - bay.floorD,
-                        frame.pos.z + frame.right.z * off,
-                        yawOf(frame) + (side > 0 ? Math.PI : 0),
-                        1, 0.95, rand(), bay.id)
-        }
-      break
-    case Theme.TRESTLE:
-      // Bents under the deck, at a pitch that reads as structure from above.
-      for (let s = span.s0; s < span.s1; s += 6.5) {
-        curve.frameAtDistance(s, frame)
-        writeInstance(at('bent'), frame.pos.x, frame.pos.y - 0.6, frame.pos.z,
-                      yawOf(frame), 1, 1.0, rand(), bay.id)
-      }
-      break
-    default:
-      break
-  }
-
+  // The rot takes the light down with the colour.
+  const dim = 1 - rot * 0.35
+  out[0]    = r
+  out[1]    = g
+  out[2]    = b
+  out[3]    = dens
+  out[4]    = ar * dim
+  out[5]    = ag * dim
+  out[6]    = ab * dim
+  out[7]    = open
   return out
-}
-
-/** Rupture weight for a bay, from the four decay channels. */
-function ruptureWeight (bay: BaySpan['bay'], decay: Float32Array): number {
-  switch (bay.rupture) {
-    case Rupture.CROWD: return decay[0] * 0.7
-    case Rupture.INVERT: return decay[0] * 1.25
-    case Rupture.ERASE: return decay[0] * 0.35
-    case Rupture.FLOOD: return decay[0] * 0.55
-    case Rupture.ADVANCE: return decay[0] * 0.85
-    case Rupture.VANISH: return decay[0] * 1.5
-    default: return decay[0]
-  }
 }
 
 export function createLoopLineScene (
   gl: WebGL2RenderingContext,
   canvas: HTMLCanvasElement,
 ): JourneyRenderer | null {
-  const geoProg = createGlProgram(gl, loopLineVert, loopLineFrag)
-  const brightP = createGlProgram(gl, postVert, brightFrag)
-  const blurP   = createGlProgram(gl, postVert, blurFrag)
-  const compP   = createGlProgram(gl, postVert, compositeFrag)
-  if (!geoProg || !brightP || !blurP || !compP)
+  const surfProg  = createGlProgram(gl, loopLineVert, loopLineFrag('surface'))
+  const wallProg  = createGlProgram(gl, loopLineVert, loopLineFrag('headwall'))
+  const waterProg = createGlProgram(gl, loopLineVert, loopLineFrag('water'))
+  const skyProg   = createGlProgram(gl, skyVert, skyFrag)
+  const downProg  = createGlProgram(gl, postVert, bloomDownFrag)
+  const upProg    = createGlProgram(gl, postVert, bloomUpFrag)
+  const compProg  = createGlProgram(gl, postVert, compositeFrag)
+  const programs  = [ surfProg, wallProg, waterProg, skyProg, downProg, upProg, compProg ]
+  if (programs.some(p => !p)) {
+    programs.forEach(p => p?.dispose())
     return null
+  }
 
-  // --- unit meshes, built once and shared by every bay --------------------
-  // `cell` is the fracture cell size. A sleeper breaks in two, a rack sheds
-  // panels, a bent loses members; the rail is left whole because a rail that
-  // shatters stops reading as the thing holding the train up.
-  const specs: UnitMeshSpec[] = [
-    { name: 'sleeper', build: buildSleeper, cell: 0.7 },
-    { name: 'rail', build: b => buildRailPiece(b, TIE_PITCH), cell: 0 },
-    { name: 'lamp', build: buildLamp, cell: 0.3 },
-    { name: 'bench', build: buildBench, cell: 0.5 },
-    { name: 'shutter', build: buildShutter, cell: 0.8 },
-    { name: 'fence', build: buildFence, cell: 1.2 },
-    { name: 'rack', build: buildRack, cell: 0.8 },
-    { name: 'bent', build: b => buildBent(b, 26), cell: 2.5 },
-  ]
+  const geoProgs = [ surfProg!, wallProg!, waterProg! ]
 
-  const units = new Map<string, Mesh>()
-  specs.forEach((spec, i) => {
-    const mesh = createMesh(gl, buildUnit(spec, 1000 + i * 31))
-    units.set(spec.name, mesh)
-  })
+  const materials = createMaterialArrays(gl)
+  const skyIds    = [ ...new Set([ ...BAYS, CHORD_BAY ].map(b => b.sky).filter(Boolean) as string[]) ]
+  const skies     = new Map<string, SkyTexture>(skyIds.map(id => [ id, createSkyTexture(gl, id) ]))
 
-  // --- the circuits ------------------------------------------------------
-  const circuits = getCircuits()
+  const circuits: Circuits = getCircuits()
 
-  const buildCircuit = (curve: ClosedCurve, spans: BaySpan[], salt: number): CircuitRender => ({
-    curve,
-    bays: spans.map((span, i) => {
-      const { profile, closed, facing } = profileFor(span.bay)
+  // --- units: one fractured builder per prop type, shared ------------------
+  const unitBuilders = new Map<string, MeshBuilder>()
+  let k = 0
+  for (const [ name, spec ] of Object.entries(UNITS))
+    unitBuilders.set(name, buildUnit(spec, SEED + 31 * k++))
 
-      // The shell is one mesh per bay, swept along that bay's own span. Fractured
-      // coarsely: a wall comes apart in slabs, not in gravel.
-      const b = buildUnit({
-        name:  `shell-${span.bay.name}`,
-        cell:  span.bay.theme === Theme.TRESTLE ? 3.0 : 5.0,
-        build: bb => sweepProfile(bb, curve, span.s0, span.s1 + 1.2,
-                                  span.bay.bore === OPEN ? 3.0 : 2.0,
-                                  profile, closed, facing),
-      }, salt + i * 97)
+  // --- bays ------------------------------------------------------------------
+  const bays: BayRender[] = []
 
-      const shell = createMesh(gl, b)
+  const buildBay = (curve: ClosedCurve, spans: BaySpan[], index: number,
+    shellSpan: [ number, number ], dressing: Dressing | null): BayRender => {
+    const span          = spans[index]
+    const bay           = span.bay
+    const draws: Draw[] = []
+    let minX = Infinity,
+      minY   = Infinity,
+      minZ   = Infinity
+    let maxX = -Infinity,
+      maxY   = -Infinity,
+      maxZ   = -Infinity
+    const grow = (x: number, y: number, z: number) => {
+      minX = Math.min(minX, x)
+      minY = Math.min(minY, y)
+      minZ = Math.min(minZ, z)
+      maxX = Math.max(maxX, x)
+      maxY = Math.max(maxY, y)
+      maxZ = Math.max(maxZ, z)
+    }
 
-      const dressing               = dressBay(curve, span, salt + i * 131)
-      const families: PropFamily[] = []
-      for (const [ name, data ] of dressing) {
-        const mesh = units.get(name)
-        if (!mesh || data.length === 0)
+    if (shellSpan[1] > shellSpan[0]) {
+      const builders = new Map<SurfaceKey, MeshBuilder>()
+      const step     = bay.theme === Theme.DEPOT || bay.theme === Theme.CUT ? 3 : 2
+      for (const profile of profilesFor(bay.theme))
+        sweepProfile(builders, curve, shellSpan[0], shellSpan[1], step, profile)
+      fractureAll(builders, bay.theme === Theme.TRESTLE ? 3 : 4.5, SEED + bay.id * 977)
+
+      // The earth behind the walls, swept after the fracture so it stays whole.
+      const rock = rockLayer(bay.theme)
+      if (rock)
+        sweepProfile(builders, curve, shellSpan[0], shellSpan[1], step * 2, rock)
+      for (const [ key, b ] of builders) {
+        const v = b.vertices()
+        for (let i = 0; i < v.length; i += 12 * 7)
+          grow(v[i], v[i + 1], v[i + 2])
+
+        const mesh = createMesh(gl, b, 4)
+        mesh.setInstances(gl, IDENTITY(0, bay.id))
+        draws.push({ mesh, surface: SURF[key], count: 1, mapping: 0, shell: true })
+      }
+    }
+
+    if (dressing)
+      for (const [ name, data ] of dressing.instances) {
+        const builder = unitBuilders.get(name)
+        if (!builder || data.length === 0)
           continue
+        for (let i = 0; i < data.length; i += INSTANCE_FLOATS)
+          grow(data[i], data[i + 1], data[i + 2])
 
-        const instances = new Float32Array(data)
-        mesh.setInstances(gl, instances)
-        families.push({ mesh, instances, count: data.length / INSTANCE_FLOATS })
+        const mesh = createMesh(gl, builder, 4)
+        mesh.setInstances(gl, new Float32Array(data))
+        draws.push({
+          mesh,
+          surface: SURF[UNITS[name].surface],
+          count:   data.length / INSTANCE_FLOATS,
+          mapping: 1,
+          shell:   false,
+        })
       }
 
-      // Bounding sphere from the span's midpoint and half-length, padded by the
-      // bore. Cheap, and a bay is a tube, so it is not a bad fit.
-      const mid     = curve.pointAtDistance((span.s0 + span.s1) * 0.5)
-      const halfLen = (span.s1 - span.s0) * 0.5
+    const cx = (minX + maxX) / 2,
+      cy     = (minY + maxY) / 2,
+      cz     = (minZ + maxZ) / 2
+    return {
+      bay,
+      span,
+      spans,
+      index,
+      draws,
+      lamps:  dressing?.lamps ?? [],
+      cx,
+      cy,
+      cz,
+      radius: Math.hypot(maxX - cx, maxY - cy, maxZ - cz) + 4,
+    }
+  }
 
-      return {
-        span,
-        shell,
-        shellInstance: new Float32Array([ 0, 0, 0, 0, 1, 0.5, 0.5, span.bay.id ]),
-        families,
-        lamps:         lampsFor(curve, span, salt + i * 7),
-        cx:            mid.x,
-        cy:            mid.y,
-        cz:            mid.z,
-        radius:        halfLen + (span.bay.bore === OPEN ? 30 : span.bay.bore + 6),
-      }
-    }),
+  circuits.mainBays.forEach((span, i) => {
+    const dressing = dressBay(circuits, span, false, SEED + i * 131)
+    // Shells overlap their successor by a metre so no seam opens on a curve.
+    bays.push(buildBay(circuits.main, circuits.mainBays, i, [ span.s0, span.s1 + 1.0 ], dressing))
   })
 
-  const main = buildCircuit(circuits.main, circuits.mainBays, 11)
-  const alt  = buildCircuit(circuits.alt, circuits.altBays, 4001)
+  // The chord: its bore between the two portal planes, plus its own track from
+  // the points to the rejoin, all along ALT and fogged by ALT's spans.
+  const chordIndex = circuits.altBays.findIndex(s => s.bay.id === CHORD_BAY.id)
+  const chordSpan  = circuits.altBays[chordIndex]
+  const chordDress = dressBay(circuits, chordSpan, true, SEED + 9001)
+  const track      = chordTrack(circuits, SEED + 9101)
+  for (const [ name, data ] of track.instances)
+    chordDress.instances.set(name, [ ...chordDress.instances.get(name) ?? [], ...data ])
+  bays.push(buildBay(circuits.alt, circuits.altBays, chordIndex,
+                     [ chordSpan.s0 - 2.2, chordSpan.s1 + 1.5 ], chordDress))
 
-  // --- post-processing targets -------------------------------------------
+  // --- headwalls -----------------------------------------------------------
+  interface WallRender {
+    wall:  Headwall;
+    mesh:  Mesh;
+    bay:   BayRender;
+    holeA: Float32Array;
+    holeB: Float32Array;
+    nA:    number;
+    nB:    number;
+  }
+
+  const walls: WallRender[] = buildHeadwalls(circuits).map(wall => {
+    const b                  = createMeshBuilder()
+    const f                  = wall.frame
+    const [ r0, u0, r1, u1 ] = wall.rect
+    const P                  = (r: number, u: number) => [
+      f.pos.x + f.right.x * r + f.up.x * u,
+      f.pos.y + f.right.y * r + f.up.y * u,
+      f.pos.z + f.right.z * r + f.up.z * u,
+    ]
+    const n   = [ -f.forward.x, -f.forward.y, -f.forward.z ]
+    const ids = [[ r0, u0 ], [ r1, u0 ], [ r1, u1 ], [ r0, u1 ]].map(([ r, u ]) => {
+      const p = P(r, u)
+      return b.vertex(p[0], p[1], p[2], n[0], n[1], n[2], r, u)
+    })
+    // Facing back along the track, toward the bay it closes.
+    const a  = P(r0, u0),
+      c      = P(r1, u0),
+      d      = P(r0, u1)
+    const cr = [
+      (c[1] - a[1]) * (d[2] - a[2]) - (c[2] - a[2]) * (d[1] - a[1]),
+      (c[2] - a[2]) * (d[0] - a[0]) - (c[0] - a[0]) * (d[2] - a[2]),
+      (c[0] - a[0]) * (d[1] - a[1]) - (c[1] - a[1]) * (d[0] - a[0]),
+    ]
+    if (cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2] > 0) {
+      b.face(ids[0], ids[1], ids[2])
+      b.face(ids[0], ids[2], ids[3])
+    }
+    else {
+      b.face(ids[0], ids[2], ids[1])
+      b.face(ids[0], ids[3], ids[2])
+    }
+
+    const mesh = createMesh(gl, b, 4)
+    mesh.setInstances(gl, IDENTITY(wall.s, wall.bay))
+
+    const pack = (poly: [ number, number ][] | undefined) => {
+      const out = new Float32Array(MAX_HOLE * 2);
+      (poly ?? []).slice(0, MAX_HOLE).forEach(([ x, y ], i) => {
+        out[i * 2]     = x
+        out[i * 2 + 1] = y
+      })
+      return out
+    }
+    return {
+      wall,
+      mesh,
+      bay:   bays[wall.bay],
+      holeA: pack(wall.holes[0]),
+      holeB: pack(wall.holes[1]),
+      nA:    Math.min(MAX_HOLE, wall.holes[0]?.length ?? 0),
+      nB:    Math.min(MAX_HOLE, wall.holes[1]?.length ?? 0),
+    }
+  })
+
+  // --- the flood -------------------------------------------------------------
+  // Level water, not track-following: the annex is the bottom of a dip, so a
+  // level surface lies only where the floor is below it, and deepens by lap.
+  const annex      = bays[REJOIN_BAY]
+  let annexLow     = Infinity
+  for (let s = annex.span.s0; s < annex.span.s1; s += 4)
+    annexLow = Math.min(annexLow, circuits.main.pointAtDistance(s).y)
+
+  const waterBase = annexLow - 0.38
+  const waterMesh = (() => {
+    const b               = createMeshBuilder()
+    const f               = { pos: { x: 0, y: 0, z: 0 }, forward: { x: 0, y: 0, z: 1 }, up: { x: 0, y: 1, z: 0 }, right: { x: 1, y: 0, z: 0 }}
+    const rings: number[] = []
+    for (let s = annex.span.s0; s <= annex.span.s1 + 0.01; s += 3) {
+      circuits.main.frameAtDistance(s, f)
+      for (const r of [ -10, 22 ])
+        rings.push(b.vertex(f.pos.x + f.right.x * r, waterBase, f.pos.z + f.right.z * r, 0, 1, 0, s, r))
+    }
+    for (let i = 0; i + 3 < rings.length; i += 2) {
+      // Facing up: wind by the geometric normal.
+      const v  = b.vertices()
+      const at = (q: number) => [ v[q * 12], v[q * 12 + 1], v[q * 12 + 2] ]
+      const A  = at(rings[i]),
+        B      = at(rings[i + 1]),
+        C      = at(rings[i + 2])
+      const ny = (B[2] - A[2]) * (C[0] - A[0]) - (B[0] - A[0]) * (C[2] - A[2])
+      if (ny > 0) {
+        b.face(rings[i], rings[i + 1], rings[i + 3])
+        b.face(rings[i], rings[i + 3], rings[i + 2])
+      }
+      else {
+        b.face(rings[i], rings[i + 3], rings[i + 1])
+        b.face(rings[i], rings[i + 2], rings[i + 3])
+      }
+    }
+
+    const mesh = createMesh(gl, b, 4)
+    mesh.setInstances(gl, IDENTITY(0, annex.bay.id))
+    return mesh
+  })()
+
+  // --- the cab ---------------------------------------------------------------
+  // The front of a people-mover, seen from the front seat: nothing but the lip
+  // of the dashboard along the bottom of the view. Pillars and a console were
+  // tried and read as a slab and a lamp; a thin black edge is enough to put you
+  // in a vehicle. Local x is left, y up, z forward, origin at the eye; one
+  // instance, moved with the car every frame.
+  const cabParts: { key: SurfaceKey; build: (b: MeshBuilder) => void }[] = [
+    { key:   'black',
+      build: b => {
+        b.box(0, -0.79, 0.92, 2.2, 0.06, 0.30)
+        b.box(0, -0.725, 1.21, 2.2, 0.012, 0.02)
+      } },
+  ]
+  const cabInstance      = new Float32Array(INSTANCE_FLOATS)
+  const cabDraws: Draw[] = cabParts.map(part => {
+    const b = createMeshBuilder()
+    part.build(b)
+
+    const mesh = createMesh(gl, b, 4)
+    mesh.setInstances(gl, cabInstance)
+    return { mesh, surface: SURF[part.key], count: 1, mapping: 1, shell: false }
+  })
+
+  // --- post targets ------------------------------------------------------------
   const quad = gl.createBuffer()
   gl.bindBuffer(gl.ARRAY_BUFFER, quad)
-  gl.bufferData(gl.ARRAY_BUFFER,
-                new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ]), gl.STATIC_DRAW)
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ]), gl.STATIC_DRAW)
 
-  let width  = 0
-  let height = 0
+  const hdr     = !!gl.getExtension('EXT_color_buffer_float')
+  gl.getExtension('OES_texture_float_linear')
 
-  // The scene is drawn into a multisampled renderbuffer and resolved with
-  // blitFramebuffer, which is WebGL2's only route to MSAA when you also need to
-  // read the result back as a texture. Asking the *default* framebuffer for
-  // antialias instead would multisample the composite, which is already smooth,
-  // and leave the geometry edges — the only aliased thing in the frame — exactly
-  // as jagged as before.
+  const colorFmt = hdr ? gl.RGBA16F : gl.RGBA8
+  const LEVELS   = 5
+
+  let width                               = 0,
+    height                                = 0
   let msaaFbo: WebGLFramebuffer | null    = null
   let msaaColor: WebGLRenderbuffer | null = null
   let msaaDepth: WebGLRenderbuffer | null = null
   let sceneFbo: WebGLFramebuffer | null   = null
   let sceneTex: WebGLTexture | null       = null
-  const bloomFbo: (WebGLFramebuffer | null)[] = [ null, null ]
-  const bloomTex: (WebGLTexture | null)[]     = [ null, null ]
+  const bloomFbo: (WebGLFramebuffer | null)[] = []
+  const bloomTex: (WebGLTexture | null)[]     = []
+  const bloomSize: [ number, number ][]       = []
 
-  const makeTex = (w: number, h: number): WebGLTexture | null => {
-    const t = gl.createTexture()
+  const makeTex = (w: number, h: number): WebGLTexture => {
+    const t = gl.createTexture()!
     gl.bindTexture(gl.TEXTURE_2D, t)
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+    gl.texImage2D(gl.TEXTURE_2D, 0, colorFmt, w, h, 0, gl.RGBA, hdr ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE, null)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -416,7 +438,7 @@ export function createLoopLineScene (
     return t
   }
 
-  const releaseTargets = () => {
+  const release = () => {
     if (msaaFbo)
       gl.deleteFramebuffer(msaaFbo)
     if (msaaColor)
@@ -427,32 +449,33 @@ export function createLoopLineScene (
       gl.deleteFramebuffer(sceneFbo)
     if (sceneTex)
       gl.deleteTexture(sceneTex)
-    for (let i = 0; i < 2; i++) {
-      if (bloomFbo[i])
-        gl.deleteFramebuffer(bloomFbo[i])
-      if (bloomTex[i])
-        gl.deleteTexture(bloomTex[i])
-    }
+    bloomFbo.forEach(f => f && gl.deleteFramebuffer(f))
+    bloomTex.forEach(t => t && gl.deleteTexture(t))
+    bloomFbo.length  = 0
+    bloomTex.length  = 0
+    bloomSize.length = 0
   }
 
   const resize = (w: number, h: number) => {
     if (w === width && h === height)
       return
-    releaseTargets()
-    width = w
+    release()
+    width  = w
     height = h
 
-    // Samples are capped at 4: the difference above that is invisible at these
-    // resolutions and the bandwidth is not.
-    const samples = Math.min(4, gl.getParameter(gl.MAX_SAMPLES) as number)
+    // MSAA on the scene, because geometry edges are the only aliased thing in
+    // the frame; resolved by blit so the result can be sampled.
+    const maxSamples = hdr
+      ? Math.max(0, ...Array.from(gl.getInternalformatParameter(gl.RENDERBUFFER, gl.RGBA16F, gl.SAMPLES) as Int32Array ?? [ 0 ]))
+      : gl.getParameter(gl.MAX_SAMPLES) as number
+    const samples = Math.min(4, maxSamples)
 
     msaaColor = gl.createRenderbuffer()
     gl.bindRenderbuffer(gl.RENDERBUFFER, msaaColor)
-    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.RGBA8, w, h)
+    gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, colorFmt, w, h)
     msaaDepth = gl.createRenderbuffer()
     gl.bindRenderbuffer(gl.RENDERBUFFER, msaaDepth)
     gl.renderbufferStorageMultisample(gl.RENDERBUFFER, samples, gl.DEPTH_COMPONENT24, w, h)
-
     msaaFbo = gl.createFramebuffer()
     gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
     gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.RENDERBUFFER, msaaColor)
@@ -463,270 +486,572 @@ export function createLoopLineScene (
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo)
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, sceneTex, 0)
 
-    const bw = Math.max(1, w >> 1)
-    const bh = Math.max(1, h >> 1)
-    for (let i = 0; i < 2; i++) {
-      bloomTex[i] = makeTex(bw, bh)
-      bloomFbo[i] = gl.createFramebuffer()
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[i])
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, bloomTex[i], 0)
+    let bw = w,
+      bh   = h
+    for (let i = 0; i < LEVELS; i++) {
+      bw = Math.max(1, bw >> 1)
+      bh = Math.max(1, bh >> 1)
+
+      const t = makeTex(bw, bh)
+      const f = gl.createFramebuffer()
+      gl.bindFramebuffer(gl.FRAMEBUFFER, f)
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0)
+      bloomTex.push(t)
+      bloomFbo.push(f)
+      bloomSize.push([ bw, bh ])
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
   }
 
-  // --- reused per-frame scratch ------------------------------------------
-  const proj: Mat4                       = new Float32Array(16)
-  const view: Mat4                       = new Float32Array(16)
-  const viewProj: Mat4                   = new Float32Array(16)
-  const lampPos                          = new Float32Array(MAX_LAMPS * 4)
-  const lampCol                          = new Float32Array(MAX_LAMPS * 4)
-  const decay                            = new Float32Array(4)
-  const ride                             = new Float32Array(4)
-  const eye: [number, number, number]    = [ 0, 0, 0 ]
-  const target: [number, number, number] = [ 0, 0, 1 ]
-  const upv: [number, number, number]    = [ 0, 1, 0 ]
-
-  const drawPost = (prog: GlProgram) => {
+  const drawQuad = () => {
     gl.bindBuffer(gl.ARRAY_BUFFER, quad)
-
-    const loc = prog.attrib('aPos')
-    gl.enableVertexAttribArray(loc)
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
+    gl.enableVertexAttribArray(0)
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0)
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
   }
 
+  // --- per-frame scratch -----------------------------------------------------------
+  const proj: Mat4                         = new Float32Array(16)
+  const view: Mat4                         = new Float32Array(16)
+  const viewProj: Mat4                     = new Float32Array(16)
+  const invVP: Mat4                        = new Float32Array(16)
+  const lampPos                            = new Float32Array(MAX_LAMPS * 4)
+  const lampCol                            = new Float32Array(MAX_LAMPS * 4)
+  const scatPos                            = new Float32Array(MAX_SCATTER * 4)
+  const scatCol                            = new Float32Array(MAX_SCATTER * 4)
+  const pick                               = new Int32Array(64)
+  const pickD                              = new Float32Array(64)
+  const medA                               = new Float32Array(8)
+  const medB                               = new Float32Array(8)
+  const medC                               = new Float32Array(8)
+  const camMed                             = new Float32Array(8)
+  const eye: [ number, number, number ]    = [ 0, 0, 0 ]
+  const target: [ number, number, number ] = [ 0, 0, 1 ]
+  const upv: [ number, number, number ]    = [ 0, 1, 0 ]
+
+  const flicker = (t: number, roll: number, lightFail: number): number => {
+    const margin = roll - lightFail
+    if (margin < 0)
+      return 0
+    if (margin >= 0.05)
+      return 1
+
+    const x = Math.sin(Math.floor(t * 14) * 12.9898 + roll * 78.233) * 43758.5453
+    return x - Math.floor(x) >= 0.25 ? 1 : 0
+  }
+
+  /** The medium at arc length `s` on a span list — the vertex shader's blend, on the CPU. */
+  const mediumAt = (spans: BaySpan[], s: number, L: number, decay: number[], out: Float32Array) => {
+    const i  = spanIndexAt(spans, s, L)
+    const n  = spans.length
+    const sp = spans[i]
+    bayMedium(spans[(i - 1 + n) % n].bay, decay, medA)
+    bayMedium(sp.bay, decay, medB)
+    bayMedium(spans[(i + 1) % n].bay, decay, medC)
+
+    const t0 = smoothstep(sp.s0 - BLEND, sp.s0 + BLEND, s)
+    const t1 = smoothstep(sp.s1 - BLEND, sp.s1 + BLEND, s)
+    for (let j = 0; j < 8; j++)
+      out[j] = (medA[j] + (medB[j] - medA[j]) * t0) * (1 - t1) + medC[j] * t1
+    return out
+  }
+
+  /** Which open bay's sky the camera should be under, by the rule in the header. */
+  const skyFor = (spans: BaySpan[], s: number, L: number): string => {
+    const n    = spans.length
+    const i    = spanIndexAt(spans, s, L)
+    const here = spans[i]
+    if (here.bay.sky && here.bay.open > 0)
+      return here.bay.sky
+
+    const prev = spans[(i - 1 + n) % n]
+    if (s - here.s0 < 25 && prev.bay.sky && prev.bay.open > 0)
+      return prev.bay.sky
+    for (let k = 1; k < n; k++) {
+      const next = spans[(i + k) % n]
+      if (next.bay.sky && next.bay.open > 0)
+        return next.bay.sky
+    }
+    return 'NIGHT'
+  }
+
+  type FrameType = {
+    camPos:    number[];
+    time:      number;
+    heavy:     number;
+    decay:     number[];
+    ride:      number[]
+    headPos:   number[];
+    headDir:   number[];
+    skyMix:    number;
+    expA:      number;
+    expB:      number
+    sun:       number[];
+    scatCount: number;
+    scatter:   number
+  }
+
+  const setFrame = (prog: GlProgram, frame: FrameType) => {
+    prog.use()
+    prog.uniformMatrix4fv('uViewProj', viewProj)
+    prog.uniform3f('uCamPos', frame.camPos[0], frame.camPos[1], frame.camPos[2])
+    prog.uniform4f('uCamFog', camMed[0], camMed[1], camMed[2], camMed[3])
+    prog.uniform4f('uDecay', frame.decay[0], frame.decay[1], frame.decay[2], frame.decay[3])
+    prog.uniform4f('uRide', frame.ride[0], frame.ride[1], frame.ride[2], frame.ride[3])
+    prog.uniform1f('uTime', frame.time)
+    prog.uniform1f('uHeavy', frame.heavy)
+    prog.uniform3f('uHeadPos', frame.headPos[0], frame.headPos[1], frame.headPos[2])
+    prog.uniform3f('uHeadDir', frame.headDir[0], frame.headDir[1], frame.headDir[2])
+    prog.uniform1f('uHeadOn', 1)
+    prog.uniform4f('uSky', frame.skyMix, frame.expA, frame.expB, SKY_YAW)
+    prog.uniform4f('uSun', frame.sun[0], frame.sun[1], frame.sun[2], frame.sun[3])
+    prog.uniform4fv('uScatPos', scatPos)
+    prog.uniform4fv('uScatCol', scatCol)
+    prog.uniform1i('uScatCount', frame.scatCount)
+    prog.uniform1f('uScatter', frame.scatter)
+    prog.uniform1i('uMatColor', 0)
+    prog.uniform1i('uMatNormal', 1)
+    prog.uniform1i('uMatDetail', 2)
+    prog.uniform1i('uSkyA', 3)
+    prog.uniform1i('uSkyB', 4)
+    prog.uniform1f('uLift', 0)
+    prog.uniform1f('uEncode', hdr ? 0 : 1)
+  }
+
+  /** Per-bay uniforms: its medium and its neighbours', its lamps, its rupture. */
+  const setBay = (prog: GlProgram, br: BayRender, camPos: number[], camFwd: number[],
+    decay: number[], time: number, isShell: boolean) => {
+    const n = br.spans.length
+    bayMedium(br.spans[(br.index - 1 + n) % n].bay, decay, medA)
+    bayMedium(br.bay, decay, medB)
+    bayMedium(br.spans[(br.index + 1) % n].bay, decay, medC)
+    prog.uniform4f('uBay', br.span.s0, br.span.s1, BLEND, isShell ? 1 : 0)
+    prog.uniform4f('uFogA', medA[0], medA[1], medA[2], medA[3])
+    prog.uniform4f('uFogB', medB[0], medB[1], medB[2], medB[3])
+    prog.uniform4f('uFogC', medC[0], medC[1], medC[2], medC[3])
+    prog.uniform4f('uAmbA', medA[4], medA[5], medA[6], medA[7])
+    prog.uniform4f('uAmbB', medB[4], medB[5], medB[6], medB[7])
+    prog.uniform4f('uAmbC', medC[4], medC[5], medC[6], medC[7])
+
+    // Rupture: shard weight, the special amount for this bay's mode, the mode.
+    const lapF = decay[3] / 0.16
+    let special = 0
+    switch (br.bay.rupture) {
+      case Rupture.BLACKOUT: special = Math.min(1, decay[1] * 1.1); break
+      case Rupture.ADVANCE: special = decay[0] * 3.2; break
+      case Rupture.EMPTY: special = Math.min(1, decay[1] * 1.2); break
+      case Rupture.VANISH: special = Math.min(0.85, Math.max(0, lapF - 1.5) * 0.06); break
+      default: special = 0
+    }
+    prog.uniform4f('uRupture', decay[0] > 0 ? br.bay.shatter : 0, special, br.bay.rupture, 0)
+
+    // The bay's lamps nearest the camera, with lamps ahead counted nearer than
+    // lamps behind: the room you are looking into is the one that has to be lit.
+    let m = 0
+    for (let i = 0; i < br.lamps.length; i++) {
+      const l  = br.lamps[i]
+      const dx = l.x - camPos[0],
+        dy     = l.y - camPos[1],
+        dz     = l.z - camPos[2]
+      let d2 = dx * dx + dy * dy + dz * dz
+      if (dx * camFwd[0] + dy * camFwd[1] + dz * camFwd[2] < 0)
+        d2 *= 3
+      if (m < MAX_LAMPS) {
+        pick[m]  = i
+        pickD[m] = d2
+        m++
+      }
+      else {
+        let worst = 0
+        for (let j = 1; j < MAX_LAMPS; j++)
+          if (pickD[j] > pickD[worst])
+            worst = j
+        if (d2 < pickD[worst]) {
+          pick[worst]  = i
+          pickD[worst] = d2
+        }
+      }
+    }
+    for (let j = 0; j < m; j++) {
+      const l            = br.lamps[pick[j]]
+      lampPos[j * 4]     = l.x
+      lampPos[j * 4 + 1] = l.y
+      lampPos[j * 4 + 2] = l.z
+      lampPos[j * 4 + 3] = l.range
+      lampCol[j * 4]     = l.r
+      lampCol[j * 4 + 1] = l.g
+      lampCol[j * 4 + 2] = l.b
+      lampCol[j * 4 + 3] = flicker(time, l.roll, decay[1])
+    }
+    prog.uniform1i('uLampCount', m)
+    prog.uniform4fv('uLampPos', lampPos)
+    prog.uniform4fv('uLampCol', lampCol)
+  }
+
+  const setSurface = (prog: GlProgram, d: Draw) => {
+    const s = d.surface
+    prog.uniform4f('uSurf', s.layer, s.mode, s.rough, s.metal)
+    prog.uniform3f('uTint', s.tint[0], s.tint[1], s.tint[2])
+    prog.uniform3f('uGlow', s.glow[0], s.glow[1], s.glow[2])
+    prog.uniform1f('uPom', s.pom ? 1 : 0)
+    prog.uniform1f('uMapping', d.mapping)
+  }
+
   return {
-    draw ({ time, pointer, custom }: QuadFrameUniforms) {
+    ready () {
+      return materials.ready && [ ...skies.values() ].every(s => s.ready)
+    },
+
+    draw ({ time, pointer, custom, heavy }: QuadFrameUniforms) {
       const w = canvas.width
       const h = canvas.height
       resize(w, h)
 
-      const camPos = (custom?.uCamPos as number[]) ?? [ 0, 0, 0 ]
-      const camFwd = (custom?.uCamFwd as number[]) ?? [ 0, 0, 1 ]
-      const camUp  = (custom?.uCamUp as number[]) ?? [ 0, 1, 0 ]
-      const rideU  = (custom?.uRide as number[]) ?? [ 0, 0, 0, 0 ]
-      const decayU = (custom?.uDecay as number[]) ?? [ 0, 0, 0, 0 ]
+      const camPos   = (custom?.uCamPos as number[]) ?? [ 0, 2, 0 ]
+      const camFwd   = (custom?.uCamFwd as number[]) ?? [ 0, 0, 1 ]
+      const camUp    = (custom?.uCamUp as number[]) ?? [ 0, 1, 0 ]
+      const trainFwd = (custom?.uTrainFwd as number[]) ?? camFwd
+      const trainUp  = (custom?.uTrainUp as number[]) ?? camUp
+      const ride     = (custom?.uRide as number[]) ?? [ 0, 0, 0, 0 ]
+      const decay    = (custom?.uDecay as number[]) ?? [ 0, 0, 0, 0 ]
+      const loop     = (custom?.uLoop as number[]) ?? [ 0, 0, 0, 0 ]
+      const hv       = heavy ?? 1
 
-      decay.set(decayU)
-      ride.set(rideU)
+      const onAlt = ride[3] > 0.5
+      const curve = onAlt ? circuits.alt : circuits.main
+      const spans = onAlt ? circuits.altBays : circuits.mainBays
+      const L     = curve.length
+      const s     = loop[0]
 
-      const onAlt   = rideU[3] > 0.5
-      const circuit = onAlt ? alt : main
-
-      // Pointer look: yaw the forward vector about world up and pitch it about
-      // the camera's right. Applied here rather than in the simulation because
-      // where the rider is looking must not change where the train is.
-      const px = pointer?.x ?? 0
-      const py = pointer?.y ?? 0
-      // A positive rotation about world up turns left; the pointer on the right
-      // must turn right.
-      const yaw = -px * 0.55
-      const cy  = Math.cos(yaw)
-      const sy  = Math.sin(yaw)
+      // Look: the pointer yaws about world up and pitches about the camera's
+      // right, applied here so where the rider looks never moves the train.
+      const yaw = -(pointer?.x ?? 0) * 0.6
+      const cy  = Math.cos(yaw),
+        sy      = Math.sin(yaw)
       let fx = camFwd[0] * cy + camFwd[2] * sy
-      const fy = camFwd[1] + py * 0.42
+      let fy = camFwd[1] + (pointer?.y ?? 0) * 0.42
       let fz = -camFwd[0] * sy + camFwd[2] * cy
-      const flen = Math.hypot(fx, fy, fz) || 1
-      fx /= flen
-      fz /= flen
+      const fl = Math.hypot(fx, fy, fz) || 1
+      fx /= fl
+      fy /= fl
+      fz /= fl
+
+      const look = [ fx, fy, fz ]
 
       eye[0]    = camPos[0]
       eye[1]    = camPos[1]
       eye[2]    = camPos[2]
       target[0] = camPos[0] + fx
-      target[1] = camPos[1] + fy / flen
+      target[1] = camPos[1] + fy
       target[2] = camPos[2] + fz
       upv[0]    = camUp[0]
       upv[1]    = camUp[1]
       upv[2]    = camUp[2]
-
-      perspective(proj, FOV, w / Math.max(1, h), 0.12, 620)
+      perspective(proj, FOV, w / Math.max(1, h), 0.1, 900)
       lookAt(view, eye, target, upv)
       multiply(viewProj, proj, view)
+      invert(invVP, viewProj)
 
-      // --- geometry pass into the multisampled target ---
+      // --- the camera's medium, its sky, its exposure ---
+      mediumAt(spans, s, L, decay, camMed)
+
+      const flood = waterBase + 0.25 + ride[1] * 0.45
+      const under = camPos[1] < flood &&
+        spans[spanIndexAt(spans, s, L)].bay.theme === Theme.ANNEX
+      if (under) {
+        camMed[0] = 0.005
+        camMed[1] = 0.03
+        camMed[2] = 0.026
+        camMed[3] = 0.22
+      }
+
+      // Open-to-open boundaries crossfade their skies across sixty metres,
+      // from either side of the line; everything else takes the rule's sky.
+      let skyHere = skyFor(spans, s, L)
+      let skyB    = skyHere
+      let skyMix  = 0
+      {
+        const n    = spans.length
+        const i    = spanIndexAt(spans, s, L)
+        const here = spans[i]
+        const prev = spans[(i - 1 + n) % n]
+        const next = spans[(i + 1) % n]
+        if (here.bay.open > 0 && prev.bay.open > 0 && prev.bay.sky !== here.bay.sky && s - here.s0 < 30) {
+          skyHere = prev.bay.sky!
+          skyB    = here.bay.sky!
+          skyMix  = smoothstep(here.s0 - 30, here.s0 + 30, s)
+        }
+        else if (here.bay.open > 0 && next.bay.open > 0 && next.bay.sky !== here.bay.sky && here.s1 - s < 30) {
+          skyB   = next.bay.sky!
+          skyMix = smoothstep(here.s1 - 30, here.s1 + 30, s)
+        }
+      }
+
+      const skyA    = skies.get(skyHere)!
+      const skyTexB = skies.get(skyB)!
+      const assetA  = skyAsset(skyHere)
+      const sun     = assetA.sun && skyHere === 'DAY'
+        ? [ ...sunDirection(assetA, SKY_YAW), 2.6 * (1 - decay[2] * 0.5) ]
+        : [ 0, 1, 0, 0 ]
+
+      let exposure = 0
+      {
+        const i  = spanIndexAt(spans, s, L)
+        const n  = spans.length
+        const sp = spans[i]
+        const a  = spans[(i - 1 + n) % n].bay.exposure
+        const c  = spans[(i + 1) % n].bay.exposure
+        const t0 = smoothstep(sp.s0 - 25, sp.s0 + 25, s)
+        const t1 = smoothstep(sp.s1 - 25, sp.s1 + 25, s)
+        exposure = (a + (sp.bay.exposure - a) * t0) * (1 - t1) + c * t1
+      }
+
+      // --- scattering lamps: the nearest, from every bay ---
+      let sc = 0
+      const sd = new Float32Array(MAX_SCATTER).fill(Infinity)
+      for (const br of bays)
+        for (const l of br.lamps) {
+          const d2 = (l.x - eye[0]) ** 2 + (l.y - eye[1]) ** 2 + (l.z - eye[2]) ** 2
+          if (d2 > 90 * 90)
+            continue
+
+          let slot = -1
+          if (sc < MAX_SCATTER)
+            slot = sc++
+          else {
+            let worst = 0
+            for (let j = 1; j < MAX_SCATTER; j++)
+              if (sd[j] > sd[worst])
+                worst = j
+            if (d2 < sd[worst])
+              slot = worst
+          }
+          if (slot < 0)
+            continue
+          sd[slot]              = d2
+          scatPos[slot * 4]     = l.x
+          scatPos[slot * 4 + 1] = l.y
+          scatPos[slot * 4 + 2] = l.z
+          scatPos[slot * 4 + 3] = l.range
+          scatCol[slot * 4]     = l.r
+          scatCol[slot * 4 + 1] = l.g
+          scatCol[slot * 4 + 2] = l.b
+          scatCol[slot * 4 + 3] = flicker(time, l.roll, decay[1])
+        }
+
+      // Fade the farthest in the set by rank, so a lamp entering or leaving it
+      // does not pop its halo; and cap what any one lamp puts into the air, or
+      // a floodlight turns the whole yard into soup.
+      let far = 0
+      for (let j = 0; j < sc; j++)
+        far = Math.max(far, sd[j])
+      for (let j = 0; j < sc; j++) {
+        const peak = Math.max(scatCol[j * 4], scatCol[j * 4 + 1], scatCol[j * 4 + 2])
+        const cap  = peak > 12 ? 12 / peak : 1
+        scatCol[j * 4] *= cap
+        scatCol[j * 4 + 1] *= cap
+        scatCol[j * 4 + 2] *= cap
+        scatCol[j * 4 + 3] *= 1 - smoothstep(far * 0.55, far, sd[j])
+      }
+
+      const headPos = [
+        eye[0] + trainFwd[0] * 1.4 - trainUp[0] * 1.3,
+        eye[1] + trainFwd[1] * 1.4 - trainUp[1] * 1.3,
+        eye[2] + trainFwd[2] * 1.4 - trainUp[2] * 1.3,
+      ]
+      const frame = {
+        camPos,
+        time,
+        heavy:     hv,
+        decay,
+        ride,
+        headPos,
+        headDir:   trainFwd,
+        skyMix,
+        expA:      assetA.exposure,
+        expB:      skyAsset(skyB).exposure,
+        sun,
+        scatCount: sc,
+        scatter:   camMed[3] * 0.16,
+      }
+
+      // --- geometry ---
       gl.bindFramebuffer(gl.FRAMEBUFFER, msaaFbo)
       gl.viewport(0, 0, w, h)
+      gl.clearColor(camMed[0], camMed[1], camMed[2], 1)
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+      materials.bind(gl, 0)
+      skyA.bind(gl, 3)
+      skyTexB.bind(gl, 4)
+
+      // The sky first, behind everything, without touching depth.
+      gl.disable(gl.DEPTH_TEST)
+      gl.depthMask(false)
+      gl.disable(gl.CULL_FACE)
+      setFrame(skyProg!, frame)
+      skyProg!.uniformMatrix4fv('uInvViewProj', invVP)
+      skyProg!.uniform1f('uSkyFog', 140)
+      drawQuad()
+      gl.depthMask(true)
       gl.enable(gl.DEPTH_TEST)
       gl.depthFunc(gl.LEQUAL)
       gl.enable(gl.CULL_FACE)
       gl.cullFace(gl.BACK)
 
-      // Clear to the camera's own bay fog, which is the one place the camera's
-      // bay is legitimately the right answer: the clear colour is what shows
-      // where nothing was drawn at all.
-      const here = circuit.bays.find(b => {
-        const s = (custom?.uLoop as number[])?.[0] ?? 0
-        return s >= b.span.s0 && s < b.span.s1
-      }) ?? circuit.bays[0]
-      const fog = here.span.bay.fog
-      gl.clearColor(fog[0], fog[1], fog[2], 1)
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+      setFrame(surfProg!, frame)
 
-      geoProg.use()
-      geoProg.uniformMatrix4fv('uViewProj', viewProj)
-      geoProg.uniform3f('uCamPos', camPos[0], camPos[1], camPos[2])
-      // The look direction after the pointer pan, not the track tangent — the
-      // headlight is mounted at the eye, so it goes where you look.
-      geoProg.uniform3f('uCamFwd', fx, fy / flen, fz)
-      geoProg.uniform4f('uDecay', decay[0], decay[1], decay[2], decay[3])
-      geoProg.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
-      geoProg.uniform1f('uTime', time)
-
-      for (const bay of circuit.bays) {
-        const dx   = bay.cx - camPos[0]
-        const dy   = bay.cy - camPos[1]
-        const dz   = bay.cz - camPos[2]
+      const visible = new Set<BayRender>()
+      for (const br of bays) {
+        const dx   = br.cx - eye[0],
+          dy       = br.cy - eye[1],
+          dz       = br.cz - eye[2]
         const dist = Math.hypot(dx, dy, dz)
-        if (dist - bay.radius > CULL_DIST)
+        if (dist - br.radius > CULL_DIST)
           continue
-        // Behind-the-camera rejection, but only once the whole sphere is behind:
-        // a bay you are standing in must never be culled.
-        if (dist > bay.radius && (dx * fx + dy * fy + dz * fz) / dist < -0.55)
+        if (dist > br.radius && (dx * fx + dy * fy + dz * fz) / dist < -0.5)
           continue
-
-        const b = bay.span.bay
-
-        // Per-bay shading parameters. These are the numbers that must come from
-        // the surface's own bay, never the camera's.
-        geoProg.uniform4f('uBayFog', b.fog[0], b.fog[1], b.fog[2],
-                          b.fogDensity * (1 + decay[2] * 0.9))
-
-        // An enclosed bay still bounces a lot of light off its own walls, so the
-        // ambient floor is a real value rather than a token one — 0.05 is not
-        // "dim", it is "off", and it makes every lamp look like the only lamp.
-        const amb = (0.055 + b.sky * 0.42) * (1 - decay[2] * 0.55)
-        geoProg.uniform4f('uBayAmb',
-                          amb * (0.9 + b.sky * 0.1), amb, amb * (1.05 + b.sky * 0.15), b.sky)
-
-        // The annex floods a fixed step per lap; every other bay is dry.
-        const flood = b.rupture === Rupture.FLOOD
-          ? bay.cy - b.floorD + Math.min(3.2, ride[1] * 0.75)
-          : -1e4
-        geoProg.uniform4f('uWater', flood, b.rupture === Rupture.FLOOD ? 1 : 0, 0, 0)
-        geoProg.uniform4f('uRupture', ruptureWeight(b, decay), 0, 0, 0)
-        // Every lamp in a bay shares one colour, so the emissive term can be
-        // tinted from a per-bay uniform — no need for a fragment to know which
-        // lamp it is part of. Without this a sodium housing glows white.
-        geoProg.uniform3f('uLampTint', b.lampTint[0], b.lampTint[1], b.lampTint[2])
-
-        // Lamps, and which of them this lap has killed. The roll is fixed per
-        // lamp, so failure order is stable and a seek reproduces it exactly.
-        // Which 24 is not a detail. THE STACKS carries a lamp every three metres
-        // over two hundred, so uploading the FIRST 24 lit the bay's opening and
-        // left the rest of it in absolute darkness — a mean-luminance cliff from
-        // 111 to 9 halfway through a bay whose geometry had not changed. The
-        // nearest 24 is the only defensible choice, since a lamp outside its own
-        // attenuation radius contributes nothing anyway.
-        //
-        // Lamps are stored in arc-length order, so the nearest is found by one
-        // linear scan and the window taken around it. No sort, no allocation.
-        let best  = 0
-        let bestD = Infinity
-        for (let i = 0; i < bay.lamps.length; i++) {
-          const lp = bay.lamps[i]
-          const dd = (lp.x - camPos[0]) ** 2 +
-            (lp.y - camPos[1]) ** 2 +
-            (lp.z - camPos[2]) ** 2
-          if (dd < bestD) {
-            bestD = dd
-            best  = i
-          }
-        }
-
-        const from = Math.max(0, Math.min(best - (MAX_LAMPS >> 1),
-                                          bay.lamps.length - MAX_LAMPS))
-        const to   = Math.min(bay.lamps.length, from + MAX_LAMPS)
-
-        let n = 0
-        for (let i = Math.max(0, from); i < to; i++) {
-          const lamp     = bay.lamps[i]
-          const l        = n * 4
-          lampPos[l]     = lamp.x
-          lampPos[l + 1] = lamp.y
-          lampPos[l + 2] = lamp.z
-          lampPos[l + 3] = lamp.r
-          lampCol[l]     = lamp.tint[0]
-          lampCol[l + 1] = lamp.tint[1]
-          lampCol[l + 2] = lamp.tint[2]
-          lampCol[l + 3] = lamp.roll < decay[1] ? 1 : 0
-          n++
-        }
-        geoProg.uniform1i('uLampCount', n)
-        geoProg.uniform4fv('uLampPos', lampPos)
-        geoProg.uniform4fv('uLampCol', lampCol)
-
-        bay.shell.setInstances(gl, bay.shellInstance)
-        bay.shell.drawInstanced(gl, 1)
-        for (const fam of bay.families) {
-          fam.mesh.setInstances(gl, fam.instances)
-          fam.mesh.drawInstanced(gl, fam.count)
+        visible.add(br)
+        for (const d of br.draws) {
+          setBay(surfProg!, br, camPos, look, decay, time, d.shell)
+          setSurface(surfProg!, d)
+          d.mesh.drawInstanced(gl, d.count)
         }
       }
 
-      // --- resolve MSAA into a sampleable texture ---
+      // Headwalls: one quad each, the portals cut per pixel and antialiased
+      // through alpha-to-coverage.
+      setFrame(wallProg!, frame)
+      gl.enable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+      for (const wr of walls) {
+        if (!visible.has(wr.bay))
+          continue
+        setBay(wallProg!, wr.bay, camPos, look, decay, time, false)
+        setSurface(wallProg!, { mesh: wr.mesh, surface: SURF[wr.wall.surface], count: 1, mapping: 0, shell: false })
+        wallProg!.uniform1f('uPom', 0)
+        gl.uniform2fv(wallProg!.loc('uHoleA'), wr.holeA)
+        gl.uniform2fv(wallProg!.loc('uHoleB'), wr.holeB)
+        gl.uniform2i(wallProg!.loc('uHoleN'), wr.nA, wr.nB)
+        wr.mesh.drawInstanced(gl, 1)
+      }
+      gl.disable(gl.SAMPLE_ALPHA_TO_COVERAGE)
+
+      // The flood.
+      if (visible.has(annex)) {
+        setFrame(waterProg!, frame)
+        // The water's vertices carry their own arc length in uv.x, like a
+        // shell's: fogged by where each part of the flood is, not by s = 0.
+        setBay(waterProg!, annex, camPos, look, decay, time, true)
+        setSurface(waterProg!, { mesh: waterMesh, surface: SURF.black, count: 1, mapping: 0, shell: false })
+        waterProg!.uniform1f('uLift', flood - waterBase)
+        waterProg!.uniform4f('uWater', 0.82, 0.6, 0, 0)
+        gl.enable(gl.BLEND)
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA)
+        gl.depthMask(false)
+        gl.disable(gl.CULL_FACE)
+        waterMesh.drawInstanced(gl, 1)
+        gl.depthMask(true)
+        gl.enable(gl.CULL_FACE)
+        gl.disable(gl.BLEND)
+      }
+
+      // The cab, last and on top, lit by whatever the car is passing.
+      {
+        cabInstance.set([
+          eye[0], eye[1], eye[2], 1,
+          trainFwd[0], trainFwd[1], trainFwd[2], 1,
+          trainUp[0], trainUp[1], trainUp[2], 1,
+          s, 0, 0.99, 0,
+        ])
+
+        const here = bays.find(b => b.spans === spans && b.index === spanIndexAt(spans, s, L)) ??
+          bays.find(b => b.bay.id === spans[spanIndexAt(spans, s, L)].bay.id) ?? bays[0]
+        gl.clear(gl.DEPTH_BUFFER_BIT)
+        surfProg!.use()
+        for (const d of cabDraws) {
+          d.mesh.setInstances(gl, cabInstance)
+          setBay(surfProg!, here, camPos, look, decay, time, false)
+          surfProg!.uniform4f('uRupture', 0, 0, -1, 0)
+          setSurface(surfProg!, d)
+          d.mesh.drawInstanced(gl, 1)
+        }
+      }
+
+      // --- resolve ---
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, msaaFbo)
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sceneFbo)
       gl.blitFramebuffer(0, 0, w, h, 0, 0, w, h, gl.COLOR_BUFFER_BIT, gl.NEAREST)
 
-      // --- bloom ---
+      // --- bloom: down the chain, then back up it ---
       gl.disable(gl.DEPTH_TEST)
       gl.disable(gl.CULL_FACE)
-
-      const bw = Math.max(1, w >> 1)
-      const bh = Math.max(1, h >> 1)
-
-      gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[0])
-      gl.viewport(0, 0, bw, bh)
-      brightP.use()
-      gl.activeTexture(gl.TEXTURE0)
-      gl.bindTexture(gl.TEXTURE_2D, sceneTex)
-      brightP.uniform1i('uSrc', 0)
-      brightP.uniform1f('uThreshold', 0.88)
-      drawPost(brightP)
-
-      blurP.use()
-      for (let pass = 0; pass < 2; pass++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[(pass + 1) % 2])
+      downProg!.use()
+      downProg!.uniform1i('uSrc', 0)
+      downProg!.uniform1f('uDecode', hdr ? 0 : 1)
+      for (let i = 0; i < LEVELS; i++) {
+        const [ bw, bh ] = bloomSize[i]
+        const src        = i === 0 ? sceneTex : bloomTex[i - 1]
+        const [ sw, sh ] = i === 0 ? [ w, h ] : bloomSize[i - 1]
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[i])
         gl.viewport(0, 0, bw, bh)
         gl.activeTexture(gl.TEXTURE0)
-        gl.bindTexture(gl.TEXTURE_2D, bloomTex[pass % 2])
-        blurP.uniform1i('uSrc', 0)
-        if (pass === 0)
-          blurP.uniform2f('uDir', 1.6 / bw, 0)
-        else
-          blurP.uniform2f('uDir', 0, 1.6 / bh)
-        drawPost(blurP)
+        gl.bindTexture(gl.TEXTURE_2D, src)
+        downProg!.uniform2f('uTexel', 1 / sw, 1 / sh)
+        downProg!.uniform1f('uThreshold', i === 0 ? 1.0 : -1)
+        if (i === 1)
+          downProg!.uniform1f('uDecode', 0)
+        drawQuad()
       }
+      upProg!.use()
+      upProg!.uniform1i('uSrc', 0)
+      gl.enable(gl.BLEND)
+      gl.blendFunc(gl.ONE, gl.ONE)
+      for (let i = LEVELS - 1; i > 0; i--) {
+        const [ tw, th ] = bloomSize[i - 1]
+        const [ sw, sh ] = bloomSize[i]
+        gl.bindFramebuffer(gl.FRAMEBUFFER, bloomFbo[i - 1])
+        gl.viewport(0, 0, tw, th)
+        gl.activeTexture(gl.TEXTURE0)
+        gl.bindTexture(gl.TEXTURE_2D, bloomTex[i])
+        upProg!.uniform2f('uTexel', 1 / sw, 1 / sh)
+        upProg!.uniform1f('uRadius', 1.0)
+        drawQuad()
+      }
+      gl.disable(gl.BLEND)
 
-      // --- composite to the screen ---
+      // --- composite ---
       gl.bindFramebuffer(gl.FRAMEBUFFER, null)
       gl.viewport(0, 0, w, h)
-      compP.use()
+      compProg!.use()
       gl.activeTexture(gl.TEXTURE0)
       gl.bindTexture(gl.TEXTURE_2D, sceneTex)
-      compP.uniform1i('uScene', 0)
+      compProg!.uniform1i('uScene', 0)
       gl.activeTexture(gl.TEXTURE1)
       gl.bindTexture(gl.TEXTURE_2D, bloomTex[0])
-      compP.uniform1i('uBloom', 1)
-      compP.uniform4f('uDecay', decay[0], decay[1], decay[2], decay[3])
-      compP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
-      compP.uniform1f('uTime', time)
-      drawPost(compP)
+      compProg!.uniform1i('uBloom', 1)
+      compProg!.uniform4f('uDecay', decay[0], decay[1], decay[2], decay[3])
+      compProg!.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+      compProg!.uniform1f('uTime', time)
+      compProg!.uniform1f('uExposure', exposure)
+      compProg!.uniform1f('uDecode', hdr ? 0 : 1)
+      compProg!.uniform1f('uHeavy', hv)
+      compProg!.uniform2f('uAspect', w / Math.max(1, h), 1)
+      drawQuad()
     },
 
     dispose () {
-      releaseTargets()
+      release()
       gl.deleteBuffer(quad)
-      for (const m of units.values())
-        m.dispose(gl)
-      for (const c of [ main, alt ])
-        for (const bay of c.bays)
-          bay.shell.dispose(gl)
-      geoProg.dispose()
-      brightP.dispose()
-      blurP.dispose()
-      compP.dispose()
+      for (const br of bays)
+        for (const d of br.draws)
+          d.mesh.dispose(gl)
+      for (const wr of walls)
+        wr.mesh.dispose(gl)
+      waterMesh.dispose(gl)
+      cabDraws.forEach(d => d.mesh.dispose(gl))
+      materials.dispose(gl)
+      skies.forEach(sky => sky.dispose(gl))
+      programs.forEach(p => p!.dispose())
     },
   }
 }

@@ -69,9 +69,9 @@
 // A small fraction of the bank is fed back into the ray basis as `headRoll`,
 // because a rider's head does lag the car, and because it is the shot.
 
-import type { JourneySimulation } from '@/components/withShaderJourney'
-import type { CustomUniforms } from '@/lib/shaderQuad'
-import type { JourneyMarks } from '@/lib/journeyTransport'
+import type { JourneySimulation } from '✦/components/withShaderJourney'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 const D = Math.PI / 180

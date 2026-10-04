@@ -1,4 +1,4 @@
-import type { JourneyMarks } from '@/lib/journeyTransport'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 export interface SkybridgesSection {

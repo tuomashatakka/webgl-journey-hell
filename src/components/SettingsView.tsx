@@ -13,8 +13,8 @@ import {
   SPEED_CHOICES,
   FRAME_RATE_CHOICES,
   frameRateLabel,
-} from '@/lib/settings'
-import { requestGyroscopePermission } from '@/lib/panControl'
+} from '✦/lib/settings'
+import { requestGyroscopePermission } from '✦/lib/panControl'
 
 
 interface SettingsViewProps {

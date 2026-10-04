@@ -1,5 +1,5 @@
-import type { JourneyAudioEngine } from '@/hooks/use-audio-engine'
-import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
 
 
 function scalar (state: CustomUniforms | undefined, name: string): number {
@@ -59,11 +59,17 @@ class StairwellAudioEngine implements JourneyAudioEngine {
     const rupture   = scalar(state, 'uRupture')
     const finale    = scalar(state, 'uFinale')
     const purgatory = scalar(state, 'uPurgatory')
+    const seam      = scalar(state, 'uSeam')
     const now       = this.ctx.currentTime
     const targets   = audioTargets(section, rupture, finale, purgatory)
 
-    this.wind?.gain.setTargetAtTime(targets.wind, now, 0.7)
-    this.machine?.gain.setTargetAtTime(targets.machine, now, 0.45)
+    // Through the wall at each seam the weather drops away and the machines
+    // of both acts are muffled by a few metres of concrete: the tunnel is the
+    // one quiet place on the route, and it is where the soundscape changes
+    // over, so the change is never heard happening.
+    const shelter = 1 - seam * 0.75
+    this.wind?.gain.setTargetAtTime(targets.wind * shelter, now, 0.7)
+    this.machine?.gain.setTargetAtTime(targets.machine * (1 - seam * 0.5), now, 0.45)
     this.impact?.gain.setTargetAtTime(
       (section === 3 ? 0.7 : 0.22 + finale * 0.55) * (1 - purgatory * 0.62), now, 0.35)
 

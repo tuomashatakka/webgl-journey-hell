@@ -1,5 +1,5 @@
-import type { JourneySimulation } from '@/components/withJourneyShell'
-import type { JourneyMarks } from '@/lib/journeyTransport'
+import type { JourneySimulation } from '✦/components/withJourneyShell'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 export const LOOP_LENGTH = 500
@@ -15,6 +15,13 @@ export const PURGATORY_START = FINALE_DISTANCE
 
 /** One circuit of the residue. It re-enters itself, so this is a period, not a length. */
 export const PURGATORY_LENGTH = 260
+
+/**
+ * Half the length of the tunnel through the wall at every seam. The renderer
+ * and the shader read it from here, so the place the stair blends its slope,
+ * the place the sky changes and the place the act changes are one place.
+ */
+export const SEAM_HALF = 9
 
 /** Units over which the fall's aftermath settles into the drift. */
 const PURGATORY_SETTLE = 30
@@ -70,7 +77,22 @@ export interface StairwellState {
   loopProgress:    number;
   section:         StairwellSection;
   sectionProgress: number;
-  transition:      number;
+
+  /**
+   * How deep in a seam's tunnel the walker is: 1 at the wall's midline (which
+   * is where one act hands to the next), falling to 0 at the portals. The
+   * same either side of the handover, by construction.
+   */
+  seam: number;
+
+  /**
+   * The acts either side, for the renderer: the next one is visible through
+   * the far portal, and so is its own far wall, with the act after that
+   * framed in the bore.
+   */
+  prevSection: number;
+  nextSection: number;
+  farSection:  number;
 
   /**
    * Traversal damage, normalised to 0..1 across the four loops. Kept as the
@@ -120,6 +142,11 @@ export function smootherstep (edge0: number, edge1: number, value: number): numb
   return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
+function seamDepth (localZ: number, length: number): number {
+  const d = Math.min(localZ, length - localZ)
+  return 1 - smoothstep(0, SEAM_HALF, d)
+}
+
 function sectionAt (localZ: number): StairwellSection {
   return STAIRWELL_SECTIONS.find(section => localZ < section.end) ?? STAIRWELL_SECTIONS.at(-1)!
 }
@@ -138,7 +165,10 @@ export function getStairwellState (z: number): StairwellState {
       loopProgress:      1,
       section:           PURGATORY_SECTION,
       sectionProgress:   localZ / PURGATORY_LENGTH,
-      transition:        0,
+      seam:              seamDepth(localZ, PURGATORY_LENGTH),
+      prevSection:       lap === 0 ? 5 : 6,
+      nextSection:       6,
+      farSection:        6,
       rupture:           1,
       decay:             LOOP_COUNT,
       purgatory:         MAX_BLEED + (1 - MAX_BLEED) * smoothstep(0, PURGATORY_BLOOM, depth),
@@ -166,6 +196,7 @@ export function getStairwellState (z: number): StairwellState {
   // rather than over the tail of the sixth act alone, as it used to — is what
   // makes the reset arrive as a slide instead of a step.
   const decay  = loop + smoothstep(0.80, 1.0, loopProgress)
+  const next   = actAfter(section.id, loop)
   const finale = loop === LOOP_COUNT - 1 && section.id === 5
     ? smoothstep(0.04, 0.96, progress)
     : 0
@@ -176,7 +207,10 @@ export function getStairwellState (z: number): StairwellState {
     loopProgress,
     section,
     sectionProgress:   progress,
-    transition:        smootherstep(0.52, 1, progress),
+    seam:              seamDepth(sectionLocal, sectionLen),
+    prevSection:       section.id === 0 ? 5 : section.id - 1,
+    nextSection:       next,
+    farSection:        actAfter(next, section.id === 5 ? loop + 1 : loop),
     rupture:           Math.min(1, decay / (LOOP_COUNT - 1)),
     decay,
     purgatory:         clamp01(decay / LOOP_COUNT) * MAX_BLEED,
@@ -185,6 +219,19 @@ export function getStairwellState (z: number): StairwellState {
     purgatoryLap:      0,
     purgatoryProgress: 0,
   }
+}
+
+/**
+ * The act after `id` on traversal `loop`. The last act of the last traversal
+ * does not hand back to the spillway: its far wall opens on the residue, and
+ * the residue only ever opens on more of itself.
+ */
+function actAfter (id: number, loop: number): number {
+  if (id >= 6)
+    return 6
+  if (id === 5)
+    return loop === LOOP_COUNT - 1 ? 6 : 0
+  return id + 1
 }
 
 export function getWalkSpeed (z: number): number {
@@ -201,6 +248,15 @@ export function getWalkSpeed (z: number): number {
 
   let speed = state.section.speed
   speed *= 1 - 0.22 * smoothstep(0.82, 1, state.sectionProgress)
+
+  // Leave each tunnel at the pace you went into it, and settle to this act's
+  // over its first stretch: the pace and its rate of change are continuous
+  // across every switch of act. (It used to step at the midline, which the
+  // eye reads as a hitch even where the picture is seamless.)
+  if (state.loop > 0 || state.section.id > 0) {
+    const entry = STAIRWELL_SECTIONS[state.prevSection].speed * 0.78
+    speed = entry + (speed - entry) * smoothstep(0, 0.18, state.sectionProgress)
+  }
 
   if (state.loop === LOOP_COUNT - 1 && state.section.id === 5) {
     const fall = smoothstep(0.18, 0.52, state.sectionProgress) *
@@ -263,7 +319,10 @@ export function createStairwellSimulation (): JourneySimulation {
         uPlayerZ:         state.z,
         uSection:         state.section.id,
         uSectionProgress: state.sectionProgress,
-        uTransition:      state.transition,
+        uSeam:            state.seam,
+        uPrevSection:     state.prevSection,
+        uNextSection:     state.nextSection,
+        uFarSection:      state.farSection,
         uLoop:            state.loop,
         uLoopProgress:    state.loopProgress,
         uRupture:         state.rupture,

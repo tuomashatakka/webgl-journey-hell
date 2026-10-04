@@ -24,8 +24,8 @@
 // each point; rotated by the same bank it is the world normal, so shading stays
 // smooth without a second pass.
 
-import type { ClosedCurve, Frame } from '@/lib/curve'
-import type { AttribSpec } from '@/lib/mesh'
+import type { ClosedCurve, Frame } from '✦/lib/curve'
+import type { AttribSpec } from '✦/lib/mesh'
 
 
 export const SWEEP_FLOATS = 16

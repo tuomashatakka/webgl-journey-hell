@@ -33,8 +33,8 @@
 //    centre, a nave, and — over the overlook — almost nothing at all, which
 //    after the nave is the loudest thing in the journey.
 
-import type { JourneyAudioEngine } from '@/hooks/use-audio-engine'
-import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
 import { PHASE_WRAP } from './kinematics'
 
 

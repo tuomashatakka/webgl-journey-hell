@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
-import JourneyGrid from '@/components/JourneyGrid'
-import SettingsButton from '@/components/SettingsButton'
+import Link from 'next/link'
+import JourneyGrid from '✦/components/JourneyGrid'
+import SettingsButton from '✦/components/SettingsButton'
 
 
 export const metadata: Metadata = {
@@ -19,6 +20,10 @@ export default function IndexPage () {
 
       <p className="index-subtitle">
         shader journeys // select a descent
+      </p>
+
+      <p className="index-assets-link">
+        <Link href="/assets">Δ the asset library →</Link>
       </p>
     </header>
 

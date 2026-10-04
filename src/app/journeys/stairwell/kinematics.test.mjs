@@ -29,20 +29,40 @@ describe('stairwell route', () => {
     }
   })
 
-  test('eases each handoff across the closing 48 percent of an act', () => {
-    const section = STAIRWELL_SECTIONS[0]
-    const at      = progress => getStairwellState(
-      section.start + (section.end - section.start) * progress,
-    ).transition
+  test('peaks the seam at every handover, the same from either side', () => {
+    for (const section of STAIRWELL_SECTIONS) {
+      const before = getStairwellState(section.end - 1e-6)
+      const after  = getStairwellState(section.end + 1e-6)
+      expect(before.seam).toBeGreaterThan(0.999)
+      expect(after.seam).toBeGreaterThan(0.999)
+      // Outside the tunnel the walls are someone else's problem.
+      expect(getStairwellState(section.start + (section.end - section.start) / 2).seam).toBe(0)
+    }
+  })
 
-    expect(at(0.52)).toBe(0)
-    expect(at(0.76)).toBeCloseTo(0.5, 8)
-    expect(at(0.999)).toBeGreaterThan(0.999)
+  test('names the act through each far portal', () => {
+    expect(getStairwellState(20).nextSection).toBe(1)
+    expect(getStairwellState(480).nextSection).toBe(0)
+    // The fourth shear horizon opens on the residue, not the spillway.
+    expect(getStairwellState(1980).nextSection).toBe(6)
+    expect(getStairwellState(PURGATORY_START + 10).prevSection).toBe(5)
+    expect(getStairwellState(PURGATORY_START + PURGATORY_LENGTH + 10).prevSection).toBe(6)
+    // ...and the act beyond the next one's far wall, framed in its bore.
+    expect(getStairwellState(20).farSection).toBe(2)
+    expect(getStairwellState(400).farSection).toBe(0)
+    expect(getStairwellState(480).farSection).toBe(1)
+    expect(getStairwellState(1900).farSection).toBe(6)
+    expect(getStairwellState(PURGATORY_START + 10).farSection).toBe(6)
+  })
 
-    // The point of the quintic: it leaves and arrives flat, so neither end of
-    // the blend shows a kick. smoothstep is ~4x steeper here.
-    expect(at(0.53)).toBeLessThan(0.0002)
-    expect(at(0.99)).toBeGreaterThan(0.9995)
+  test('the pace is continuous across every switch of act', () => {
+    for (const s of STAIRWELL_SECTIONS)
+      for (const loop of [ 0, 1, 2, 3 ]) {
+        const z = loop * LOOP_LENGTH + s.start
+        if (z === 0)
+          continue
+        expect(Math.abs(getWalkSpeed(z + 0.001) - getWalkSpeed(z - 0.001))).toBeLessThan(0.01)
+      }
   })
 
   test('returns to the same section with stronger rupture', () => {

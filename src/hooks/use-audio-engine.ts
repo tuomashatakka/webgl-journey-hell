@@ -11,7 +11,7 @@
 //   <button onClick={ audio.toggle }>{ audio.isMuted ? 'UNMUTE' : 'MUTE' }</button>
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
 
 
 /** Minimum surface a journey audio engine has to expose. */

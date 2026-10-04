@@ -41,11 +41,11 @@
 // down the bonnet. In the cave the car floats, and the same pose picks up the
 // water's heave, roll and a slow yaw drift on the eddies.
 
-import type { JourneySimulation } from '@/components/withJourneyShell'
-import type { CustomUniforms } from '@/lib/shaderQuad'
-import type { JourneyMarks } from '@/lib/journeyTransport'
-import type { Frame } from '@/lib/curve'
-import { levelFrame, newFrame } from '@/lib/sweep'
+import type { JourneySimulation } from '✦/components/withJourneyShell'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
+import type { Frame } from '✦/lib/curve'
+import { levelFrame, newFrame } from '✦/lib/sweep'
 import {
   DECAY_SECTION,
   SECTION_COUNT,

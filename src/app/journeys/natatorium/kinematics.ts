@@ -26,9 +26,9 @@
 // comes from the water instead — the building floods further every lap, so lap 1
 // you drown and resurface, lap 2 you barely surface, lap 3 you never do.
 
-import type { JourneySimulation } from '@/components/withShaderJourney'
-import type { CustomUniforms } from '@/lib/shaderQuad'
-import type { JourneyMarks } from '@/lib/journeyTransport'
+import type { JourneySimulation } from '✦/components/withShaderJourney'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 export function smoothstep (edge0: number, edge1: number, x: number): number {

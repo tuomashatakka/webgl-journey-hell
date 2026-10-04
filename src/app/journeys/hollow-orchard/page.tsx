@@ -1,6 +1,6 @@
 'use client'
 
-import { withShaderJourney } from '@/components/withShaderJourney'
+import { withShaderJourney } from '✦/components/withShaderJourney'
 import { createHollowOrchardAudio } from './audio'
 import { createHollowOrchardSimulation } from './kinematics'
 import { hollowOrchardFrag } from './shader'

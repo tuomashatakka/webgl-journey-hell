@@ -28,8 +28,8 @@ import {
   tileArc
 } from './physics'
 import type { FoundryState } from './physics'
-import type { JourneySimulation } from '@/components/withShaderJourney'
-import type { JourneyMarks } from '@/lib/journeyTransport'
+import type { JourneySimulation } from '✦/components/withShaderJourney'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 export interface FoundrySection {

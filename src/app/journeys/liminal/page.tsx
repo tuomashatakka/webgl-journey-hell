@@ -3,12 +3,12 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { vsQuad, fsScene, fsPost } from './shaders'
 import { createLiminalRide, getKinematicState } from './kinematics'
-import { useSettings } from '@/components/SettingsProvider'
+import { useSettings } from '✦/components/SettingsProvider'
 import { Settings as SettingsIcon } from 'lucide-react'
 import Link from 'next/link'
-import SettingsView from '@/components/SettingsView'
-import useAudioEngine from '@/hooks/use-audio-engine'
-import usePanControl from '@/hooks/use-pan-control'
+import SettingsView from '✦/components/SettingsView'
+import useAudioEngine from '✦/hooks/use-audio-engine'
+import usePanControl from '✦/hooks/use-pan-control'
 import {
   useDisplayFilter,
   useFpsMeter,
@@ -16,14 +16,14 @@ import {
   useLatestRef,
   useResolutionResize
 
-} from '@/hooks/use-journey-runtime'
-import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '@/lib/crtPass'
-import { signalLossAt } from '@/lib/signalLoss'
-import { createSignalOverlay } from '@/lib/signalOverlay'
-import { createJourneyTransport } from '@/lib/journeyTransport'
-import type { JourneyTransport as Transport } from '@/lib/journeyTransport'
-import JourneyTransport from '@/components/JourneyTransport'
-import type { TransportView } from '@/components/JourneyTransport'
+} from '✦/hooks/use-journey-runtime'
+import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '✦/lib/crtPass'
+import { signalLossAt } from '✦/lib/signalLoss'
+import { createSignalOverlay } from '✦/lib/signalOverlay'
+import { createJourneyTransport } from '✦/lib/journeyTransport'
+import type { JourneyTransport as Transport } from '✦/lib/journeyTransport'
+import JourneyTransport from '✦/components/JourneyTransport'
+import type { TransportView } from '✦/components/JourneyTransport'
 
 
 class CyberLiminalAudioEngine {

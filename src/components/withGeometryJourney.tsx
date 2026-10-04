@@ -24,7 +24,7 @@
 //
 // Usage:
 //   'use client';
-//   import { withGeometryJourney } from '@/components/withGeometryJourney';
+//   import { withGeometryJourney } from '✦/components/withGeometryJourney';
 //   import { createLoopLineScene } from './scene';
 //   export default withGeometryJourney(createLoopLineScene);
 

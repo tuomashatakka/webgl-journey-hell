@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css' // Global styles
-import { SettingsProvider } from '@/components/SettingsProvider'
+import { SettingsProvider } from '✦/components/SettingsProvider'
 
 
 export const metadata: Metadata = {

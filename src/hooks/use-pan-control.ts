@@ -10,8 +10,8 @@
 //   gl.uniform2f(loc, pointerRef.current.x, pointerRef.current.y)
 
 import { useCallback, useEffect, useRef } from 'react'
-import { createPanControl } from '@/lib/panControl'
-import type { PanControl, PanControlOptions, PanVector } from '@/lib/panControl'
+import { createPanControl } from '✦/lib/panControl'
+import type { PanControl, PanControlOptions, PanVector } from '✦/lib/panControl'
 
 
 export interface PanControlHandle {

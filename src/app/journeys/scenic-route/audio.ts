@@ -19,8 +19,8 @@
 // Section blending comes from uFogCol.w, the "surface" scalar the simulation
 // already blends across section windows: 0 asphalt, 2 fall, 3 gullet, 4 water.
 
-import type { JourneyAudioEngine } from '@/hooks/use-audio-engine'
-import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
 
 
 const RAMP = 0.08

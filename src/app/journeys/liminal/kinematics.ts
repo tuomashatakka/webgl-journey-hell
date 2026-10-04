@@ -1,4 +1,4 @@
-import type { JourneyMarks } from '@/lib/journeyTransport'
+import type { JourneyMarks } from '✦/lib/journeyTransport'
 
 
 /** One traversal. The literals below predate this constant; it is not a rename. */

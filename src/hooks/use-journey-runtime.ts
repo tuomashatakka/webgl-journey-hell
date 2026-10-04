@@ -10,8 +10,8 @@
 // identically.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { displayFilter } from '@/lib/settings'
-import type { GraphicsSettings } from '@/lib/settings'
+import { displayFilter } from '✦/lib/settings'
+import type { GraphicsSettings } from '✦/lib/settings'
 
 
 /**

@@ -1,6 +1,6 @@
 'use client'
 
-import { withShaderJourney } from '@/components/withShaderJourney'
+import { withShaderJourney } from '✦/components/withShaderJourney'
 import { createFoundrySimulation } from './kinematics'
 import { foundryFrag } from './shader'
 

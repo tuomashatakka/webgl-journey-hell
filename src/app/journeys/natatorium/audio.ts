@@ -19,8 +19,8 @@
 //    slow constant smears those dips into one dull fade instead of rendering
 //    every individual moment the ears break the surface.
 
-import type { JourneyAudioEngine } from '@/hooks/use-audio-engine'
-import type { CustomUniforms } from '@/lib/shaderQuad'
+import type { JourneyAudioEngine } from '✦/hooks/use-audio-engine'
+import type { CustomUniforms } from '✦/lib/shaderQuad'
 import { TYPE_PLANT, TYPE_RAW } from './kinematics'
 
 

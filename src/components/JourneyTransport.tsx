@@ -10,7 +10,7 @@
 // switched off while shuttling, because there the bar is *supposed* to jump.
 
 import { useEffect, useRef, useState } from 'react'
-import type { TransportAction, TransportMode } from '@/lib/journeyTransport'
+import type { TransportAction, TransportMode } from '✦/lib/journeyTransport'
 
 
 const SAMPLE_MS = 60

@@ -1,6 +1,6 @@
 'use client'
 
-import { withShaderJourney } from '@/components/withShaderJourney'
+import { withShaderJourney } from '✦/components/withShaderJourney'
 import { createSwitchbackAudio } from './audio'
 import { createSwitchbackSimulation } from './kinematics'
 import { switchbackFrag } from './shader'

@@ -15,8 +15,8 @@
 // The dial faces are drawn once on a Canvas2D and uploaded; the needles are
 // meshes rotated by uniform, so the only per-frame work is two angles.
 
-import { createMeshBuilder } from '@/lib/mesh'
-import type { MeshBuilder } from '@/lib/mesh'
+import { createMeshBuilder } from '✦/lib/mesh'
+import type { MeshBuilder } from '✦/lib/mesh'
 
 
 export const TAG = {

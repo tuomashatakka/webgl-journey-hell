@@ -1,6 +1,6 @@
 'use client'
 
-import { withGeometryJourney } from '@/components/withGeometryJourney'
+import { withGeometryJourney } from '✦/components/withGeometryJourney'
 import { createScenicRouteSimulation } from './kinematics'
 import { createScenicRouteAudio } from './audio'
 import { createScenicRouteScene } from './scene'
