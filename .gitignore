@@ -6,10 +6,6 @@ coverage/
 .env*
 !.env.example
 .playwright-mcp/
-public/*
-# but DO track shipped journey assets (e.g. the skybridges HDRI env map),
-# which the static export needs at build time.
-!public/journeys
 out/*
 # The repo is bun-managed; a second lockfile desyncs from bun.lock and breaks CI.
 package-lock.json

@@ -1,21 +1,21 @@
 // Serve the bare harness (tools/harness/entry.ts) for tools/journey.mjs.
 //
-//   node tools/harness/serve.mjs [--port=4173]   # standalone, for a browser
+//   node tools/harness/serve.mjs [--port=N]   # standalone, for a browser
 //   node tools/journey.mjs <cmd> <journey> --bare …   # started in-process
 //
 // The bundle is rebuilt on every request for it, which takes a few hundred
 // milliseconds and means an edit to a shader is picked up by the next shot with
-// nothing to restart. Static files come straight out of public/, at the root,
-// because the harness bundle is built with an empty basePath.
+// nothing to restart.
 
 import { execFile } from 'node:child_process'
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { CONFIG } from '../../src/packages/config/config.ts'
 
 
 const run   = promisify(execFile)
@@ -78,12 +78,6 @@ export async function startHarness ({ port = 0, quiet = true } = {}) {
         return
       }
 
-      const file = path.join(ROOT, 'public', path.normalize(decodeURIComponent(url.pathname)))
-      if (file.startsWith(path.join(ROOT, 'public')) && existsSync(file) && statSync(file).isFile()) {
-        res.writeHead(200, { 'content-type': TYPES[path.extname(file)] ?? 'application/octet-stream' })
-        createReadStream(file).pipe(res)
-        return
-      }
       res.writeHead(404).end()
     }
     catch (err) {
@@ -103,7 +97,7 @@ export async function startHarness ({ port = 0, quiet = true } = {}) {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const port = Number((/--port=(\d+)/).exec(process.argv.join(' '))?.[1] ?? 4173)
+  const port = Number((/--port=(\d+)/).exec(process.argv.join(' '))?.[1] ?? CONFIG.tools.harnessPort)
   const h    = await startHarness({ port, quiet: false })
   console.log(`harness at ${h.url}/journeys/<slug>?t=12&w=640&h=360`)
 }

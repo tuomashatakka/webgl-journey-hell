@@ -1,5 +1,15 @@
 // Single source of truth for the landing grid and the journey routes.
 // Adding a journey = append one entry here + create app/journeys/<slug>/page.tsx.
+import { staticUrl } from '@wjh/web/assetUrl'
+import liminalPoster from '../../assets/posters/liminal.jpg'
+import switchbackPoster from '../../assets/posters/switchback.jpg'
+import natatoriumPoster from '../../assets/posters/natatorium.jpg'
+import stairwellPoster from '../../assets/posters/stairwell.jpg'
+import skybridgesPoster from '../../assets/posters/skybridges.jpg'
+import foundryPoster from '../../assets/posters/foundry.jpg'
+import hollowOrchardPoster from '../../assets/posters/hollow-orchard.jpg'
+import loopLinePoster from '../../assets/posters/loop-line.jpg'
+import scenicRoutePoster from '../../assets/posters/scenic-route.jpg'
 import { foundryPreviewFrag } from './foundry/shader'
 import { hollowOrchardPreviewFrag } from './hollow-orchard/shader'
 import { loopLinePreviewFrag } from './loop-line/shader'
@@ -25,12 +35,12 @@ export interface Journey {
   gradient: [string, string];
 
   /**
-   * Screenshot of the running journey (under /public), shown before hover and
+   * Screenshot of the running journey (assets/posters), shown before hover and
    * wherever the live preview can't run: touch devices with no hover, browsers
    * without WebGL, a preview shader that failed to compile. Captured with
    * `tools/shoot-posters.mjs`.
    */
-  poster?: string;
+  poster: string;
 
   /** Compact fragment shader for the hover-to-live preview (iTime/iResolution/uPointer). */
   previewShader: string;
@@ -115,7 +125,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'horror', 'CRT', 'audio' ],
     accent:        '#00ffaa',
     gradient:      [ '#04110d', '#0a0410' ],
-    poster:        '/journeys/liminal.jpg',
+    poster:        staticUrl(liminalPoster),
     previewShader: liminalPreviewFrag,
     status:        'live',
   },
@@ -126,7 +136,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'dreamcore', 'mine cart', 'coaster', 'simulated', 'loop' ],
     accent:        '#ff9ec4',
     gradient:      [ '#f3b9c8', '#221226' ],
-    poster:        '/journeys/switchback.jpg',
+    poster:        staticUrl(switchbackPoster),
     previewShader: switchbackPreviewFrag,
     status:        'live',
   },
@@ -137,7 +147,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'poolrooms', 'liminal', 'water', 'audio' ],
     accent:        '#67d5e0',
     gradient:      [ '#9fd0dc', '#2c5866' ],
-    poster:        '/journeys/natatorium.jpg',
+    poster:        staticUrl(natatoriumPoster),
     previewShader: natatoriumPreviewFrag,
     status:        'live',
   },
@@ -148,7 +158,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'industrial', 'volumetric', 'loop', 'audio' ],
     accent:        '#9ed9ff',
     gradient:      [ '#142835', '#190a28' ],
-    poster:        '/journeys/stairwell.jpg',
+    poster:        staticUrl(stairwellPoster),
     previewShader: stairwellPreviewFrag,
     status:        'live',
   },
@@ -159,7 +169,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'glass', 'vertigo' ],
     accent:        '#9fd8ff',
     gradient:      [ '#dbe6f2', '#aebfce' ],
-    poster:        '/journeys/skybridges.jpg',
+    poster:        staticUrl(skybridgesPoster),
     previewShader: skybridgesPreviewFrag,
     status:        'live',
   },
@@ -170,7 +180,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'industrial', 'rigid-body', 'simulated', 'loop' ],
     accent:        '#ff8a3d',
     gradient:      [ '#241206', '#0a0708' ],
-    poster:        '/journeys/foundry.jpg',
+    poster:        staticUrl(foundryPoster),
     previewShader: foundryPreviewFrag,
     status:        'live',
   },
@@ -181,7 +191,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'raymarch', 'body-horror', 'organic', 'audio', 'loop' ],
     accent:        '#d8a13a',
     gradient:      [ '#2a1c07', '#150a1b' ],
-    poster:        '/journeys/hollow-orchard.jpg',
+    poster:        staticUrl(hollowOrchardPoster),
     previewShader: hollowOrchardPreviewFrag,
     status:        'live',
   },
@@ -192,7 +202,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'geometry', 'rasterized', 'transit', 'dreamcore', 'simulated', 'loop' ],
     accent:        '#b39dff',
     gradient:      [ '#cfc4ff', '#0d0b14' ],
-    poster:        '/journeys/loop-line.jpg',
+    poster:        staticUrl(loopLinePoster),
     previewShader: loopLinePreviewFrag,
     status:        'live',
   },
@@ -203,7 +213,7 @@ export const JOURNEYS: Journey[] = [
     tags:          [ 'geometry', 'rasterized', 'driving', 'coaster', 'sea', 'body-horror', 'simulated', 'loop' ],
     accent:        '#ffb054',
     gradient:      [ '#f2c27a', '#061a26' ],
-    poster:        '/journeys/scenic-route.jpg',
+    poster:        staticUrl(scenicRoutePoster),
     previewShader: scenicRoutePreviewFrag,
     status:        'live',
   },

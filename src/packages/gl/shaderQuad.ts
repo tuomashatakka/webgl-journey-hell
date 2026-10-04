@@ -13,7 +13,6 @@
 // The env map is opt-in; it loads asynchronously and uEnvLoaded gates its use,
 // so the first frames fall back to a procedural environment.
 
-import { assetUrl } from '@wjh/web/assetUrl'
 import type { AnyGl } from './context'
 import { createGlProgram } from './program'
 import { QUAD_VS_100, createFullscreenQuad } from './quad'
@@ -46,7 +45,7 @@ export function createShaderQuad (gl: AnyGl, fragmentSource: string, options: Sh
     return null
 
   const quad = createFullscreenQuad(gl)
-  const env  = options.envUrl ? loadImageTexture(gl, assetUrl(options.envUrl)) : null
+  const env  = options.envUrl ? loadImageTexture(gl, options.envUrl) : null
 
   return {
     draw (frame) {

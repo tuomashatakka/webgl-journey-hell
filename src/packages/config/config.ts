@@ -298,4 +298,66 @@ export const CONFIG = {
     /** Arrow-key scrub step, as a fraction of the lap. */
     transportKeyStep: 0.02,
   },
+
+  tools: {
+    /** Where `bun run dev` serves, before the base path. */
+    devOrigin: 'http://localhost:3000',
+
+    /** Port of the standalone bare harness. */
+    harnessPort: 4173,
+
+    /**
+     * Small by default: journey.mjs frames are measurements, not portfolio shots,
+     * and a 320x200 buffer resolves a popping wall just as well as a 4K one while
+     * running ~40x faster. Override with --w/--h when the eye is the instrument.
+     */
+    defaultWidth: 320,
+    defaultHeight: 200,
+
+    /** The DOM overlays `journey.mjs hud` measures. */
+    hudIds: [ 'back-btn', 'fullscreen-btn', 'audio-btn', 'settings-btn', 'fps-display' ],
+
+    posters: {
+      /** Where the landing-grid stills live; the registry imports them from here. */
+      dir: 'assets/posters',
+      quality: 82,
+
+      /** 16:10, the card's aspect ratio. */
+      width: 1280,
+      height: 800,
+
+      /** The section each live shot waits for, and optionally the instant to seek to. */
+      shots: [
+        { slug: 'liminal', section: 'CRYSTAL CAVE' },
+        { slug: 'stairwell', section: 'PROTEAN WEATHER BRIDGE' },
+        { slug: 'skybridges', section: 'THE ASCENT' },
+        { slug: 'foundry', section: 'FURNACE FLOOR|GEARWORKS' },
+        { slug: 'scenic-route', section: 'THE FALL', t: 103.2 },
+        { slug: 'hollow-orchard', section: 'THE NURSERY' },
+        { slug: 'natatorium', section: 'TILE CORRIDOR' },
+        { slug: 'switchback', section: 'THE BOARDING PLATFORM' },
+        { slug: 'loop-line', section: 'THE VIADUCT', t: 87 },
+      ],
+
+      /** Instants the bare harness shoots at, for the journeys it is used for. */
+      bare: { 'loop-line': 87, 'stairwell': 24 },
+
+      /** Seeded into localStorage: cheap settings, because software GL runs at ~1 fps. */
+      settings: {
+        resolution: 0.75,
+        speed: 4,
+        heavyEffects: false,
+        brightness: 1,
+        contrast: 1,
+        maxFrameRate: 60,
+      },
+
+      /** Hide the chrome before the capture. */
+      hideHud: '.hud, #settings-btn, #journey-loader, #journey-title-intro, #journey-section-heading, nextjs-portal { display: none !important; }',
+
+      /** Seconds to wait for a section, and the settle after it is reached. */
+      sectionTimeoutMs: 240_000,
+      settleMs: 4000,
+    },
+  },
 } as const

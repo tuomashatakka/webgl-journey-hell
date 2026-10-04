@@ -49,15 +49,13 @@ import { existsSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { startHarness } from './harness/serve.mjs'
+import { CONFIG } from '../src/packages/config/config.ts'
 
 // Reassigned by --bare to the in-process harness.
-let BASE = process.env.JOURNEY_BASE_URL ?? 'http://localhost:3000/webgl-journey-hell'
+let BASE = process.env.JOURNEY_BASE_URL ?? `${CONFIG.tools.devOrigin}${CONFIG.site.basePath}`
 
-// Small by default: these are measurements, not portfolio shots, and a 320x200
-// buffer resolves a popping wall just as well as a 4K one while running ~40x
-// faster. Override with --w/--h when the eye is the instrument.
-const DEF_W = 320
-const DEF_H = 200
+const DEF_W = CONFIG.tools.defaultWidth
+const DEF_H = CONFIG.tools.defaultHeight
 
 function parseArgs (argv) {
   const [ cmd, journey, ...rest ] = argv
@@ -387,7 +385,7 @@ function uvFn () {
 // function of the URL. A gate that can never pass is noise, so it is not one.
 // The section headings are absent for the same reason (and are a full-viewport
 // canvas besides: fixed by construction).
-const HUD_IDS = [ 'back-btn', 'fullscreen-btn', 'audio-btn', 'settings-btn', 'fps-display' ]
+const HUD_IDS = CONFIG.tools.hudIds
 
 const hudFn = ids => ids.map(id => {
   const el = document.getElementById(id)

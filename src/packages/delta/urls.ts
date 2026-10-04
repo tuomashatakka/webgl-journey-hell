@@ -4,8 +4,9 @@
 // _next/static/media with a content hash and the basePath already applied,
 // and bun's file loader does the same for the bare harness. An import
 // resolves to a string under bun and to StaticImageData under Next, which
-// is all `urlOf` exists to paper over.
+// is all `staticUrl` exists to paper over.
 
+import { staticUrl } from '@wjh/web/assetUrl'
 import colorStrip from './materials/color.jpg'
 import normalStrip from './materials/normal.jpg'
 import detailStrip from './materials/detail.jpg'
@@ -20,26 +21,22 @@ import sky_NightSkyHDRI003 from './skies/NightSkyHDRI003.jpg'
 import sky_NightSkyHDRI008 from './skies/NightSkyHDRI008.jpg'
 import sky_NightSkyHDRI007 from './skies/NightSkyHDRI007.jpg'
 
-type Imported = string | { src: string }
-
-const urlOf = (a: Imported): string => (typeof a === 'string' ? a : a.src)
-
 export const MATERIAL_URLS = {
-  color:  urlOf(colorStrip),
-  normal: urlOf(normalStrip),
-  detail: urlOf(detailStrip),
+  color:  staticUrl(colorStrip),
+  normal: staticUrl(normalStrip),
+  detail: staticUrl(detailStrip),
 }
 
 /** Sky URL by ambientCG asset id. */
 export const SKY_URLS: Readonly<Record<string, string>> = {
-  DaySkyHDRI070B: urlOf(sky_DaySkyHDRI070B),
-  DaySkyHDRI071B: urlOf(sky_DaySkyHDRI071B),
-  EveningSkyHDRI046B: urlOf(sky_EveningSkyHDRI046B),
-  EveningSkyHDRI045B: urlOf(sky_EveningSkyHDRI045B),
-  EveningSkyHDRI047B: urlOf(sky_EveningSkyHDRI047B),
-  MorningSkyHDRI011B: urlOf(sky_MorningSkyHDRI011B),
-  MorningSkyHDRI007B: urlOf(sky_MorningSkyHDRI007B),
-  NightSkyHDRI003: urlOf(sky_NightSkyHDRI003),
-  NightSkyHDRI008: urlOf(sky_NightSkyHDRI008),
-  NightSkyHDRI007: urlOf(sky_NightSkyHDRI007),
+  DaySkyHDRI070B: staticUrl(sky_DaySkyHDRI070B),
+  DaySkyHDRI071B: staticUrl(sky_DaySkyHDRI071B),
+  EveningSkyHDRI046B: staticUrl(sky_EveningSkyHDRI046B),
+  EveningSkyHDRI045B: staticUrl(sky_EveningSkyHDRI045B),
+  EveningSkyHDRI047B: staticUrl(sky_EveningSkyHDRI047B),
+  MorningSkyHDRI011B: staticUrl(sky_MorningSkyHDRI011B),
+  MorningSkyHDRI007B: staticUrl(sky_MorningSkyHDRI007B),
+  NightSkyHDRI003: staticUrl(sky_NightSkyHDRI003),
+  NightSkyHDRI008: staticUrl(sky_NightSkyHDRI008),
+  NightSkyHDRI007: staticUrl(sky_NightSkyHDRI007),
 }

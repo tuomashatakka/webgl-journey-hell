@@ -16,19 +16,10 @@ import { MATERIAL_SIZE, MATERIALS, skyAsset } from './manifest'
 import { MATERIAL_URLS, SKY_URLS } from './urls'
 
 
-const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
-
-/** The bundler already applied basePath to imported URLs; never apply it twice. */
-function resolve (url: string): string {
-  if (!BASE_PATH || !url.startsWith('/') || url.startsWith(`${BASE_PATH}/`))
-    return url
-  return BASE_PATH + url
-}
-
 async function decode (url: string): Promise<HTMLImageElement> {
   const img    = new Image()
   img.decoding = 'async'
-  img.src      = resolve(url)
+  img.src      = url
   await img.decode()
   return img
 }

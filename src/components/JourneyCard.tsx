@@ -2,7 +2,6 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { assetUrl } from '@wjh/web/assetUrl'
 import { useRef, useState } from 'react'
 import type { Journey } from '✦/journeys/registry'
 import { usePreview } from './ShaderPreviewLayer'
@@ -19,12 +18,9 @@ export default function JourneyCard ({ journey }: JourneyCardProps) {
   // touch device or a WebGL-less browser actually sees, so it is never merely
   // decorative; `posterFailed` drops to the gradient if the file 404s.
   //
-  // The poster path goes through assetUrl even though next/image normally
-  // applies basePath itself: this is a static export, so images are
-  // `unoptimized`, and an unoptimized next/image emits the src string verbatim
-  // into a plain <img>. Every poster on the grid was 404ing under the sub-path
-  // deploy and every card was silently falling back to its CSS gradient — the
-  // failure is invisible precisely because the fallback works.
+  // The poster URL comes from a static import (staticUrl), so it already carries
+  // the basePath: an unoptimized next/image emits its src verbatim, which is why
+  // a raw '/journeys/x.jpg' string 404ed under the sub-path deploy.
   const [ posterFailed, setPosterFailed ] = useState(false)
 
   const onEnter = () => {
@@ -48,7 +44,7 @@ export default function JourneyCard ({ journey }: JourneyCardProps) {
       }}>
       {journey.poster && !posterFailed &&
           <Image
-            src={ assetUrl(journey.poster) }
+            src={ journey.poster }
             alt={ `${journey.title} — still from the journey` }
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
