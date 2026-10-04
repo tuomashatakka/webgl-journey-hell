@@ -5,6 +5,7 @@ Traps that have already cost time, in the order you are likely to hit them. The 
 ## Repo and tooling
 
 * **bun, not npm.** One lockfile (`bun.lock`); a second one desyncs and breaks CI. Next is not on PATH: `bunx next dev`. Audit with `bun audit`; the GitHub alert count is not the truth. Fix stale transitives by regenerating `bun.lock`.
+* **`.github/dependabot.yml` is intentional, leave it.** It is there for version updates: Dependabot maintains `bun.lock` (under the `npm` ecosystem) and bumps the pinned GitHub Actions. Security is a separate concern and is covered by `bun audit`, not by Dependabot security PRs.
 * **The site lives under a basePath.** Local routes are `http://localhost:3000/webgl-journey-hell/...`; without the prefix they 404. A plain string handed to `new Image()`, `fetch()` or a CSS `url()` is not prefixed by Next: use `staticUrl` / `assetUrl` (`@wjh/web/assetUrl`). An unoptimized `next/image` skips the basePath for the same reason.
 * **There is no `public/` directory.** Every image is in `assets/` and statically imported (posters in `src/journeys/registry.ts`, the skybridges env map in its `journey.ts`, the delta files in `delta/urls.ts`). Do not recreate `public/` and do not reference `/journeys/<slug>.jpg`.
 * **An AI Studio sync can mutate the working tree** while you edit (it resurrects old files and strips dependencies). `metadata.json` belongs to it. Commit early, and re-check `git status` and `package.json`/`bun.lock` after structural work. A build can pass with stripped dependencies because `node_modules` is still populated.
