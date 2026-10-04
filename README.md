@@ -57,12 +57,13 @@ components/
   JourneyGrid.tsx           # grid + shared-preview host
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
   ShaderPreviewLayer.tsx    # ONE shared WebGL canvas for all card previews
-  withJourneyShell.tsx      # every route: the view (canvas, HUD, transport, title card)
-  JourneyTransport.tsx      # the tape deck: chapter/lap jumps, a scrubbable bar
-  JourneyTitleIntro.tsx     # the glitching title card every journey opens on
+  withJourneyShell.tsx      # every route: the view (canvas, HUD, transport, loader, title card, headings)
+  JourneyTransport.tsx      # the tape deck: pause, chapter/lap jumps, a scrubbable bar
+  JourneyLoader.tsx         # the loading bar every journey opens on
+  GlitchTitle.tsx           # the glitching title card, and the section headings in its type
   AssetBrowser.tsx          # the /assets page: one shared canvas, scissored per card
 hooks/
-  use-journey-runtime.ts    # the engine under every route: GL, simulation, transport, governor, frame
+  use-journey-runtime.ts    # the engine under every route: GL, loading, simulation, transport, pause, frame
   use-pan-control.ts        # pointer + gyroscope view panning (tweened)
   use-audio-engine.ts       # lazy per-journey audio + mute button state
 lib/
@@ -72,7 +73,7 @@ lib/
   audio/                    # the JourneyAudio base every soundtrack extends, noise, uniform readers
   quality/                  # device profile, quality tiers, the adaptive resolution governor
   math.ts                   # clamp, mix, smoothstep, smootherstep, hash1 — GLSL's, on the CPU
-  glitchTitle.ts            # the title card's renderer (displacement + byte corruption)
+  glitchTitle.ts            # the title card's and headings' renderer (displacement + byte corruption)
   canvasText.ts             # letter-spaced 2D canvas text
   frameLoopManager.ts       # ONE frame-capped rAF shared by every journey
   panControl.ts             # framework-free pan controller behind use-pan-control
@@ -462,7 +463,8 @@ A journey is **declared once**, in `app/journeys/<slug>/journey.ts`, and
 everything that runs journeys reads that declaration: the page, the bare harness,
 the tools. `components/withJourneyShell` (a view over `hooks/use-journey-runtime`)
 owns all the route machinery — context, resize, adaptive resolution, pointer,
-settings, the frame loop, `?t=` seeking, HUD, transport, title card, debug panel.
+settings, the frame loop, `?t=` seeking, loading bar, HUD, transport and pause,
+title card, section headings, fullscreen, debug panel.
 
 ```ts
 // app/journeys/<slug>/journey.ts
@@ -471,7 +473,6 @@ export default defineJourney({
   renderer:         shaderRenderer(frag),          // or geometryRenderer / passRenderer
   createSimulation: createMySimulation,             // optional
   createAudio:      createMyAudio,                  // optional: renders the mute button
-  sectionTitleClassName: '<slug>-sector-title',     // optional
 })
 
 // app/journeys/<slug>/page.tsx
@@ -563,29 +564,70 @@ scale is not a constant (`lib/quality`):
   a 60 cap on a 60 Hz display no longer drops frames that arrive 0.1 ms early.
 * **Nothing composites that need not.** The display grade rides on the CRT pass
   instead of a CSS filter on the canvas (a full-screen compositing pass per frame
-  at native resolution); the section title's glitch layers stop animating once it
-  has faded; the scanline layer is left off on a low-tier phone; the transport
-  bar and the FPS readout write to the DOM directly instead of re-rendering React
-  sixteen times a second.
+  at native resolution); a section heading's canvas is unmounted once it has torn
+  out; the scanline layer is left off on a low-tier phone; the transport bar and
+  the FPS readout write to the DOM directly instead of re-rendering React sixteen
+  times a second; and a paused journey stops drawing until something it shows
+  actually changes (the last frame stays on the canvas).
 
-## the title card
+## the page
 
-Every journey opens on its name (`components/JourneyTitleIntro`,
-`lib/glitchTitle`): it fades up out of black with the tagline under it, holds,
-and then the signal carrying it fails — the black tears away in bands, the title's
-channels separate and its slices slide sideways, and its bytes go bad (copies at
-offsets that are not multiples of four rotate the channels, rows smear, bits flip,
-8×8 blocks posterise like a codec that lost its residuals). The corrupted variants
-are built one per frame during the hold, so the card never stalls a frame, and its
-clock is its own frames — a journey compiling its shaders behind it cannot eat it.
-A tap or a key skips to the tear-out; reduced motion gets a plain fade. Never shown
-under `?t=` or `?hud=0`.
+The canvas is always the viewport — `100vw` × `100vh` (the dynamic height where a
+browser has one, so a phone's toolbars never cover it) — and a `ResizeObserver`
+re-fits the backing store whenever that box changes: a rotation, a resized window,
+fullscreen. The resize is applied by the next frame, just before it draws, since
+resizing clears the canvas and a cleared canvas between a frame and its paint is a
+flash.
+
+**Fullscreen is the picture alone**: every piece of chrome (`.hud`) fades out and
+stops taking the pointer, which is for looking around. Keyboard focus brings a
+control back; Esc brings them all back.
+
+**Panning is the same everywhere**, the way the poolrooms always did it: the view
+swings away from the pointer sideways (pointer or phone to the right, and it turns
+left) and follows it up and down. The shaders all look *toward* `uPointer`; the
+one inversion is in `use-journey-runtime`.
+
+**Pause** (❚❚ on the transport, or space anywhere but a text field) holds the
+clock: the simulation stops stepping, the audio context is suspended where it
+is, and the frame stays up — it can still be looked around, and the transport
+still jumps and scrubs while paused.
+
+## the opening, and the headings
+
+A journey's page opens in three beats, none of them under `?t=` or `?hud=0`:
+
+1. **the loading bar** (`components/JourneyLoader`). It is in the prerendered
+   HTML, so it is up before any script has run, and it moves by stage — the
+   scripts, then *compiling shaders* (painted first, then the context and the
+   renderer are built: the stretch that blocks the main thread, which is why a
+   highlight sweeps the bar as a compositor-only animation), then *loading
+   textures* by the renderer's `progress()` while its `ready()` is false, then a
+   few frames *warming up* at t = 0. The journey's clock holds at zero until then,
+   so it starts when it can be seen.
+2. **the title card** (`components/GlitchTitle`, `lib/glitchTitle`): the name fades
+   up out of black with the tagline under it, holds, and then the signal carrying
+   it fails — the black tears away in bands, the title's channels separate and its
+   slices slide sideways, and its bytes go bad (copies at offsets that are not
+   multiples of four rotate the channels, rows smear, bits flip, 8×8 blocks
+   posterise like a codec that lost its residuals). The corrupted variants are
+   built one per frame during the hold, so the card never stalls a frame, and its
+   clock is its own frames. A tap or a key skips to the tear-out; reduced motion
+   gets a plain fade.
+3. **the journey**, with a **section heading** each time the section changes —
+   the same type and the same failure, smaller and quicker, with no black behind
+   it: the section's name, and its lap under it as the tagline. It is announced on
+   play and on a jump, never mid-scrub, and once it has torn out it is gone from
+   the middle entirely; the section stays named on the transport, next to the play
+   state.
 
 ## the transport, and the CRT
 
 Every journey carries a tape deck (`components/JourneyTransport`), driven by
 `lib/journey/transport`:
 
+* **❚❚** — pause / play (space does the same). The line beside the buttons reads
+  the state and the section: `▶ PLAY  LAP 2 · THE VIADUCT`.
 * **◀◀ / ▶▶** — previous / next *chapter*: a cut to the start of the section, never
   a shuttle through time. ◀◀ restarts the chapter you are in, or goes one further
   if you have only just entered it.

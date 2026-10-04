@@ -7,11 +7,10 @@ import { createScenicRouteScene } from './scene'
 
 
 export const scenicRoute = defineJourney({
-  slug:                  'scenic-route',
-  renderer:              geometryRenderer(createScenicRouteScene),
-  createAudio:           createScenicRouteAudio,
-  createSimulation:      createScenicRouteSimulation,
-  sectionTitleClassName: 'scenic-route-sector-title',
+  slug:             'scenic-route',
+  renderer:         geometryRenderer(createScenicRouteScene),
+  createAudio:      createScenicRouteAudio,
+  createSimulation: createScenicRouteSimulation,
 })
 
 export default scenicRoute

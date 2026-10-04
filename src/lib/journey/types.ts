@@ -96,6 +96,12 @@ export interface JourneyRenderer {
    * captures the placeholder frame.
    */
   ready?(): boolean;
+
+  /**
+   * Optional: how much of what `ready()` waits on has arrived, 0..1 — the
+   * loading bar shows it. Without it the bar jumps when `ready()` turns true.
+   */
+  progress?(): number;
 }
 
 /** Minimum surface a journey's audio engine exposes. */
@@ -114,4 +120,7 @@ export interface JourneyAudioEngine {
    * same state the geometry does.
    */
   update?(time: number, state?: CustomUniforms): void;
+
+  /** Optional: stop (and resume) making sound while the journey is paused. */
+  setPaused?(paused: boolean): void;
 }

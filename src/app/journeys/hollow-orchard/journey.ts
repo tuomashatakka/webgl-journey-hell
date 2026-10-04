@@ -7,11 +7,10 @@ import { hollowOrchardFrag } from './shader'
 
 
 export const hollowOrchard = defineJourney({
-  slug:                  'hollow-orchard',
-  renderer:              shaderRenderer(hollowOrchardFrag),
-  createAudio:           createHollowOrchardAudio,
-  createSimulation:      createHollowOrchardSimulation,
-  sectionTitleClassName: 'hollow-orchard-sector-title',
+  slug:             'hollow-orchard',
+  renderer:         shaderRenderer(hollowOrchardFrag),
+  createAudio:      createHollowOrchardAudio,
+  createSimulation: createHollowOrchardSimulation,
 })
 
 export default hollowOrchard

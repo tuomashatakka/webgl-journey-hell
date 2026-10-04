@@ -25,6 +25,18 @@ export interface GlitchTitleOptions {
 
   /** A plain fade, no glitching (prefers-reduced-motion). */
   calm?: boolean;
+
+  /**
+   * Start on black and tear it away (the title card), or draw the name alone
+   * over whatever is underneath (a section heading). Default true.
+   */
+  backdrop?: boolean;
+
+  /** Seconds: faded in by `in`, held until `hold`, torn out by `out`. */
+  timing?: { in: number; hold: number; out: number };
+
+  /** Scales the type, for a heading that should sit under the title card's size. */
+  fontScale?: number;
 }
 
 export interface GlitchTitle {
@@ -181,10 +193,12 @@ function corrupt (src: HTMLCanvasElement, top: number, bottom: number, amount: n
 }
 
 export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleOptions): GlitchTitle {
-  const ctx   = canvas.getContext('2d')!
-  const tIn   = opts.calm ? CALM_IN : IN
-  const tHold = opts.calm ? CALM_HOLD : HOLD
-  let tOut                  = opts.calm ? CALM_OUT : OUT
+  const ctx      = canvas.getContext('2d')!
+  const timing   = opts.timing ?? (opts.calm ? { in: CALM_IN, hold: CALM_HOLD, out: CALM_OUT } : { in: IN, hold: HOLD, out: OUT })
+  const backdrop = opts.backdrop ?? true
+  const tIn      = timing.in
+  const tHold    = timing.hold
+  let tOut                  = timing.out
   let outStart              = tHold
   let layers: Layers | null = null
 
@@ -195,7 +209,7 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
     const title = opts.title.toUpperCase()
     const head  = (px: number) => `700 ${px}px "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif`
     const body  = (px: number) => `400 ${px}px "Helvetica Neue", Helvetica, Arial, sans-serif`
-    const size  = fitSize(b, head, title, Math.max(18, Math.min(w * 0.058, h * 0.11)), 0.32, maxW)
+    const size  = fitSize(b, head, title, Math.max(14, Math.min(w * 0.058, h * 0.11) * (opts.fontScale ?? 1)), 0.32, maxW)
     const midY  = h * 0.5
 
     b.fillStyle    = '#f4f4f4'
@@ -258,7 +272,7 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
     skip (t) {
       if (t < outStart) {
         outStart = Math.max(t, tIn * 0.5)
-        tOut     = outStart + (OUT - HOLD) * 0.8
+        tOut     = outStart + (timing.out - timing.hold) * 0.8
       }
     },
 
@@ -286,7 +300,10 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
       // --- the black it all starts on -----------------------------------------
       // Fades plainly when calm; otherwise it is torn away in bands, the way a
       // picture rolls back in when a signal locks.
-      if (opts.calm) {
+      if (!backdrop) {
+        // A heading has nothing behind it to tear away.
+      }
+      else if (opts.calm) {
         ctx.fillStyle = `rgba(0, 0, 0, ${1 - out})`
         ctx.fillRect(0, 0, w, h)
       }

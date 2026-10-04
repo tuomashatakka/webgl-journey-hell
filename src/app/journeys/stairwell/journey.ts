@@ -7,11 +7,10 @@ import { createStairwellRenderer } from './renderer'
 
 
 export const stairwell = defineJourney({
-  slug:                  'stairwell',
-  renderer:              passRenderer(createStairwellRenderer),
-  createAudio:           createStairwellAudio,
-  createSimulation:      createStairwellSimulation,
-  sectionTitleClassName: 'stairwell-sector-title',
+  slug:             'stairwell',
+  renderer:         passRenderer(createStairwellRenderer),
+  createAudio:      createStairwellAudio,
+  createSimulation: createStairwellSimulation,
 })
 
 export default stairwell

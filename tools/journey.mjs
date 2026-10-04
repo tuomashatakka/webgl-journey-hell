@@ -385,7 +385,9 @@ function uvFn () {
 // #journey-transport is deliberately absent: every command here drives `?t=`,
 // and the transport hides itself in frozen mode so the seek stays a pure
 // function of the URL. A gate that can never pass is noise, so it is not one.
-const HUD_IDS = [ 'sector-title', 'back-btn', 'fullscreen-btn', 'audio-btn', 'fps-display' ]
+// The section headings are absent for the same reason (and are a full-viewport
+// canvas besides: fixed by construction).
+const HUD_IDS = [ 'back-btn', 'fullscreen-btn', 'audio-btn', 'settings-btn', 'fps-display' ]
 
 const hudFn = ids => ids.map(id => {
   const el = document.getElementById(id)
@@ -436,23 +438,6 @@ async function cmdHud (page, journey, opts) {
       for (const x of seen)
         console.log(`    t=${String(x.t).padStart(5)}  cx ${String(x.e.cx).padStart(7)}  cy ${String(x.e.cy).padStart(6)} ` +
                     ` w ${String(x.e.w).padStart(6)}  ${x.e.text}`)
-  }
-}
-
-async function cmdGlyph (page, journey, opts) {
-  const from = num(opts.from, 0), to = num(opts.to, 60), step = num(opts.step, 2)
-  for (let t = from; t <= to + 1e-9; t += step) {
-    const dbg = await seek(page, journey, t, { ...opts, hud: true })
-    const g = await page.evaluate(() => {
-      const el = document.getElementById('sector-title')
-      if (!el) return null
-      const r = document.createRange(); r.selectNodeContents(el)
-      const gb = r.getBoundingClientRect(), b = el.getBoundingClientRect()
-      return { boxCx: +((b.left+b.right)/2).toFixed(1), boxW: +b.width.toFixed(1),
-               gl: +gb.left.toFixed(1), gr: +gb.right.toFixed(1),
-               gcx: +((gb.left+gb.right)/2).toFixed(1), ls: getComputedStyle(el).letterSpacing }
-    })
-    console.log(String(t).padStart(5), dbg.label.padEnd(22), JSON.stringify(g))
   }
 }
 
@@ -571,7 +556,7 @@ async function cmdGlsl (page, journey, opts) {
 
 const COMMANDS = {
   shot: cmdShot, film: cmdFilm, probe: cmdProbe, scan: cmdScan, uv: cmdUv,
-  hud: cmdHud, glyph: cmdGlyph, fps: cmdFps, contact: cmdContact, glsl: cmdGlsl,
+  hud: cmdHud, fps: cmdFps, contact: cmdContact, glsl: cmdGlsl,
 }
 
 const { cmd, journey, opts } = parseArgs(process.argv.slice(2))

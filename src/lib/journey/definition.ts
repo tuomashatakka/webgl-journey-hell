@@ -101,12 +101,6 @@ export interface JourneyDefinition {
 
   /** Section title for a journey with no simulation, from time. */
   sectionNameAt?: (time: number) => string;
-
-  /** Class for journey-specific section-title typography. */
-  sectionTitleClassName?: string;
-
-  /** Mirror the pointer's x (a camera that turns away from it). */
-  invertPanX?: boolean;
 }
 
 /** Identity, for inference and for a greppable marker on every journey. */

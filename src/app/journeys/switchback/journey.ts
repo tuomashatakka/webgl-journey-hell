@@ -7,11 +7,10 @@ import { switchbackFrag } from './shader'
 
 
 export const switchback = defineJourney({
-  slug:                  'switchback',
-  renderer:              shaderRenderer(switchbackFrag),
-  createAudio:           createSwitchbackAudio,
-  createSimulation:      createSwitchbackSimulation,
-  sectionTitleClassName: 'switchback-sector-title',
+  slug:             'switchback',
+  renderer:         shaderRenderer(switchbackFrag),
+  createAudio:      createSwitchbackAudio,
+  createSimulation: createSwitchbackSimulation,
 })
 
 export default switchback

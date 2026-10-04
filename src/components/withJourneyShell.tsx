@@ -5,7 +5,20 @@
 // A journey is declared once (app/journeys/<slug>/journey.ts) and its page is
 // one line: `export default withJourneyShell(definition)`. Everything that runs
 // it lives in hooks/use-journey-runtime; this file is only the view over that
-// engine — the canvas, the HUD, the transport, the title card.
+// engine — the canvas, the HUD, the transport, the overlays.
+//
+// A page opens in three beats:
+//
+//   1. the loading bar — prerendered, so it is up before any script has run
+//   2. the title card, once the journey is loaded and its clock has started
+//   3. the journey, with a heading glitching in whenever the section changes
+//
+// None of them under ?t= or ?hud=0: a driver's frame must be the journey, not
+// the chrome over it.
+//
+// Fullscreen is the picture alone: every piece of chrome fades and stops
+// taking the pointer (keyboard focus still brings a control back). Space
+// pauses and resumes everywhere but a text field; Esc leaves fullscreen.
 //
 // Global graphics settings arrive through the runtime:
 //   • resolution  → AUTO hands the render scale to the adaptive governor
@@ -29,21 +42,80 @@ import { useSettings } from './SettingsProvider'
 import SettingsButton from './SettingsButton'
 import JourneyDebugPanel from './JourneyDebugPanel'
 import JourneyTransport from './JourneyTransport'
-import JourneyTitleIntro from './JourneyTitleIntro'
+import JourneyLoader, { LOADER_FADE_MS } from './JourneyLoader'
+import { SectionHeading, TitleCard } from './GlitchTitle'
 
+
+/** A key press that belongs to a field being typed in, not to the journey. */
+function typing (target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  return !!el && (el.isContentEditable || el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT')
+}
+
+/**
+ * Space pauses and resumes, wherever focus is — the way a player's space bar
+ * does. Taken on keyup as well as keydown, so a focused button does not also
+ * read the press as a click (the pause button would toggle twice).
+ */
+function usePauseKey (toggle: () => void, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled)
+      return
+
+    const isSpace = (e: KeyboardEvent) =>
+      (e.code === 'Space' || e.key === ' ') && !e.ctrlKey && !e.metaKey && !e.altKey && !typing(e.target)
+
+    const down = (e: KeyboardEvent) => {
+      if (!isSpace(e))
+        return
+      e.preventDefault()
+      if (!e.repeat)
+        toggle()
+    }
+    const up = (e: KeyboardEvent) => {
+      if (isSpace(e))
+        e.preventDefault()
+    }
+
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => {
+      window.removeEventListener('keydown', down)
+      window.removeEventListener('keyup', up)
+    }
+  }, [ toggle, enabled ])
+}
 
 export function withJourneyShell (definition: JourneyDefinition) {
   const meta = getJourney(definition.slug)
 
   function JourneyShell () {
-    const { settings } = useSettings()
-    const rt           = useJourneyRuntime(definition)
-    const { dbg }      = rt
+    const { settings }              = useSettings()
+    const rt                        = useJourneyRuntime(definition)
+    const { dbg, loading, section } = rt
+    const accent                    = meta?.accent ?? '#ffffff'
 
-    // The title card plays once per mount, and never under ?t= or without a
-    // HUD: a driver's frame must be the journey, not the card over it.
-    const [ introDone, setIntroDone ] = useState(false)
-    const showIntro                   = !introDone && dbg.hud && dbg.t === null && !!meta
+    // The opening sequence plays once per mount.
+    const staged                          = dbg.hud && dbg.t === null
+    const [ loaderGone, setLoaderGone ]   = useState(false)
+    const [ introDone, setIntroDone ]     = useState(false)
+    const [ headingDone, setHeadingDone ] = useState(-1)
+
+    const opened      = loading.done && (introDone || !staged || !meta)
+    const showLoader  = staged && !loaderGone
+    const showIntro   = staged && loading.done && !introDone && !!meta
+    const showHeading = staged && opened && !!section.name && headingDone !== section.key
+
+    // The bar fades as the card comes up underneath it, then goes entirely.
+    useEffect(() => {
+      if (!loading.done)
+        return
+
+      const timer = setTimeout(() => setLoaderGone(true), LOADER_FADE_MS)
+      return () => clearTimeout(timer)
+    }, [ loading.done ])
+
+    usePauseKey(rt.togglePause, dbg.t === null && opened)
 
     // The CSS scanline layer is part of the look where the CRT is on; on a
     // low-tier phone it is a full-screen blend at native resolution that the
@@ -59,58 +131,59 @@ export function withJourneyShell (definition: JourneyDefinition) {
       ? ({ ['--accent' as string]: meta.accent } as React.CSSProperties)
       : undefined
 
-    return <main id="app-container" style={ accentStyle }>
+    return <main id="app-container" style={ accentStyle } data-fullscreen={ rt.fullscreen ? '1' : undefined }>
       <canvas id="gl-canvas" ref={ rt.canvasRef } />
       {scanlines && <section id="crt-overlay" />}
 
       {dbg.hud &&
-        <Link id="back-btn" href="/">
+        <Link id="back-btn" className="hud" href="/">
           ← INDEX
         </Link>
       }
 
-      {dbg.hud && rt.sectionName && !showIntro &&
-        <header
-          key={ rt.sectionKey }
-          id="sector-title"
-          className={ definition.sectionTitleClassName }
-          data-text={ rt.sectionName }>
-          {rt.sectionName}
-        </header>
+      {showHeading &&
+        <SectionHeading
+          key={ section.key }
+          title={ section.name }
+          accent={ accent }
+          onDone={ () => setHeadingDone(section.key) } />
       }
 
       {dbg.hud &&
-        <button id="fullscreen-btn" onClick={ rt.toggleFullscreen }>
-          FULLSCREEN
+        <button id="fullscreen-btn" className="hud" onClick={ rt.toggleFullscreen }>
+          {rt.fullscreen ? 'EXIT FULLSCREEN' : 'FULLSCREEN'}
         </button>
       }
 
       {dbg.hud && definition.createAudio &&
-        <button id="audio-btn" onClick={ rt.audio.toggle }>
+        <button id="audio-btn" className="hud" onClick={ rt.audio.toggle }>
           {rt.audio.isMuted ? 'UNMUTE AUDIO' : 'MUTE AUDIO'}
         </button>
       }
 
-      {dbg.hud && <aside id="fps-display" ref={ rt.statsRef }>— FPS</aside>}
+      {dbg.hud && <aside id="fps-display" className="hud" ref={ rt.statsRef }>— FPS</aside>}
       {dbg.hud && <SettingsButton />}
 
       {/* Frozen ?t= mode gets no transport: the frame is a pure function of the URL. */}
       {dbg.hud && dbg.t === null &&
         <JourneyTransport
           ref={ rt.transportRef }
+          paused={ rt.paused }
+          onTogglePause={ rt.togglePause }
           onAction={ rt.act }
           onScrub={ rt.scrub }
           onRelease={ rt.release } />
       }
 
       {showIntro &&
-        <JourneyTitleIntro
+        <TitleCard
           title={ meta.title }
           subtitle={ meta.tagline }
           accent={ meta.accent }
           onDone={ () => setIntroDone(true) } />
       }
 
+      {showLoader && <JourneyLoader { ...loading } />}
       {dbg.debug && <JourneyDebugPanel getState={ () => window.__journeyDebug ?? rt.debugState() } />}
     </main>
   }

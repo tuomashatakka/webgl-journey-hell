@@ -6,11 +6,10 @@ import { skybridgesFrag } from './shader'
 
 
 export const skybridges = defineJourney({
-  slug:                  'skybridges',
-  renderer:              shaderRenderer(skybridgesFrag, { envMapUrl: '/journeys/skybridges/env.png' }),
-  marksAt:               getSkybridgesMarks,
-  sectionNameAt:         getSkybridgesSectionName,
-  sectionTitleClassName: 'skybridges-sector-title',
+  slug:          'skybridges',
+  renderer:      shaderRenderer(skybridgesFrag, { envMapUrl: '/journeys/skybridges/env.png' }),
+  marksAt:       getSkybridgesMarks,
+  sectionNameAt: getSkybridgesSectionName,
 })
 
 export default skybridges

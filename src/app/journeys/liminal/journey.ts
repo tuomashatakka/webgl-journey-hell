@@ -11,7 +11,6 @@ export const liminal = defineJourney({
   renderer:         passRendererWebGL1(createLiminalRenderer),
   createAudio:      createLiminalAudio,
   createSimulation: createLiminalSimulation,
-  invertPanX:       true,
 })
 
 export default liminal

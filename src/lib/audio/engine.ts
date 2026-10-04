@@ -20,6 +20,7 @@ export abstract class JourneyAudio implements JourneyAudioEngine {
   protected dry:         GainNode | null = null
   protected noiseBuffer: AudioBuffer | null = null
   protected isMuted = true
+  protected isPaused = false
 
   private timers: ReturnType<typeof setTimeout>[] = []
 
@@ -44,10 +45,26 @@ export abstract class JourneyAudio implements JourneyAudioEngine {
     const ctx    = this.ctx
     if (ctx && this.main) {
       this.main.gain.setTargetAtTime(this.isMuted ? 0 : this.level, ctx.currentTime, this.fade)
-      if (!this.isMuted && ctx.state === 'suspended')
+      if (!this.isMuted && !this.isPaused && ctx.state === 'suspended')
         void ctx.resume()
     }
     return this.isMuted
+  }
+
+  /**
+   * A paused journey is silent: the context is suspended, which stops every
+   * scheduled source where it is, so it picks up from the same sample.
+   */
+  setPaused (paused: boolean): void {
+    this.isPaused = paused
+
+    const ctx     = this.ctx
+    if (!ctx)
+      return
+    if (paused && ctx.state === 'running')
+      void ctx.suspend()
+    else if (!paused && !this.isMuted && ctx.state === 'suspended')
+      void ctx.resume()
   }
 
   destroy (): void {

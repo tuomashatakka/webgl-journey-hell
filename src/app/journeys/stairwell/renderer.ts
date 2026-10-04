@@ -120,6 +120,11 @@ export function createStairwellRenderer (
       return materials.ready && [ ...skies.values() ].every(s => s.ready)
     },
 
+    progress () {
+      const done = [ ...skies.values() ].filter(s => s.ready).length + (materials.ready ? 1 : 0)
+      return done / (skies.size + 1)
+    },
+
     draw (frame) {
       resize()
 

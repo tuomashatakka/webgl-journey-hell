@@ -7,11 +7,10 @@ import { natatoriumFrag } from './shader'
 
 
 export const natatorium = defineJourney({
-  slug:                  'natatorium',
-  renderer:              shaderRenderer(natatoriumFrag),
-  createAudio:           createNatatoriumAudio,
-  createSimulation:      createNatatoriumSimulation,
-  sectionTitleClassName: 'natatorium-sector-title',
+  slug:             'natatorium',
+  renderer:         shaderRenderer(natatoriumFrag),
+  createAudio:      createNatatoriumAudio,
+  createSimulation: createNatatoriumSimulation,
 })
 
 export default natatorium

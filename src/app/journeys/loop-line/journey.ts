@@ -7,11 +7,10 @@ import { createLoopLineScene } from './scene'
 
 
 export const loopLine = defineJourney({
-  slug:                  'loop-line',
-  renderer:              geometryRenderer(createLoopLineScene),
-  createAudio:           createLoopLineAudio,
-  createSimulation:      createLoopLineSimulation,
-  sectionTitleClassName: 'loop-line-sector-title',
+  slug:             'loop-line',
+  renderer:         geometryRenderer(createLoopLineScene),
+  createAudio:      createLoopLineAudio,
+  createSimulation: createLoopLineSimulation,
 })
 
 export default loopLine

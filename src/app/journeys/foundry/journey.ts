@@ -6,10 +6,9 @@ import { foundryFrag } from './shader'
 
 
 export const foundry = defineJourney({
-  slug:                  'foundry',
-  renderer:              shaderRenderer(foundryFrag),
-  createSimulation:      createFoundrySimulation,
-  sectionTitleClassName: 'foundry-sector-title',
+  slug:             'foundry',
+  renderer:         shaderRenderer(foundryFrag),
+  createSimulation: createFoundrySimulation,
 })
 
 export default foundry

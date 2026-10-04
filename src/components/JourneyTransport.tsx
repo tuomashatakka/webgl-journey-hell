@@ -2,11 +2,16 @@
 
 // The tape deck at the bottom of every journey.
 //
-// React renders its structure once; the shell then pushes the live state in
-// through `update()` every frame, which writes straight to the few DOM nodes
-// that change — text only when it differs, the fill as a compositor-only
-// transform. The previous version re-rendered the component sixteen times a
-// second through state, which on a phone was a measurable slice of the frame.
+//   [⏮][◀◀][❚❚][▶▶][⏭]  ▶ PLAY  LOOP 1 · II · PROTEAN WEATHER BRIDGE     00:42
+//   [==========|========|=====--------------------------------------------]
+//
+// The play state and the section it is in read as one line, so the section
+// is always named somewhere once its heading has faded from the middle. On a
+// narrow screen that line drops under the buttons.
+//
+// React renders the structure; the shell pushes the live state in through
+// `update()` every frame, which writes straight to the few DOM nodes that
+// change — text only when it differs, the fill as a compositor-only transform.
 //
 // The track is a slider: press (or touch) anywhere on it and drag to scrub
 // through the current lap; arrow keys step it when focused.
@@ -17,6 +22,7 @@ import type { TransportAction, TransportMode } from '✦/lib/journey'
 
 export interface TransportView {
   mode:         TransportMode;
+  paused:       boolean;
   loop:         number;
   section:      number;
   sectionCount: number;
@@ -31,20 +37,26 @@ export interface TransportHandle {
 }
 
 interface Props {
-  onAction:  (action: TransportAction) => void;
-  onScrub:   (fraction: number) => void;
-  onRelease: () => void;
+  paused:        boolean;
+  onTogglePause: () => void;
+  onAction:      (action: TransportAction) => void;
+  onScrub:       (fraction: number) => void;
+  onRelease:     () => void;
 }
 
-const MODE_TEXT: Record<TransportMode, string> = {
-  play:  '▶  PLAY',
-  flash: '▸│ SKIP',
-  scrub: '◀▶ SCRUB',
+const MODE_TEXT: Record<TransportMode | 'paused', string> = {
+  play:   '▶ PLAY',
+  paused: '❚❚ PAUSED',
+  flash:  '▸│ SKIP',
+  scrub:  '◀▶ SCRUB',
 }
 
-const CONTROLS: { act: TransportAction; glyph: string; title: string }[] = [
+const BACK: { act: TransportAction; glyph: string; title: string }[] = [
   { act: 'prev-lap', glyph: '⏮', title: 'Back to the start of the lap' },
   { act: 'prev', glyph: '◀◀', title: 'Previous chapter' },
+]
+
+const FORWARD: { act: TransportAction; glyph: string; title: string }[] = [
   { act: 'next', glyph: '▶▶', title: 'Next chapter' },
   { act: 'next-lap', glyph: '⏭', title: 'Next lap' },
 ]
@@ -58,7 +70,9 @@ function counter (t: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
-const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTransport ({ onAction, onScrub, onRelease }, ref) {
+const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTransport (
+  { paused, onTogglePause, onAction, onScrub, onRelease }, ref,
+) {
   const rootRef    = useRef<HTMLElement>(null)
   const labelRef   = useRef<HTMLSpanElement>(null)
   const modeRef    = useRef<HTMLSpanElement>(null)
@@ -68,7 +82,7 @@ const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTran
 
   // Only the tick layout goes through React; it changes once per journey.
   const [ ticks, setTicks ] = useState<number[]>([])
-  const last                = useRef({ label: '', mode: 'play', counter: '', ticks: '', progress: -1 })
+  const last                = useRef({ label: '', mode: '', counter: '', ticks: '', progress: -1 })
   const progressRef         = useRef(0)
 
   useImperativeHandle(ref, () => ({
@@ -82,11 +96,13 @@ const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTran
         labelRef.current.textContent = label
         l.label                      = label
       }
-      if (view.mode !== l.mode) {
+
+      const mode = view.paused && view.mode === 'play' ? 'paused' : view.mode
+      if (mode !== l.mode) {
         if (modeRef.current)
-          modeRef.current.textContent = MODE_TEXT[view.mode]
-        rootRef.current?.setAttribute('data-mode', view.mode)
-        l.mode = view.mode
+          modeRef.current.textContent = MODE_TEXT[mode]
+        rootRef.current?.setAttribute('data-mode', mode)
+        l.mode = mode
       }
 
       const count = counter(view.time)
@@ -147,28 +163,37 @@ const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTran
     onRelease()
   }, [ onScrub, onRelease ])
 
-  return <aside id="journey-transport" ref={ rootRef } data-mode="play">
+  type PropsType = { act: TransportAction; glyph: string; title: string }
+
+  const button = ({ act, glyph, title }: PropsType) =>
+    <button key={ act } className="jt-btn" type="button" title={ title } aria-label={ title } onClick={ () => onAction(act) }>
+      {glyph}
+    </button>
+
+  return <aside id="journey-transport" className="hud" ref={ rootRef } data-mode="play">
     <div className="jt-head">
       <div className="jt-buttons">
-        {CONTROLS.map(({ act, glyph, title }) =>
-          <button
-            key={ act }
-            className="jt-btn"
-            type="button"
-            title={ title }
-            aria-label={ title }
-            onClick={ () => onAction(act) }>
-            {glyph}
-          </button>,
-        )}
-      </div>
+        {BACK.map(button)}
 
-      <span className="jt-label" ref={ labelRef }>—</span>
+        <button
+          className="jt-btn jt-pause"
+          type="button"
+          title={ paused ? 'Play (space)' : 'Pause (space)' }
+          aria-label={ paused ? 'Play' : 'Pause' }
+          aria-pressed={ paused }
+          onClick={ onTogglePause }>
+          {paused ? '▶' : '❚❚'}
+        </button>
+
+        {FORWARD.map(button)}
+      </div>
 
       <span className="jt-state">
         <span className="jt-mode" ref={ modeRef }>{MODE_TEXT.play}</span>
-        <span className="jt-counter" ref={ counterRef }>00:00</span>
+        <span className="jt-label" ref={ labelRef }>—</span>
       </span>
+
+      <span className="jt-counter" ref={ counterRef }>00:00</span>
     </div>
 
     <div

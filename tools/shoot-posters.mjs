@@ -66,7 +66,7 @@ const SETTINGS = {
 }
 
 const HIDE_HUD = `
-  #back-btn, #fullscreen-btn, #audio-btn, #settings-btn, #fps-display, #sector-title,
+  .hud, #settings-btn, #journey-loader, #journey-title-intro, #journey-section-heading,
   nextjs-portal { display: none !important; }
 `
 
@@ -122,7 +122,11 @@ for (const { slug, section, t } of shots) {
   const deadline = Date.now() + 240_000
   let label = ''
   while (Date.now() < deadline) {
-    label = await page.$eval('#sector-title', el => el.textContent ?? '').catch(() => '')
+    // A frozen ?t= page publishes its label; a live one names its section on
+    // the transport's state line.
+    label = await page.evaluate(() =>
+      window.__journeyDebug?.label ??
+      document.querySelector('#journey-transport .jt-label')?.textContent ?? '').catch(() => '')
     if (section.test(label))
       break
     await page.waitForTimeout(1000)

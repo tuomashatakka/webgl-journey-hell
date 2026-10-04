@@ -3,19 +3,33 @@
 // The engine under every journey page: everything that is not markup.
 //
 // Given a journey definition it owns the WebGL context and the renderer, the
-// simulation and its clock, the transport, the adaptive resolution governor,
-// the CRT pass and the signal-loss caption, and the one frame callback that
-// ties them together. components/withJourneyShell is the view over it.
+// simulation and its clock, the transport and the pause, the adaptive
+// resolution governor, the CRT pass and the signal-loss caption, the loading
+// state, and the one frame callback that ties them together.
+// components/withJourneyShell is the view over it.
 //
 // Two paths through the frame:
 //
 //   live    — the transport observes and may move the clock; the simulation
-//             steps on the speed-scaled delta; the governor watches real frame
-//             times and moves the render scale; audio follows the uniforms.
+//             steps on the speed-scaled delta unless paused or still loading;
+//             the governor watches real frame times and moves the render
+//             scale; audio follows the uniforms.
 //   frozen  — `?t=`: seek once, then redraw that instant every frame. No
 //             integration, no pan tween, no audio, no governor: the frame is a
 //             pure function of the URL, which is the whole contract a
 //             screenshot driver relies on.
+//
+// Loading, stage by stage, as the bar shows it:
+//
+//   LOADING            the prerendered page, while the scripts arrive
+//   COMPILING SHADERS  painted first; then the context and the renderer are
+//                      built, the stretch that blocks the main thread
+//   LOADING TEXTURES   while the renderer's `ready()` is false, by `progress()`
+//   WARMING UP         a few frames drawn at t = 0, where lazily linked
+//                      programs and first texture uploads land
+//
+// The clock holds at zero until the last of those, so a journey starts when it
+// can be seen rather than wherever it had got to behind the bar.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useFrameLoop } from '✦/lib/frameLoopManager'
@@ -51,12 +65,44 @@ import type { TransportHandle } from '✦/components/JourneyTransport'
 /** Backing-store cap for the fixed resolution choices, as before AUTO. */
 const MAX_DPR = 2
 
+/** Frames drawn at t = 0 once the assets are in, before the clock starts. */
+const WARM_FRAMES = 3
+
+/** Seconds to wait on a renderer's assets before starting without them. */
+const ASSET_TIMEOUT = 20
+
+/** Pan movement too small to be worth redrawing a paused frame for. */
+const PAN_EPSILON = 1e-4
+
 /**
  * Stand-in for journeys with no soundtrack. useAudioEngine has to be called
  * unconditionally (hook order) but only builds on the first unmute — which,
  * with no mute button rendered, never happens.
  */
 const SILENT_ENGINE: JourneyAudioEngine = { toggleMute: () => true, destroy: () => {} }
+
+/** The loading bar, as the runtime reports it. */
+export interface JourneyLoading {
+
+  /** 0..1. */
+  progress: number;
+  status:   string;
+
+  /** Everything is up and the clock is running: the bar can go. */
+  done: boolean;
+
+  /** The journey cannot run here; the bar stays, saying why. */
+  failed: boolean;
+}
+
+/** What the prerendered page shows, before any script has run. */
+export const LOADING_BOOT: JourneyLoading = { progress: 0.04, status: 'LOADING', done: false, failed: false }
+
+/** The section to announce, and a key that changes whenever it does. */
+export interface SectionAnnouncement {
+  name: string;
+  key:  number;
+}
 
 /**
  * Mirror a changing value into a ref. Render loops are registered once and
@@ -70,9 +116,22 @@ export function useLatestRef<T> (value: T): React.RefObject<T> {
   return ref
 }
 
-/** Toggle fullscreen on the document element. */
-export function useFullscreenToggle (): () => void {
-  return useCallback(() => {
+/** Fullscreen on the document element, and whether it is on right now. */
+type UseFullscreenReturnType = { isFullscreen: boolean; toggle: () => void }
+
+export function useFullscreen (): UseFullscreenReturnType {
+  const [ isFullscreen, setIsFullscreen ] = useState(false)
+
+  // Followed rather than assumed: Esc, the browser's own UI and a phone's back
+  // gesture all leave fullscreen without asking the button.
+  useEffect(() => {
+    const sync = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', sync)
+    sync()
+    return () => document.removeEventListener('fullscreenchange', sync)
+  }, [])
+
+  const toggle = useCallback(() => {
     if (!document.fullscreenElement)
       document.documentElement.requestFullscreen().catch(err => {
         console.error('Error attempting to enable fullscreen:', err)
@@ -80,6 +139,8 @@ export function useFullscreenToggle (): () => void {
     else
       void document.exitFullscreen()
   }, [])
+
+  return { isFullscreen, toggle }
 }
 
 export interface JourneyRuntime {
@@ -92,11 +153,21 @@ export interface JourneyRuntime {
   /** The "W×H · N FPS" readout, attached by the view; written once a second. */
   statsRef: React.RefObject<HTMLElement | null>;
 
-  /** Section title and a key that changes whenever it does (re-runs its CSS). */
-  sectionName: string;
-  sectionKey:  number;
+  /** The bar shown before the title card. */
+  loading: JourneyLoading;
+
+  /**
+   * The section heading to show. Moves when the section changes in play or on
+   * a jump — never mid-scrub, where the tape crosses sections by the dozen.
+   */
+  section: SectionAnnouncement;
+
+  /** The clock is held; the frame stays up, and can still be looked around. */
+  paused:      boolean;
+  togglePause: () => void;
 
   audio:            AudioEngineHandle<JourneyAudioEngine>;
+  fullscreen:       boolean;
   toggleFullscreen: () => void;
 
   act:     (action: TransportAction) => void;
@@ -118,9 +189,14 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
 
   const dbgRef = useLatestRef(dbg)
 
-  const [ sectionName, setSectionName ] = useState(() => definition.sectionNameAt?.(0) ?? '')
-  const [ sectionKey, setSectionKey ]   = useState(0)
-  const sectionRef                      = useRef(sectionName)
+  const [ section, setSection ] = useState<SectionAnnouncement>(() => ({ name: definition.sectionNameAt?.(0) ?? '', key: 0 }))
+  const announcedRef            = useRef(section.name)
+
+  const [ loading, setLoading ] = useState<JourneyLoading>(LOADING_BOOT)
+  const loadRef                 = useRef({ shown: LOADING_BOOT, done: false, warm: 0, since: 0 })
+
+  const [ paused, setPausedState ] = useState(false)
+  const pausedRef                  = useRef(false)
 
   const canvasRef    = useRef<HTMLCanvasElement>(null)
   const transportRef = useRef<TransportHandle | null>(null)
@@ -140,13 +216,24 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
   if (definition.createSimulation && !simRef.current)
     simRef.current = definition.createSimulation()
 
+  // Every journey pans the way the poolrooms always has: the view swings away
+  // from the pointer sideways — pointer (or phone) to the right, and it turns
+  // left — and follows it up and down. The shaders all look *toward* uPointer,
+  // so the one inversion lives here rather than in each of them.
   const { pointerRef, updatePan } = usePanControl({
     gyroscope: settings.gyroscope,
-    invertX:   definition.invertPanX,
+    invertX:   true,
   })
-  const audio            = useAudioEngine<JourneyAudioEngine>(() => definition.createAudio?.() ?? SILENT_ENGINE)
-  const audioRef         = audio.engineRef
-  const toggleFullscreen = useFullscreenToggle()
+
+  // An engine built while paused (the first unmute) starts out paused, so its
+  // context is never resumed only to be suspended a moment later.
+  const audio = useAudioEngine<JourneyAudioEngine>(() => {
+    const engine = definition.createAudio?.() ?? SILENT_ENGINE
+    engine.setPaused?.(pausedRef.current)
+    return engine
+  })
+  const audioRef   = audio.engineRef
+  const fullscreen = useFullscreen()
 
   // --- quality ---------------------------------------------------------------
   const device   = useRef(detectDevice()).current
@@ -178,9 +265,58 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
       },
     })
 
+  // --- pause -----------------------------------------------------------------
+  const togglePause = useCallback(() => {
+    const next        = !pausedRef.current
+    pausedRef.current = next
+    setPausedState(next)
+    audioRef.current?.setPaused?.(next)
+  }, [ audioRef ])
+
+  // --- loading ---------------------------------------------------------------
+  /** Hand the bar a new state — whole percents only, React hears no more. */
+  const report = useCallback((next: JourneyLoading) => {
+    const l    = loadRef.current
+    const prev = l.shown
+    if (Math.round(next.progress * 100) === Math.round(prev.progress * 100) &&
+      next.status === prev.status && next.done === prev.done && next.failed === prev.failed)
+      return
+    l.shown = next
+    setLoading(next)
+  }, [])
+
+  /** Once per live frame until done: where the renderer's assets are. */
+  const pollLoading = useCallback((renderer: JourneyRenderer) => {
+    const l      = loadRef.current
+    const ready  = renderer.ready?.() ?? true
+    const waited = (performance.now() - l.since) / 1000
+
+    if (!ready && waited < ASSET_TIMEOUT) {
+      const p = renderer.progress?.() ?? 0
+      report({ progress: 0.6 + 0.32 * p, status: 'LOADING TEXTURES', done: false, failed: false })
+      return
+    }
+    if (!ready && l.warm === 0)
+      console.warn(`${definition.slug}: assets still loading after ${ASSET_TIMEOUT}s; starting without them`)
+
+    l.warm += 1
+    if (l.warm < WARM_FRAMES) {
+      report({ progress: 0.94, status: 'WARMING UP', done: false, failed: false })
+      return
+    }
+    l.done = true
+    report({ progress: 1, status: 'SIGNAL ACQUIRED', done: true, failed: false })
+  }, [ report ])
+
   // --- resize ----------------------------------------------------------------
-  const sizeRef = useRef({ w: 0, h: 0 })
-  const resize  = useCallback(() => {
+  // The canvas is laid out at the full viewport by CSS; this matches its
+  // backing store to that box (times the render scale). A ResizeObserver only
+  // marks it due and the next frame applies it, just before drawing: resizing
+  // clears the canvas, and between a frame and its paint is the one moment a
+  // cleared canvas would be seen.
+  const sizeRef   = useRef({ w: 0, h: 0 })
+  const resizeDue = useRef(true)
+  const resize    = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas)
       return
@@ -199,8 +335,8 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
       const scale = res === AUTO_RESOLUTION
         ? governor.current!.scale
         : Math.min(window.devicePixelRatio || 1, MAX_DPR) * res
-      w = Math.max(1, Math.floor(window.innerWidth * scale))
-      h = Math.max(1, Math.floor(window.innerHeight * scale))
+      w = Math.max(1, Math.floor((canvas.clientWidth || window.innerWidth) * scale))
+      h = Math.max(1, Math.floor((canvas.clientHeight || window.innerHeight) * scale))
     }
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width  = w
@@ -209,7 +345,9 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     sizeRef.current = { w, h }
   }, [ dbgRef, settingsRef ])
 
-  useEffect(resize, [ resize, settings.resolution, dbg.w, dbg.h, dbg.res ])
+  useEffect(() => {
+    resizeDue.current = true
+  }, [ settings.resolution, dbg.w, dbg.h, dbg.res ])
 
   // --- GL setup / teardown (once) --------------------------------------------
   useEffect(() => {
@@ -217,46 +355,80 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     if (!canvas)
       return
 
-    // Read straight from the query string: this runs a render before `dbg`
-    // lands, and context attributes cannot change afterwards.
-    // preserveDrawingBuffer is what lets a driver read the frame back at all,
-    // and costs a copy per frame — on only while something is debugging.
-    const boot = readDebugParams()
-    const spec = definition.renderer
-    const gl   = createContext(canvas, spec.context, {
-      ...spec.attributes,
-      preserveDrawingBuffer: boot.debug || boot.t !== null,
-    })
-    if (!gl) {
-      console.error(`${spec.context} not supported`)
-      return
+    let teardown: (() => void) | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    const fail = (status: string) => report({ progress: 0, status, done: false, failed: true })
+
+    const setup = (): (() => void) | null => {
+      // Read straight from the query string: this can run before `dbg` lands,
+      // and context attributes cannot change afterwards. preserveDrawingBuffer
+      // is what lets a driver read the frame back at all, and costs a copy per
+      // frame — on only while something is debugging.
+      const boot = readDebugParams()
+      const spec = definition.renderer
+      const gl   = createContext(canvas, spec.context, {
+        ...spec.attributes,
+        preserveDrawingBuffer: boot.debug || boot.t !== null,
+      })
+      if (!gl) {
+        console.error(`${spec.context} not supported`)
+        fail(`NO SIGNAL · ${spec.context.toUpperCase()} UNAVAILABLE`)
+        return null
+      }
+
+      resize()
+
+      const renderer      = spec.create(gl, canvas)
+      rendererRef.current = renderer
+      if (!renderer) {
+        fail('NO SIGNAL · RENDERER FAILED')
+        return null
+      }
+
+      // Failing to build the CRT pass is not fatal: the journey underneath is
+      // a complete image on its own.
+      crtRef.current     = createCrtPass(gl)
+      overlayRef.current = createSignalOverlay()
+
+      loadRef.current.since = performance.now()
+      report({ progress: 0.6, status: renderer.ready ? 'LOADING TEXTURES' : 'WARMING UP', done: false, failed: false })
+
+      const observer = new ResizeObserver(() => {
+        resizeDue.current = true
+      })
+      observer.observe(canvas)
+
+      return () => {
+        observer.disconnect()
+        crtRef.current?.dispose()
+        crtRef.current = null
+        overlayRef.current?.dispose()
+        overlayRef.current = null
+        renderer.dispose()
+        rendererRef.current = null
+        // NOTE: never WEBGL_lose_context here. A canvas hands back the same
+        // context on every getContext(), so losing it would poison the next
+        // mount (StrictMode/HMR reuse the canvas) and every compile after it
+        // would fail with a null info log.
+      }
     }
 
-    resize()
+    // Say what is about to happen, and let it be painted before doing it: the
+    // compile blocks the main thread, and a bar that sat at "loading" through
+    // it would read as a hang. rAF then a task is "after the next paint".
+    report({ progress: 0.15, status: 'COMPILING SHADERS', done: false, failed: false })
 
-    const renderer      = spec.create(gl, canvas)
-    rendererRef.current = renderer
-    if (!renderer)
-      return
+    const raf = requestAnimationFrame(() => {
+      timer = setTimeout(() => {
+        teardown = setup()
+      }, 0)
+    })
 
-    // Failing to build the CRT pass is not fatal: the journey underneath is a
-    // complete image on its own.
-    crtRef.current     = createCrtPass(gl)
-    overlayRef.current = createSignalOverlay()
-
-    window.addEventListener('resize', resize)
     return () => {
-      window.removeEventListener('resize', resize)
-      crtRef.current?.dispose()
-      crtRef.current = null
-      overlayRef.current?.dispose()
-      overlayRef.current = null
-      renderer.dispose()
-      rendererRef.current = null
-      // NOTE: never WEBGL_lose_context here. A canvas hands back the same
-      // context on every getContext(), so losing it would poison the next
-      // mount (StrictMode/HMR reuse the canvas) and every compile after it
-      // would fail with a null info log.
+      cancelAnimationFrame(raf)
+      clearTimeout(timer)
+      teardown?.()
     }
   }, [])
 
@@ -282,16 +454,14 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     canvas.style.filter = !crtRef.current && graded
       ? `brightness(${settings.brightness}) contrast(${settings.contrast})`
       : ''
-  }, [ settings.brightness, settings.contrast ])
+  }, [ settings.brightness, settings.contrast, loading.done ])
 
   // --- per-frame helpers -----------------------------------------------------
-  const setSection = useCallback((label: string, animate: boolean) => {
-    if (label === sectionRef.current)
+  const announce = useCallback((label: string) => {
+    if (label === announcedRef.current)
       return
-    sectionRef.current = label
-    setSectionName(label)
-    if (animate)
-      setSectionKey(k => k + 1)
+    announcedRef.current = label
+    setSection(s => ({ name: label, key: s.key + 1 }))
   }, [])
 
   /** The CRT treatment and the display grade, over what the renderer drew. */
@@ -354,11 +524,20 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     uniforms: debugRef.current,
   }), [ dbgRef ])
 
+  // What the last live frame was drawn with — a paused frame that would come
+  // out the same is not drawn again.
+  const drawnRef = useRef({ x: NaN, y: NaN, time: NaN, w: 0, h: 0, held: false, settings: null as GraphicsSettings | null })
+
   // --- the frame ---------------------------------------------------------------
   const onFrame = useCallback((manager: FrameLoopManager) => {
     const renderer = rendererRef.current
     if (!renderer)
       return
+
+    if (resizeDue.current) {
+      resizeDue.current = false
+      resize()
+    }
 
     const d   = dbgRef.current
     const sim = simRef.current
@@ -379,15 +558,18 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
 
       debugRef.current = frame.custom ?? {}
       labelRef.current = hudLabel(frame.label, frame.detail)
-      setSection(frame.label, false)
       countFrame()
+      if (!loadRef.current.done)
+        pollLoading(renderer)
 
       // Published after draw() returns: "the seeked frame is on the canvas".
       publishDebugState({ ...debugState(), seeking: true, ready: renderer.ready?.() ?? true })
       return
     }
 
-    const tr = transport.current!
+    const loaded = loadRef.current.done
+    const held   = pausedRef.current
+    const tr     = transport.current!
 
     // Log where we are *before* moving, so every boundary ever crossed has a
     // recorded time to go back to.
@@ -398,17 +580,34 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
 
     // Input is tweened on the real delta — the speed setting must not change
     // how the camera feels to move.
-    updatePan(manager.deltaTime)
+    const pan = updatePan(manager.deltaTime)
 
-    if (ts.mode !== 'scrub') {
+    // The clock runs once everything is up, and not while paused. Jumps and
+    // scrubs move it either way: those are the transport's own moves, made
+    // inside tick() and request().
+    if (loaded && !held && ts.mode !== 'scrub') {
       const dt = manager.deltaTime * s.speed
       iTimeRef.current += dt
       // Step before the draw, so the frame shows the state just integrated.
       simRef.current?.step(dt, iTimeRef.current)
     }
 
-    // Resolution follows the frame rate, when it is the governor's to decide.
-    if (s.resolution === AUTO_RESOLUTION && d.res === null && !(d.w && d.h) &&
+    const canvas = canvasRef.current!
+    const drawn  = drawnRef.current
+    if (held && loaded && !moving && ts.scrubMix === 0 && drawn.held &&
+      drawn.time === iTimeRef.current && drawn.settings === s &&
+      drawn.w === canvas.width && drawn.h === canvas.height &&
+      Math.abs(drawn.x - pan.x) < PAN_EPSILON && Math.abs(drawn.y - pan.y) < PAN_EPSILON) {
+      // Paused and nothing has moved: the last frame is still on the canvas
+      // (an undrawn frame is not cleared), and the GPU gets to rest.
+      countFrame()
+      return
+    }
+
+    // Resolution follows the frame rate, when it is the governor's to decide —
+    // from frames that are actually being made, so neither the load's hitches
+    // nor a paused frame's idling skews it.
+    if (loaded && !held && s.resolution === AUTO_RESOLUTION && d.res === null && !(d.w && d.h) &&
       governor.current!.sample(manager.deltaTime))
       resize()
 
@@ -416,7 +615,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     const frame   = evaluateFrame(definition, liveSim, iTimeRef.current)
 
     // A tape has no audio at speed, and a rewound clock makes a graph click.
-    if (!moving)
+    if (!moving && !held)
       audioRef.current?.update?.(iTimeRef.current, frame.custom)
 
     renderer.draw({
@@ -427,13 +626,25 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
       quality,
     })
     composite(iTimeRef.current, ts.scrub, ts.scrubMix, frame.marks?.signalAge ?? 0)
+    drawn.x        = pan.x
+    drawn.y        = pan.y
+    drawn.time     = iTimeRef.current
+    drawn.w        = canvas.width
+    drawn.h        = canvas.height
+    drawn.held     = held
+    drawn.settings = s
+
+    if (!loaded)
+      pollLoading(renderer)
 
     debugRef.current = frame.custom ?? {}
     labelRef.current = hudLabel(frame.label, frame.detail)
-    setSection(frame.label, true)
+    if (ts.mode !== 'scrub')
+      announce(frame.label)
 
     transportRef.current?.update({
       mode:         ts.mode,
+      paused:       held,
       loop:         frame.marks?.loop ?? 0,
       section:      frame.marks?.section ?? 0,
       sectionCount: frame.marks?.sectionCount ?? 1,
@@ -446,7 +657,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     countFrame()
     if (d.debug)
       publishDebugState(debugState())
-  }, [ audioRef, composite, countFrame, dbgRef, debugState, pointerRef, quality, resize, setSection, settingsRef, updatePan ])
+  }, [ announce, audioRef, composite, countFrame, dbgRef, debugState, pointerRef, pollLoading, quality, resize, settingsRef, updatePan ])
   useFrameLoop(onFrame)
 
   const act     = useCallback((action: TransportAction) => transport.current?.request(action), [])
@@ -458,10 +669,13 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     canvasRef,
     transportRef,
     statsRef,
-    sectionName,
-    sectionKey,
+    loading,
+    section,
+    paused,
+    togglePause,
     audio,
-    toggleFullscreen,
+    fullscreen:       fullscreen.isFullscreen,
+    toggleFullscreen: fullscreen.toggle,
     act,
     scrub,
     release,
