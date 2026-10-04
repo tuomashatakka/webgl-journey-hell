@@ -119,6 +119,8 @@ export function withJourneyShell (definition: JourneyDefinition) {
         <SectionHeading
           key={ section.key }
           title={ section.name }
+          index={ section.index }
+          loop={ section.loop }
           accent={ meta?.accent ?? '#ffffff' }
           onDone={ opening.finishHeading } />
         }

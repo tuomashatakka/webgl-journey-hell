@@ -57,7 +57,7 @@ import { createSignalOverlay } from './signalOverlay'
 import type { SignalOverlay } from './signalOverlay'
 import { createJourneyTransport } from './transport'
 import type { JourneyTransport, TransportAction, TransportMode, TransportState } from './transport'
-import type { JourneyRenderer, JourneySimulation } from './types'
+import type { JourneyMarks, JourneyRenderer, JourneySimulation } from './types'
 
 
 const { runtime } = CONFIG
@@ -82,6 +82,10 @@ export interface JourneyLoading {
 export interface SectionAnnouncement {
   name: string;
   key:  number;
+
+  /** The section's index in the lap and the lap's own, both from zero. */
+  index: number;
+  loop:  number;
 }
 
 /** What the transport bar shows, pushed every live frame. */
@@ -197,7 +201,7 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
   let resizeDue                     = true
 
   const load = { shown: LOADING_BOOT, done: false, warm: 0, since: 0 }
-  let section = { name: definition.sectionNameAt?.(0) ?? '', key: 0 }
+  let section: SectionAnnouncement = { name: definition.sectionNameAt?.(0) ?? '', key: 0, index: 0, loop: 0 }
 
   const fps = { frames: 0, since: 0, value: 0 }
 
@@ -289,10 +293,10 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
   }
 
   // --- per-frame helpers -----------------------------------------------------
-  const announce = (name: string) => {
+  const announce = (name: string, m: JourneyMarks | null) => {
     if (name === section.name)
       return
-    section = { name, key: section.key + 1 }
+    section = { name, key: section.key + 1, index: m?.section ?? 0, loop: m?.loop ?? 0 }
     host.onSection(section)
   }
 
@@ -543,7 +547,7 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
     debugUniforms = frame.custom ?? {}
     label         = hudLabel(frame.label, frame.detail)
     if (ts.mode !== 'scrub')
-      announce(frame.label)
+      announce(frame.label, m)
 
     host.transportView()?.update({
       mode:         ts.mode,

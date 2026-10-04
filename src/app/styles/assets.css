@@ -19,7 +19,7 @@
   background:        #000;
   min-block-size:    100vb;
   color:             #fff;
-  font-family:       var(--font-mono);
+  font-family:       var(--font-ui);
   padding:           64px 24px 48px;
 }
 
@@ -78,9 +78,8 @@
   justify-content:   space-between;
   gap:               16px;
   padding:           12px 20px;
-  font-family:       system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family:       var(--font-ui);
   font-size:         1rem;
-  font-weight:       600;
   color:             var(--ink);
   cursor:            pointer;
   clear:             both;
@@ -182,7 +181,6 @@
   strong {
     color:         #fff;
     font-size:     0.8125rem;
-    font-weight:   600;
   }
 
   code {

@@ -93,7 +93,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
 
   const dbgRef = useLatestRef(dbg)
 
-  const [ section, setSection ] = useState<SectionAnnouncement>(() => ({ name: definition.sectionNameAt?.(0) ?? '', key: 0 }))
+  const [ section, setSection ] = useState<SectionAnnouncement>(() => ({ name: definition.sectionNameAt?.(0) ?? '', key: 0, index: 0, loop: 0 }))
   const [ loading, setLoading ] = useState<JourneyLoading>(LOADING_BOOT)
   const [ paused, setPaused ]   = useState(false)
   const pausedRef               = useRef(false)

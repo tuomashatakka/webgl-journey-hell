@@ -43,7 +43,7 @@ Small on purpose: tokens, a handful of rules, and the tooling that enforces them
 | `--panel`, `--panel-deep` | `#1a1e24`, `#15181f` | surfaces |
 | `--line` | `#2d3139` | hairlines and control borders |
 | `--hud-row` | `84px` | height reserved for the bottom transport row |
-| `--font-mono` | `monospace` | the only typeface |
+| `--font-ui` | Montserrat Light (300), self-hosted from `src/app/fonts/` | the only typeface, light throughout, no bold; the canvases set type in `CONFIG.ui.typeface` |
 
 Add a token before adding a literal colour. Spacing is multiples of 4 px; the HUD uses 8, 12, 18.
 
@@ -57,7 +57,7 @@ One file per concern, imported in cascade order by `layout.tsx`: `base` (page, c
 | --- | --- |
 | `withJourneyShell` | the journey page: canvas, HUD, overlays |
 | `JourneyTransport` | the tape deck; chapters, laps, scrubbing |
-| `JourneyLoader`, `GlitchTitle` | the opening: the bar, the title card, section headings (small type, wide tracking; every journey's label normalised to the place's name over "LAP n") |
+| `JourneyLoader`, `GlitchTitle` | the opening: the bar, the title card, section headings (small type, wide tracking; every journey's label normalised to the place's name over "SECTOR x / ITERATION y": the label's own section number where it gives one, else the marks' index + 1, and the marks' lap + 1) |
 | `SettingsProvider` | graphics settings state, persisted |
 | `JourneyToolbar`, `ToolbarButton` | the top bar and its icon buttons with tooltips |
 | `SettingsButton`, `SettingsView` | the settings panel (an aside over a backdrop) and its trigger |

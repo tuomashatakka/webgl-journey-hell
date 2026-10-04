@@ -188,7 +188,7 @@ export function createFoundrySimulation (): JourneySimulation {
     marks (): JourneyMarks {
       return {
         loop:         state.loop,
-        section:      sectionFor(state).id,
+        section:      sectionFor(state).id - 1,
         sectionCount: SECTION_COUNT,
         progress:     Math.min(1, state.z / (SECTION_LEN * SECTION_COUNT)),
         signalAge,

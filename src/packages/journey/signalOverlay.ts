@@ -71,7 +71,7 @@ function drawMeter (
   ctx.lineWidth   = Math.max(1, u * 0.06)
   ctx.strokeRect(left, top, w, h)
 
-  ctx.font         = `${u * 1.5}px monospace`
+  ctx.font         = `300 ${u * 1.5}px ${CONFIG.ui.typeface}`
   ctx.textAlign    = 'right'
   ctx.textBaseline = 'middle'
 
@@ -107,7 +107,7 @@ function drawMeter (
   }
   ctx.stroke()
 
-  ctx.font      = `${u * 1.6}px monospace`
+  ctx.font      = `300 ${u * 1.6}px ${CONFIG.ui.typeface}`
   ctx.textAlign = 'left'
   ctx.fillStyle = 'rgba(255,255,255,0.62)'
   ctx.fillText('dB', left, top - u * 1.4)
@@ -173,7 +173,7 @@ export function createSignalOverlay (): SignalOverlay | null {
       ctx.fillStyle   = 'rgba(255,255,255,0.92)'
       warningTriangle(ctx, cx, cy - u * 12, u * 6.4)
 
-      ctx.font         = `${u * 5.2}px monospace`
+      ctx.font         = `300 ${u * 5.2}px ${CONFIG.ui.typeface}`
       ctx.textAlign    = 'left'
       ctx.textBaseline = 'alphabetic'
       ctx.fillStyle    = 'rgba(255,255,255,0.94)'

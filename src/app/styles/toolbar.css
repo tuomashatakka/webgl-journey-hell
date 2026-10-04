@@ -75,7 +75,7 @@
 .fps-display {
   padding-inline-start:     4px;
   color:                    rgba(255, 255, 255, 0.45);
-  font-family:              var(--font-mono);
+  font-family:              var(--font-ui);
   font-size:                0.6875rem;
   letter-spacing:           1px;
   white-space:              nowrap;
@@ -92,7 +92,7 @@
   background:       #000;
   color:            #fff;
   border:           1px solid var(--line);
-  font-family:      var(--font-mono);
+  font-family:      var(--font-ui);
   font-size:        0.6875rem;
   letter-spacing:   1px;
   white-space:      nowrap;

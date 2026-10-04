@@ -588,7 +588,7 @@ export function createHollowOrchardSimulation (): JourneySimulation {
     marks (): JourneyMarks {
       return {
         loop:         state.loop,
-        section:      state.stageA,
+        section:      state.stageA - 1,
         sectionCount: STAGE_COMPOST,
         progress:     state.loopZ / ORCHARD_LOOP_Z,
         signalAge,

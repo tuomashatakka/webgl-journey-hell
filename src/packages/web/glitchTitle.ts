@@ -83,6 +83,11 @@ function canvasOf (w: number, h: number): HTMLCanvasElement {
   return c
 }
 
+/** The type at px, in the site's one face, light. */
+function face (px: number): string {
+  return `300 ${px}px ${CONFIG.ui.typeface}`
+}
+
 /**
  * The largest size, at most `size`, at which `text` (letter-spaced by
  * `spacingRatio` of the size) fits `maxWidth`. Width is linear in size, so one
@@ -243,14 +248,12 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
     const b     = base.getContext('2d')!
     const maxW  = w * 0.88
     const title = opts.title.toUpperCase()
-    const head  = (px: number) => `700 ${px}px "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif`
-    const body  = (px: number) => `400 ${px}px "Helvetica Neue", Helvetica, Arial, sans-serif`
-    const size  = fitSize(b, head, title, Math.max(11, Math.min(w * 0.03, h * 0.06) * (opts.fontScale ?? 1)), 0.62, maxW)
+    const size  = fitSize(b, face, title, Math.max(11, Math.min(w * 0.03, h * 0.06) * (opts.fontScale ?? 1)), 0.62, maxW)
     const midY  = h * 0.5
 
     b.fillStyle    = '#f4f4f4'
     b.textBaseline = 'middle'
-    b.font         = head(size)
+    b.font         = face(size)
     spacedText(b, title, w / 2, midY, size * 0.62)
 
     let bottom = midY + size * 0.75
@@ -258,14 +261,14 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
       // A tagline that will not fit on one line at a readable size takes two.
       const text  = opts.subtitle.toUpperCase()
       const want  = Math.max(9, size * 0.42)
-      const fit   = fitSize(b, body, text, want, 0.8, maxW)
+      const fit   = fitSize(b, face, text, want, 0.8, maxW)
       const lines = fit < want * 0.8 ? twoLines(text) : [ text ]
       const sub   = lines.length > 1
-        ? Math.min(...lines.map(l => fitSize(b, body, l, want, 0.8, maxW)))
+        ? Math.min(...lines.map(l => fitSize(b, face, l, want, 0.8, maxW)))
         : fit
 
       b.globalAlpha = 0.62
-      b.font        = body(sub)
+      b.font        = face(sub)
       lines.forEach((line, i) => spacedText(b, line, w / 2, midY + size * 1.15 + i * sub * 1.6, sub * 0.8))
       bottom = midY + size * 1.15 + (lines.length - 1) * sub * 1.6 + sub
       b.globalAlpha = 1
@@ -284,6 +287,13 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
       bottom,
     }
   }
+
+  // The face can land after the first frame: the card is set again in it.
+  if (!document.fonts.check(face(32)))
+    document.fonts.load(face(32)).then(() => {
+      if (layers)
+        layers = build(canvas.width, canvas.height)
+    }, () => undefined)
 
   /** Amount of glitch at t: flickers on the way in, quiet on the hold, a ramp out. */
   const glitchAt = (t: number, rnd: () => number): number => {

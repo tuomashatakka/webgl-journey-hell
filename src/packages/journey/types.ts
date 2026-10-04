@@ -14,7 +14,7 @@ export interface JourneyMarks {
   /** Integer lap index. 0 always, for journeys with no lap concept. */
   loop: number;
 
-  /** Integer section index within the lap. */
+  /** Integer section index within the lap, from zero. The section heading counts from it. */
   section: number;
 
   /** How many sections a lap has — the tick count on the progress bar. */

@@ -13,7 +13,7 @@ html, body {
         radial-gradient(ellipse at 50% -20%, rgba(0, 255, 170, 0.06), transparent 60%),
         #000;
   color:         #fff;
-  font-family:   var(--font-mono);
+  font-family:   var(--font-ui);
   padding:       0;
 }
 
@@ -41,7 +41,7 @@ html, body {
 
 
 .index-title {
-  font-family:      Georgia, serif;
+  font-family:      var(--font-ui);
   font-size:        clamp(18px, 4vi, 34px);
   letter-spacing:   4px;
   color:            #fff;
@@ -118,7 +118,7 @@ html, body {
   overflow:           hidden;
   border-radius:      6% / 8%;
   color:              #9dffd4;
-  font-family:        var(--font-mono);
+  font-family:        var(--font-ui);
   text-shadow:        0 0 6px rgba(120, 255, 200, 0.75);
   transition:         opacity 0.3s ease;
 }
@@ -150,7 +150,6 @@ html, body {
 .crt-name {
   grid-area:   name;
   font-size:   clamp(11px, 1.7vi, 22px);
-  font-weight: 700;
 }
 
 
@@ -219,7 +218,7 @@ html, body {
   background:     rgba(0, 0, 0, 0.6);
   border:         1px solid rgba(157, 255, 212, 0.35);
   color:          #9dffd4;
-  font-family:    var(--font-mono);
+  font-family:    var(--font-ui);
   font-size:      0.6875rem;
   letter-spacing: 2px;
   padding:        9px 14px;

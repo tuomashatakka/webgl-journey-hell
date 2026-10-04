@@ -383,6 +383,9 @@ export const CONFIG = {
   ui: {
     debugPanelSampleMs: 200,
 
+    /** The typeface the canvases set type in, light: the CSS's --font-ui. */
+    typeface: '"Montserrat", "Helvetica Neue", Helvetica, Arial, sans-serif',
+
     /** How long the bar takes to fade once loaded; the shell unmounts it after. */
     loaderFadeMs: 450,
 

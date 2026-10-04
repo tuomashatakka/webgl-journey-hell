@@ -38,13 +38,17 @@ interface TitleCardProps {
 interface SectionHeadingProps {
 
   /** The section's HUD label: "LAP 2 · THE VIADUCT", or the bare name. */
-  title:  string;
+  title: string;
+
+  /** Where it is, both from zero: the section's index in the lap, and the lap. */
+  index:  number;
+  loop:   number;
   accent: string;
   onDone: () => void;
 }
 
-/** The name as the heading's title, and the lap under it as its tagline. */
-type SplitLabelReturnType = { title: string; subtitle?: string }
+/** The name as the heading's title, and where it is as its tagline. */
+type SplitLabelReturnType = { title: string; subtitle: string }
 
 function GlitchTitleCanvas ({ id, skippable, maxScale = 2, onDone, onOut, ...options }: CanvasProps) {
   const canvasRef = useGlitchTitle(options, { skippable, maxScale, onDone, onOut })
@@ -64,22 +68,24 @@ export function TitleCard (props: TitleCardProps) {
 }
 
 /**
- * Every journey's label in one format: the place's name, and "LAP n" under it
- * once there is more than one. Journeys say "SECTION 3:", "SECTOR 3:", "LOOP 2",
- * "LAP 2"; the heading says none of that differently.
+ * Every journey's label in one format: the place's name, and "SECTOR x /
+ * ITERATION y" under it. Journeys say "SECTION 3:", "SECTOR 3:", "LOOP 2",
+ * "LAP 2"; the heading says none of that differently. A number the label gives
+ * its section is the one shown (the abyss is sector 666), else the index's.
  */
-function splitLabel (label: string): SplitLabelReturnType {
-  const parts = label.toUpperCase().split(' · ')
-  const title = parts[parts.length - 1].replace(/^SECT(?:ION|OR)\s+\d+\s*:\s*/, '')
-  const lap   = parts.length > 1 ? (/\d+/).exec(parts[0])?.[0] : undefined
-  return lap ? { title, subtitle: `LAP ${lap}` } : { title }
+function splitLabel (label: string, index: number, loop: number): SplitLabelReturnType {
+  const parts  = label.toUpperCase().split(' · ')
+  const named  = (/^SECT(?:ION|OR)\s+(\d+)\s*:\s*/).exec(parts[parts.length - 1])
+  const title  = named ? parts[parts.length - 1].slice(named[0].length) : parts[parts.length - 1]
+  const sector = named ? named[1] : String(index + 1)
+  return { title, subtitle: `SECTOR ${sector} / ITERATION ${loop + 1}` }
 }
 
 /**
  * The card's type, smaller and quicker, over the running journey: no
  * backdrop, no skip, and gone entirely once it has torn out.
  */
-export function SectionHeading ({ title, accent, onDone }: SectionHeadingProps) {
+export function SectionHeading ({ title, index, loop, accent, onDone }: SectionHeadingProps) {
   const fontScale = useHeadingFontScale()
 
   return <GlitchTitleCanvas
@@ -89,6 +95,6 @@ export function SectionHeading ({ title, accent, onDone }: SectionHeadingProps) 
     fontScale={ fontScale }
     timing={{ in: 0.55, hold: 2.4, out: 3.3 }}
     maxScale={ 1.5 }
-    { ...splitLabel(title) }
+    { ...splitLabel(title, index, loop) }
     onDone={ onDone } />
 }
