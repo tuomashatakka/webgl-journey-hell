@@ -23,6 +23,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CONFIG } from '../src/packages/config/config.ts'
+import { findChromium, glArgs } from './chromium.mjs'
 
 
 const { posters } = CONFIG.tools
@@ -45,9 +46,8 @@ await mkdir(OUT, { recursive: true })
 if (bare) {
   const { startHarness } = await import('./harness/serve.mjs')
   const harness          = await startHarness()
-  const linux            = process.platform === 'linux'
   const b                = await chromium.launch({
-    executablePath: process.env.JOURNEY_CHROMIUM ?? (linux ? '/opt/pw-browsers/chromium' : undefined),
+    executablePath: await findChromium(),
     args:           [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ],
   })
   const page = await b.newPage()
@@ -72,19 +72,44 @@ if (bare) {
   process.exit(0)
 }
 
-const browser = await chromium.launch({
-  args: [ '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader' ],
-})
-const context = await browser.newContext({
-  viewport:          { width: posters.width, height: posters.height },
-  deviceScaleFactor: 1,
-})
-await context.addInitScript(([ key, settings ]) => {
-  localStorage.setItem(key, JSON.stringify(settings))
-}, [ CONFIG.settings.v1Key, posters.settings ])
-
-for (const { slug, section, t } of shots) {
+// One browser per shot, so one journey's GPU trouble cannot cost the rest.
+async function openPage () {
+  const browser = await chromium.launch({
+    executablePath: await findChromium(),
+    args:           glArgs(),
+  })
+  const context = await browser.newContext({
+    viewport:          { width: posters.width, height: posters.height },
+    deviceScaleFactor: 1,
+  })
+  await context.addInitScript(([ key, settings ]) => {
+    localStorage.setItem(key, JSON.stringify(settings))
+  }, [ CONFIG.settings.storageKey, posters.settings ])
   const page = await context.newPage()
+  return { browser, page }
+}
+
+const failed = []
+for (const { slug, section, t } of shots) {
+  const { browser, page } = await openPage()
+  page.on('crash', () => console.error(`${slug}: page crashed`))
+  page.on('pageerror', e => console.error(`${slug}: ${e.message}`))
+  try {
+    await shoot(page, slug, section, t)
+  } catch (error) {
+    failed.push(slug)
+    console.error(`${slug}: ${error.message.split('\n')[0]}`)
+  } finally {
+    await browser.close().catch(() => {})
+  }
+}
+
+if (failed.length) {
+  console.error(`failed: ${failed.join(', ')}`)
+  process.exit(1)
+}
+
+async function shoot (page, slug, section, t) {
   // A shot may name its instant: ?t= seeks the simulation and freezes there,
   // so the section is reached at once instead of driven to at 4x. ?t= implies
   // the debug overlay; a poster wants the chrome and not the panel.
@@ -111,7 +136,4 @@ for (const { slug, section, t } of shots) {
   // JPEG, not PNG: a 1280x800 raymarch still is ~2 MB as PNG.
   await page.screenshot({ path: path.join(OUT, `${slug}.jpg`), type: 'jpeg', quality, timeout: 180_000 })
   console.log(`${slug} → ${label || '(section not reached)'}`)
-  await page.close()
 }
-
-await browser.close()

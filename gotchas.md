@@ -65,3 +65,4 @@ Traps that have already cost time, in the order you are likely to hit them. The 
 
 * The journeys are raymarched or rasterized by hand: zero 3D dependencies. "Real geometry" means a new renderer path (`geometryRenderer`), not a new shader.
 * Before reading about a Next.js API, read the matching guide in `node_modules/next/dist/docs/`: this Next.js version has breaking changes (see `AGENTS.md`).
+* **Browser tools need full Chromium, not the headless shell.** Without a GPU process a live journey never paints and the headless shell exits cleanly after ~30 s. `tools/chromium.mjs` picks the full build; see `docs/tooling.md`. `data-journey-ready` is raised only by the debug overlay (`?t=` / `debug=1`), so do not wait on it for a live page.

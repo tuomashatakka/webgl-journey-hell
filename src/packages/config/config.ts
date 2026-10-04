@@ -433,6 +433,8 @@ export const CONFIG = {
         brightness:   1,
         contrast:     1,
         maxFrameRate: 60,
+        gyroscope:    false,
+        crt:          false,
       },
 
       /** Hide the chrome before the capture. */

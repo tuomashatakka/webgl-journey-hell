@@ -117,6 +117,17 @@ change while motion shrinks with the step, so a pop that hides at 0.1 s stands
 out at 10 ms. Note that `scan` rebuilds the bundle per frame in `--bare` mode —
 do not edit while one runs.
 
+## Posters and screenshots
+
+With `bun run dev` running:
+
+```bash
+node tools/shoot-posters.mjs [slug…]   # assets/posters/<slug>.jpg, the index cards' fallback art
+node tools/shoot-ui.mjs                # assets/screenshots/app-*.png, the README's shots of the chrome
+```
+
+Both launch a fresh browser per shot and find it through `tools/chromium.mjs`, which prefers a full Playwright Chromium (`Google Chrome for Testing.app`) over the headless shell. The headless shell has no GPU process: a live journey in it never paints and the browser exits after ~30 s with code 0, so a missing full build looks like a silent hang, not an error. Install it with `bunx playwright install chromium`; `JOURNEY_CHROMIUM` overrides the lookup. Posters are shot with the CRT pass off (`CONFIG.tools.posters.settings`), seeded under the current settings key.
+
 ## Verifying the geometry primitives
 
 ```bash
