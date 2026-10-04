@@ -1,6 +1,7 @@
 import type { JourneyAudioEngine } from '@wjh/journey/types'
 import { JourneyAudio } from '@wjh/audio/engine'
-import { brownNoise, scalar } from '@wjh/audio/nodes'
+import { brownNoise } from '@wjh/audio/nodes'
+import { scalar } from '@wjh/gl/uniforms'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
 
 

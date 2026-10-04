@@ -30,6 +30,7 @@
 // because only the renderer knows the aspect ratio, and the pointer look is
 // applied here because where the rider looks must not change where the car is.
 
+import { vector } from '@wjh/gl/uniforms'
 import type { JourneyRenderer } from '@wjh/journey/types'
 import { HIGH_QUALITY } from '@wjh/gl/uniforms'
 import { createFullscreenQuad } from '@wjh/gl/quad'
@@ -390,9 +391,6 @@ export function createScenicRouteScene (
 
   const drawQuad = () => quad.draw()
 
-  const vec = (c: FrameUniforms['custom'], k: string, d: number[]): number[] =>
-    (c?.[k] as number[] | undefined) ?? d
-
   /** The bank LUT on unit 0 for any program that sweeps. */
   const bindBank = (prog: GlProgram, gain: number) => {
     gl.activeTexture(gl.TEXTURE0)
@@ -449,24 +447,24 @@ export function createScenicRouteScene (
       const h = canvas.height
       resize(w, h, (quality ?? HIGH_QUALITY).msaa)
 
-      const camPos = vec(custom, 'uCamPos', [ 0, 0, 0 ])
-      const camFwd = vec(custom, 'uCamFwd', [ 0, 0, 1 ])
-      const camUp  = vec(custom, 'uCamUp', [ 0, 1, 0 ])
-      const ride   = vec(custom, 'uRide', [ 0, 0, 0, 0 ])
-      const sun    = vec(custom, 'uSun', [ 0, 0.2, 1, 0.2 ])
-      const env    = vec(custom, 'uEnv', [ 0, 1, 0.001, -1e4 ])
-      const fogCol = vec(custom, 'uFogCol', [ 0.6, 0.65, 0.7, 0 ])
-      const flt    = vec(custom, 'uFloat', [ 0, 0, 0, 3.4 ])
-      const car    = vec(custom, 'uCar', [ 0, 1, 0, 0 ])
-      const loop   = vec(custom, 'uLoop', [ 0, 0, 0, 0 ])
+      const camPos = vector(custom, 'uCamPos', [ 0, 0, 0 ])
+      const camFwd = vector(custom, 'uCamFwd', [ 0, 0, 1 ])
+      const camUp  = vector(custom, 'uCamUp', [ 0, 1, 0 ])
+      const ride   = vector(custom, 'uRide', [ 0, 0, 0, 0 ])
+      const sun    = vector(custom, 'uSun', [ 0, 0.2, 1, 0.2 ])
+      const env    = vector(custom, 'uEnv', [ 0, 1, 0.001, -1e4 ])
+      const fogCol = vector(custom, 'uFogCol', [ 0.6, 0.65, 0.7, 0 ])
+      const flt    = vector(custom, 'uFloat', [ 0, 0, 0, 3.4 ])
+      const car    = vector(custom, 'uCar', [ 0, 1, 0, 0 ])
+      const loop   = vector(custom, 'uLoop', [ 0, 0, 0, 0 ])
       // (fall weight, fish risen, jaws open, shake); without a sim the fish is up and open.
-      const fall    = vec(custom, 'uFall', [ 0, 1, 1, 0 ])
+      const fall    = vector(custom, 'uFall', [ 0, 1, 1, 0 ])
       const isHeavy = (heavy ?? 1) > 0.5
-      carPos   = vec(custom, 'uCarPos', camPos)
-      carFwd   = vec(custom, 'uCarFwd', camFwd)
-      carRight = vec(custom, 'uCarRight', [ 1, 0, 0 ])
+      carPos   = vector(custom, 'uCarPos', camPos)
+      carFwd   = vector(custom, 'uCarFwd', camFwd)
+      carRight = vector(custom, 'uCarRight', [ 1, 0, 0 ])
 
-      const carUp = vec(custom, 'uCarUp', [ 0, 1, 0 ])
+      const carUp = vector(custom, 'uCarUp', [ 0, 1, 0 ])
       lights   = car[3]
 
       // Pointer look: yaw about the camera's up, pitch toward it.

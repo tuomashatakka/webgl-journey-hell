@@ -1,8 +1,5 @@
 // Web Audio building blocks every soundtrack uses.
 
-import type { CustomUniforms } from '@wjh/gl/uniforms'
-
-
 type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
 
 /** A new AudioContext (webkit-prefixed on older Safari), or null without Web Audio. */
@@ -38,12 +35,6 @@ export function whiteNoise (ctx: BaseAudioContext, seconds = 2): AudioBuffer {
   for (let i = 0; i < size; i++)
     out[i] = Math.random() * 2 - 1
   return buffer
-}
-
-/** A scalar uniform from the frame's map, or `fallback`. */
-export function scalar (state: CustomUniforms | undefined, name: string, fallback = 0): number {
-  const v = state?.[name]
-  return typeof v === 'number' ? v : fallback
 }
 
 

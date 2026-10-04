@@ -85,3 +85,15 @@ export function uploadCustomUniforms (
     }
   }
 }
+
+/** A scalar uniform from the frame's map, or `fallback`. */
+export function scalar (custom: CustomUniforms | undefined, name: string, fallback = 0): number {
+  const v = custom?.[name]
+  return typeof v === 'number' ? v : fallback
+}
+
+/** A vector uniform from the frame's map, or `fallback`. */
+export function vector (custom: CustomUniforms | undefined, name: string, fallback: number[]): number[] {
+  const v = custom?.[name]
+  return Array.isArray(v) ? v : fallback
+}

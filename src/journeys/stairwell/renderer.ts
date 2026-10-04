@@ -12,6 +12,7 @@
 // sitting behind the camera. The current act's sky and the next act's are both
 // bound, because the next act is visible through the portal at the far seam.
 
+import { scalar } from '@wjh/gl/uniforms'
 import type { JourneyRenderer } from '@wjh/journey/types'
 import { QUAD_VS_300, createFullscreenQuad } from '@wjh/gl/quad'
 import { createGlProgram } from '@wjh/gl/program'
@@ -113,11 +114,6 @@ export function createStairwellRenderer (
     target = createRenderTarget(g2, canvas.width, canvas.height, format, { mips: true })
   }
 
-  const num = (frame: FrameUniforms, name: string): number => {
-    const v = frame.custom?.[name]
-    return typeof v === 'number' ? v : 0
-  }
-
   return {
     ready () {
       return materials.ready && [ ...skies.values() ].every(s => s.ready)
@@ -131,12 +127,12 @@ export function createStairwellRenderer (
     draw (frame) {
       resize()
 
-      const section  = Math.round(num(frame, 'uSection'))
-      const progress = num(frame, 'uSectionProgress')
+      const section  = Math.round(scalar(frame.custom, 'uSection'))
+      const progress = scalar(frame.custom, 'uSectionProgress')
       const a        = ACTS[section] ?? ACTS[0]
-      const b        = ACTS[Math.round(num(frame, 'uNextSection'))] ?? a
-      const c        = ACTS[Math.round(num(frame, 'uFarSection'))] ?? b
-      const p        = ACTS[Math.round(num(frame, 'uPrevSection'))] ?? a
+      const b        = ACTS[Math.round(scalar(frame.custom, 'uNextSection'))] ?? a
+      const c        = ACTS[Math.round(scalar(frame.custom, 'uFarSection'))] ?? b
+      const p        = ACTS[Math.round(scalar(frame.custom, 'uPrevSection'))] ?? a
 
       // Exposure is blended across each seam by where the camera is, exactly
       // as the slope is: half-and-half at the middle of the tunnel, from
