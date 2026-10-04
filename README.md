@@ -4,6 +4,15 @@ An index of WebGL shader **journeys**: nine raymarched or rasterized descents, e
 
 Next.js (App Router, static export), React 19, TypeScript, bun workspaces.
 
+| | |
+| --- | --- |
+| ![The index grid](assets/screenshots/app-index.png) | ![A journey, with the top toolbar](assets/screenshots/app-journey.png) |
+| ![Toolbar tooltip](assets/screenshots/app-tooltip.png) | ![The settings pane](assets/screenshots/app-settings.png) |
+
+<img src="assets/screenshots/app-phone.png" alt="A journey at phone width" width="195">
+
+Keys in a journey: <kbd>←</kbd>/<kbd>→</kbd> seek, <kbd>Space</kbd> pause, <kbd>1</kbd>–<kbd>4</kbd> speed, <kbd>⌘</kbd>+<kbd>←</kbd>/<kbd>→</kbd> previous/next lap, <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> look around.
+
 ## Run it
 
 ```bash
@@ -39,7 +48,7 @@ src/journeys/    framework-free journey content, one folder per journey + regist
 src/packages/    bun workspaces, framework-free, never import react or next
 assets/          posters, screenshots, textures: every image in the repo
 docs/            architecture, design system, tooling, runtime, per-journey specs
-tools/           CLI: journey.mjs, shoot-posters.mjs, verify-geometry.ts, harness/
+tools/           CLI: journey.mjs, shoot-posters.mjs, shoot-ui.mjs, chromium.mjs, verify-geometry.ts, harness/
 ```
 
 ## Read next
