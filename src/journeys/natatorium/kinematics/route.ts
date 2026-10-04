@@ -2,16 +2,16 @@ import { clamp01 } from '@wjh/math/scalar'
 
 // ---- surface types, read by the shader's material branch ----
 
-export const TYPE_TILE   = 0
+const TYPE_TILE   = 0
 
 // white tile, the default pool finish
-export const TYPE_GUTTER = 1
+const TYPE_GUTTER = 1
 
 // narrow service corridor, darker tile
-export const TYPE_VAULT  = 2
+const TYPE_VAULT  = 2
 
 // big vaulted hall, columns, clerestory
-export const TYPE_LOCKER = 3
+const TYPE_LOCKER = 3
 
 // lockers and benches along the walls
 
@@ -54,7 +54,7 @@ export interface Section {
   speed: number;
 }
 
-export const D = Math.PI / 180
+const D = Math.PI / 180
 
 // The lap. Four invariants hold across this table, all checked by
 // assertRouteSane() below:

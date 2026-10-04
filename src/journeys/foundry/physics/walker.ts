@@ -5,44 +5,44 @@ import { LAP_ARC, RoutePoint, SPAN_TILES, TILE_HALF, cycDelta, cyclic, decayFor,
 
 // Metres of travel per footstep. CYCLE_LEN is a whole number of these, so the
 // stride phase is continuous across the wrap.
-export const STEP_LEN = 0.875
+const STEP_LEN = 0.875
 
-export const WALK_SPEED = 2.4
+const WALK_SPEED = 2.4
 
 // m/s, a brisk walk
-export const LEG_K      = 210
+const LEG_K      = 210
 
 // leg-spring stiffness (per unit mass)
-export const LEG_C      = 9
+const LEG_C      = 9
 
 // leg-spring damping — low enough that the head rings
-export const SWAY_K     = 74
+const SWAY_K     = 74
 
 // lateral sway stiffness, tuned to one stride period
-export const SWAY_C     = 4
+const SWAY_C     = 4
 
-export const HEEL_KICK  = 0.55
+const HEEL_KICK  = 0.55
 
 // m/s of head drop injected by each heel strike
-export const SWAY_KICK  = 0.3
+const SWAY_KICK  = 0.3
 
-export const UNFOLD_LEAD = 14
+const UNFOLD_LEAD = 14
 
 // metres of warning before you reach a tile
-export const REFOLD_LAG  = 5
+const REFOLD_LAG  = 5
 
 // metres behind you before it folds away again
-export const HINGE_K     = 46
+const HINGE_K     = 46
 
 // hinge stiffness — higher snaps the plate over
-export const HINGE_C     = 7.5
+const HINGE_C     = 7.5
 
 // hinge damping — lower leaves it ringing
-export const HINGE_KICK  = 0.42
+const HINGE_KICK  = 0.42
 
 // --- deterministic RNG ------------------------------------------------------
 /** Cheap scalar hash, used to vary one footfall from the next. */
-export function hash11 (x: number): number {
+function hash11 (x: number): number {
   const s = Math.sin(x * 12.9898) * 43758.5453123
   return s - Math.floor(s)
 }
@@ -80,7 +80,7 @@ export function stepMechanisms (s: FoundryState, dt: number): void {
  * only the lateral coordinate tells them apart. A z-only test would have the
  * walker riding the ring of the wrong tile all the way across the hall.
  */
-export function tileUnderfoot (s: FoundryState): number {
+function tileUnderfoot (s: FoundryState): number {
   let best  = -1
   let bestD = TILE_HALF + 0.4
   for (let i = 0; i < SPAN_TILES; i++) {
@@ -163,7 +163,7 @@ export function stepRide (s: FoundryState, impactSum: number): void {
  * folding span the spring's rest length is the panel you are standing on, so the
  * mechanism's ring shows up in your eyes.
  */
-export const scratchRoute: RoutePoint = { x: 0, z: 0, dx: 0, dz: 1 }
+const scratchRoute: RoutePoint = { x: 0, z: 0, dx: 0, dz: 1 }
 
 export function stepWalker (s: FoundryState, dt: number): void {
   // Stepping out of the cage accelerates you to a pace; stepping back into it

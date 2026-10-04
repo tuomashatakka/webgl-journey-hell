@@ -86,7 +86,7 @@ export interface SwitchbackState {
   crack: number;
 }
 
-export interface Slot {
+interface Slot {
 
   /** Section bounds relative to the cart, in metres of camera-space depth. */
   z0: number;
@@ -103,7 +103,7 @@ export interface Slot {
   id:     number;
 }
 
-export function makeSlot (sec: Section, z0: number, z1: number): Slot {
+function makeSlot (sec: Section, z0: number, z1: number): Slot {
   return {
     z0,
     z1,

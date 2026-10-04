@@ -6,7 +6,7 @@ import { SurfaceKey } from './surfaces'
 // --- unit props -----------------------------------------------------------------
 
 /** A flat disc or ring in the local xy plane, facing +z, both sides. */
-export function disc (b: MeshBuilder, r0: number, r1: number, z: number, seg: number): void {
+function disc (b: MeshBuilder, r0: number, r1: number, z: number, seg: number): void {
   for (const side of [ 1, -1 ]) {
     const base = b.vertexCount
     for (let i = 0; i <= seg; i++) {
@@ -32,7 +32,7 @@ export function disc (b: MeshBuilder, r0: number, r1: number, z: number, seg: nu
 }
 
 /** A cylinder along local y, capped, for posts, masts and pendants. */
-export function cylY (b: MeshBuilder, x: number, y0: number, y1: number, z: number, r: number, seg = 10): void {
+function cylY (b: MeshBuilder, x: number, y0: number, y1: number, z: number, r: number, seg = 10): void {
   const base = b.vertexCount
   for (let i = 0; i <= seg; i++) {
     const a = i / seg * Math.PI * 2
@@ -49,7 +49,7 @@ export function cylY (b: MeshBuilder, x: number, y0: number, y1: number, z: numb
 }
 
 /** A low-poly sphere, for globes and lamp bulbs. */
-export function sphere (b: MeshBuilder, x: number, y: number, z: number, r: number, seg = 8): void {
+function sphere (b: MeshBuilder, x: number, y: number, z: number, r: number, seg = 8): void {
   const base = b.vertexCount
   const rows = seg,
     cols     = seg * 2
@@ -73,7 +73,7 @@ export function sphere (b: MeshBuilder, x: number, y: number, z: number, r: numb
 }
 
 /** A ring around the local z axis (a tunnel rib), as a swept box section. */
-export function ribRing (b: MeshBuilder, cu: number, r: number, depth: number, width: number, seg: number, a0: number, a1: number): void {
+function ribRing (b: MeshBuilder, cu: number, r: number, depth: number, width: number, seg: number, a0: number, a1: number): void {
   const pts: [ number, number ][] = [[ r - depth, -width ], [ r, -width ], [ r, width ], [ r - depth, width ]]
   for (let k = 0; k < 4; k++) {
     const [ ra, za ] = pts[k]
@@ -308,5 +308,6 @@ export function buildUnit (spec: UnitSpec, seed: number): MeshBuilder {
     fracture(b, spec.cell, mulberry32(seed))
   return b
 }
+
 /** Sleeper pitch, metres. */
 export const TIE_PITCH = 0.744

@@ -7,7 +7,7 @@ import { SurfaceKey } from './surfaces'
 import { Profile, refine } from './profiles'
 
 
-export interface Corner {
+interface Corner {
   r:  number;
   u:  number;
   nr: number;

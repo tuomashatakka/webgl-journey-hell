@@ -18,11 +18,11 @@ import { Section, localFloor, sectionAt } from './route'
 
 export type Vec3 = [ number, number, number ]
 
-export function rotY (x: number, z: number, c: number, s: number): [ number, number ] {
+function rotY (x: number, z: number, c: number, s: number): [ number, number ] {
   return [ c * x - s * z, s * x + c * z ]
 }
 
-export function lerp3 (a: Vec3, b: Vec3, t: number): Vec3 {
+function lerp3 (a: Vec3, b: Vec3, t: number): Vec3 {
   return [ mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t) ]
 }
 
@@ -31,12 +31,12 @@ export function lerp3 (a: Vec3, b: Vec3, t: number): Vec3 {
  * both sides of a join agree on the window — that agreement is what makes the
  * two one-sided formulas meet exactly at the boundary.
  */
-export function cornerHalf (a: Section, b: Section): number {
+function cornerHalf (a: Section, b: Section): number {
   return Math.min(6, Math.min(a.len, b.len) * 0.3)
 }
 
 /** A point in the NEXT section's frame, expressed in the current one. */
-export function nextToCur (q: Vec3, cur: Section, next: Section): Vec3 {
+function nextToCur (q: Vec3, cur: Section, next: Section): Vec3 {
   const c          = Math.cos(next.turn)
   const s          = Math.sin(next.turn)
   const [ rx, rz ] = rotY(q[0], q[2], c, s)
@@ -44,7 +44,7 @@ export function nextToCur (q: Vec3, cur: Section, next: Section): Vec3 {
 }
 
 /** A point in the PREVIOUS section's frame, expressed in the current one. */
-export function prevToCur (q: Vec3, cur: Section, prev: Section): Vec3 {
+function prevToCur (q: Vec3, cur: Section, prev: Section): Vec3 {
   const c          = Math.cos(-cur.turn)
   const s          = Math.sin(-cur.turn)
   const [ rx, rz ] = rotY(q[0], q[2] - prev.len, c, s)
@@ -60,9 +60,9 @@ export function prevToCur (q: Vec3, cur: Section, prev: Section): Vec3 {
  *   side = -1  mixing backward into `prev`, weight is the *current* share
  *   side =  0  clear of any corner
  */
-export type CornerBlendReturnType = { side: number; w: number }
+type CornerBlendReturnType = { side: number; w: number }
 
-export function cornerBlend (idx: number, localZ: number): CornerBlendReturnType {
+function cornerBlend (idx: number, localZ: number): CornerBlendReturnType {
   const cur   = sectionAt(idx)
   const hwEnd = cornerHalf(cur, sectionAt(idx + 1))
   if (localZ > cur.len - hwEnd)
@@ -81,7 +81,7 @@ export function cornerBlend (idx: number, localZ: number): CornerBlendReturnType
  * everything else — a 1.4m corridor opening into a 16m hall would otherwise
  * snap the camera sideways by nearly half a unit at the join.
  */
-export function swayFor (s: Section, dist: number): number {
+function swayFor (s: Section, dist: number): number {
   return Math.sin(dist * 0.09) * Math.min(0.5, s.halfW * 0.06)
 }
 

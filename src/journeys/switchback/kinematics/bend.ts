@@ -13,9 +13,9 @@ import { FIT_Z2 } from './common'
 // only thing that comes back is a shape 80 metres long.
 
 /** Arc length integrated forward each frame, and the step it is walked in. */
-export const REACH_S   = 88
+const REACH_S   = 88
 
-export const FIT_STEPS = 44
+const FIT_STEPS = 44
 
 /**
  * The two camera-space depths the quadratic is pinned to. Two points determine
@@ -24,7 +24,7 @@ export const FIT_STEPS = 44
  * that visibly misses the wheels) and the far one puts the error where the fog
  * is. Z2 sits just inside the fog rather than at the edge of the march.
  */
-export const FIT_Z1 = 20
+const FIT_Z1 = 20
 
 export interface Bend {
   ax: number;
@@ -34,7 +34,7 @@ export interface Bend {
 }
 
 /** Solve q(z) = a*z + b*z^2 through (z1,v1) and (z2,v2). */
-export function fitQuadratic (z1: number, v1: number, z2: number, v2: number): [ number, number ] {
+function fitQuadratic (z1: number, v1: number, z2: number, v2: number): [ number, number ] {
   const det = z1 * z2 * (z2 - z1)
   if (Math.abs(det) < 1e-6)
     return [ 0, 0 ]

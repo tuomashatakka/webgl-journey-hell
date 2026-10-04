@@ -12,7 +12,7 @@ export interface PP {
   smooth?: boolean;
 }
 
-export const pp = (r: number, u: number, s: SurfaceKey, ao = 1, smooth = false): PP =>
+const pp = (r: number, u: number, s: SurfaceKey, ao = 1, smooth = false): PP =>
   ({ r, u, s, ao, smooth })
 
 export interface Profile {
@@ -21,7 +21,7 @@ export interface Profile {
 }
 
 /** An arc of points, anticlockwise from a0 to a1 (radians), all smooth. */
-export function arc (cr: number, cu: number, rr: number, ru: number, a0: number, a1: number,
+function arc (cr: number, cu: number, rr: number, ru: number, a0: number, a1: number,
   n: number, s: SurfaceKey, ao = 1): PP[] {
   const out: PP[] = []
   for (let i = 0; i <= n; i++) {

@@ -2,12 +2,12 @@ import { FALL_START, LAP_LEN, PHASE_WRAP, SECTIONS, SECTION_COUNT, beatAt, grade
 import { D, DRAG, FIT_Z2, G, ROLL_RES, V_MAX, V_MIN } from './common'
 
 /** The peak-to-mean ratio of the above. Curvature caps are stated against it. */
-export const EASE_PEAK = 1.875
+const EASE_PEAK = 1.875
 
 /** Sleeper pitch, and the bay spacing of the trestle bents. Both divide PHASE_WRAP. */
-export const TIE_PITCH  = 2.5
+const TIE_PITCH  = 2.5
 
-export const BENT_PITCH = 10
+const BENT_PITCH = 10
 
 /**
  * Smallest turn radius the rectification can carry, as a curvature. A quadratic
@@ -20,7 +20,7 @@ export const BENT_PITCH = 10
  * It is not a limit on how a turn *feels*. Lateral acceleration is v^2/r, so
  * this radius at the speed the void section runs at is 0.9g in your ribs.
  */
-export const MAX_CURV = 1 / 44
+const MAX_CURV = 1 / 44
 
 /**
  * ...and how much of a turn the fit may be asked to swallow whole. MAX_CURV
@@ -29,7 +29,7 @@ export const MAX_CURV = 1 / 44
  * swings much past a radian inside the visible range has left the +Z half-space,
  * and no quadratic in z can follow it out of there.
  */
-export const MAX_WINDOW_TURN = 1
+const MAX_WINDOW_TURN = 1
 
 /**
  * Dev-only guard for the properties the route table cannot be allowed to break.

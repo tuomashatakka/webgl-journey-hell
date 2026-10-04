@@ -8,10 +8,10 @@ export const EYE_HEIGHT = 1.62
 // --- the lift shaft (mirrored by the shader) --------------------------------
 
 /** Cyclic position of the shaft, part-way down the loading bay. */
-export const LIFT_Z = 18
+const LIFT_Z = 18
 
 /** How far back from the cage's centre you stand, metres. */
-export const LIFT_STAND = 0.55
+const LIFT_STAND = 0.55
 
 /** Where the walk starts and ends: standing in the cage at the landing. */
 export const WALK_START = LIFT_Z - LIFT_STAND

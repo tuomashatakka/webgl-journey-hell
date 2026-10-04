@@ -2,13 +2,13 @@ import { G, LANDING_Y, LIFT_TOP, MODE_FALL, MODE_OBLIVION, MODE_SETTLE } from '.
 import { DebrisBody, FoundryState } from './types'
 
 // gravity
-export const DEBRIS_COUNT = 6
+const DEBRIS_COUNT = 6
 
 /** Shaft head, and the height the cage is at when the cable lets go. */
-export const SHAFT_HEAD_Y = 128
+const SHAFT_HEAD_Y = 128
 
 /** Metres further up the shaft the cable parts on each successive run. */
-export const LIFT_RISE = 26
+const LIFT_RISE = 26
 
 /**
  * Where this run starts.
@@ -40,7 +40,7 @@ export function shaftHeadFor (loop: number): number {
 export const LIFT_BRAKE_Y = 44
 
 /** Metres lower the trip gear fires on each successive run. */
-export const BRAKE_DROP = 5
+const BRAKE_DROP = 5
 
 /**
  * Where the shoes bite on this run.
@@ -60,10 +60,10 @@ export function brakeYFor (loop: number): number {
 /** Hydraulic buffers in the pit, for the arrivals the shoes do not catch. */
 export const PIT_Y = -3
 
-export const CAGE_HALF   = 1.5
+const CAGE_HALF   = 1.5
 
 // cage interior half-width
-export const CAGE_HEIGHT = 2.6
+const CAGE_HEIGHT = 2.6
 
 /** The emergency shoes are on the rails. */
 export const MODE_BRAKE = 1
@@ -82,7 +82,7 @@ export const MODE_BRAKE = 1
 export const OBLIVION_LOOP = 3
 
 /** Seconds the shoes go on grabbing before there is nothing left of them. */
-export const OBLIVION_GRIP = 11
+const OBLIVION_GRIP = 11
 
 /**
  * Clamp force of one full grab, newtons — well above the nominal brakeForce().
@@ -94,16 +94,16 @@ export const OBLIVION_GRIP = 11
  * is only 47 m between the trip point and the pit, and nominal friction spends
  * all of it without ever getting the cage below terminal.
  */
-export const OBLIVION_BITE = 118000
+const OBLIVION_BITE = 118000
 
 /** Rate of the stick-slip grab, rad/s: bite, tear free, bite again. */
-export const OBLIVION_CHATTER = 6.1
+const OBLIVION_CHATTER = 6.1
 
 /** What fraction of a full clamp one of those grabs is worth. */
-export const OBLIVION_HOLD = 1
+const OBLIVION_HOLD = 1
 
 /** ½ρCdA down there. Terminal velocity works out at about 46 m/s. */
-export const OBLIVION_DRAG = 4.2
+const OBLIVION_DRAG = 4.2
 
 /**
  * Vertical period of the oblivion shaft.
@@ -118,25 +118,25 @@ export const OBLIVION_DRAG = 4.2
  */
 export const OBLIVION_PERIOD = 64
 
-export const CAGE_MASS       = 900
+const CAGE_MASS       = 900
 
 // kg, cage + occupant + offcuts
-export const CAGE_DRAG       = 1.15
+const CAGE_DRAG       = 1.15
 
 // ½ρCdA, quadratic drag coefficient
-export const CREEP_SPEED     = 8
+const CREEP_SPEED     = 8
 
 // m/s, governed lowering rate once the shoes hold
-export const CREEP_MAX_FORCE = 90000
+const CREEP_MAX_FORCE = 90000
 
 // N ceiling on the lowering servo
-export const BUFFER_K        = 260000
+const BUFFER_K        = 260000
 
 // N/m, hydraulic buffer stiffness
-export const BUFFER_C        = 34000
+const BUFFER_C        = 34000
 
 // N·s/m
-export const BUFFER_POWER    = 1.6
+const BUFFER_POWER    = 1.6
 
 export function spawnDebris (rand: () => number, cageY: number): DebrisBody[] {
   const bodies: DebrisBody[] = []
@@ -196,7 +196,7 @@ export function spawnDebris (rand: () => number, cageY: number): DebrisBody[] {
  * @param speed    absolute cage speed, m/s
  * @param engaged  seconds since the shoes made contact
  */
-export function brakeForce (speed: number, engaged: number): number {
+function brakeForce (speed: number, engaged: number): number {
   // Wedge seating: normal force climbs over ~0.35 s to full clamp.
   const seat   = Math.min(1, engaged / 0.35)
   const normal = 68000 * seat
@@ -207,7 +207,7 @@ export function brakeForce (speed: number, engaged: number): number {
 }
 
 // --- quaternion helpers -----------------------------------------------------
-export function integrateQuat (b: DebrisBody, dt: number): void {
+function integrateQuat (b: DebrisBody, dt: number): void {
   const { qx, qy, qz, qw, wx, wy, wz } = b
   const hx                             = 0.5 * dt
   let nx = qx + hx * (wx * qw + wy * qz - wz * qy)
@@ -231,7 +231,7 @@ export function integrateQuat (b: DebrisBody, dt: number): void {
  * velocity, which is what makes the free-fall float and the brake-slam fall
  * out of the same code path for free.
  */
-export function collideWithCage (b: DebrisBody, cageY: number, cageV: number): number {
+function collideWithCage (b: DebrisBody, cageY: number, cageV: number): number {
   const r           = b.scale * 0.55 // bounding radius of the offcut
   const restitution = 0.32
   const friction    = 0.38
@@ -299,7 +299,7 @@ export function collideWithCage (b: DebrisBody, cageY: number, cageV: number): n
  * Only the two falling phases move it — once it is stood on the landing it is
  * simply held there for the rest of the lap.
  */
-export function cageForce (s: FoundryState, dt: number): number {
+function cageForce (s: FoundryState, dt: number): number {
   if (s.mode !== MODE_FALL && s.mode !== MODE_BRAKE && s.mode !== MODE_OBLIVION) {
     s.y     = LANDING_Y
     s.cageV = 0
@@ -491,7 +491,7 @@ export function stepCage (s: FoundryState, dt: number): number {
  * Bounding-sphere contacts between debris bodies. Returns the summed closing
  * speed so these impacts register too.
  */
-export function stepBodyContacts (s: FoundryState): number {
+function stepBodyContacts (s: FoundryState): number {
   let impactSum = 0
   // Bounding-sphere pairs only (15 for 6 bodies). Full box-box manifolds would
   // be far more code for a contact that is on screen for a second at a time;

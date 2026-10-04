@@ -6,7 +6,7 @@ import { brdfChunk, noiseChunk, skyLookupChunk } from './common'
  * The sun below the horizon is handled by testing each sample's sun ray against
  * the planet, which is what darkens the sky at dusk rather than a fade.
  */
-export const atmosphereChunk = /* glsl */`
+const atmosphereChunk = /* glsl */`
 const float R_E   = 6371e3;
 const float R_A   = 6471e3;
 const vec3  K_R   = vec3(5.5e-6, 13.0e-6, 22.4e-6);

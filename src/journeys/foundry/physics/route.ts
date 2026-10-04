@@ -33,7 +33,7 @@ export const TILE_HALF = 1.2
 export const TILE = TILE_HALF * 2
 
 /** Cyclic position of tile 0's centre, in the furnace-floor hall. */
-export const SPAN_Z0 = 219
+const SPAN_Z0 = 219
 
 /**
  * The route, in grid steps of TILE. Lateral first, then forward.
@@ -47,14 +47,14 @@ export const SPAN_Z0 = 219
  * Invariant, asserted by the tests: consecutive entries differ by exactly one
  * step in exactly one axis, and `iz` never decreases.
  */
-export const SPAN_IX = [ 0, 0, 0, -1, -2, -2, -2, -1, 0, 1, 2, 2, 2, 2, 2, 2 ]
+const SPAN_IX = [ 0, 0, 0, -1, -2, -2, -2, -1, 0, 1, 2, 2, 2, 2, 2, 2 ]
 
-export const SPAN_IZ = [ 0, 1, 2, 2, 2, 3, 4, 4, 4, 4, 4, 5, 6, 7, 8, 9 ]
+const SPAN_IZ = [ 0, 1, 2, 2, 2, 3, 4, 4, 4, 4, 4, 5, 6, 7, 8, 9 ]
 
 /** Metres of walking across the span, and how much of that is forward travel. */
 export const SPAN_ARC = (SPAN_TILES - 1) * TILE
 
-export const SPAN_Z_RUN = SPAN_IZ[SPAN_TILES - 1] * TILE
+const SPAN_Z_RUN = SPAN_IZ[SPAN_TILES - 1] * TILE
 
 /**
  * The lateral legs buy no forward progress, so a lap is this much longer to walk
@@ -122,13 +122,13 @@ export function cycDelta (to: number, from: number): number {
 // 0.4 m sideways at the lip.
 
 /** Arc position at which tile 0's centre is reached. */
-export const SPAN_A0 = SPAN_Z0 - WALK_START
+const SPAN_A0 = SPAN_Z0 - WALK_START
 
 /** Metres over which the route eases back to the centreline after the span. */
-export const RETURN_RUN = 22
+const RETURN_RUN = 22
 
 /** Lateral offset the span leaves you at. */
-export const SPAN_X_END = SPAN_IX[SPAN_TILES - 1] * TILE
+const SPAN_X_END = SPAN_IX[SPAN_TILES - 1] * TILE
 
 /** Lateral offset of tile `i`'s centre. */
 export function tileX (i: number): number {
@@ -146,13 +146,13 @@ export function tileArc (i: number): number {
 }
 
 /** Control point `k`, with the sequence continued straight past both ends. */
-export function ctlX (k: number): number {
+function ctlX (k: number): number {
   if (k < 0)
     return 0
   return tileX(k)
 }
 
-export function ctlZ (k: number): number {
+function ctlZ (k: number): number {
   if (k < 0)
     return SPAN_Z0 + k * TILE
   if (k >= SPAN_TILES)

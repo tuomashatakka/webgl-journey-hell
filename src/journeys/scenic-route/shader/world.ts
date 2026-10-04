@@ -8,7 +8,7 @@ import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } fro
  * Reading the bank table. R32F texels, 1024 wide, wrapped rows; linear between
  * samples — identical to route.ts's bankTableAt, which is the point.
  */
-export const bankChunk = /* glsl */`
+const bankChunk = /* glsl */`
 uniform sampler2D uBankLut;
 uniform ivec2 uBankInfo;   // (sample count, unused)
 uniform float uBankStep;
@@ -376,7 +376,7 @@ void main () {
 `
 
 /** Leaf mask for the crossed canopy quads: an ellipse eaten by noise. */
-export const leafChunk = /* glsl */`
+const leafChunk = /* glsl */`
 // Holes torn in a crown lobe's skin, on its spherical uv: the lobe reads as
 // clumps of leaves with sky between them, not as a smooth green ball. Negative
 // is a hole.

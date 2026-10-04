@@ -3,7 +3,7 @@ import { MAT } from '@wjh/delta/manifest'
 // --- surfaces ----------------------------------------------------------------
 
 /** How the fragment shader treats a draw. Mirrored as `MODE_*` in shader.ts. */
-export const enum Mode {
+const enum Mode {
   TEXTURED = 0,
   PAINT = 1,
   EMISSIVE = 2,
@@ -35,13 +35,13 @@ export interface Surface {
   pom: boolean;
 }
 
-export const tex = (layer: number, tint: [ number, number, number ] = [ 1, 1, 1 ], o: Partial<Surface> = {}): Surface =>
+const tex = (layer: number, tint: [ number, number, number ] = [ 1, 1, 1 ], o: Partial<Surface> = {}): Surface =>
   ({ layer, tint, rough: 1, metal: 0, mode: Mode.TEXTURED, glow: [ 0, 0, 0 ], pom: true, ...o })
 
-export const paint = (tint: [ number, number, number ], rough = 0.6, o: Partial<Surface> = {}): Surface =>
+const paint = (tint: [ number, number, number ], rough = 0.6, o: Partial<Surface> = {}): Surface =>
   ({ layer: -1, tint, rough, metal: 0, mode: Mode.PAINT, glow: [ 0, 0, 0 ], pom: false, ...o })
 
-export const glow = (c: [ number, number, number ], mode = Mode.EMISSIVE): Surface =>
+const glow = (c: [ number, number, number ], mode = Mode.EMISSIVE): Surface =>
   ({ layer: -1, tint: [ 0.9, 0.9, 0.9 ], rough: 0.3, metal: 0, mode, glow: c, pom: false })
 
 /** Every surface on the line, by name. Profiles and props refer to these keys. */

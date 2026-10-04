@@ -2,29 +2,29 @@ import { clamp01, mix, smootherstep } from '@wjh/math/scalar'
 import { D, DECAY_SECTION, FALL_ENTRY, TYPE_FALL } from './common'
 
 /** d/dt of smootherstep on the unit interval. Peaks at 15/8 in the middle. */
-export function dSmootherstep (t: number): number {
+function dSmootherstep (t: number): number {
   const u = clamp01(t)
   return 30 * u * u * (u - 1) * (u - 1)
 }
 
 // ---- room types, read by the shader's material branch ---------------------
 
-export const TYPE_PLATFORM  = 0
+const TYPE_PLATFORM  = 0
 
 // fluorescent boarding station, wet tile
-export const TYPE_DRIFT     = 1
+const TYPE_DRIFT     = 1
 
 // hand-cut chalk adit, timber sets, dust
-export const TYPE_SCAFFOLD  = 2
+const TYPE_SCAFFOLD  = 2
 
 // steel lattice suspended in nothing
-export const TYPE_CONCOURSE = 3
+const TYPE_CONCOURSE = 3
 
 // carpeted mall interior at sunset
-export const TYPE_CHAPEL    = 4
+const TYPE_CHAPEL    = 4
 
 // folded stone, god-rays, no floor plan
-export const TYPE_OVERLOOK  = 5
+const TYPE_OVERLOOK  = 5
 
 // open sky over a cloud sea, drifting ash
 
@@ -101,7 +101,7 @@ export interface Section {
  * finite number a sphere trace can step against instead of an infinity that
  * poisons a `min`.
  */
-export const OPEN = 400
+const OPEN = 400
 
 // ---------------------------------------------------------------------------
 // The lap
@@ -259,15 +259,15 @@ export const PHASE_WRAP = 2560
 export const PITCH_LAPS = 3
 
 /** The steepest descent in the authored table. The scale the ramp is written against. */
-export const AUTHORED_DROP = 28 * D
+const AUTHORED_DROP = 28 * D
 
 /** What a level stretch becomes on the final lap. Nothing stays level. */
-export const PITCH_BIAS = 50 * D
+const PITCH_BIAS = 50 * D
 
 /** ...and what the steepest authored descent becomes, which fixes the gain. */
-export const DROP_CEIL = 86 * D
+const DROP_CEIL = 86 * D
 
-export const PITCH_GAIN = (DROP_CEIL - PITCH_BIAS) / AUTHORED_DROP - 1
+const PITCH_GAIN = (DROP_CEIL - PITCH_BIAS) / AUTHORED_DROP - 1
 
 /**
  * How far the pitch-over has gone at an arc length, 0..1. Reads lapF rather than
@@ -294,7 +294,7 @@ export function pitchAt (s: number): number {
  * profile below level and there is nothing left to lift the cart with, which is
  * why the lap stops closing.
  */
-export function steepen (g: number, t: number): number {
+function steepen (g: number, t: number): number {
   if (t <= 0)
     return g
 
@@ -311,15 +311,15 @@ export const FALL_START = LAP_LEN * FALL_LAPS
 export const FALL_BLOCK = 720
 
 /** How steep the shaft gets. Not 90: cos(grade) is load-bearing in the up vector. */
-export const FALL_GRADE = -89.2 * D
+const FALL_GRADE = -89.2 * D
 
 /** The shaft's corkscrew: peak curvature, and the wavelength it snakes on. */
-export const FALL_CURV = 1 / 96
+const FALL_CURV = 1 / 96
 
-export const FALL_WAVE = 0.019
+const FALL_WAVE = 0.019
 
 /** Grade the shaft inherits from the railway, once the pitch-over has finished. */
-export const FALL_ENTRY_GRADE = steepen(-20 * D, 1)
+const FALL_ENTRY_GRADE = steepen(-20 * D, 1)
 
 export const FALL_SECTION: Section = {
   id:     7,
@@ -342,11 +342,11 @@ export const FALL_SECTION: Section = {
 
 export const STARTS: number[]      = []
 
-export const SEC_YAW0: number[]    = []
+const SEC_YAW0: number[]    = []
 
-export const BEAT_YAW0: number[][] = []
+const BEAT_YAW0: number[][] = []
 
-export let LAP_TURN = 0
+let LAP_TURN = 0
 
 {
   let accLen = 0
@@ -374,7 +374,7 @@ export let LAP_TURN = 0
  * measured from. Four whole laps of turning, since the lap does not close in yaw
  * and never needed to.
  */
-export const FALL_YAW0 = FALL_LAPS * LAP_TURN
+const FALL_YAW0 = FALL_LAPS * LAP_TURN
 
 /**
  * Laps run, with the fractional part ramping across THE OVERLOOK rather than

@@ -1,7 +1,7 @@
 import { brdfChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './common'
 
 /** Skin and flesh, shared by the head and the jaws. */
-export const mawMaterialChunk = /* glsl */`
+const mawMaterialChunk = /* glsl */`
 vec3 skinAlbedo (vec3 p, float belly) {
   float scales = vnoise(p.xz * 0.9 + p.y * 0.4) * 0.5 + vnoise(p.xy * 2.3 + p.z) * 0.5;
   vec3 dark = vec3(0.028, 0.045, 0.045);
