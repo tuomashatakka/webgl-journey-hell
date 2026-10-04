@@ -14,13 +14,12 @@
 // triplanar with explicit gradients, because the hit/miss test is a branch and
 // implicit derivatives inside it are undefined at exactly the silhouette.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import Link from 'next/link'
 import { MATERIALS, SKIES } from '@wjh/delta/manifest'
-import { startAssetBrowser } from '@wjh/delta/browser'
-import type { AssetSlot, AssetView } from '@wjh/delta/browser'
+import type { AssetSlot } from '@wjh/delta/browser'
 import { MAP_MODES } from '@wjh/delta/browserShader'
-import useLatestRef from '✦/hooks/use-latest-ref'
+import { useAssetCanvas } from '✦/hooks/use-asset-canvas'
 
 
 type ModeId = typeof MAP_MODES[number]['id']
@@ -30,26 +29,6 @@ type PreviewProps = {
   kind:     0 | 1;
   index:    number;
   register: (key: string, slot: AssetSlot | null) => void;
-}
-
-function useAssetCanvas (mode: ModeId, light: string) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const slots     = useRef(new Map<string, AssetSlot>())
-  const viewRef   = useLatestRef<AssetView>({ mode, light })
-
-  const register = useCallback((key: string, slot: AssetSlot | null) => {
-    if (slot)
-      slots.current.set(key, slot)
-    else
-      slots.current.delete(key)
-  }, [])
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    return canvas ? startAssetBrowser(canvas, () => viewRef.current, slots.current) ?? undefined : undefined
-  }, [ viewRef ])
-
-  return { canvasRef, register }
 }
 
 function Preview ({ id, kind, index, register }: PreviewProps) {

@@ -1,6 +1,6 @@
 'use client'
 
-// The overlay behind ?debug=1 — see lib/debugParams for the parameters.
+// The overlay behind ?debug=1 — see packages/web/debugParams for the parameters.
 //
 // Deliberately not wired into React state per frame. A journey redraws sixty
 // times a second and every uniform in it changes on every one of those frames;
@@ -10,7 +10,8 @@
 // are for reading, and nobody can read sixty updates a second anyway.
 
 import { CONFIG } from '@wjh/config/config'
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
+import { useSampled } from '✦/hooks/use-sampled'
 import type { JourneyDebugState } from '@wjh/web/debugParams'
 
 
@@ -29,7 +30,7 @@ function fmtValue (v: number | number[]): string {
   if (typeof v === 'number')
     return fmt(v)
 
-  // Uniform arrays are packed as flat runs of vec4 (see lib/gl/uniforms), so
+  // Uniform arrays are packed as flat runs of vec4 (see packages/gl/uniforms), so
   // grouping them in fours is what makes them legible as what they actually are.
   if (v.length > 4) {
     const rows: string[] = []
@@ -46,18 +47,8 @@ interface Props {
 }
 
 export default function JourneyDebugPanel ({ getState }: Props) {
-  const [ state, setState ] = useState<JourneyDebugState | null>(null)
-  const [ open, setOpen ]   = useState(true)
-  const getStateRef         = useRef(getState)
-  getStateRef.current       = getState
-
-  useEffect(() => {
-    const tick = () => setState(getStateRef.current())
-    tick()
-
-    const id = window.setInterval(tick, CONFIG.ui.debugPanelSampleMs)
-    return () => window.clearInterval(id)
-  }, [])
+  const state             = useSampled(getState, CONFIG.ui.debugPanelSampleMs)
+  const [ open, setOpen ] = useState(true)
 
   if (!state)
     return null
