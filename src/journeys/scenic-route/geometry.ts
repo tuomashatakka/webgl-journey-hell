@@ -57,7 +57,7 @@ function vnoise (x: number, z: number): number {
 }
 
 /** Five octaves, 0..1. */
-export function fbm (x: number, z: number): number {
+function fbm (x: number, z: number): number {
   let amp = 0.5
   let sum = 0
   let px  = x
@@ -81,7 +81,7 @@ const COAST: [ number, number ][] = [
 ]
 
 /** x of the cliff edge at z, smoothed and wobbled. */
-export function cliffX (z: number): number {
+function cliffX (z: number): number {
   let i = 0
   while (i < COAST.length - 2 && z > COAST[i + 1][0])
     i++
@@ -94,16 +94,16 @@ export function cliffX (z: number): number {
 
 // --- the height field ----------------------------------------------------------
 
-export const SEA_LEVEL   = 0
-export const SEABED      = -28
-export const PLAZA_Y     = 78
+const SEA_LEVEL   = 0
+const SEABED      = -28
+const PLAZA_Y     = 78
 export const PLAZA       = { x: 385, z: 665, r0: 130, r1: 210 }
-export const VALLEY_Y    = -60
-export const RIDGE_Y     = 125
-export const SHELF_Y     = 85
+const VALLEY_Y    = -60
+const RIDGE_Y     = 125
+const SHELF_Y     = 85
 
 /** The land before anything is built on it. */
-export function naturalHeight (x: number, z: number): number {
+function naturalHeight (x: number, z: number): number {
   // Valley to ridge to shelf.
   let h = VALLEY_Y + (RIDGE_Y - VALLEY_Y) * smoothstep(0, 340, x)
   h    -= (RIDGE_Y - SHELF_Y) * smoothstep(340, 480, x)
@@ -224,7 +224,7 @@ export function spineHits (idx: SpineIndex, x: number, z: number, r: number, y0:
  * +1 far away. The tube's ring is 1.15 R wide and runs from 0.58 R below the
  * spine to 1.42 R above it.
  */
-export function carveAt (idx: SpineIndex, x: number, h: number, z: number): number {
+function carveAt (idx: SpineIndex, x: number, h: number, z: number): number {
   if (!idx.tube)
     return 1
 
@@ -278,7 +278,7 @@ export interface TerrainChunk {
  * smooth-shaded from central differences of the field itself. uv carries the
  * world xz for the material, and the shard attribute is unused.
  */
-export function buildTerrainChunk (
+function buildTerrainChunk (
   idx: SpineIndex, x0: number, z0: number, cells: number, cell: number,
   heightAt: (x: number, z: number) => number = (x, z) => terrainHeight(idx, x, z),
 ): TerrainChunk {
@@ -333,10 +333,10 @@ export function buildTerrainChunk (
 }
 
 /** The near field: 100 m chunks at 4 m over the route's bounding box. */
-export const NEAR = { x0: -300, z0: -320, nx: 11, nz: 13, size: 100, cell: 4 }
+const NEAR = { x0: -300, z0: -320, nx: 11, nz: 13, size: 100, cell: 4 }
 
 /** The far field: one coarse mesh to the horizon with the near field cut out. */
-export const FAR = { x0: -2700, z0: -2700, size: 6000, cell: 60 }
+const FAR = { x0: -2700, z0: -2700, size: 6000, cell: 60 }
 
 export function buildNearChunks (idx: SpineIndex): TerrainChunk[] {
   const out: TerrainChunk[] = []

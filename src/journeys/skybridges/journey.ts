@@ -5,7 +5,7 @@ import { getSkybridgesMarks, getSkybridgesSectionName } from './kinematics'
 import { skybridgesFrag } from './shader'
 
 
-export const skybridges = defineJourney({
+const skybridges = defineJourney({
   slug:          'skybridges',
   renderer:      shaderRenderer(skybridgesFrag, { envMapUrl: '/journeys/skybridges/env.png' }),
   marksAt:       getSkybridgesMarks,

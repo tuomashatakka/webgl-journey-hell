@@ -20,7 +20,7 @@ import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from '
 import type { TransportAction, TransportMode } from '@wjh/journey/transport'
 
 
-export interface TransportView {
+interface TransportView {
   mode:         TransportMode;
   paused:       boolean;
   loop:         number;

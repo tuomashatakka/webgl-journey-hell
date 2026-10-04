@@ -192,4 +192,3 @@ export function withJourneyShell (definition: JourneyDefinition) {
   return JourneyShell
 }
 
-export default withJourneyShell

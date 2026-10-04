@@ -6,7 +6,7 @@ import { createLiminalSimulation } from './kinematics'
 import { createLiminalRenderer } from './renderer'
 
 
-export const liminal = defineJourney({
+const liminal = defineJourney({
   slug:             'liminal',
   renderer:         passRendererWebGL1(createLiminalRenderer),
   createAudio:      createLiminalAudio,

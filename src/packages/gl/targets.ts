@@ -42,7 +42,7 @@ export function sceneFormat (gl: WebGL2RenderingContext, preferHdr = true): Colo
   return rgba8(gl)
 }
 
-export interface TextureOptions {
+interface TextureOptions {
   filter?: number;
   wrap?:   number;
 
@@ -51,12 +51,12 @@ export interface TextureOptions {
 }
 
 /** How many mip levels a w × h texture has. */
-export function mipLevels (w: number, h: number): number {
+function mipLevels (w: number, h: number): number {
   return Math.floor(Math.log2(Math.max(w, h))) + 1
 }
 
 /** An empty 2D texture of `fmt`, with sampling state set. */
-export function createTexture (gl: AnyGl, w: number, h: number, fmt: ColorFormat, opts: TextureOptions = {}): WebGLTexture {
+function createTexture (gl: AnyGl, w: number, h: number, fmt: ColorFormat, opts: TextureOptions = {}): WebGLTexture {
   const tex    = gl.createTexture()!
   const filter = opts.filter ?? gl.LINEAR
   const wrap   = opts.wrap ?? gl.CLAMP_TO_EDGE
@@ -133,7 +133,7 @@ export function createRenderTarget (
 }
 
 /** The most MSAA samples `fmt` supports as a renderbuffer on this device. */
-export function maxSamples (gl: WebGL2RenderingContext, fmt: ColorFormat): number {
+function maxSamples (gl: WebGL2RenderingContext, fmt: ColorFormat): number {
   if (fmt.hdr) {
     const s = gl.getInternalformatParameter(gl.RENDERBUFFER, fmt.internal, gl.SAMPLES) as Int32Array | null
     return s && s.length ? Math.max(0, ...Array.from(s)) : 0
@@ -141,7 +141,7 @@ export function maxSamples (gl: WebGL2RenderingContext, fmt: ColorFormat): numbe
   return gl.getParameter(gl.MAX_SAMPLES) as number
 }
 
-export interface MsaaTarget {
+interface MsaaTarget {
   readonly fbo:     WebGLFramebuffer;
   readonly samples: number;
   readonly width:   number;
@@ -154,7 +154,7 @@ export interface MsaaTarget {
 }
 
 /** A multisampled colour (+ depth) renderbuffer target. */
-export function createMsaaTarget (
+function createMsaaTarget (
   gl: WebGL2RenderingContext,
   width: number,
   height: number,

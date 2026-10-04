@@ -133,7 +133,7 @@ function grow (arr: SweepArrays, verts: number, idx: number): void {
   }
 }
 
-export function createSweepArrays (): SweepArrays {
+function createSweepArrays (): SweepArrays {
   return {
     vertices:    new Float32Array(0),
     indices:     new Uint32Array(0),

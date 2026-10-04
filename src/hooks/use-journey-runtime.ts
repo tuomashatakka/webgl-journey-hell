@@ -81,7 +81,7 @@ const SILENT_ENGINE: JourneyAudioEngine = {
 /**
  * What the prerendered page shows, before any script has run.
  */
-export const LOADING_BOOT: JourneyLoading = {
+const LOADING_BOOT: JourneyLoading = {
   progress: 0.04,
   status:   'LOADING',
   done:     false,
@@ -99,7 +99,7 @@ export interface JourneyLoading {
 
 
 /** The section to announce, and a key that changes whenever it does. */
-export interface SectionAnnouncement {
+interface SectionAnnouncement {
   name: string;
   key:  number;
 }
@@ -108,7 +108,7 @@ export interface SectionAnnouncement {
  * Mirror a changing value into a ref. Render loops are registered once and
  * must not be re-created when settings change; they read through the ref.
  */
-export function useLatestRef<T> (value: T): React.RefObject<T> {
+function useLatestRef<T> (value: T): React.RefObject<T> {
   const ref = useRef(value)
   useEffect(() => {
     ref.current = value
@@ -119,7 +119,7 @@ export function useLatestRef<T> (value: T): React.RefObject<T> {
 /** Fullscreen on the document element, and whether it is on right now. */
 type UseFullscreenReturnType = { isFullscreen: boolean; toggle: () => void }
 
-export function useFullscreen (): UseFullscreenReturnType {
+function useFullscreen (): UseFullscreenReturnType {
   const [ isFullscreen, setIsFullscreen ] = useState(false)
 
   // Followed rather than assumed: Esc, the browser's own UI and a phone's back
@@ -708,4 +708,4 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
 }
 
 /** For callers that only need the settings type alongside the runtime. */
-export type { GraphicsSettings }
+

@@ -4,15 +4,15 @@ import { mix, smoothstep } from '@wjh/math/scalar'
 
 
 /** One traversal. The literals below predate this constant; it is not a rename. */
-export const LIMINAL_LOOP_Z = 500
+const LIMINAL_LOOP_Z = 500
 
 /** Where the fourth traversal stops being a traversal. */
-export const LIMINAL_ABYSS_Z = 2000
+const LIMINAL_ABYSS_Z = 2000
 
 /** Six sectors plus the abyss. Drives the transport bar's tick marks. */
-export const LIMINAL_SECTOR_COUNT = 7
+const LIMINAL_SECTOR_COUNT = 7
 
-export interface KinematicState {
+interface KinematicState {
   loop:      number;
   sector:    number; // 1 to 6, or 666
   descent:   number; // 0..1 progress through sector 666 (0 for non-666)
@@ -175,7 +175,7 @@ function pieceName (id: number): string {
 }
 
 // Fixed-length loop timeline definition (500.0 units per loop)
-export function getKinematicState (z: number): KinematicState {
+function getKinematicState (z: number): KinematicState {
   // If we reach the endless fall of the last Loop 3, we stay in it forever
   if (z >= 2000) {
     const localZ = z - 2000
@@ -314,7 +314,7 @@ export function getKinematicState (z: number): KinematicState {
 }
 
 // Horizontal swaying and alignment offsets
-export function getCamX (z: number): number {
+function getCamX (z: number): number {
   const state = getKinematicState(z)
 
   if (state.sector === 1)
@@ -344,7 +344,7 @@ export function getCamX (z: number): number {
 }
 
 // Camera vertical layout height offset
-export function getCamOffset (z: number): number {
+function getCamOffset (z: number): number {
   const state = getKinematicState(z)
 
   if (state.sector === 2) {
@@ -361,7 +361,7 @@ export function getCamOffset (z: number): number {
 }
 
 // Evaluates the physical floor Y elevation
-export function getFloorY (z: number): number {
+function getFloorY (z: number): number {
   const state = getKinematicState(z)
 
   if (state.sector === 1)
@@ -409,12 +409,12 @@ export function getFloorY (z: number): number {
   return 0
 }
 
-export function getCamY (z: number): number {
+function getCamY (z: number): number {
   return getFloorY(z)
 }
 
 // Determines the player's walking speed dynamically
-export function getWalkSpeed (z: number): number {
+function getWalkSpeed (z: number): number {
   const state = getKinematicState(z)
 
   // Finale endless fall: decay speed but never reach zero.
@@ -446,13 +446,13 @@ export function getWalkSpeed (z: number): number {
  * to an arbitrary time, which an inline `currentZ += speed * dt` cannot do — so
  * the integration lives here instead, and the loop drives this.
  */
-export interface LiminalRide {
+interface LiminalRide {
   readonly z: number;
   step(dt: number): void;
   marks(): JourneyMarks;
 }
 
-export function createLiminalRide (): LiminalRide {
+function createLiminalRide (): LiminalRide {
   let z = 0
 
   // Inside the ride, so a ?t= seek rebuilds it. See lib/signalLoss.
@@ -487,7 +487,7 @@ export function createLiminalRide (): LiminalRide {
  * The loop counter the shaders decay by, eased across each 500-unit boundary
  * (±20 units) so the corridor's state slides rather than steps.
  */
-export function smoothIteration (z: number): number {
+function smoothIteration (z: number): number {
   const loop = getKinematicState(z).loop
   const d    = z % LIMINAL_LOOP_Z
   if (d >= 480) {

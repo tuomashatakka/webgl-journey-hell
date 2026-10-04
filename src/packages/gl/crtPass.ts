@@ -243,7 +243,7 @@ const CRT_FS = `
   }
 `
 
-export interface CrtDrawOptions {
+interface CrtDrawOptions {
   time:       number;
   curve:      number;
   aberration: number;

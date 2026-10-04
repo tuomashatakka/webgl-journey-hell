@@ -6,7 +6,7 @@ import { createScenicRouteSimulation } from './kinematics'
 import { createScenicRouteScene } from './scene'
 
 
-export const scenicRoute = defineJourney({
+const scenicRoute = defineJourney({
   slug:             'scenic-route',
   renderer:         geometryRenderer(createScenicRouteScene),
   createAudio:      createScenicRouteAudio,

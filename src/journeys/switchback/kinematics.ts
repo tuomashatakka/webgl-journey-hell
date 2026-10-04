@@ -94,12 +94,12 @@ const EASE_PEAK = 1.875
 
 // ---- room types, read by the shader's material branch ---------------------
 
-export const TYPE_PLATFORM  = 0 // fluorescent boarding station, wet tile
-export const TYPE_DRIFT     = 1 // hand-cut chalk adit, timber sets, dust
-export const TYPE_SCAFFOLD  = 2 // steel lattice suspended in nothing
-export const TYPE_CONCOURSE = 3 // carpeted mall interior at sunset
-export const TYPE_CHAPEL    = 4 // folded stone, god-rays, no floor plan
-export const TYPE_OVERLOOK  = 5 // open sky over a cloud sea, drifting ash
+const TYPE_PLATFORM  = 0 // fluorescent boarding station, wet tile
+const TYPE_DRIFT     = 1 // hand-cut chalk adit, timber sets, dust
+const TYPE_SCAFFOLD  = 2 // steel lattice suspended in nothing
+const TYPE_CONCOURSE = 3 // carpeted mall interior at sunset
+const TYPE_CHAPEL    = 4 // folded stone, god-rays, no floor plan
+const TYPE_OVERLOOK  = 5 // open sky over a cloud sea, drifting ash
 
 export interface Section {
   id:   number;
@@ -288,7 +288,7 @@ export const SECTIONS: Section[] = [
   },
 ]
 
-export const SECTION_COUNT = SECTIONS.length
+const SECTION_COUNT = SECTIONS.length
 
 /** Arc length of one lap. */
 export const LAP_LEN = SECTIONS.reduce((acc, s) => acc + s.len, 0)
@@ -305,11 +305,11 @@ export const LAP_LEN = SECTIONS.reduce((acc, s) => acc + s.len, 0)
 export const PHASE_WRAP = 2560
 
 /** Sleeper pitch, and the bay spacing of the trestle bents. Both divide PHASE_WRAP. */
-export const TIE_PITCH  = 2.5
-export const BENT_PITCH = 10
+const TIE_PITCH  = 2.5
+const BENT_PITCH = 10
 
 /** Eye height above the rail head, sitting in the cart. */
-export const EYE = 1.15
+const EYE = 1.15
 
 /**
  * Smallest turn radius the rectification can carry, as a curvature. A quadratic
@@ -429,7 +429,7 @@ function steepen (g: number, t: number): number {
 // section is not in SECTIONS, so assertRouteSane still validates a six-room
 // cyclic railway and this cannot break it.
 
-export const TYPE_FALL = 6
+const TYPE_FALL = 6
 
 /** Laps of railway before the rails run out. */
 export const FALL_LAPS = 4
@@ -453,7 +453,7 @@ const FALL_WAVE = 0.019
 /** Grade the shaft inherits from the railway, once the pitch-over has finished. */
 const FALL_ENTRY_GRADE = steepen(-20 * D, 1)
 
-export const FALL_SECTION: Section = {
+const FALL_SECTION: Section = {
   id:     7,
   name:   'THE FALL',
   len:    FALL_BLOCK,
@@ -533,7 +533,7 @@ export function lapFAt (s: number): number {
 }
 
 /** Metres fallen past the end of the track. Zero while there is still track. */
-export function fallDepthAt (s: number): number {
+function fallDepthAt (s: number): number {
   return Math.max(0, s - FALL_START)
 }
 
@@ -578,7 +578,7 @@ function beatAt (s: number): Beat {
 }
 
 /** Absolute heading at an arc length. Grows without bound; only ever used as a direction. */
-export function yawAt (s: number): number {
+function yawAt (s: number): number {
   if (s >= FALL_START) {
     // The shaft snakes rather than turns: the integral of the corkscrew below,
     // so heading and curvature cannot disagree and put the rider off the fit.
@@ -766,7 +766,7 @@ function fitBend (s0: number, yaw0: number, grade0: number): Bend {
 
 // ---------------------------------------------------------------------------
 
-export interface SwitchbackState {
+interface SwitchbackState {
 
   /** Arc length travelled. CPU-only; nothing this large reaches the shader. */
   s: number;
@@ -846,7 +846,7 @@ export interface SwitchbackState {
   crack: number;
 }
 
-export interface Slot {
+interface Slot {
 
   /** Section bounds relative to the cart, in metres of camera-space depth. */
   z0: number;
@@ -884,7 +884,7 @@ function makeSlot (sec: Section, z0: number, z1: number): Slot {
  * reads a clock; the integrator owns time and this owns shape, which is what
  * makes `?t=` replayable to the byte.
  */
-export function getSwitchbackState (s: number, speed: number, headRollPrev: number): SwitchbackState {
+function getSwitchbackState (s: number, speed: number, headRollPrev: number): SwitchbackState {
   const lap  = Math.floor(s / LAP_LEN)
   const lapU = s - lap * LAP_LEN
   const lapF = lap + smootherstep(
@@ -1058,7 +1058,7 @@ export function getSwitchbackState (s: number, speed: number, headRollPrev: numb
 }
 
 /** HUD label. Laps count from 1, the way the rest of the repo counts them. */
-export function labelFor (state: SwitchbackState): string {
+function labelFor (state: SwitchbackState): string {
   const kph = Math.round(state.speed * 3.6)
 
   if (state.inFall)

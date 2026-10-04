@@ -19,7 +19,7 @@ import { createMeshBuilder } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 
 
-export const TAG = {
+const TAG = {
   PLASTIC: 0,
   LEATHER: 1,
   DIAL:    2,

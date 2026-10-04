@@ -47,7 +47,7 @@ import { smootherstep } from '@wjh/math/scalar'
 
 const D = Math.PI / 180
 
-export const enum Kind {
+const enum Kind {
   COUNTY = 0,
   INCLINE = 1,
   DOWNTOWN = 2,
@@ -232,7 +232,7 @@ export const BANK_GAIN = 4
  * and 1 + 2.25 · 4 = 10 keeps the worst bank rate inside one order of magnitude
  * of the authored lap — the gate the tests hold it to.
  */
-export const BANK_LAP_CAP = 2.25
+const BANK_LAP_CAP = 2.25
 
 /** The bank multiplier at lapF. One function, read by the camera and the shader. */
 export function bankGainAt (lapF: number): number {
@@ -240,14 +240,14 @@ export function bankGainAt (lapF: number): number {
 }
 
 /** Per-lap speed: targets up, drag down. */
-export const SPEED_LAP = 0.08
-export const DRAG_LAP  = 0.2
+const SPEED_LAP = 0.08
+const DRAG_LAP  = 0.2
 
 /** Metres between bank table samples. */
 export const BANK_STEP = 0.5
 
 /** Half the boundary blend window: every per-section quantity crosses in 2·W metres. */
-export const BLEND_W = 15
+const BLEND_W = 15
 
 // ---------------------------------------------------------------------------
 // Control points
@@ -587,7 +587,7 @@ export function spanAt (route: Route, s: number): Span {
 }
 
 /** Bank at lap 0, radians, linear between table samples, cyclic. */
-export function bankTableAt (route: Route, s: number): number {
+function bankTableAt (route: Route, s: number): number {
   const tab = route.bankTable
   const N   = tab.length
   const f   = (s / BANK_STEP % N + N) % N
@@ -699,7 +699,7 @@ export function sunElevationAt (lapF: number): number {
 }
 
 /** Sun azimuth, fixed: ahead-left on the county road. */
-export const SUN_AZIMUTH = -38 * D
+const SUN_AZIMUTH = -38 * D
 
 export function sunDirection (lapF: number, out: [ number, number, number ]): [ number, number, number ] {
   const e = sunElevationAt(lapF)

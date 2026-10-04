@@ -43,14 +43,14 @@ function wrapPi (a: number): number {
 
 // ---- surface types, read by the shader's material branch ----
 
-export const TYPE_TILE   = 0 // white tile, the default pool finish
-export const TYPE_GUTTER = 1 // narrow service corridor, darker tile
-export const TYPE_VAULT  = 2 // big vaulted hall, columns, clerestory
-export const TYPE_LOCKER = 3 // lockers and benches along the walls
+const TYPE_TILE   = 0 // white tile, the default pool finish
+const TYPE_GUTTER = 1 // narrow service corridor, darker tile
+const TYPE_VAULT  = 2 // big vaulted hall, columns, clerestory
+const TYPE_LOCKER = 3 // lockers and benches along the walls
 export const TYPE_PLANT  = 4 // pumps and pipework, the only warm light
 export const TYPE_RAW    = 5 // bare concrete, below the tile line
 
-export interface Section {
+interface Section {
   id:   number;
   name: string;
 
@@ -96,7 +96,7 @@ const D = Math.PI / 180
 //     closes over your head on THE STAIR DOWN. Nothing else encodes that moment.
 //  4. Any three consecutive sections span >= 60 units, so the resident window
 //     always reaches past the fog and you never see the end of the world.
-export const SECTIONS: Section[] = [
+const SECTIONS: Section[] = [
   {
     id:    1,
     name:  'THE SHALLOW END',
@@ -260,29 +260,29 @@ export const SECTIONS: Section[] = [
   },
 ]
 
-export const SECTION_COUNT = SECTIONS.length
+const SECTION_COUNT = SECTIONS.length
 
 /** Total route length of one lap. */
-export const LAP_LEN = SECTIONS.reduce((acc, s) => acc + s.len, 0)
+const LAP_LEN = SECTIONS.reduce((acc, s) => acc + s.len, 0)
 
 /** Eye height above the floor. You walk on the bottom, even once that is a bad idea. */
-export const EYE = 1.62
+const EYE = 1.62
 
 /**
  * How far ahead the heading is sampled. Doubles as the corner lead: the chord
  * to a point this far along the blended path already points into the turn
  * before the camera reaches it.
  */
-export const LOOKAHEAD = 1.8
+const LOOKAHEAD = 1.8
 
 /**
  * Water level on lap 0, in the same units as the accumulated floor fall (the
  * entry floor is 0). Ankle-deep at the door.
  */
-export const WATER_Y0 = 0.12
+const WATER_Y0 = 0.12
 
 /** Each lap the building floods further. This is the whole escalation. */
-export const WATER_RISE = 1.15
+const WATER_RISE = 1.15
 
 // NOTE: sections are extended past both ends by a small overlap so that
 // neighbouring air boxes genuinely interpenetrate rather than merely touching on
@@ -340,7 +340,7 @@ const RISE_TO   = 10 // THE CISTERN
 const SIGHT  = 12
 const SETTLE = 3
 
-export function deployAt (ahead: number): number {
+function deployAt (ahead: number): number {
   return smootherstep(SIGHT, SETTLE, ahead)
 }
 
@@ -481,7 +481,7 @@ function blendScalar (idx: number, localZ: number, pick: (s: Section) => number)
  * section's frame into this slot's frame, as `q.xz = rot(cos,sin) * (p.xz - t.xz)`
  * with `q.y = p.y - ty`, plus the shape the shader needs to build it.
  */
-export interface Slot {
+interface Slot {
   cos:   number;
   sin:   number;
   tx:    number;
@@ -514,7 +514,7 @@ export interface Slot {
   id: number;
 }
 
-export interface NatatoriumState {
+interface NatatoriumState {
   dist: number; // total distance walked, CPU-only
   lap:  number;
 
@@ -592,7 +592,7 @@ function makeSlot (
  * its inverse rearranged into the same shape. Both reduce to `rot * (p - t)`,
  * which is why the shader needs exactly one transform routine.
  */
-export function getNatatoriumState (dist: number): NatatoriumState {
+function getNatatoriumState (dist: number): NatatoriumState {
   const lap  = Math.floor(dist / LAP_LEN)
   const lapZ = dist - lap * LAP_LEN
   const lapF = lap + smootherstep(STARTS[RISE_FROM], STARTS[RISE_TO], lapZ)
@@ -712,7 +712,7 @@ export function getNatatoriumState (dist: number): NatatoriumState {
 }
 
 /** HUD label. Laps count from 1 the way the other journeys count them. */
-export function labelFor (state: NatatoriumState): string {
+function labelFor (state: NatatoriumState): string {
   const under = state.above < 0.5 ? ' ↓' : ''
   return lapLabel(state.lap, `${state.name}${under}`, { bareFirst: true })
 }
@@ -723,7 +723,7 @@ export function labelFor (state: NatatoriumState): string {
  * hole where an unresident section should be — so they are worth asserting
  * rather than discovering in a screenshot.
  */
-export function assertRouteSane (): string[] {
+function assertRouteSane (): string[] {
   const problems: string[] = []
 
   for (let i = 0; i < SECTION_COUNT; i++) {
@@ -875,4 +875,4 @@ export function createNatatoriumSimulation (): JourneySimulation {
  * one: by here its own decay has saturated and another lap says nothing new.
  * See lib/signalLoss.
  */
-export const SIGNAL_LOSS_LAP = 5
+const SIGNAL_LOSS_LAP = 5

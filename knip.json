@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "includeEntryExports": true,
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/app/**/{page,layout}.tsx",
+        "src/**/*.test.mjs",
+        "tools/*.{mjs,ts}",
+        "tools/harness/entry.ts"
+      ],
+      "project": [
+        "src/**/*.{ts,tsx,mjs}",
+        "tools/**/*.{mjs,ts}",
+        "!src/packages/**"
+      ],
+      "ignoreIssues": {
+        "src/app/**": [
+          "exports"
+        ]
+      },
+      "ignoreDependencies": [
+        "@tuomashatakka/eslint-config"
+      ]
+    },
+    "src/packages/*": {
+      "entry": [
+        "*.test.mjs",
+        "build.mjs"
+      ],
+      "project": [
+        "*.{ts,mjs}"
+      ]
+    }
+  }
+}

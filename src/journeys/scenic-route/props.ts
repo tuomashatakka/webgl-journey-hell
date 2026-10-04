@@ -22,10 +22,10 @@ import type { SpineIndex } from './geometry'
 import { ROCK_START, tubeRadius } from './maw'
 
 
-export const PROP_FLOATS = 8
+const PROP_FLOATS = 8
 
 /** Material ids, mirrored by the `uMaterial` branch in propFrag. */
-export const MAT = {
+const MAT = {
   WOOD:      0,
   CREOSOTE:  1,
   HAY:       2,

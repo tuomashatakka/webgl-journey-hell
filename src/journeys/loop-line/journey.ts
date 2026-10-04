@@ -6,7 +6,7 @@ import { createLoopLineSimulation } from './kinematics'
 import { createLoopLineScene } from './scene'
 
 
-export const loopLine = defineJourney({
+const loopLine = defineJourney({
   slug:             'loop-line',
   renderer:         geometryRenderer(createLoopLineScene),
   createAudio:      createLoopLineAudio,

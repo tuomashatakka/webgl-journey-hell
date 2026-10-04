@@ -9,7 +9,7 @@ import type { AnyGl } from './context'
 import { isWebGL2 } from './context'
 
 
-export const QUAD_VERTICES = new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ])
+const QUAD_VERTICES = new Float32Array([ -1, -1, 1, -1, -1, 1, 1, 1 ])
 
 /** GLSL ES 1.00 pass-through for a full-screen fragment shader. */
 export const QUAD_VS_100 = `

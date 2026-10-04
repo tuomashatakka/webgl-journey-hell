@@ -22,7 +22,7 @@ export interface AudioEngineHandle<T extends JourneyAudioEngine> {
   toggle:    () => void;
 }
 
-export function useAudioEngine<T extends JourneyAudioEngine> (
+function useAudioEngine<T extends JourneyAudioEngine> (
   create: () => T,
 ): AudioEngineHandle<T> {
   const engineRef   = useRef<T | null>(null)

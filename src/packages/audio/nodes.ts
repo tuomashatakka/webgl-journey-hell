@@ -47,7 +47,7 @@ export function scalar (state: CustomUniforms | undefined, name: string, fallbac
 }
 
 /** A vector uniform from the frame's map, or `fallback`. */
-export function vector (state: CustomUniforms | undefined, name: string, fallback: number[]): number[] {
+function vector (state: CustomUniforms | undefined, name: string, fallback: number[]): number[] {
   const v = state?.[name]
   return Array.isArray(v) ? v : fallback
 }

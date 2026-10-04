@@ -19,7 +19,7 @@ import { PLAZA, buildSpineIndex, nearestSpine, terrainHeight } from './geometry'
 import type { SpineIndex } from './geometry'
 
 
-export const TOWER_FLOATS = 12
+const TOWER_FLOATS = 12
 
 /** How much the bend grows per lap: 1, 1.8, 2.6 at the lap boundaries. */
 export function bendGainAt (lapF: number): number {

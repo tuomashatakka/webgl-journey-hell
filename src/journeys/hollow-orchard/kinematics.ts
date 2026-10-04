@@ -24,7 +24,7 @@ function mix3 (a: RGB, b: RGB, t: number): RGB {
   return [ mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t) ]
 }
 
-export type RGB = [ number, number, number ]
+type RGB = [ number, number, number ]
 
 // ---- Stage ids (mirrored as plain float comparisons in the shader) ----
 
@@ -33,21 +33,21 @@ export const STAGE_CATHEDRAL = 2
 export const STAGE_MARROW    = 3
 export const STAGE_ROOTS     = 4
 export const STAGE_FRUITING  = 5
-export const STAGE_TRANSIT   = 6
-export const STAGE_BLOOM     = 7
+const STAGE_TRANSIT   = 6
+const STAGE_BLOOM     = 7
 export const STAGE_HOST      = 8
-export const STAGE_HARVEST   = 9
+const STAGE_HARVEST   = 9
 export const STAGE_MYCELIAL  = 10
-export const STAGE_SEEDVAULT = 11
+const STAGE_SEEDVAULT = 11
 export const STAGE_COMPOST   = 12
 
-export const ORCHARD_LOOP_Z = 660
-export const ABYSS_START_Z  = 530
-export const ABYSS_LEN      = ORCHARD_LOOP_Z - ABYSS_START_Z // 130
-export const ABYSS_SLOTS    = 6
-export const SCAPE_W        = 12 // scape -> scape crossfade, world units
-export const PIECE_W        = 0.3 // setpiece crossfade, fraction of a slot
-export const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
+const ORCHARD_LOOP_Z = 660
+const ABYSS_START_Z  = 530
+const ABYSS_LEN      = ORCHARD_LOOP_Z - ABYSS_START_Z // 130
+const ABYSS_SLOTS    = 6
+const SCAPE_W        = 12 // scape -> scape crossfade, world units
+const PIECE_W        = 0.3 // setpiece crossfade, fraction of a slot
+const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
 
 // ---- the route ------------------------------------------------------------
 //
@@ -67,24 +67,24 @@ export const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
 //     `(sqrt(s^2 + 4) + s) / 2` for a slope s, and the march has to stay under
 //     the reciprocal of that or it steps through walls. s peaks at 0.95 here
 //     (a 43 degree heading swing), so the march runs at 0.48 rather than 0.55.
-export const PATH_K1 = Math.PI * 2 / ORCHARD_LOOP_Z * 2 // two long sweeps a loop
-export const PATH_A1 = 32
-export const PATH_K2 = Math.PI * 2 / ORCHARD_LOOP_Z * 5 // five tighter kinks
-export const PATH_A2 = 7
+const PATH_K1 = Math.PI * 2 / ORCHARD_LOOP_Z * 2 // two long sweeps a loop
+const PATH_A1 = 32
+const PATH_K2 = Math.PI * 2 / ORCHARD_LOOP_Z * 5 // five tighter kinks
+const PATH_A2 = 7
 
 /** Lateral offset of the route centreline at a distance along it. */
-export function pathX (z: number): number {
+function pathX (z: number): number {
   return Math.sin(z * PATH_K1) * PATH_A1 + Math.sin(z * PATH_K2) * PATH_A2
 }
 
 /** Its slope — the tangent of the heading, so the camera can face down it. */
-export function pathDX (z: number): number {
+function pathDX (z: number): number {
   return Math.cos(z * PATH_K1) * PATH_A1 * PATH_K1 +
          Math.cos(z * PATH_K2) * PATH_A2 * PATH_K2
 }
 
 /** Its curvature, up to a factor — what the camera banks into. */
-export function pathDDX (z: number): number {
+function pathDDX (z: number): number {
   return -Math.sin(z * PATH_K1) * PATH_A1 * PATH_K1 * PATH_K1 -
        Math.sin(z * PATH_K2) * PATH_A2 * PATH_K2 * PATH_K2
 }
@@ -102,11 +102,11 @@ export function pathDDX (z: number): number {
 // the walked line. It cannot fail to clear the camera, because it is defined by
 // where the camera goes, and an orchard with a row eaten through it is the
 // reading this journey wants anyway.
-export const AISLE_R  = 0.95 // radius around the walked line
-export const AISLE_DY = 0.35 // how far below the eye the capsule is centred
-export const AISLE_HY = 0.45 // half-height of its straight part
+const AISLE_R  = 0.95 // radius around the walked line
+const AISLE_DY = 0.35 // how far below the eye the capsule is centred
+const AISLE_HY = 0.45 // half-height of its straight part
 
-export interface OrchardStage {
+interface OrchardStage {
 
   /** 1..12; matches the STAGE_* constants and the shader's if-chain. */
   id:   number;
@@ -138,7 +138,7 @@ export interface OrchardStage {
 }
 
 // Index = id - 1. The six scape lengths sum to ABYSS_START_Z (530).
-export const ORCHARD_STAGES: OrchardStage[] = [
+const ORCHARD_STAGES: OrchardStage[] = [
   {
     id:    STAGE_NURSERY,
     name:  'SECTOR 1: THE NURSERY',
@@ -302,7 +302,7 @@ const SCAPE_STARTS: number[] = (() => {
   return starts
 })()
 
-export interface OrchardState {
+interface OrchardState {
 
   /** Total distance walked. CPU-only — never uploaded (highp loses it after ~10 min). */
   z: number;
@@ -356,7 +356,7 @@ export interface OrchardState {
  * has exactly one dispatch path: evaluate A, and evaluate B only when the
  * crossfade is actually open.
  */
-export function getOrchardState (z: number): OrchardState {
+function getOrchardState (z: number): OrchardState {
   const loop  = Math.floor(z / ORCHARD_LOOP_Z)
   const loopZ = z - loop * ORCHARD_LOOP_Z
 
@@ -466,7 +466,7 @@ export function getOrchardState (z: number): OrchardState {
 }
 
 /** HUD label. Loops are counted from 1 the way the other journeys count them. */
-export function labelFor (state: OrchardState): string {
+function labelFor (state: OrchardState): string {
   return lapLabel(state.loop, state.name, { word: 'LOOP', bareFirst: true })
 }
 

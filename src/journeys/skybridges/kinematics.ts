@@ -1,7 +1,7 @@
 import type { JourneyMarks } from '@wjh/journey/types'
 
 
-export interface SkybridgesSection {
+interface SkybridgesSection {
   id:     number;
   name:   string;
   startZ: number;
@@ -9,13 +9,13 @@ export interface SkybridgesSection {
 }
 
 // Twelve seconds per section at default speed gives each theme room to land.
-export const SKYBRIDGES_SPEED = 5
-export const SKYBRIDGES_LOOP_Z = 540
+const SKYBRIDGES_SPEED = 5
+const SKYBRIDGES_LOOP_Z = 540
 
 // Nine themed scenes on one continuous first-person run (~60 units each). The
 // shader mirrors these centers; geometry for each section lives in its own
 // world-Z band. See SPEC.md for the full design.
-export const SKYBRIDGES_SECTIONS: SkybridgesSection[] = [
+const SKYBRIDGES_SECTIONS: SkybridgesSection[] = [
   { id: 1, name: 'SECTION 1: DAWN APPROACH', startZ: 0, endZ: 60 },
   { id: 2, name: 'SECTION 2: THE CONVERGENCE', startZ: 60, endZ: 120 },
   { id: 3, name: 'SECTION 3: THE ASCENT', startZ: 120, endZ: 180 },
@@ -27,7 +27,7 @@ export const SKYBRIDGES_SECTIONS: SkybridgesSection[] = [
   { id: 9, name: 'SECTION 9: SKYLIGHT RELEASE', startZ: 480, endZ: SKYBRIDGES_LOOP_Z },
 ]
 
-export function getSkybridgesSection (time: number): SkybridgesSection {
+function getSkybridgesSection (time: number): SkybridgesSection {
   const z = (time * SKYBRIDGES_SPEED % SKYBRIDGES_LOOP_Z + SKYBRIDGES_LOOP_Z) % SKYBRIDGES_LOOP_Z
   return SKYBRIDGES_SECTIONS.find(section => z >= section.startZ && z < section.endZ) ??
     SKYBRIDGES_SECTIONS[SKYBRIDGES_SECTIONS.length - 1]
@@ -69,4 +69,4 @@ export function getSkybridgesMarks (time: number): JourneyMarks {
  * laps is about three and a half minutes: long enough that the run has settled
  * into a rhythm, short enough that breaking it lands.
  */
-export const SIGNAL_LOSS_LAP = 2
+const SIGNAL_LOSS_LAP = 2

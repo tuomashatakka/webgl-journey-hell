@@ -11,7 +11,7 @@ export function isWebGL2 (gl: AnyGl): gl is WebGL2RenderingContext {
 }
 
 /** Defaults tuned for a full-screen raymarch: no depth, no MSAA, opaque. */
-export const BASE_CONTEXT_ATTRIBUTES: WebGLContextAttributes = {
+const BASE_CONTEXT_ATTRIBUTES: WebGLContextAttributes = {
   alpha:     false,
   antialias: false,
   depth:     false,

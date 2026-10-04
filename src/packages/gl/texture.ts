@@ -4,7 +4,7 @@ import type { AnyGl } from './context'
 
 
 /** Resolve once `url` has decoded; reject with the url on failure. */
-export function loadImage (url: string): Promise<HTMLImageElement> {
+function loadImage (url: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img       = new Image()
     img.crossOrigin = 'anonymous'

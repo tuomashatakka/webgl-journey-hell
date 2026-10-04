@@ -6,7 +6,7 @@ import { createHollowOrchardSimulation } from './kinematics'
 import { hollowOrchardFrag } from './shader'
 
 
-export const hollowOrchard = defineJourney({
+const hollowOrchard = defineJourney({
   slug:             'hollow-orchard',
   renderer:         shaderRenderer(hollowOrchardFrag),
   createAudio:      createHollowOrchardAudio,

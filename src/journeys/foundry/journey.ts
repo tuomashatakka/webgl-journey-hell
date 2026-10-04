@@ -5,7 +5,7 @@ import { createFoundrySimulation } from './kinematics'
 import { foundryFrag } from './shader'
 
 
-export const foundry = defineJourney({
+const foundry = defineJourney({
   slug:             'foundry',
   renderer:         shaderRenderer(foundryFrag),
   createSimulation: createFoundrySimulation,

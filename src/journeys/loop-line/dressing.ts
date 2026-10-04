@@ -166,7 +166,7 @@ const RED: [ number, number, number ]        = [ 1, 0.1, 0.06 ]
  * `skip` lets the chord's track hold off until it has diverged far enough not
  * to stand in the main line's sleepers.
  */
-export function layTrack (
+function layTrack (
   d: Dresser, s0: number, s1: number, wood: boolean,
   skip?: (s: number) => { sleepers: boolean; rails: boolean },
 ): void {

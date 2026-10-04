@@ -72,11 +72,11 @@ export const CYCLE_LEN = SECTION_LEN * SECTION_COUNT
  * wrap from the furnace floor back into the loading bay. One rule for all seven
  * seams is what makes the loop read as a single continuous walk.
  */
-export const TRANSITION = 9
+const TRANSITION = 9
 
 // Metres of travel per footstep. CYCLE_LEN is a whole number of these, so the
 // stride phase is continuous across the wrap.
-export const STEP_LEN = 0.875
+const STEP_LEN = 0.875
 
 const WALK_SPEED = 2.4 // m/s, a brisk walk
 const LEG_K      = 210 // leg-spring stiffness (per unit mass)
@@ -89,25 +89,25 @@ const TREMOR_K   = 130 // floor-tremor spring (impacts travel up it)
 const TREMOR_C   = 5.5
 
 /** Eye height above the walking surface, metres. */
-export const EYE_HEIGHT = 1.62
+const EYE_HEIGHT = 1.62
 
 // --- the lift shaft (mirrored by the shader) --------------------------------
 
 /** Cyclic position of the shaft, part-way down the loading bay. */
-export const LIFT_Z = 18
+const LIFT_Z = 18
 
 /** How far back from the cage's centre you stand, metres. */
-export const LIFT_STAND = 0.55
+const LIFT_STAND = 0.55
 
 /** Where the walk starts and ends: standing in the cage at the landing. */
 export const WALK_START = LIFT_Z - LIFT_STAND
 
 /** Half-width of the square hoist shaft. */
-export const SHAFT_R = 3
+const SHAFT_R = 3
 
 /** Shaft head, and the height the cage is at when the cable lets go. */
-export const SHAFT_HEAD_Y = 128
-export const LIFT_TOP = 120
+const SHAFT_HEAD_Y = 128
+const LIFT_TOP = 120
 
 /** Metres further up the shaft the cable parts on each successive run. */
 const LIFT_RISE = 26
@@ -160,13 +160,13 @@ export function brakeYFor (loop: number): number {
 }
 
 /** Landing level — the cage floor comes to rest flush with the hall's. */
-export const LANDING_Y = 0
+const LANDING_Y = 0
 
 /** Hydraulic buffers in the pit, for the arrivals the shoes do not catch. */
 export const PIT_Y = -3
 
-export const CAGE_HALF = 1.5 // cage interior half-width
-export const CAGE_HEIGHT = 2.6
+const CAGE_HALF = 1.5 // cage interior half-width
+const CAGE_HEIGHT = 2.6
 
 // Seconds for the gate to rattle up, for the shutter to come down, and for the
 // shutter to clear again once the cable has gone.
@@ -272,7 +272,7 @@ export const TILE_HALF = 1.2
 export const TILE = TILE_HALF * 2
 
 /** Cyclic position of tile 0's centre, in the furnace-floor hall. */
-export const SPAN_Z0 = 219
+const SPAN_Z0 = 219
 
 /**
  * The route, in grid steps of TILE. Lateral first, then forward.
@@ -291,7 +291,7 @@ const SPAN_IZ = [ 0, 1, 2, 2, 2, 3, 4, 4, 4, 4, 4, 5, 6, 7, 8, 9 ]
 
 /** Metres of walking across the span, and how much of that is forward travel. */
 export const SPAN_ARC = (SPAN_TILES - 1) * TILE
-export const SPAN_Z_RUN = SPAN_IZ[SPAN_TILES - 1] * TILE
+const SPAN_Z_RUN = SPAN_IZ[SPAN_TILES - 1] * TILE
 
 /**
  * The lateral legs buy no forward progress, so a lap is this much longer to walk
@@ -319,7 +319,7 @@ export const SPAN_HALF_W =
   Math.max(...SPAN_IX.map(Math.abs)) * TILE + TILE_HALF
 
 /** Molten surface far below the span. */
-export const MELT_Y = -30
+const MELT_Y = -30
 
 const UNFOLD_LEAD = 14 // metres of warning before you reach a tile
 const REFOLD_LAG  = 5 // metres behind you before it folds away again
@@ -327,7 +327,7 @@ const HINGE_K     = 46 // hinge stiffness — higher snaps the plate over
 const HINGE_C     = 7.5 // hinge damping — lower leaves it ringing
 const HINGE_KICK  = 0.42 // hinge rate injected by a footfall landing on a tile
 
-export interface DebrisBody {
+interface DebrisBody {
 
   /** Position: x/z are in the cage's frame, y is world height. */
   px: number
@@ -476,12 +476,12 @@ export interface FoundryState {
 // --- cyclic helpers ---------------------------------------------------------
 
 /** Wrap a distance into one lap, 0..CYCLE_LEN. */
-export function cyclic (z: number): number {
+function cyclic (z: number): number {
   return z - CYCLE_LEN * Math.floor(z / CYCLE_LEN)
 }
 
 /** Signed distance from `from` to `to` the short way round the lap. */
-export function cycDelta (to: number, from: number): number {
+function cycDelta (to: number, from: number): number {
   const d = cyclic(to - from)
   return d > CYCLE_LEN * 0.5 ? d - CYCLE_LEN : d
 }
@@ -630,7 +630,7 @@ export function decayFor (smoothLoop: number): number {
 }
 
 /** True while the camera is riding the cage rather than walking. */
-export function riding (state: FoundryState): boolean {
+function riding (state: FoundryState): boolean {
   return state.mode !== MODE_WALK
 }
 
@@ -761,7 +761,7 @@ export function createFoundryState (seed = 0x5eed): FoundryState {
  * @param speed    absolute cage speed, m/s
  * @param engaged  seconds since the shoes made contact
  */
-export function brakeForce (speed: number, engaged: number): number {
+function brakeForce (speed: number, engaged: number): number {
   // Wedge seating: normal force climbs over ~0.35 s to full clamp.
   const seat   = Math.min(1, engaged / 0.35)
   const normal = 68000 * seat

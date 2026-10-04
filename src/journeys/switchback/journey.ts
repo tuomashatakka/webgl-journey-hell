@@ -6,7 +6,7 @@ import { createSwitchbackSimulation } from './kinematics'
 import { switchbackFrag } from './shader'
 
 
-export const switchback = defineJourney({
+const switchback = defineJourney({
   slug:             'switchback',
   renderer:         shaderRenderer(switchbackFrag),
   createAudio:      createSwitchbackAudio,

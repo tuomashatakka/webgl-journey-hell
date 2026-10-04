@@ -117,7 +117,7 @@ export const MAT: Readonly<Record<string, number>> = Object.fromEntries(
 )
 
 /** Sky index by id. */
-export const SKY: Readonly<Record<string, number>> = Object.fromEntries(
+const SKY: Readonly<Record<string, number>> = Object.fromEntries(
   SKIES.map((s, i) => [ s.id, i ]),
 )
 

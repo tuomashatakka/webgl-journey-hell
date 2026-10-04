@@ -51,7 +51,7 @@ export interface TransportHost {
   marksAt?(time: number): JourneyMarks | undefined;
 }
 
-export interface TransportSim {
+interface TransportSim {
   step(dt: number, time: number): void;
   marks?(): JourneyMarks;
 }

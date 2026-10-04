@@ -47,7 +47,7 @@ import { Theme } from './stations'
 // --- surfaces ----------------------------------------------------------------
 
 /** How the fragment shader treats a draw. Mirrored as `MODE_*` in shader.ts. */
-export const enum Mode {
+const enum Mode {
   TEXTURED = 0,
   PAINT = 1,
   EMISSIVE = 2,
@@ -149,7 +149,7 @@ export type SurfaceKey = keyof typeof SURF
 // --- profiles ----------------------------------------------------------------
 
 /** One section point: right, up (metres), the surface of the edge leaving it, and options. */
-export interface PP {
+interface PP {
   r:       number;
   u:       number;
   s:       SurfaceKey;
@@ -157,7 +157,7 @@ export interface PP {
   smooth?: boolean;
 }
 
-export const pp = (r: number, u: number, s: SurfaceKey, ao = 1, smooth = false): PP =>
+const pp = (r: number, u: number, s: SurfaceKey, ao = 1, smooth = false): PP =>
   ({ r, u, s, ao, smooth })
 
 export interface Profile {

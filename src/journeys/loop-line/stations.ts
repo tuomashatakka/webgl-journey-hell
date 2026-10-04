@@ -324,7 +324,7 @@ export const CHORD_BAY: Bay = {
 }
 
 /** Every bay that can own geometry, indexed by id. */
-export const ALL_BAYS: Bay[] = [ ...BAYS, CHORD_BAY ]
+const ALL_BAYS: Bay[] = [ ...BAYS, CHORD_BAY ]
 
 /**
  * THE TURNBACK is where the lap counter advances: no walls, no ceiling, signal
@@ -337,7 +337,7 @@ export const DECAY_BAY = 8
 export const SWITCH_LAP = 2
 
 /** The bay the chord leaves from and the bay it rejoins in. */
-export const JUNCTION_BAY = 2
+const JUNCTION_BAY = 2
 export const REJOIN_BAY = 4
 
 /** How far inside the concourse the points are, before the end wall. */
@@ -481,7 +481,7 @@ function crossPlane (curve: ClosedCurve, plane: Frame, guess: number): number {
  * and the chord as a smooth inward-and-down displacement of the resampled
  * points between the junction and the rejoin.
  */
-export function buildCircuits (): Circuits {
+function buildCircuits (): Circuits {
   const flat   = createClosedCurve(ringPoints(new Array(RADII.length).fill(0) as number[]))
   const fracs  = RADII.map((_, i) => arcFractionAtParam(flat, i / RADII.length))
   const design = createClosedCurve(ringPoints(fracs.map(heightAt)))
@@ -593,7 +593,7 @@ export function buildCircuits (): Circuits {
 }
 
 /** The span owning an arc length on a given circuit. Total: the spans tile it. */
-export function spanAt (spans: BaySpan[], s: number, loopLength: number): BaySpan {
+function spanAt (spans: BaySpan[], s: number, loopLength: number): BaySpan {
   const t = (s % loopLength + loopLength) % loopLength
   for (const span of spans)
     if (t < span.s1)

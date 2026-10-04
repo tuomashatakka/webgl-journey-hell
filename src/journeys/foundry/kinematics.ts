@@ -32,7 +32,7 @@ import {
 import type { FoundryState } from './physics'
 
 
-export interface FoundrySection {
+interface FoundrySection {
   id:   number
   name: string
 }
@@ -41,7 +41,7 @@ export interface FoundrySection {
 // keys its geometry, corridor profile, rib/lamp cadence and palette off the same
 // indices — SECTION_LEN is the single source of truth for where each one starts,
 // and the seventh runs straight back into the first.
-export const FOUNDRY_SECTIONS: FoundrySection[] = [
+const FOUNDRY_SECTIONS: FoundrySection[] = [
   { id: 1, name: 'SECTION 1: LOADING BAY' },
   { id: 2, name: 'SECTION 2: PISTON GALLERY' },
   { id: 3, name: 'SECTION 3: THE LONG RUN' },
@@ -60,7 +60,7 @@ const EVENT_BOARD    = 'THE SHUTTER'
 const EVENT_SPAN     = 'THE STEPPING STONES'
 const EVENT_OBLIVION = 'THE PIT HAS NO FLOOR'
 
-export function sectionFor (state: FoundryState): FoundrySection {
+function sectionFor (state: FoundryState): FoundrySection {
   const band = Math.min(
     SECTION_COUNT - 1,
     Math.max(0, Math.floor(state.z / SECTION_LEN)),
@@ -103,7 +103,7 @@ function rideEvent (state: FoundryState): string {
  * second lap on it is prefixed with the lap count, because by then the halls are
  * no longer quite the ones you walked.
  */
-export function labelFor (state: FoundryState): string {
+function labelFor (state: FoundryState): string {
   const section = sectionFor(state)
 
   let event = rideEvent(state)

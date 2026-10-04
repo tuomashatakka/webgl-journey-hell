@@ -14,7 +14,7 @@ import { createPanControl } from '@wjh/web/panControl'
 import type { PanControl, PanControlOptions, PanVector } from '@wjh/web/panControl'
 
 
-export interface PanControlHandle {
+interface PanControlHandle {
 
   /**
    * Latest tweened pan value. The ref (and the object inside it) keep a stable
@@ -30,7 +30,7 @@ export interface PanControlHandle {
   recenterPan: () => void;
 }
 
-export function usePanControl (options: PanControlOptions = {}): PanControlHandle {
+function usePanControl (options: PanControlOptions = {}): PanControlHandle {
   const { invertX, invertY, gyroscope, getRect } = options
 
   const controlRef = useRef<PanControl | null>(null)

@@ -18,10 +18,10 @@ import type { Route } from './course'
 
 
 /** Jaw opening in radians at lap 0, and its growth per lap. */
-export const JAW_BASE   = 0.42
-export const JAW_PER_LAP = 0.13
+const JAW_BASE   = 0.42
+const JAW_PER_LAP = 0.13
 
-export interface V3 { x: number; y: number; z: number }
+interface V3 { x: number; y: number; z: number }
 
 export function jawAngleAt (lapF: number): number {
   return JAW_BASE + Math.min(lapF, 3) * JAW_PER_LAP
@@ -51,7 +51,7 @@ const HEAD_KNOTS: [ number, number ][] = [
   [ -6, 42 ], [ 18, 46 ], [ 55, 41 ], [ 95, 28 ], [ 125, 15 ], [ 140, 11 ],
 ]
 
-export function headRadius (t: number): number {
+function headRadius (t: number): number {
   if (t <= HEAD_KNOTS[0][0])
     return HEAD_KNOTS[0][1]
   for (let i = 0; i < HEAD_KNOTS.length - 1; i++) {
@@ -250,7 +250,7 @@ export interface Tube {
 }
 
 /** Metres past the mouth where the front part of the tube hands over to the fixed part. */
-export const TUBE_SPLIT = 74
+const TUBE_SPLIT = 74
 
 /**
  * The tube's ring sits high on the spine: the car rides the water near the

@@ -6,7 +6,7 @@ import { createNatatoriumSimulation } from './kinematics'
 import { natatoriumFrag } from './shader'
 
 
-export const natatorium = defineJourney({
+const natatorium = defineJourney({
   slug:             'natatorium',
   renderer:         shaderRenderer(natatoriumFrag),
   createAudio:      createNatatoriumAudio,

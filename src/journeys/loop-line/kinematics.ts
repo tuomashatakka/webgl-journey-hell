@@ -67,7 +67,7 @@ const LEAD     = 26
 const LEAD_MIX = 0.38
 
 /** The rupture channels, from lapF alone. Shared with the scene and the audio. */
-export function decayOf (lapF: number): [ number, number, number, number ] {
+function decayOf (lapF: number): [ number, number, number, number ] {
   // The rates matter more than the effects. At three times these the line was
   // rubble by lap four, and a room that has stopped being a room cannot decay
   // any further. As set, lap two is a place with something wrong with it, lap
@@ -288,4 +288,4 @@ export function createLoopLineSimulation (): JourneySimulation {
  * go with it. This journey has no ending to reach, so the count stands in for
  * one. See lib/signalLoss.
  */
-export const SIGNAL_LOSS_LAP = 5
+const SIGNAL_LOSS_LAP = 5

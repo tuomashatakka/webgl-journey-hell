@@ -7,14 +7,13 @@ import { clamp01, smootherstep, smoothstep } from '@wjh/math/scalar'
 
 export const LOOP_LENGTH = 500
 export const LOOP_COUNT = 4
-export const FINALE_DISTANCE = LOOP_LENGTH * LOOP_COUNT
 
 /**
  * Where the anthology stops repeating. Past this there is no fifth traversal —
  * the fall at the end of the fourth shear horizon delivers you into purgatory
  * instead, and purgatory does not end.
  */
-export const PURGATORY_START = FINALE_DISTANCE
+export const PURGATORY_START = LOOP_LENGTH * LOOP_COUNT
 
 /** One circuit of the residue. It re-enters itself, so this is a period, not a length. */
 export const PURGATORY_LENGTH = 260
@@ -65,7 +64,7 @@ export const STAIRWELL_SECTIONS: readonly StairwellSection[] = [
  * what assertStairwellRoute checks. Purgatory is not part of the loop; it is
  * what is left when the loop stops.
  */
-export const PURGATORY_SECTION: StairwellSection = {
+const PURGATORY_SECTION: StairwellSection = {
   id:    6,
   start: 0,
   end:   PURGATORY_LENGTH,

@@ -75,7 +75,7 @@ export const SIGNAL_LOSS_LAP = 3
 const G = 9.81
 
 /** Eye height above the road surface. A low seat in a low car. */
-export const CAM_H = 1.3
+const CAM_H = 1.3
 
 /** Hard clamp on the integration step. A backgrounded tab must not teleport. */
 const MAX_STEP = 0.05

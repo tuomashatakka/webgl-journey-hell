@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS: GraphicsSettings = {
 }
 
 /** Defaults for this device: no compute-heavy branches on a phone. */
-export function deviceDefaults (): GraphicsSettings {
+function deviceDefaults (): GraphicsSettings {
   return { ...DEFAULT_SETTINGS, heavyEffects: detectDevice().tier > 0 }
 }
 

@@ -40,7 +40,7 @@ function gist (log: string): string {
  * always means the context was lost (a reused canvas whose context had been
  * released), not a source error, and it is reported as such.
  */
-export function compileShader (gl: AnyGl, type: number, source: string, tag = 'gl'): WebGLShader | null {
+function compileShader (gl: AnyGl, type: number, source: string, tag = 'gl'): WebGLShader | null {
   const shader = gl.createShader(type)
   if (!shader)
     return null
@@ -59,7 +59,7 @@ export function compileShader (gl: AnyGl, type: number, source: string, tag = 'g
   return shader
 }
 
-export interface LinkedProgram {
+interface LinkedProgram {
   program: WebGLProgram;
   vs:      WebGLShader;
   fs:      WebGLShader;
@@ -70,7 +70,7 @@ export interface LinkedProgram {
  * the link, so a GLSL ES 1.00 full-screen pass and a 3.00 one with
  * `layout(location = 0)` can share one quad and one vertex array.
  */
-export function linkProgram (gl: AnyGl, vertexSource: string, fragmentSource: string, tag = 'gl'): LinkedProgram | null {
+function linkProgram (gl: AnyGl, vertexSource: string, fragmentSource: string, tag = 'gl'): LinkedProgram | null {
   const vs = compileShader(gl, gl.VERTEX_SHADER, vertexSource, tag)
   const fs = compileShader(gl, gl.FRAGMENT_SHADER, fragmentSource, tag)
   if (!vs || !fs) {

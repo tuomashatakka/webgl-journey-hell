@@ -43,7 +43,7 @@ export function hash2 (x: number, y: number): number {
 
 
 /** Deterministic [0,1) from three integer coordinates via integer mixing. */
-export function hash3 (x: number, y: number, z: number): number {
+function hash3 (x: number, y: number, z: number): number {
   let h = x * 374761393 + y * 668265263 + z * 1103515249 | 0
   h = Math.imul(h ^ h >>> 13, 1274126177) | 0
   h = h ^ h >>> 16

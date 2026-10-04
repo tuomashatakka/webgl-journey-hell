@@ -23,7 +23,7 @@
 export type Vec3 = [number, number, number] | Float32Array
 
 export type Mat4 = Float32Array
-export type Mat3 = Float32Array
+type Mat3 = Float32Array
 
 
 const EPSILON = 1e-6
@@ -32,7 +32,7 @@ const EPSILON = 1e-6
 const _scratch = new Float32Array(16)
 
 
-export function create (): Mat4 {
+function create (): Mat4 {
   const out = new Float32Array(16)
   out[0]    = 1
   out[5]    = 1
@@ -42,7 +42,7 @@ export function create (): Mat4 {
 }
 
 
-export function identity (out: Mat4): Mat4 {
+function identity (out: Mat4): Mat4 {
   out[0]  = 1
   out[1]  = 0
   out[2]  = 0
@@ -309,7 +309,7 @@ export function invert (out: Mat4, a: Mat4): Mat4 | null {
  * placing objects in a scene without allocating separate rotation,
  * translation, and scale matrices only to multiply them together.
  */
-export function fromRotationTranslationScale (
+function fromRotationTranslationScale (
   out:          Mat4,
   yawRadians:   number,
   pitchRadians: number,
@@ -364,7 +364,7 @@ export function fromRotationTranslationScale (
  * model matrix includes non-uniform scale. The output is a Mat3 (Float32Array
  * of 9 elements, column-major).
  */
-export function normalMatrix (out: Mat3, model: Mat4): Mat3 {
+function normalMatrix (out: Mat3, model: Mat4): Mat3 {
   const inv = invert(_scratch, model)
   if (!inv) {
     out[0] = 1; out[1] = 0; out[2] = 0
@@ -392,7 +392,7 @@ export function normalMatrix (out: Mat3, model: Mat4): Mat3 {
  * Transform a 3D point by a 4x4 matrix with perspective divide. The input w
  * component defaults to 1 (an ordinary point, not a direction).
  */
-export function transformPoint (out: Vec3, m: Mat4, p: Vec3): Vec3 {
+function transformPoint (out: Vec3, m: Mat4, p: Vec3): Vec3 {
   const x = p[0],
     y     = p[1],
     z     = p[2]

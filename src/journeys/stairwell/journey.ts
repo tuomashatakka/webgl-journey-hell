@@ -6,7 +6,7 @@ import { createStairwellSimulation } from './kinematics'
 import { createStairwellRenderer } from './renderer'
 
 
-export const stairwell = defineJourney({
+const stairwell = defineJourney({
   slug:             'stairwell',
   renderer:         passRenderer(createStairwellRenderer),
   createAudio:      createStairwellAudio,
