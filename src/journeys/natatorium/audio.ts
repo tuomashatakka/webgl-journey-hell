@@ -21,7 +21,7 @@
 
 import { JourneyAudio } from '@wjh/audio/engine'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
-import { TYPE_PLANT, TYPE_RAW } from './kinematics'
+import { TYPE_PLANT, TYPE_RAW } from './kinematics/route'
 
 
 /** Glide for slow-moving parameters. */
