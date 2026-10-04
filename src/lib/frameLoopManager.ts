@@ -8,7 +8,7 @@
 // Packages registry (npm.pkg.github.com), which would require a per-machine
 // read:packages token + .npmrc for every contributor and CI run. It's a tiny,
 // dependency-free module, so we keep a local copy with identical exports
-// (frameLoopManager / useFrameLoop / useFrameLoopManager). Swapping to the
+// (frameLoopManager). Swapping to the
 // published package later is a one-line import change.
 //
 // One global manager drives a single rAF loop shared by every registered
@@ -23,9 +23,6 @@
 //     20 fps under a 60 cap played every journey at a third of its speed.
 //   • the cap tolerates rAF jitter. A 60 cap on a 60 Hz display used to skip
 //     any frame that arrived 0.1 ms early — a dropped frame every few seconds.
-import { useEffect, useSyncExternalStore } from 'react'
-
-
 /** How early (ms) a capped frame may arrive and still run. */
 const JITTER_MS = 1.5
 
@@ -179,27 +176,3 @@ class FrameLoopManager {
 export type { FrameLoopManager }
 
 export const frameLoopManager = new FrameLoopManager()
-
-/**
- * Register a callback that runs once per (capped) frame for the component's
- * lifetime — synchronously inside the rAF callback, so a frame is drawn in the
- * frame it was scheduled for rather than in a microtask after it.
- */
-export const useFrameLoop = (callback: (manager: FrameLoopManager) => void) => {
-  useEffect(() => {
-    frameLoopManager.registerSyncCallback(callback)
-    return () => {
-      frameLoopManager.unregisterSyncCallback(callback)
-    }
-  }, [ callback ])
-}
-
-/** Subscribe a component to manager state changes; returns the manager for imperative control. */
-export const useFrameLoopManager = () => {
-  useSyncExternalStore(
-    frameLoopManager.subscribe.bind(frameLoopManager),
-    () => `${frameLoopManager.isPaused}:${frameLoopManager.getFramerate()}`,
-    () => `true:0`,
-  )
-  return frameLoopManager
-}

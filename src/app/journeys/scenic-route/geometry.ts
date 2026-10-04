@@ -31,8 +31,8 @@
 // only on the sections that run on the ground — the fall, the throat and the
 // cave are elsewhere, and downtown is the plaza.
 
-import { VERTEX_FLOATS, createMeshBuilder } from '✦/lib/mesh'
-import type { MeshBuilder } from '✦/lib/mesh'
+import { VERTEX_FLOATS, createMeshBuilder } from '✦/lib/meshBuilder'
+import type { MeshBuilder } from '✦/lib/meshBuilder'
 import { hash2 } from '✦/lib/rng'
 import type { Route } from './course'
 import { tubeRadius } from './maw'

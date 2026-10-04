@@ -36,8 +36,8 @@
 // own `right` is −x, and a basis built on it would be a reflection that turns
 // every prop inside out).
 
-import { createMeshBuilder, fracture } from '✦/lib/mesh'
-import type { MeshBuilder } from '✦/lib/mesh'
+import { createMeshBuilder, fracture } from '✦/lib/meshBuilder'
+import type { MeshBuilder } from '✦/lib/meshBuilder'
 import { mulberry32 } from '✦/lib/rng'
 import type { ClosedCurve, Frame } from '✦/lib/curve'
 import { MAT } from 'Δ'

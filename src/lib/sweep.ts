@@ -25,7 +25,7 @@
 // smooth without a second pass.
 
 import type { ClosedCurve, Frame } from '✦/lib/curve'
-import type { AttribSpec } from '✦/lib/mesh'
+import type { AttribSpec } from '✦/lib/meshBuilder'
 
 
 export const SWEEP_FLOATS = 16

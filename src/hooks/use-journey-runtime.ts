@@ -32,7 +32,7 @@
 // can be seen rather than wherever it had got to behind the bar.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useFrameLoop } from '✦/lib/frameLoopManager'
+import useFrameLoop from '✦/hooks/use-frame-loop'
 import type { FrameLoopManager } from '✦/lib/frameLoopManager'
 import usePanControl from '✦/hooks/use-pan-control'
 import useAudioEngine from '✦/hooks/use-audio-engine'

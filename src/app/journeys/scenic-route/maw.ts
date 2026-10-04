@@ -10,8 +10,8 @@
 // Materials are decided by facing: a front face is skin, a back face is the
 // inside of the mouth. The one mesh is the outside and the inside both.
 
-import { createMeshBuilder } from '✦/lib/mesh'
-import type { MeshBuilder } from '✦/lib/mesh'
+import { createMeshBuilder } from '✦/lib/meshBuilder'
+import type { MeshBuilder } from '✦/lib/meshBuilder'
 import { finishSweep, levelFrame, newFrame, sweepProfile } from '✦/lib/sweep'
 import type { ProfilePoint, SweepArrays } from '✦/lib/sweep'
 import type { Route } from './course'

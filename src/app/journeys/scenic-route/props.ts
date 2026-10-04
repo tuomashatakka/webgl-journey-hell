@@ -12,8 +12,8 @@
 // pairs stay together. Every placement is filtered against the whole route in
 // three dimensions: nothing stands where any road passes through it.
 
-import { createMeshBuilder } from '✦/lib/mesh'
-import type { MeshBuilder } from '✦/lib/mesh'
+import { createMeshBuilder } from '✦/lib/meshBuilder'
+import type { MeshBuilder } from '✦/lib/meshBuilder'
 import { levelFrame, newFrame } from '✦/lib/sweep'
 import { lookAt, SECTION_COUNT } from './course'
 import type { LookParams, Route } from './course'
