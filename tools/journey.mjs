@@ -109,7 +109,7 @@ function url (journey, t, opts, extra = {}) {
  */
 async function seek (page, journey, t, opts, extra) {
   await page.goto(url(journey, t, opts, extra), { waitUntil: 'commit' })
-  await page.waitForSelector('html[data-journey-ready="1"]', { timeout: 60_000 })
+  await page.waitForSelector('html[data-journey-ready="1"]', { state: 'attached', timeout: 60_000 })
   const dbg = await page.evaluate(() => window.__journeyDebug)
   // The bare harness collects console.error into a list; a failed compile there
   // still produces a frame (black), so the list is the only way to know.
