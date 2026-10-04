@@ -1,4 +1,3 @@
-import { MATERIAL_GLSL, SURFACE_GLSL } from '@wjh/delta/glsl'
 import { coreGlsl } from './glsl/core'
 import { paletteGlsl } from './glsl/palette'
 import { setpiecesGlsl } from './glsl/setpieces'
@@ -6,12 +5,9 @@ import { marchGlsl } from './glsl/march'
 import { shadingGlsl } from './glsl/shading'
 
 
-// GLSL ES 3.00 on WebGL 2: the walls are Δ scans. The phone build is this
-// with LITE defined after the version line (see renderer.ts).
-export const fsScene = `#version 300 es\n${coreGlsl}${MATERIAL_GLSL}\n${SURFACE_GLSL}${paletteGlsl}${setpiecesGlsl}${marchGlsl}${shadingGlsl}`
+export const fsScene = coreGlsl + paletteGlsl + setpiecesGlsl + marchGlsl + shadingGlsl
 
-export const fsPost = `#version 300 es
-
+export const fsPost = `
     #ifdef GL_FRAGMENT_PRECISION_HIGH
     precision highp float;
     #else
@@ -23,7 +19,6 @@ export const fsPost = `#version 300 es
     uniform vec2 uPointer;
     uniform float uIteration;
     uniform float uPlayerZ;
-    out vec4 fragColor;
 
     float hash(vec2 p) {
         return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453123);
@@ -84,7 +79,7 @@ export const fsPost = `#version 300 es
         getSegmentDataPost(uPlayerZ, sector, isFall);
 
         float loopVal = floor(uPlayerZ / 500.0);
-        float decayFactor = clamp(smoothstep(0.5, 1.0, loopVal) * 0.42 + max(loopVal - 1.0, 0.0) * 0.2, 0.0, 0.95);
+        float decayFactor = clamp(loopVal * 0.15, 0.0, 0.9);
         // As the journey STOPS in the abyss, calm the post FX toward the still reference look.
         float calm = smoothstep(2000.0, 2300.0, uPlayerZ);
         chromAbOffset *= (1.0 - calm * 0.6);
@@ -101,17 +96,17 @@ export const fsPost = `#version 300 es
         }
 
         vec3 col = vec3(0.0);
-        col.r += texture(uTexture, uvDistorted - chromAbOffset).r;
-        col.g += texture(uTexture, uvDistorted).g;
-        col.b += texture(uTexture, uvDistorted + chromAbOffset).b;
+        col.r += texture2D(uTexture, uvDistorted - chromAbOffset).r;
+        col.g += texture2D(uTexture, uvDistorted).g;
+        col.b += texture2D(uTexture, uvDistorted + chromAbOffset).b;
 
         // --- 3. HORIZONTAL ANAMORPHIC FLARES & SUPER LONG-RADIUS BLOOM ---
         float flarePower = (decayFactor * 0.35 + (is666 ? 0.45 : 0.0)) * (1.0 - calm * 0.9);
         vec3 flare = vec3(0.0);
         for (int i = 1; i <= 6; i++) {
             float flOffset = float(i) * 0.022; // super long sweep
-            vec3 tapL = texture(uTexture, uvDistorted - vec2(flOffset, 0.0)).rgb;
-            vec3 tapR = texture(uTexture, uvDistorted + vec2(flOffset, 0.0)).rgb;
+            vec3 tapL = texture2D(uTexture, uvDistorted - vec2(flOffset, 0.0)).rgb;
+            vec3 tapR = texture2D(uTexture, uvDistorted + vec2(flOffset, 0.0)).rgb;
             flare += max(tapL - 0.28, 0.0);
             flare += max(tapR - 0.28, 0.0);
         }
@@ -121,10 +116,10 @@ export const fsPost = `#version 300 es
         float bloomPower = decayFactor * 0.55 * (1.0 - calm * 0.85);
         for (int i = 1; i <= 4; i++) {
             float bOff = float(i) * 0.018;
-            bloom += texture(uTexture, uvDistorted + vec2(bOff, bOff)).rgb;
-            bloom += texture(uTexture, uvDistorted + vec2(-bOff, bOff)).rgb;
-            bloom += texture(uTexture, uvDistorted + vec2(bOff, -bOff)).rgb;
-            bloom += texture(uTexture, uvDistorted + vec2(-bOff, -bOff)).rgb;
+            bloom += texture2D(uTexture, uvDistorted + vec2(bOff, bOff)).rgb;
+            bloom += texture2D(uTexture, uvDistorted + vec2(-bOff, bOff)).rgb;
+            bloom += texture2D(uTexture, uvDistorted + vec2(bOff, -bOff)).rgb;
+            bloom += texture2D(uTexture, uvDistorted + vec2(-bOff, -bOff)).rgb;
         }
         col += (bloom / 16.0) * bloomPower;
 
@@ -187,6 +182,6 @@ export const fsPost = `#version 300 es
         }
         col *= fade;
 
-        fragColor = vec4(col, 1.0);
+        gl_FragColor = vec4(col, 1.0);
     }
 `

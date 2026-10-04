@@ -26,17 +26,15 @@ export default withJourneyShell(journey)
 Pick the renderer by what the journey is (`src/packages/journey/definition.ts`):
 
 * **`shaderRenderer(frag, { envMapUrl })`** — one GLSL ES 1.00 fragment shader on a
-  full-screen quad, WebGL 1, no depth buffer. Four of the journeys are this.
+  full-screen quad, WebGL 1, no depth buffer. Six of the journeys are this.
 * **`geometryRenderer(createScene)`** — triangles: WebGL 2 with `depth: true`; hand
   back your own scene object. Reach for `src/packages/math/mat4.ts`, `src/packages/geometry/curve.ts`, `src/packages/geometry/meshBuilder.ts` and `src/packages/gl/mesh.ts`, and
   `src/packages/gl`'s `createPostChain` for the MSAA → resolve → bloom frame. `loop-line` is
   the worked example. (A rasterizer without a depth buffer draws its rooms in
   submission order and you see straight through the walls.)
-* **`passRenderer(create)`** — a hand-built renderer on WebGL 2 (raymarch into a
-  target, then post): `stairwell/` and `liminal/`, or a single pass straight to the
-  screen: `foundry/`. All three bind Δ's material arrays (`createMaterialArrays`)
-  and sample them triplanar (`sampleTriplanarGrad`, with the hit's derivatives
-  taken before the hit branch).
+* **`passRenderer(create)`** / **`passRendererWebGL1(create)`** — a hand-built
+  multi-pass renderer (raymarch into a target, then post): `stairwell/` on WebGL 2,
+  `liminal/` on WebGL 1.
 
 The rest of the definition:
 

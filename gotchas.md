@@ -23,7 +23,6 @@ Traps that have already cost time, in the order you are likely to hit them. The 
 * **Large shaders are split into concatenated template strings** (`glsl/<pass>.ts` pieces joined in `shader.ts`). Splitting must not change a single byte of the assembled source: compare an md5 of every exported shader string before and after.
 * **A shader that fails to compile still leaves a black frame.** `node tools/journey.mjs glsl <slug>` reports the errors and exits 1; run it after every shader edit.
 * **Hash on a wrapped clock.** `tickAt` in the CRT pass exists because `sin()` of an unwrapped hour-long clock stops varying and the noise freezes into a constant that subtracts the whole picture.
-* **Δ in a raymarcher needs the hit's derivatives taken in uniform control flow** — `dFdx(p)` before `if (hit)`, then `sampleTriplanarGrad`. Inside the branch the implicit derivatives are undefined and the textures shimmer or go black at silhouettes.
 * **Phone compilers inline and unroll everything.** The liminal `LITE` build exists because the full raymarcher did not compile on some phones. Anything with many `map()` call sites needs a light build.
 * **The CRT capture texture must be `RGB`**, not `RGBA`, because the contexts are created `alpha: false`; the wrong format is a silent `INVALID_OPERATION` and every journey goes black.
 * Route-bending traps (min vs smin, bounds that reach zero, quantised fields through a pinhole, resolve-the-owner rules) are in `docs/routes.md`.

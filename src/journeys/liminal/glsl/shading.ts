@@ -22,50 +22,6 @@ export const shadingGlsl = `    // Standard Normal Calculation
         return clamp(1.0 - 2.5 * occ * (5.0 / float(AO_STEPS)), 0.0, 1.0);
     }
 
-    // Which Δ scan a matte surface is, by sector and facing: tiled pools, a
-    // plastered gut, a spalled reservoir, brick under the orange, terrazzo
-    // corridors, rock in the abyss.
-    float matteLayer(float sector, vec3 n) {
-        if (sector == 666.0) return MAT_ROCK;
-        if (n.y < -0.7) return sector == 4.0 ? MAT_CONCRETE : MAT_PLASTER;
-        bool floorFacing = n.y > 0.7;
-        if (sector == 1.0 || sector == 2.0) return MAT_TILE;
-        if (sector == 3.0) return floorFacing ? MAT_TERRAZZO : MAT_PLASTER;
-        if (sector == 4.0) return floorFacing ? MAT_FLOOR : MAT_CONCRETE;
-        if (sector == 5.0) return floorFacing ? MAT_FLOOR : MAT_BRICK;
-        return floorFacing ? MAT_TERRAZZO : MAT_TILE;
-    }
-
-    // The rooms' own light, as the loop line lights its bays: panels hung down
-    // the middle of the way every six metres, warm white rotting to red, and
-    // their glow in the haze.
-    vec3 panelCol(float decay) { return mix(vec3(1.0, 0.95, 0.85), vec3(1.0, 0.35, 0.25), decay * 0.6); }
-    vec3 panelPos(float k) {
-        float z = k * 6.0 + 3.0;
-        return vec3(getCamX(z), getFloorY(z) + 3.6, z);
-    }
-    vec3 panelLight(vec3 p, vec3 n, float decay) {
-        vec3 acc = vec3(0.0);
-        float k0 = floor((p.z - 3.0) / 6.0);
-        for (int i = 0; i < 2; i++) {
-            vec3 ld = panelPos(k0 + float(i)) - p;
-            float d2 = max(dot(ld, ld), 1e-3);
-            acc += vec3(max(dot(n, ld * inversesqrt(d2)), 0.0) / (1.0 + d2 * 0.06));
-        }
-        return acc * panelCol(decay) * 0.9;
-    }
-    vec3 panelGlow(vec3 ro, vec3 rd, float tmax, float decay) {
-        float k0 = floor((ro.z - 3.0) / 6.0);
-        float g = 0.0;
-        for (int i = 0; i < 5; i++) {
-            vec3 o = ro - panelPos(k0 + float(i));
-            float b = dot(rd, o);
-            float h = sqrt(max(dot(o, o) - b * b, 1e-4));
-            g += (atan((tmax + b) / h) - atan(b / h)) / h;
-        }
-        return panelCol(decay) * g * 0.012;
-    }
-
     #ifdef LITE
     // What a reflection would have found, without marching for it: the room
     // itself, as dimly as the full build lights what its reflections hit —
@@ -165,7 +121,7 @@ export const shadingGlsl = `    // Standard Normal Calculation
         float t = 0.0;
         float matID = 0.0;
         float godRayAccum = 0.0;
-        float decayFactor = decayOf(loop);
+        float decayFactor = clamp(loop * 0.15, 0.0, 0.9);
 
         float crystalGlow = 0.0;
         float fogTension = 0.0;
@@ -189,16 +145,14 @@ export const shadingGlsl = `    // Standard Normal Calculation
                 }
             }
 
-            // Red light up out of the floor cracks: from the second loop, on
-            // every build that marches far enough to carry it.
-            if (decayFactor > 0.05) {
+            if (uHeavy > 0.5 && decayFactor > 0.05) {
                 float l, s, dc, sa, sb, bl, lZ, sLen, iF, iC;
                 getSegmentData(p.z, l, s, dc, sa, sb, bl, lZ, sLen, iF, iC);
                 float fY_p = getFloorY(p.z);
                 float heightAboveFloor = p.y - fY_p;
                 if (heightAboveFloor > 0.0 && heightAboveFloor < 15.0) {
                     float fCrack = getFloorCrack(p, lZ, loop);
-                    godRayAccum += fCrack * exp(-heightAboveFloor * 0.24) * 0.03 * (1.0 + 3.0 * decayFactor);
+                    godRayAccum += fCrack * exp(-heightAboveFloor * 0.28) * 0.02 * (1.0 + 3.0 * decayFactor);
                 }
             }
         #endif
@@ -207,11 +161,6 @@ export const shadingGlsl = `    // Standard Normal Calculation
             if (t > MAX_DIST) break;
             t += res.x;
         }
-
-        // Derivatives of the hit for the texture lookups, taken while every
-        // pixel of the quad still runs the same code.
-        vec3 hitP = ro + rd * t;
-        vec3 dpx = dFdx(hitP), dpy = dFdy(hitP);
 
         vec3 col = vec3(0.0);
         vec3 fogColor = getBiomeColor(ro.z + 30.0);
@@ -282,16 +231,17 @@ export const shadingGlsl = `    // Standard Normal Calculation
 
                 col = mix(refrCol, reflCol, mix(0.12, 0.88, fresnel));
             } else {
+                float dif = max(dot(n, sunDir), 0.0);
                 float ao = HIT_AO;
+
                 vec3 albedo = getBiomeColor(p.z);
-                vec3 nS = n;
 
                 if (matID == MAT_MATTE) {
-                    // The scan, brought to this pipeline's display-referred
-                    // space, under the biome's colour; its normal lights it.
-                    Surface sf = sampleTriplanarGrad(matteLayer(s_p, n), p, n, 4.0, dpx, dpy);
-                    albedo *= pow(sf.albedo, vec3(0.4545)) * 1.6;
-                    nS = sf.normal;
+                    if (s_p == 1.0 || s_p == 5.0 || s_p == 6.0) {
+                        vec3 grid = smoothstep_custom(0.0, 0.05, abs(fract(p * 2.0) - 0.5));
+                        float lines = grid.x * grid.y * grid.z;
+                        albedo *= mix(0.6, 1.0, lines);
+                    }
 
                     // BLOOD DECALS: Large, non-uniform biological projections
                     if (decayFactor > 0.01) {
@@ -308,7 +258,7 @@ export const shadingGlsl = `    // Standard Normal Calculation
 
                     float fCrack = getFloorCrack(p, lZ_p, loop);
                     if (fCrack > 0.01) {
-                        vec3 crackCol = vec3(1.5, 0.02, 0.01) * (1.0 + 3.0 * decayFactor);
+                        vec3 crackCol = vec3(1.5, 0.02, 0.01) * (1.0 + 8.0 * decayFactor);
                         albedo = mix(albedo, crackCol, fCrack);
                     }
                 }
@@ -321,8 +271,7 @@ export const shadingGlsl = `    // Standard Normal Calculation
                     albedo = fleshBase;
                 }
 
-                float dif = max(dot(nS, sunDir), 0.0);
-                col = albedo * (dif * 0.35 + 0.3) * ao + albedo * panelLight(p, nS, decayFactor) * ao;
+                col = albedo * (dif * 0.6 + 0.4) * ao;
 
                 if (matID == MAT_FLESH) {
                     vec3 refDir = reflect(rd, n);
@@ -386,9 +335,7 @@ export const shadingGlsl = `    // Standard Normal Calculation
         }
 
         col = mix(col, fogColor, fogFactor);
-        if (!is666) col += panelGlow(ro, rd, min(t, MAX_DIST), decayFactor);
-        // Saturating, so the deepest loop is a red room and not a red screen.
-        col += vec3(1.3, 0.05, 0.01) * (1.0 - exp(-godRayAccum * 1.4)) * 0.9;
+        col += vec3(1.3, 0.05, 0.01) * godRayAccum;
 
         // Apply accumulated atmospheric volumetric glows
         if (is666 && fallAmt > 0.5) {
@@ -400,6 +347,6 @@ export const shadingGlsl = `    // Standard Normal Calculation
             }
         }
 
-        fragColor = vec4(col, t);
+        gl_FragColor = vec4(col, t);
     }
 `
