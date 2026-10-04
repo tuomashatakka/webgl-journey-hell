@@ -492,6 +492,54 @@ function buildFrames (pts: Vec3[], lut: LutEntry[]): PtFrame[] {
 
 // ---- holonomy correction ------------------------------------------------
 
+function correctHolonomy (frames: PtFrame[]): void {
+  const n = frames.length
+  if (n < 2)
+    return
+
+  // Reference frame: the initial parallel-transported up, right, and forward.
+  const refUp    = v3Copy(frames[0].up)
+  const refFwd   = v3Copy(frames[0].forward)
+
+  // Measure the residual twist as the signed angle between the last transported
+  // up and the reference up, projected onto the plane perpendicular to the
+  // reference forward. This is the holonomy of the loop.
+  const lastUp = frames[n - 1].up
+  const dotL   = v3Dot(refFwd, lastUp)
+  const dotR   = v3Dot(refFwd, refUp)
+  let compL = v3()
+  let compR = v3()
+  v3Scale(refFwd, dotL, compL)
+  v3Scale(refFwd, dotR, compR)
+  compL = v3Sub(lastUp, compL, v3())
+  compR = v3Sub(refUp, compR, v3())
+
+  const sinH     = v3Dot(refFwd, v3Cross(compR, compL, v3()))
+  const cosH     = v3Dot(compR, compL)
+  const holonomy = Math.atan2(sinH, cosH)
+
+  // Distribute the correction linearly: frame i gets rotated about its own
+  // tangent by -holonomy * i/(n-1). This is exact for constant-tangent curves
+  // and O(h²) accurate otherwise — far below visual threshold at our LUT
+  // density.
+  const tmpUp = v3()
+  const tmpRt = v3()
+
+  for (let i = 0; i < n; i++) {
+    const angle = -holonomy * i / (n - 1)
+    if (Math.abs(angle) < 1e-12)
+      continue
+    rodrigues(frames[i].forward, angle, frames[i].up, tmpUp)
+    rodrigues(frames[i].forward, angle, frames[i].right, tmpRt)
+    frames[i].up.x    = tmpUp.x
+    frames[i].up.y    = tmpUp.y
+    frames[i].up.z    = tmpUp.z
+    frames[i].right.x = tmpRt.x
+    frames[i].right.y = tmpRt.y
+    frames[i].right.z = tmpRt.z
+  }
+
+}
 
 
 // ---- public factory -----------------------------------------------------
@@ -505,6 +553,7 @@ export function createClosedCurve (
   const lut    = buildLut(points, samplesPerSegment)
   const total  = lut[lut.length - 1].cumLen
   const frames = buildFrames(points, lut)
+  correctHolonomy(frames)
 
   const tmpA = v3()
 

@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  FINALE_DISTANCE,
   LOOP_COUNT,
   LOOP_LENGTH,
   PURGATORY_LENGTH,
@@ -129,7 +128,7 @@ describe('stairwell purgatory', () => {
   })
 
   test('walk speed stays finite and positive for the whole route', () => {
-    for (let z = 0; z < FINALE_DISTANCE + PURGATORY_LENGTH * 3; z += 0.25) {
+    for (let z = 0; z < PURGATORY_START + PURGATORY_LENGTH * 3; z += 0.25) {
       const speed = getWalkSpeed(z)
       expect(Number.isFinite(speed)).toBe(true)
       expect(speed).toBeGreaterThan(0)
