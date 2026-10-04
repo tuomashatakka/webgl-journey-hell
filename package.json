@@ -7,6 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "knip": "knip",
+    "check": "tsc --noEmit && eslint src && knip && bun test",
     "clean": "next clean"
   },
   "dependencies": {
