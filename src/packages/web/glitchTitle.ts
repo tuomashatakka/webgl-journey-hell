@@ -11,6 +11,7 @@
 // frame while the title holds, so nothing in the card ever stalls a frame;
 // the tear-out then draws displaced slices from them.
 
+import { CONFIG } from '@wjh/config/config'
 import { clamp01, smoothstep } from '@wjh/math/scalar'
 import { mulberry32 } from '@wjh/math/rng'
 import { spacedText, spacedWidth } from './canvasText'
@@ -51,20 +52,9 @@ export interface GlitchTitle {
   resize(width: number, height: number): void;
 }
 
-/** Seconds: fade in until IN, hold until HOLD, torn out by OUT. */
-const IN   = 1.15
-const HOLD = 2.75
-const OUT  = 4
 
-const CALM_IN   = 0.8
-const CALM_HOLD = 2.2
-const CALM_OUT  = 3
 
-/** Byte-corrupted variants, from barely damaged to wrecked. */
-const VARIANTS = 6
 
-/** The glitch picks a new pattern this many times a second, like a frame rate. */
-const GLITCH_FPS = 24
 
 interface Layers {
   base:   HTMLCanvasElement;
@@ -194,7 +184,7 @@ function corrupt (src: HTMLCanvasElement, top: number, bottom: number, amount: n
 
 export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleOptions): GlitchTitle {
   const ctx      = canvas.getContext('2d')!
-  const timing   = opts.timing ?? (opts.calm ? { in: CALM_IN, hold: CALM_HOLD, out: CALM_OUT } : { in: IN, hold: HOLD, out: OUT })
+  const timing   = opts.timing ?? (opts.calm ? { in: CONFIG.titleCard.calm.fadeInAt, hold: CONFIG.titleCard.calm.holdUntil, out: CONFIG.titleCard.calm.tornOutBy } : { in: CONFIG.titleCard.fadeInAt, hold: CONFIG.titleCard.holdUntil, out: CONFIG.titleCard.tornOutBy })
   const backdrop = opts.backdrop ?? true
   const tIn      = timing.in
   const tHold    = timing.hold
@@ -287,12 +277,12 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
         return false
 
       // Spread the corruption work over the hold, one variant per frame.
-      if (!opts.calm && layers.broken.length < VARIANTS && t > 0.2) {
+      if (!opts.calm && layers.broken.length < CONFIG.titleCard.variants && t > 0.2) {
         const k = layers.broken.length
-        layers.broken.push(corrupt(layers.base, layers.top, layers.bottom, (k + 1) / VARIANTS, 1013 + k * 7919))
+        layers.broken.push(corrupt(layers.base, layers.top, layers.bottom, (k + 1) / CONFIG.titleCard.variants, 1013 + k * 7919))
       }
 
-      const frame = Math.floor(t * GLITCH_FPS)
+      const frame = Math.floor(t * CONFIG.titleCard.glitchFps)
       const rnd   = mulberry32(frame * 2654435761 >>> 0)
       const out   = clamp01((t - outStart) / Math.max(0.01, tOut - outStart))
       const g     = glitchAt(t, rnd)

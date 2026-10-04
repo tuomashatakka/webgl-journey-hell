@@ -6,6 +6,7 @@
       "name": "ai-studio-applet",
       "dependencies": {
         "@wjh/audio": "workspace:*",
+        "@wjh/config": "workspace:*",
         "@wjh/delta": "workspace:*",
         "@wjh/geometry": "workspace:*",
         "@wjh/gl": "workspace:*",
@@ -37,6 +38,10 @@
         "@wjh/journey": "workspace:*",
       },
     },
+    "src/packages/config": {
+      "name": "@wjh/config",
+      "version": "1.0.0",
+    },
     "src/packages/delta": {
       "name": "@wjh/delta",
       "version": "1.0.0",
@@ -52,6 +57,7 @@
       "name": "@wjh/gl",
       "version": "1.0.0",
       "dependencies": {
+        "@wjh/config": "workspace:*",
         "@wjh/geometry": "workspace:*",
         "@wjh/web": "workspace:*",
       },
@@ -64,6 +70,7 @@
       "name": "@wjh/journey",
       "version": "1.0.0",
       "dependencies": {
+        "@wjh/config": "workspace:*",
         "@wjh/gl": "workspace:*",
         "@wjh/math": "workspace:*",
         "@wjh/web": "workspace:*",
@@ -77,6 +84,7 @@
       "name": "@wjh/quality",
       "version": "1.0.0",
       "dependencies": {
+        "@wjh/config": "workspace:*",
         "@wjh/gl": "workspace:*",
         "@wjh/math": "workspace:*",
       },
@@ -85,6 +93,7 @@
       "name": "@wjh/web",
       "version": "1.0.0",
       "dependencies": {
+        "@wjh/config": "workspace:*",
         "@wjh/math": "workspace:*",
       },
     },
@@ -305,6 +314,8 @@
     "@unrs/resolver-binding-win32-x64-msvc": ["@unrs/resolver-binding-win32-x64-msvc@1.12.2", "", { "os": "win32", "cpu": "x64" }, "sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA=="],
 
     "@wjh/audio": ["@wjh/audio@workspace:src/packages/audio"],
+
+    "@wjh/config": ["@wjh/config@workspace:src/packages/config"],
 
     "@wjh/delta": ["@wjh/delta@workspace:src/packages/delta"],
 

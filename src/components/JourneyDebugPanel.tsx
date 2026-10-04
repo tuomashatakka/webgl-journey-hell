@@ -9,11 +9,11 @@
 // into a ref, and this samples that ref on its own slow interval — the numbers
 // are for reading, and nobody can read sixty updates a second anyway.
 
+import { CONFIG } from '@wjh/config/config'
 import { useEffect, useRef, useState } from 'react'
 import type { JourneyDebugState } from '@wjh/web/debugParams'
 
 
-const SAMPLE_MS = 200
 
 /** Enough precision to tell two frames apart, not so much that it is unreadable. */
 function fmt (v: number): string {
@@ -56,7 +56,7 @@ export default function JourneyDebugPanel ({ getState }: Props) {
     const tick = () => setState(getStateRef.current())
     tick()
 
-    const id = window.setInterval(tick, SAMPLE_MS)
+    const id = window.setInterval(tick, CONFIG.ui.debugPanelSampleMs)
     return () => window.clearInterval(id)
   }, [])
 

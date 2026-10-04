@@ -1,11 +1,12 @@
+import { CONFIG } from '@wjh/config/config'
 import type { Metadata } from 'next'
 import './globals.css' // Global styles
 import { SettingsProvider } from '✦/components/SettingsProvider'
 
 
 export const metadata: Metadata = {
-  title:       'webgl-journey-hell',
-  description: 'An index of WebGL shader journeys into the abyss.',
+  title:       CONFIG.site.title,
+  description: CONFIG.site.description,
 }
 
 type RootLayoutProps = { children: React.ReactNode }

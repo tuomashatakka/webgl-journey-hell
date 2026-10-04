@@ -1,3 +1,5 @@
+import { CONFIG } from '@wjh/config/config'
+
 // What every GL helper here accepts, and how to tell the two apart.
 //
 // The shell hands out WebGL 1 contexts to the single-pass shader journeys and
@@ -10,12 +12,6 @@ export function isWebGL2 (gl: AnyGl): gl is WebGL2RenderingContext {
   return typeof WebGL2RenderingContext !== 'undefined' && gl instanceof WebGL2RenderingContext
 }
 
-/** Defaults tuned for a full-screen raymarch: no depth, no MSAA, opaque. */
-const BASE_CONTEXT_ATTRIBUTES: WebGLContextAttributes = {
-  alpha:     false,
-  antialias: false,
-  depth:     false,
-}
 
 /**
  * Create a context of the asked-for type. `preserveDrawingBuffer` is the
@@ -27,5 +23,5 @@ export function createContext (
   type: 'webgl' | 'webgl2',
   attributes: WebGLContextAttributes = {},
 ): AnyGl | null {
-  return canvas.getContext(type, { ...BASE_CONTEXT_ATTRIBUTES, ...attributes }) as AnyGl | null
+  return canvas.getContext(type, { ...CONFIG.gl.contextAttributes, ...attributes }) as AnyGl | null
 }

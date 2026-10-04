@@ -1,39 +1,29 @@
 import type { NextConfig } from 'next'
+import pkg from './package.json'
+import { CONFIG } from './src/packages/config/config'
 
 
-// Single source of truth for the deployment sub-path. Next rewrites basePath
-// into next/link, next/image and imported static assets automatically, but NOT
-// into plain URL strings used at runtime (e.g. `new Image().src`), so it is
-// also published as a public env var for lib/assetUrl.ts to prepend.
-const basePath = '/webgl-journey-hell'
+const { basePath } = CONFIG.site
 
 const nextConfig: NextConfig = {
   basePath,
-  env:             { NEXT_PUBLIC_BASE_PATH: basePath },
-  output:          'export',
-  reactStrictMode: true,
+  env:               { NEXT_PUBLIC_BASE_PATH: basePath },
+  output:            'export',
+  reactStrictMode:   true,
+
   // The workspace packages ship TypeScript source, not a build.
-  transpilePackages: ['@wjh/audio', '@wjh/delta', '@wjh/geometry', '@wjh/gl', '@wjh/glsl', '@wjh/journey', '@wjh/math', '@wjh/quality', '@wjh/web'],
+  transpilePackages: Object.keys(pkg.dependencies).filter(name => name.startsWith('@wjh/')),
+
   // Dev-only overlay, and it sits in the bottom-left corner — which is exactly
   // where tools/shoot-posters.mjs and `journey.mjs shot --hud=0` are trying to
   // capture a clean plate of the running route. Off, so a poster is the picture
   // and nothing else.
-  devIndicators:   false,
-  // Allow access to remote image placeholder.
-  images:          {
-    // Static export (output: 'export') ships no server to run the default image
-    // optimizer, so next/image throws at runtime. Emit images unoptimized to make
-    // next/image compatible with the export.
-    unoptimized:    true,
-    remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: 'picsum.photos',
-        port:     '',
-        pathname: '/**', // This allows any path under the hostname
-      },
-    ],
-  },
+  devIndicators:     false,
+
+  // Static export (output: 'export') ships no server to run the default image
+  // optimizer, so next/image throws at runtime. Emit images unoptimized to make
+  // next/image compatible with the export.
+  images:            { unoptimized: true },
 }
 
 export default nextConfig

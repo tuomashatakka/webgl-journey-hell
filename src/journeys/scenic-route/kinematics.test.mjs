@@ -1,3 +1,4 @@
+import { CONFIG } from '@wjh/config/config'
 import { describe, expect, test } from 'bun:test'
 import {
   BANK_GAIN,
@@ -10,7 +11,7 @@ import {
   speedParamsAt,
   sunElevationAt,
 } from './course'
-import { SIGNAL_LOSS_LAP, ScenicRide } from './kinematics'
+import { ScenicRide } from './kinematics'
 
 
 const D     = Math.PI / 180
@@ -236,13 +237,13 @@ describe('scenic route — the ride', () => {
     const sim = new ScenicRide()
     const dt  = 1 / 60
     let t     = 0
-    while (sim.state.lap < SIGNAL_LOSS_LAP && t < 900) {
+    while (sim.state.lap < CONFIG.signal.lossLaps.scenicRoute && t < 900) {
       t += dt
       sim.step(dt, t)
-      if (sim.state.lap < SIGNAL_LOSS_LAP)
+      if (sim.state.lap < CONFIG.signal.lossLaps.scenicRoute)
         expect(sim.state.signalAge).toBe(0)
     }
-    expect(sim.state.lap).toBe(SIGNAL_LOSS_LAP)
+    expect(sim.state.lap).toBe(CONFIG.signal.lossLaps.scenicRoute)
     // The step that crossed the seam already counts: the loss is a property of
     // being in the fourth lap, not of having been noticed there.
     expect(sim.state.signalAge).toBeGreaterThan(0)

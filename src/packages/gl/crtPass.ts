@@ -21,6 +21,7 @@
 // `webgl2` contexts (withJourneyShell's `contextType`) and 1.00 compiles under
 // either.
 
+import { CONFIG } from '@wjh/config/config'
 import type { AnyGl } from './context'
 import { createGlProgram } from './program'
 import { QUAD_UV_VS_100, createFullscreenQuad } from './quad'
@@ -408,23 +409,4 @@ export function createCrtPass (gl: AnyGl): CrtPass | null {
   }
 }
 
-/** The idle look. Subtle by design — every journey already grades its own image. */
-export const CRT_DEFAULTS = {
-  curve:      0.055,
-  aberration: 0.0022,
-  scanline:   0.045,
-  vignette:   0.22,
-} as const
 
-/**
- * The tube switched off, for when the CRT setting is off but the pass still has
- * to run — for the signal loss, which is a story beat rather than a display
- * treatment, or for the display grade. Curvature and scanlines go; the
- * caption, the tearing, the snow and the grade stay.
- */
-export const CRT_BYPASS = {
-  curve:      0,
-  aberration: 0,
-  scanline:   0,
-  vignette:   0,
-} as const

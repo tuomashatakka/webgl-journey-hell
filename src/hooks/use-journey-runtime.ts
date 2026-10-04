@@ -31,6 +31,7 @@
 // The clock holds at zero until the last of those, so a journey starts when it
 // can be seen rather than wherever it had got to behind the bar.
 
+import { CONFIG } from '@wjh/config/config'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import useFrameLoop from '✦/hooks/use-frame-loop'
 import type { FrameLoopManager } from '@wjh/web/frameLoopManager'
@@ -40,7 +41,7 @@ import type { AudioEngineHandle } from '✦/hooks/use-audio-engine'
 import { useSettings } from '✦/components/SettingsProvider'
 import { NO_DEBUG, publishDebugState, readDebugParams } from '@wjh/web/debugParams'
 import type { DebugParams, JourneyDebugState } from '@wjh/web/debugParams'
-import { CRT_BYPASS, CRT_DEFAULTS, createCrtPass } from '@wjh/gl/crtPass'
+import { createCrtPass } from '@wjh/gl/crtPass'
 import { createContext } from '@wjh/gl/context'
 import { takeGlFailure } from '@wjh/gl/program'
 import type { CrtPass } from '@wjh/gl/crtPass'
@@ -55,7 +56,6 @@ import { createGovernor } from '@wjh/quality/governor'
 import { detectDevice } from '@wjh/quality/device'
 import { qualityForTier, scaleRange } from '@wjh/quality/tiers'
 import type { Governor } from '@wjh/quality/governor'
-import { AUTO_RESOLUTION } from '@wjh/quality/settings'
 import type { GraphicsSettings } from '@wjh/quality/settings'
 import { signalLossAt } from '@wjh/journey/signalLoss'
 import { createSignalOverlay } from '@wjh/journey/signalOverlay'
@@ -63,10 +63,6 @@ import type { SignalOverlay } from '@wjh/journey/signalOverlay'
 import type { TransportHandle } from '✦/components/JourneyTransport'
 
 
-const MAX_DPR       = 2 // Backing-store cap for the fixed resolution choices, as before AUTO.
-const WARM_FRAMES   = 3 // Frames drawn at t = 0 once the assets are in, before the clock starts.
-const ASSET_TIMEOUT = 20 // Seconds to wait on a renderer's assets before starting without them.
-const PAN_EPSILON   = 1e-4 // Pan movement too small to be worth redrawing a paused frame for.
 
 /**
  * Stand-in for journeys with no soundtrack. useAudioEngine has to be called
@@ -291,16 +287,16 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     const ready  = renderer.ready?.() ?? true
     const waited = (performance.now() - l.since) / 1000
 
-    if (!ready && waited < ASSET_TIMEOUT) {
+    if (!ready && waited < CONFIG.runtime.assetTimeoutSeconds) {
       const p = renderer.progress?.() ?? 0
       report({ progress: 0.6 + 0.32 * p, status: 'LOADING TEXTURES', done: false, failed: false })
       return
     }
     if (!ready && l.warm === 0)
-      console.warn(`${definition.slug}: assets still loading after ${ASSET_TIMEOUT}s; starting without them`)
+      console.warn(`${definition.slug}: assets still loading after ${CONFIG.runtime.assetTimeoutSeconds}s; starting without them`)
 
     l.warm += 1
-    if (l.warm < WARM_FRAMES) {
+    if (l.warm < CONFIG.runtime.warmFrames) {
       report({ progress: 0.94, status: 'WARMING UP', done: false, failed: false })
       return
     }
@@ -332,9 +328,9 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     }
     else {
       const res   = d.res ?? settingsRef.current.resolution
-      const scale = res === AUTO_RESOLUTION
+      const scale = res === CONFIG.settings.autoResolution
         ? governor.current!.scale
-        : Math.min(window.devicePixelRatio || 1, MAX_DPR) * res
+        : Math.min(window.devicePixelRatio || 1, CONFIG.runtime.maxDpr) * res
       w = Math.max(1, Math.floor((canvas.clientWidth || window.innerWidth) * scale))
       h = Math.max(1, Math.floor((canvas.clientHeight || window.innerHeight) * scale))
     }
@@ -510,7 +506,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
 
     crt.draw({
       time,
-      ...s.crt ? CRT_DEFAULTS : CRT_BYPASS,
+      ...s.crt ? CONFIG.crt.idle : CONFIG.crt.bypass,
       scrub,
       scrubMix,
       signal:     loss.level,
@@ -621,7 +617,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     if (held && loaded && !moving && ts.scrubMix === 0 && drawn.held &&
       drawn.time === iTimeRef.current && drawn.settings === s &&
       drawn.w === canvas.width && drawn.h === canvas.height &&
-      Math.abs(drawn.x - pan.x) < PAN_EPSILON && Math.abs(drawn.y - pan.y) < PAN_EPSILON) {
+      Math.abs(drawn.x - pan.x) < CONFIG.runtime.panEpsilon && Math.abs(drawn.y - pan.y) < CONFIG.runtime.panEpsilon) {
       // Paused and nothing has moved: the last frame is still on the canvas
       // (an undrawn frame is not cleared), and the GPU gets to rest.
       countFrame()
@@ -631,7 +627,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     // Resolution follows the frame rate, when it is the governor's to decide —
     // from frames that are actually being made, so neither the load's hitches
     // nor a paused frame's idling skews it.
-    if (loaded && !held && s.resolution === AUTO_RESOLUTION && d.res === null && !(d.w && d.h) &&
+    if (loaded && !held && s.resolution === CONFIG.settings.autoResolution && d.res === null && !(d.w && d.h) &&
       governor.current!.sample(manager.deltaTime))
       resize()
 

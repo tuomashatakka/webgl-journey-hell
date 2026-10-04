@@ -1,7 +1,7 @@
+import { CONFIG } from '@wjh/config/config'
+
 // Replaying a journey to an instant.
 
-/** Upper bound on seek iterations, so `?t=1e9` cannot hang the tab. */
-export const MAX_SEEK_STEPS = 200_000
 
 /** Anything a seek can drive: the JourneySimulation subset it needs. */
 export interface Steppable {
@@ -21,7 +21,7 @@ export interface Steppable {
  * Returns the number of steps taken, which is capped so `?t=1e9` cannot hang.
  */
 export function seekSimulation (sim: Steppable | null, t: number, dt: number): number {
-  const steps = Math.min(Math.ceil(t / dt), MAX_SEEK_STEPS)
+  const steps = Math.min(Math.ceil(t / dt), CONFIG.transport.maxSeekSteps)
   if (steps <= 0)
     return 0
 

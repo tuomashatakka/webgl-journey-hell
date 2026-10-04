@@ -42,7 +42,8 @@ import { useSettings } from './SettingsProvider'
 import SettingsButton from './SettingsButton'
 import JourneyDebugPanel from './JourneyDebugPanel'
 import JourneyTransport from './JourneyTransport'
-import JourneyLoader, { LOADER_FADE_MS } from './JourneyLoader'
+import { CONFIG } from '@wjh/config/config'
+import JourneyLoader from './JourneyLoader'
 import { SectionHeading, TitleCard } from './GlitchTitle'
 
 
@@ -111,7 +112,7 @@ export function withJourneyShell (definition: JourneyDefinition) {
       if (!loading.done)
         return
 
-      const timer = setTimeout(() => setLoaderGone(true), LOADER_FADE_MS)
+      const timer = setTimeout(() => setLoaderGone(true), CONFIG.ui.loaderFadeMs)
       return () => clearTimeout(timer)
     }, [ loading.done ])
 

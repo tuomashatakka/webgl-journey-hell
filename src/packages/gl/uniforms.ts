@@ -1,6 +1,9 @@
 // The per-frame inputs every renderer receives, and the one place that knows
 // how to upload an arbitrary uniform map.
 
+import { CONFIG } from '@wjh/config/config'
+
+
 /**
  * Extra per-frame uniforms, keyed by GLSL name. The value's length picks the
  * setter, so the same map covers scalars, vectors and vec4 arrays:
@@ -29,7 +32,7 @@ export interface QualityHints {
 }
 
 /** The default when nothing has been measured: desktop behaviour. */
-export const HIGH_QUALITY: QualityHints = { tier: 2, msaa: 4, bloomLevels: 5 }
+export const HIGH_QUALITY: QualityHints = { tier: 2, ...CONFIG.quality.tiers[2] }
 
 export interface FrameUniforms {
   time:     number;

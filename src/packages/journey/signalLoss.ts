@@ -14,49 +14,18 @@
 // The seconds themselves are counted inside each journey's own `step`, and
 // arrive here through JourneyMarks.signalAge.
 
+import { CONFIG } from '@wjh/config/config'
 import { smootherstep } from '@wjh/math/scalar'
 
-/** Seconds in the ending before the picture starts to go. */
-export const SIGNAL_GRACE = 8
 
-/** ...and how long it then takes to arrive, once it has started. */
-export const SIGNAL_RAMP = 15
 
-/**
- * Seconds of *active* loss before the dB meter appears.
- *
- * Zero: the readout comes up with the caption, not after it. The two are one
- * instrument panel, and a panel that arrives in two instalments reads as two
- * separate events rather than as one receiver giving up.
- */
-export const SIGNAL_METER_DELAY = 0
 
-/**
- * How long the meter takes to fade in once it is due.
- *
- * Long — most of the ramp. It is doing the work the delay used to do: the
- * readout is *there* from the first frame of the loss and simply cannot be read
- * yet, which is a slower and much less announced arrival than waiting eight
- * seconds and then cutting it in over two.
- */
-export const SIGNAL_METER_FADE = 12
 
-/**
- * Never 1.
- *
- * The signal is weak and unwatchable, not absent. A transmission that reaches
- * zero is a blank screen, and a blank screen is indistinguishable from a crash —
- * there has to be enough left to see that something is still down there.
- */
-export const SIGNAL_PEAK = 0.86
 
-/** Reception in dB at onset, and where it settles. */
-const DB_START = -12
-const DB_FLOOR = -68
 
 export interface SignalLoss {
 
-  /** 0..SIGNAL_PEAK. 0 while the picture is still fine. */
+  /** 0..CONFIG.signal.peak. 0 while the picture is still fine. */
   level: number;
 
   /** 0..1, how far the dB readout has faded in. */
@@ -84,10 +53,10 @@ export function signalHash (n: number): number {
  */
 export function dbAt (age: number): number {
   if (age <= 0)
-    return DB_START
+    return CONFIG.signal.dbStart
 
-  const k    = smootherstep(0, SIGNAL_RAMP, age)
-  const base = DB_START + (DB_FLOOR - DB_START) * k
+  const k    = smootherstep(0, CONFIG.signal.rampSeconds, age)
+  const base = CONFIG.signal.dbStart + (CONFIG.signal.dbFloor - CONFIG.signal.dbStart) * k
 
   // The needle gets less steady as the signal gets weaker, which is the one
   // thing a static readout would fail to say.
@@ -103,14 +72,14 @@ export function dbAt (age: number): number {
  * as a bug in the renderer rather than as a signal going.
  */
 export function signalLossAt (signalAge: number): SignalLoss {
-  const age = Math.max(0, signalAge - SIGNAL_GRACE)
+  const age = Math.max(0, signalAge - CONFIG.signal.graceSeconds)
 
   if (age <= 0)
-    return { level: 0, meter: 0, db: DB_START, age: 0 }
+    return { level: 0, meter: 0, db: CONFIG.signal.dbStart, age: 0 }
 
   return {
-    level: SIGNAL_PEAK * smootherstep(0, SIGNAL_RAMP, age),
-    meter: smootherstep(SIGNAL_METER_DELAY, SIGNAL_METER_DELAY + SIGNAL_METER_FADE, age),
+    level: CONFIG.signal.peak * smootherstep(0, CONFIG.signal.rampSeconds, age),
+    meter: smootherstep(CONFIG.signal.meterDelaySeconds, CONFIG.signal.meterDelaySeconds + CONFIG.signal.meterFadeSeconds, age),
     db:    dbAt(age),
     age,
   }

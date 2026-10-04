@@ -14,6 +14,7 @@
     "./panControl": "./panControl.ts"
   },
   "dependencies": {
+    "@wjh/config": "workspace:*",
     "@wjh/math": "workspace:*"
   }
 }

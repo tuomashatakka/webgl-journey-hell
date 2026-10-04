@@ -1,3 +1,5 @@
+import { CONFIG } from '@wjh/config/config'
+
 // What kind of device this is, decided once.
 //
 // Only coarse facts the browser will tell anyone: a touch-first pointer, the
@@ -21,13 +23,12 @@ export interface DeviceProfile {
   tier: 0 | 1 | 2;
 }
 
-const SERVER_PROFILE: DeviceProfile = { mobile: false, dpr: 1, tier: 2 }
 
 let cached: DeviceProfile | null = null
 
 export function detectDevice (): DeviceProfile {
   if (typeof window === 'undefined')
-    return SERVER_PROFILE
+    return CONFIG.quality.serverProfile
   if (cached)
     return cached
 

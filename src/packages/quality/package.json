@@ -12,6 +12,7 @@
     "./tiers": "./tiers.ts"
   },
   "dependencies": {
+    "@wjh/config": "workspace:*",
     "@wjh/gl": "workspace:*",
     "@wjh/math": "workspace:*"
   }

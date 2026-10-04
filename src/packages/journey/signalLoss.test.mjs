@@ -1,85 +1,78 @@
+import { CONFIG } from '@wjh/config/config'
 import { describe, expect, test } from 'bun:test'
-import {
-  SIGNAL_GRACE,
-  SIGNAL_METER_DELAY,
-  SIGNAL_METER_FADE,
-  SIGNAL_PEAK,
-  SIGNAL_RAMP,
-  dbAt,
-  signalLossAt,
-} from './signalLoss'
+import { dbAt, signalLossAt } from './signalLoss'
 
 
 describe('signal loss timeline', () => {
   test('holds off until the journey has been in its ending a while', () => {
-    for (const t of [ 0, 1, 4, SIGNAL_GRACE - 0.01 ]) {
+    for (const t of [ 0, 1, 4, CONFIG.signal.graceSeconds - 0.01 ]) {
       const s = signalLossAt(t)
       expect(s.level).toBe(0)
       expect(s.meter).toBe(0)
       expect(s.age).toBe(0)
     }
-    expect(signalLossAt(SIGNAL_GRACE).level).toBe(0)
-    expect(signalLossAt(SIGNAL_GRACE + 0.5).level).toBeGreaterThan(0)
+    expect(signalLossAt(CONFIG.signal.graceSeconds).level).toBe(0)
+    expect(signalLossAt(CONFIG.signal.graceSeconds + 0.5).level).toBeGreaterThan(0)
   })
 
   // The ask was "at least 15 seconds before reaching its peak". Assert the
   // *slowness* rather than the shape: at the two-thirds mark it must still have
   // a visible way to go, which a ramp that secretly finished early would fail.
   test('takes the full ramp to arrive', () => {
-    const at = a => signalLossAt(SIGNAL_GRACE + a).level
+    const at = a => signalLossAt(CONFIG.signal.graceSeconds + a).level
 
-    expect(SIGNAL_RAMP).toBeGreaterThanOrEqual(15)
-    expect(at(SIGNAL_RAMP * 0.5)).toBeLessThan(SIGNAL_PEAK * 0.6)
-    expect(at(SIGNAL_RAMP * 0.67)).toBeLessThan(SIGNAL_PEAK * 0.85)
-    expect(at(SIGNAL_RAMP - 0.5)).toBeLessThan(SIGNAL_PEAK)
-    expect(at(SIGNAL_RAMP)).toBeCloseTo(SIGNAL_PEAK, 6)
+    expect(CONFIG.signal.rampSeconds).toBeGreaterThanOrEqual(15)
+    expect(at(CONFIG.signal.rampSeconds * 0.5)).toBeLessThan(CONFIG.signal.peak * 0.6)
+    expect(at(CONFIG.signal.rampSeconds * 0.67)).toBeLessThan(CONFIG.signal.peak * 0.85)
+    expect(at(CONFIG.signal.rampSeconds - 0.5)).toBeLessThan(CONFIG.signal.peak)
+    expect(at(CONFIG.signal.rampSeconds)).toBeCloseTo(CONFIG.signal.peak, 6)
   })
 
   test('eases in, so the onset is not a cut', () => {
-    const at = a => signalLossAt(SIGNAL_GRACE + a).level
+    const at = a => signalLossAt(CONFIG.signal.graceSeconds + a).level
 
     // smootherstep leaves flat: the first second must move far less than the
     // middle of the ramp does, or the picture snaps when it starts failing.
     const first = at(1) - at(0)
-    const mid   = at(SIGNAL_RAMP / 2 + 0.5) - at(SIGNAL_RAMP / 2 - 0.5)
+    const mid   = at(CONFIG.signal.rampSeconds / 2 + 0.5) - at(CONFIG.signal.rampSeconds / 2 - 0.5)
     expect(first).toBeLessThan(mid * 0.25)
 
     // ...and arrives flat too.
-    const last = at(SIGNAL_RAMP) - at(SIGNAL_RAMP - 1)
+    const last = at(CONFIG.signal.rampSeconds) - at(CONFIG.signal.rampSeconds - 1)
     expect(last).toBeLessThan(mid * 0.25)
   })
 
   test('never clears and never reaches nothing', () => {
-    for (const a of [ SIGNAL_RAMP, 60, 600, 36_000 ]) {
-      const s = signalLossAt(SIGNAL_GRACE + a)
-      expect(s.level).toBeCloseTo(SIGNAL_PEAK, 6)
+    for (const a of [ CONFIG.signal.rampSeconds, 60, 600, 36_000 ]) {
+      const s = signalLossAt(CONFIG.signal.graceSeconds + a)
+      expect(s.level).toBeCloseTo(CONFIG.signal.peak, 6)
       expect(s.level).toBeLessThan(1)
     }
   })
 
   test('brings the meter up with the caption, slowly', () => {
-    const at = a => signalLossAt(SIGNAL_GRACE + a).meter
+    const at = a => signalLossAt(CONFIG.signal.graceSeconds + a).meter
 
     // It arrives with the loss rather than after it, so there is no delay left
     // to sit through — but it takes most of the ramp to become readable.
-    expect(SIGNAL_METER_DELAY).toBe(0)
+    expect(CONFIG.signal.meterDelaySeconds).toBe(0)
     expect(at(0)).toBe(0)
     expect(at(0.5)).toBeGreaterThan(0)
 
-    expect(at(SIGNAL_METER_FADE * 0.5)).toBeCloseTo(0.5, 6)
-    expect(at(SIGNAL_METER_FADE - 0.01)).toBeLessThan(1)
-    expect(at(SIGNAL_METER_FADE)).toBe(1)
+    expect(at(CONFIG.signal.meterFadeSeconds * 0.5)).toBeCloseTo(0.5, 6)
+    expect(at(CONFIG.signal.meterFadeSeconds - 0.01)).toBeLessThan(1)
+    expect(at(CONFIG.signal.meterFadeSeconds)).toBe(1)
 
     // A long fade was the point: half of it must still be short of a quarter.
-    expect(SIGNAL_METER_FADE).toBeGreaterThanOrEqual(10)
-    expect(at(SIGNAL_METER_FADE * 0.25)).toBeLessThan(0.25)
+    expect(CONFIG.signal.meterFadeSeconds).toBeGreaterThanOrEqual(10)
+    expect(at(CONFIG.signal.meterFadeSeconds * 0.25)).toBeLessThan(0.25)
   })
 
   test('the readout falls, unsteadily, and settles', () => {
     expect(dbAt(0)).toBe(-12)
 
     const early = dbAt(1)
-    const late  = dbAt(SIGNAL_RAMP)
+    const late  = dbAt(CONFIG.signal.rampSeconds)
     expect(late).toBeLessThan(early - 30)
 
     // The needle has to get *less* steady as the signal weakens, or the readout
@@ -90,7 +83,7 @@ describe('signal loss timeline', () => {
         vs.push(dbAt(a))
       return Math.max(...vs) - Math.min(...vs)
     }
-    expect(spread([ 0.5, 3 ])).toBeLessThan(spread([ SIGNAL_RAMP, SIGNAL_RAMP + 2.5 ]))
+    expect(spread([ 0.5, 3 ])).toBeLessThan(spread([ CONFIG.signal.rampSeconds, CONFIG.signal.rampSeconds + 2.5 ]))
   })
 
   // The load-bearing property: ?t= replays a simulation and redraws, so every

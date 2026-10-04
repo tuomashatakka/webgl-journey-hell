@@ -26,6 +26,7 @@
 // comes from the water instead — the building floods further every lap, so lap 1
 // you drown and resurface, lap 2 you barely surface, lap 3 you never do.
 
+import { CONFIG } from '@wjh/config/config'
 import { zeros } from '@wjh/math/arrays'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
@@ -797,7 +798,7 @@ export function createNatatoriumSimulation (): JourneySimulation {
     step (dt: number) {
       dist += state.speed * Math.min(dt, 0.1)
       state = getNatatoriumState(dist)
-      if (state.lap >= SIGNAL_LOSS_LAP)
+      if (state.lap >= CONFIG.signal.lossLaps.natatorium)
         signalAge += dt
     },
 
@@ -870,10 +871,3 @@ export function createNatatoriumSimulation (): JourneySimulation {
   }
 }
 
-/**
- * The lap at which the route has stopped going anywhere and the signal starts to
- * go with it. This journey has no ending to reach, so the count stands in for
- * one: by here its own decay has saturated and another lap says nothing new.
- * See lib/signalLoss.
- */
-const SIGNAL_LOSS_LAP = 5

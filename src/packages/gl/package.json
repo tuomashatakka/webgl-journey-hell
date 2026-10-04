@@ -17,6 +17,7 @@
     "./uniforms": "./uniforms.ts"
   },
   "dependencies": {
+    "@wjh/config": "workspace:*",
     "@wjh/geometry": "workspace:*",
     "@wjh/web": "workspace:*"
   }

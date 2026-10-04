@@ -14,23 +14,15 @@
 // function of the SignalLoss it is handed, because `?t=` has to redraw the same
 // frame twice — see lib/signalLoss for why that constraint reaches this far.
 
+import { CONFIG } from '@wjh/config/config'
 import { dbAt, signalHash } from './signalLoss'
 import type { SignalLoss } from './signalLoss'
 import { spacedText } from '@wjh/web/canvasText'
 
 
-/** Redraws a second. The caption is static and the trace does not need 60. */
-const TICK_HZ = 12
 
-/** Seconds of history the dB trace shows. */
-const WINDOW = 12
 
-/** The readout's vertical range. */
-const DB_TOP    = -4
-const DB_BOTTOM = -76
 
-/** Cap on the drawing surface. Past this the text is already past crisp. */
-const MAX_W = 1600
 
 export interface SignalOverlay {
   canvas: HTMLCanvasElement;
@@ -77,7 +69,7 @@ function drawMeter (
   u: number,
 ): void {
   const left = cx - w / 2
-  const y    = (db: number) => top + h * (DB_TOP - db) / (DB_TOP - DB_BOTTOM)
+  const y    = (db: number) => top + h * (CONFIG.signal.overlay.dbTop - db) / (CONFIG.signal.overlay.dbTop - CONFIG.signal.overlay.dbBottom)
 
   ctx.strokeStyle = 'rgba(255,255,255,0.22)'
   ctx.lineWidth   = Math.max(1, u * 0.06)
@@ -110,8 +102,8 @@ function drawMeter (
   const cols = Math.max(2, Math.min(240, Math.round(w / Math.max(1, u * 0.28))))
   for (let i = 0; i < cols; i++) {
     const f  = i / (cols - 1)
-    const at = loss.age - (1 - f) * WINDOW
-    const gy = y(at <= 0 ? DB_TOP - 1 : dbAt(at))
+    const at = loss.age - (1 - f) * CONFIG.signal.overlay.windowSeconds
+    const gy = y(at <= 0 ? CONFIG.signal.overlay.dbTop - 1 : dbAt(at))
     const gx = left + w * f
     if (i === 0)
       ctx.moveTo(gx, gy); else
@@ -151,10 +143,10 @@ export function createSignalOverlay (): SignalOverlay | null {
 
       // The drawing surface is capped and the aspect preserved, so the caption
       // is the same size on screen whatever the resolution setting is doing.
-      const dw = Math.min(MAX_W, Math.max(64, Math.round(w)))
+      const dw = Math.min(CONFIG.signal.overlay.maxWidth, Math.max(64, Math.round(w)))
       const dh = Math.max(48, Math.round(dw * h / w))
 
-      const tick = Math.floor(loss.age * TICK_HZ)
+      const tick = Math.floor(loss.age * CONFIG.signal.overlay.tickHz)
       if (tick === lastTick && dw === lastW && dh === lastH)
         return false
 

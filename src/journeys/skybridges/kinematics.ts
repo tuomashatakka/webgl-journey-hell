@@ -1,3 +1,4 @@
+import { CONFIG } from '@wjh/config/config'
 import type { JourneyMarks } from '@wjh/journey/types'
 
 
@@ -55,18 +56,7 @@ export function getSkybridgesMarks (time: number): JourneyMarks {
 
     // No simulation to keep a counter in, and none needed: this route is a pure
     // function of the clock, so the seconds since the signal-loss lap are too.
-    signalAge: Math.max(0, time - SIGNAL_LOSS_LAP * SKYBRIDGES_LOOP_Z / SKYBRIDGES_SPEED),
+    signalAge: Math.max(0, time - CONFIG.signal.lossLaps.skybridges * SKYBRIDGES_LOOP_Z / SKYBRIDGES_SPEED),
   }
 }
 
-/**
- * The lap on which the sun goes off.
- *
- * Two rather than the five every other looping journey uses, because here the
- * signal loss is not the point — it is the *consequence*. The star this whole
- * run is lit by comes apart (see the blast sequence in shader.ts), and an event
- * that only fires after nine minutes of walking is an event nobody sees. Two
- * laps is about three and a half minutes: long enough that the run has settled
- * into a rhythm, short enough that breaking it lands.
- */
-const SIGNAL_LOSS_LAP = 2

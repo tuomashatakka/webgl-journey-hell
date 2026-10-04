@@ -36,6 +36,7 @@
 // the front of a driverless train actually does, and what makes a bend read as
 // a bend instead of the world sliding sideways.
 
+import { CONFIG } from '@wjh/config/config'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
@@ -141,7 +142,7 @@ class LoopLineRide implements JourneySimulation {
       this.lap++
     }
 
-    if (this.lap >= SIGNAL_LOSS_LAP)
+    if (this.lap >= CONFIG.signal.lossLaps.loopLine)
       this.signalAge += h
 
     this.throwPointsIfDue(before)
@@ -283,9 +284,3 @@ export function createLoopLineSimulation (): JourneySimulation {
   return new LoopLineRide()
 }
 
-/**
- * The lap at which the route has stopped going anywhere and the signal starts to
- * go with it. This journey has no ending to reach, so the count stands in for
- * one. See lib/signalLoss.
- */
-const SIGNAL_LOSS_LAP = 5

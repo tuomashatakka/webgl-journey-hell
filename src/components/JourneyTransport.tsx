@@ -16,6 +16,7 @@
 // The track is a slider: press (or touch) anywhere on it and drag to scrub
 // through the current lap; arrow keys step it when focused.
 
+import { CONFIG } from '@wjh/config/config'
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState } from 'react'
 import type { TransportAction, TransportMode } from '@wjh/journey/transport'
 
@@ -61,8 +62,6 @@ const FORWARD: { act: TransportAction; glyph: string; title: string }[] = [
   { act: 'next-lap', glyph: '⏭', title: 'Next lap' },
 ]
 
-/** Arrow-key scrub step, as a fraction of the lap. */
-const KEY_STEP = 0.02
 
 /** mm:ss — a tape counter, not a timestamp. */
 function counter (t: number): string {
@@ -155,7 +154,7 @@ const JourneyTransport = forwardRef<TransportHandle, Props>(function JourneyTran
   }, [ onRelease ])
 
   const onKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
-    const step = e.key === 'ArrowRight' ? KEY_STEP : e.key === 'ArrowLeft' ? -KEY_STEP : 0
+    const step = e.key === 'ArrowRight' ? CONFIG.ui.transportKeyStep : e.key === 'ArrowLeft' ? -CONFIG.ui.transportKeyStep : 0
     if (!step)
       return
     e.preventDefault()

@@ -9,11 +9,10 @@
 // is blocked compiling shaders, the one stretch of the load that cannot
 // report progress.
 
+import { CONFIG } from '@wjh/config/config'
 import type { JourneyLoading } from '✦/hooks/use-journey-runtime'
 
 
-/** How long the bar takes to fade once loaded; the shell unmounts it after. */
-export const LOADER_FADE_MS = 450
 
 export default function JourneyLoader ({ progress, status, done, failed, detail }: JourneyLoading) {
   const p   = Math.min(1, Math.max(0, progress))

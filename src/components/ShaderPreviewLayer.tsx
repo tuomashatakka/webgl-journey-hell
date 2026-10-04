@@ -6,6 +6,7 @@
 // are compiled once per journey and cached in the shared context, so switching
 // previews is just a useProgram — never more than one GL context exists.
 
+import { CONFIG } from '@wjh/config/config'
 import {
   createContext,
   useCallback,
@@ -35,9 +36,6 @@ export function usePreview (): PreviewAPI | null {
   return useContext(PreviewCtx)
 }
 
-// Render the preview below native resolution — plenty for a thumbnail, easy on the GPU.
-const PREVIEW_SCALE = 0.6
-const MAX_DPR       = 2
 
 type PreviewProviderProps = { children: ReactNode }
 
@@ -122,9 +120,9 @@ export function PreviewProvider ({ children }: PreviewProviderProps) {
       activeSlugRef.current = journey.slug
 
       const rect    = slot.getBoundingClientRect()
-      const dpr     = Math.min(window.devicePixelRatio || 1, MAX_DPR)
-      canvas.width  = Math.max(1, Math.floor(rect.width * dpr * PREVIEW_SCALE))
-      canvas.height = Math.max(1, Math.floor(rect.height * dpr * PREVIEW_SCALE))
+      const dpr     = Math.min(window.devicePixelRatio || 1, CONFIG.runtime.maxDpr)
+      canvas.width  = Math.max(1, Math.floor(rect.width * dpr * CONFIG.ui.previewScale))
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr * CONFIG.ui.previewScale))
 
       if (!quadCache.current.has(journey.slug))
         quadCache.current.set(journey.slug, createShaderQuad(gl, journey.previewShader))

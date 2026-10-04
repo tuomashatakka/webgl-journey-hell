@@ -1,0 +1,11 @@
+{
+  "name": "@wjh/config",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The one config file: every tunable, path and feature flag",
+  "sideEffects": false,
+  "exports": {
+    "./config": "./config.ts"
+  }
+}

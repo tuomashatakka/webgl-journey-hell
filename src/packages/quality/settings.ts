@@ -7,13 +7,14 @@
 // via a CSS filter on the canvas (see displayFilter), so they need no per-shader
 // uniform. maxFrameRate drives the shared frame loop's cap (see SettingsProvider).
 
+import { CONFIG } from '@wjh/config/config'
 import { detectDevice } from './device'
 
 
 export interface GraphicsSettings {
 
   /**
-   * Internal canvas scale: AUTO_RESOLUTION (0) hands it to the adaptive
+   * Internal canvas scale: CONFIG.settings.autoResolution (0) hands it to the adaptive
    * governor (lib/quality); otherwise 0.15 | 0.33 | 0.5 | 0.75 | 1.0, a
    * fixed multiplier of the (dpr-capped) backing store.
    */
@@ -41,39 +42,15 @@ export interface GraphicsSettings {
   crt: boolean;
 }
 
-/** The resolution value that hands the render scale to the adaptive governor. */
-export const AUTO_RESOLUTION = 0
 
-const STORAGE_KEY = 'journey-graphics-settings-v2'
 
-// Earlier keys, read once so existing users keep their config. v1 saved its
-// defaults on first visit, so a v1 resolution of 0.5 and heavy effects on are
-// what nobody chose: those migrate to the new defaults (AUTO, and heavy
-// effects only where the device can afford them).
-const V1_KEY     = 'journey-graphics-settings-v1'
-const LEGACY_KEY = 'liminal-graphics-settings-v1'
 
-/** Static defaults: what the prerender and a desktop get. */
-const DEFAULT_SETTINGS: GraphicsSettings = {
-  resolution:   AUTO_RESOLUTION,
-  speed:        1,
-  heavyEffects: true,
-  brightness:   1,
-  contrast:     1,
-  maxFrameRate: 60,
-  gyroscope:    true,
-  crt:          true,
-}
 
 /** Defaults for this device: no compute-heavy branches on a phone. */
 function deviceDefaults (): GraphicsSettings {
-  return { ...DEFAULT_SETTINGS, heavyEffects: detectDevice().tier > 0 }
+  return { ...CONFIG.settings.defaults, heavyEffects: detectDevice().tier > 0 }
 }
 
-/** Allowed discrete choices surfaced in the settings UI. */
-export const RESOLUTION_CHOICES = [ AUTO_RESOLUTION, 0.15, 0.33, 0.5, 0.75, 1 ] as const
-export const SPEED_CHOICES = [ 1, 2, 4 ] as const
-export const FRAME_RATE_CHOICES = [ 30, 60, 120, 0 ] as const // 0 = Unlimited
 
 function coerce (parsed: Partial<GraphicsSettings> | null | undefined, defaults: GraphicsSettings): GraphicsSettings {
   const p    = parsed ?? {}
@@ -93,20 +70,20 @@ function coerce (parsed: Partial<GraphicsSettings> | null | undefined, defaults:
 
 export function loadSettings (): GraphicsSettings {
   if (typeof window === 'undefined')
-    return DEFAULT_SETTINGS
+    return CONFIG.settings.defaults
 
   const defaults = deviceDefaults()
   try {
-    const saved = localStorage.getItem(STORAGE_KEY)
+    const saved = localStorage.getItem(CONFIG.settings.storageKey)
     if (saved)
       return coerce(JSON.parse(saved), defaults)
 
-    const old = localStorage.getItem(V1_KEY) ?? localStorage.getItem(LEGACY_KEY)
+    const old = localStorage.getItem(CONFIG.settings.v1Key) ?? localStorage.getItem(CONFIG.settings.legacyKey)
     if (old) {
       const v1 = coerce(JSON.parse(old), defaults)
       return {
         ...v1,
-        resolution:   v1.resolution === 0.5 ? AUTO_RESOLUTION : v1.resolution,
+        resolution:   v1.resolution === 0.5 ? CONFIG.settings.autoResolution : v1.resolution,
         heavyEffects: v1.heavyEffects && defaults.heavyEffects,
       }
     }
@@ -121,7 +98,7 @@ export function saveSettings (settings: GraphicsSettings) {
   if (typeof window === 'undefined')
     return
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+    localStorage.setItem(CONFIG.settings.storageKey, JSON.stringify(settings))
   }
   catch (e) {
     console.error('Failed to save settings:', e)
@@ -130,7 +107,7 @@ export function saveSettings (settings: GraphicsSettings) {
 
 /** Human label for a resolution value. */
 export function resolutionLabel (res: number): string {
-  if (res === AUTO_RESOLUTION)
+  if (res === CONFIG.settings.autoResolution)
     return 'AUTO'
   return res === 1 ? '1.0x (NATIVE)' : `${res}x`
 }

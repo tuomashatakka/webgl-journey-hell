@@ -41,6 +41,7 @@
 // down the bonnet. In the cave the car floats, and the same pose picks up the
 // water's heave, roll and a slow yaw drift on the eddies.
 
+import { CONFIG } from '@wjh/config/config'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
@@ -65,13 +66,6 @@ import type { LookParams, Route, SpeedParams } from './course'
 import { hash1, smootherstep } from '@wjh/math/scalar'
 
 
-/**
- * Three laps, then the signal. Once the lap counter reads this the fourth lap
- * begins on the county road at night and the picture starts to go eight
- * seconds in — counted here, inside step(), never by the shell, because a
- * ?t= seek replays this simulation from zero without anyone watching.
- */
-export const SIGNAL_LOSS_LAP = 3
 
 const G = 9.81
 
@@ -217,7 +211,7 @@ export class ScenicRide implements JourneySimulation {
       this.lap++
     }
 
-    if (this.lap >= SIGNAL_LOSS_LAP)
+    if (this.lap >= CONFIG.signal.lossLaps.scenicRoute)
       this.signalAge += h
 
     // lapF ramps across the decay section rather than stepping at the seam.

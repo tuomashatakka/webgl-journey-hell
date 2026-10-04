@@ -25,8 +25,9 @@
 // chapter button that fast-forwards through time to get somewhere is a
 // different control from one that goes there.
 
+import { CONFIG } from '@wjh/config/config'
 import type { JourneyMarks } from './types'
-import { MAX_SEEK_STEPS, seekSimulation } from './seek'
+import { seekSimulation } from './seek'
 
 
 /** What the transport needs from whatever owns the live simulation. */
@@ -96,28 +97,12 @@ export interface JourneyTransport {
   isScrubbing(): boolean;
 }
 
-/** Forward search step: coarse, because it may cover minutes in one frame. */
-const SEARCH_DT = 1 / 20
 
-/** Journey-seconds a single forward move may cover before giving up. */
-const FORWARD_BUDGET = 900
 
-/** Replay dt for backward moves. */
-const SEEK_DT = 1 / 20
 
-/** How long you must be *into* a section (or lap) before going back restarts it. */
-const GRACE_SECTION = 1.5
-const GRACE_LOOP    = 3
 
-const FLASH_SECONDS = 0.28
 
-/** A progress sample is kept every this much of the lap. */
-const SAMPLE_STEP = 0.0025
 
-// A journey with no marks() still gets working transport, it just moves by the
-// clock. These are the "lap" and "section" it pretends to have.
-const FALLBACK_LOOP_SECONDS    = 30
-const FALLBACK_SECTION_SECONDS = 8
 
 interface Boundary {
   time:    number;
@@ -159,7 +144,7 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
     }
 
     const n = track.t.length
-    if (n === 0 || time > track.t[n - 1] && m.progress >= track.p[n - 1] + SAMPLE_STEP) {
+    if (n === 0 || time > track.t[n - 1] && m.progress >= track.p[n - 1] + CONFIG.transport.sampleStep) {
       track.t.push(time)
       track.p.push(m.progress)
     }
@@ -218,7 +203,7 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
   /** Replay a fresh simulation up to `t` and make it the live one. */
   const seekTo = (t: number) => {
     const sim = host.createSimulation()
-    seekSimulation(sim, Math.max(0, t), SEEK_DT)
+    seekSimulation(sim, Math.max(0, t), CONFIG.transport.seekDt)
     host.adopt(sim, Math.max(0, t))
 
     // The log stays authoritative — re-observing on the way back would append
@@ -234,9 +219,9 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
   const forwardUntil = (arrived: (now: JourneyMarks) => boolean) => {
     let spent = 0
     let steps = 0
-    while (steps++ < MAX_SEEK_STEPS && spent < FORWARD_BUDGET) {
-      host.advance(SEARCH_DT)
-      spent += SEARCH_DT
+    while (steps++ < CONFIG.transport.maxSeekSteps && spent < CONFIG.transport.forwardBudget) {
+      host.advance(CONFIG.transport.searchDt)
+      spent += CONFIG.transport.searchDt
 
       const now = marksOf()
       if (!now)
@@ -250,7 +235,7 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
   const flash = (direction: number) => {
     dir       = direction
     mode      = 'flash'
-    flashLeft = FLASH_SECONDS
+    flashLeft = CONFIG.transport.flashSeconds
   }
 
   const applyScrub = (fraction: number) => {
@@ -285,12 +270,12 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
       const m        = marksOf()
 
       if (!m) {
-        const span = action === 'prev' || action === 'next' ? FALLBACK_SECTION_SECONDS : FALLBACK_LOOP_SECONDS
+        const span = action === 'prev' || action === 'next' ? CONFIG.transport.fallbackSectionSeconds : CONFIG.transport.fallbackLoopSeconds
         if (action === 'next' || action === 'next-lap') {
           const until = time + span
           let steps   = 0
-          while (host.current().time < until && steps++ < MAX_SEEK_STEPS)
-            host.advance(SEARCH_DT)
+          while (host.current().time < until && steps++ < CONFIG.transport.maxSeekSteps)
+            host.advance(CONFIG.transport.searchDt)
           flash(1)
         }
         else {
@@ -320,7 +305,7 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
           // Media convention: go back to the start of this chapter, unless you
           // have only just entered it, in which case go back one further.
           const here = sectionStart(time)
-          seekTo(time - here > GRACE_SECTION ? here : previousSectionStart(time))
+          seekTo(time - here > CONFIG.transport.graceSection ? here : previousSectionStart(time))
           flash(-1)
           break
         }
@@ -329,7 +314,7 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
             return
 
           const here = loopStart.get(m.loop) ?? 0
-          seekTo(time - here > GRACE_LOOP ? here : loopStart.get(m.loop - 1) ?? 0)
+          seekTo(time - here > CONFIG.transport.graceLoop ? here : loopStart.get(m.loop - 1) ?? 0)
           flash(-1)
           break
         }

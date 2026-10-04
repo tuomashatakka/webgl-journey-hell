@@ -16,30 +16,15 @@
 // The controller is framework-free (the shared preview canvas on the landing
 // grid uses it directly); see hooks/use-pan-control.ts for the React wrapper.
 
+import { CONFIG } from '@wjh/config/config'
 import { clamp, easeInOutCubic } from '@wjh/math/scalar'
 
-/** Ordinary-motion follow rate, 1/s. Higher = tighter tracking of the pointer. */
-const FOLLOW_RATE = 16
 
-/** Target deltas beyond this (in -1..1 units) are treated as a jump and tweened. */
-const JUMP_DISTANCE = 0.3
 
-/** Jump tween duration = distance × this, clamped to the bounds below. */
-const JUMP_SECONDS_PER_UNIT = 0.35
-const JUMP_MIN_DURATION     = 0.16
-const JUMP_MAX_DURATION     = 0.5
 
-/** Tilt (degrees, from the calibration pose) that maps to a full-scale ±1 pan. */
-const GYRO_RANGE_DEG = 35
 
-/** Tilt below this is ignored, so a hand-held device doesn't jitter the camera. */
-const GYRO_DEADZONE_DEG = 1.5
 
-/** Smoothing applied to raw orientation readings, 1/s. */
-const GYRO_FOLLOW_RATE = 6
 
-/** Largest frame delta the tweens integrate, so a stalled tab doesn't snap. */
-const MAX_DELTA = 0.1
 
 export interface PanVector {
   x: number;
@@ -130,8 +115,8 @@ function angleDelta (a: number, b: number): number {
 
 /** Degrees of tilt → -1..1, with a deadzone around the calibration pose. */
 function tiltAxis (deg: number): number {
-  const magnitude = Math.max(0, Math.abs(deg) - GYRO_DEADZONE_DEG)
-  return clamp(Math.sign(deg) * magnitude / GYRO_RANGE_DEG, -1, 1)
+  const magnitude = Math.max(0, Math.abs(deg) - CONFIG.pan.gyroDeadzoneDeg)
+  return clamp(Math.sign(deg) * magnitude / CONFIG.pan.gyroRangeDeg, -1, 1)
 }
 
 export function createPanControl (options: PanControlOptions = {}): PanControl {
@@ -275,11 +260,11 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
   // --- Tweening ------------------------------------------------------------
 
   const update = (dt: number): PanVector => {
-    const step = clamp(dt, 0, MAX_DELTA)
+    const step = clamp(dt, 0, CONFIG.pan.maxDelta)
 
     // Gyro is low-passed before it joins the target, so tilt noise can never
     // look like a jump and trip the tween below.
-    const gyroLerp = 1 - Math.exp(-GYRO_FOLLOW_RATE * step)
+    const gyroLerp = 1 - Math.exp(-CONFIG.pan.gyroFollowRate * step)
     gyro.x += (gyroRaw.x - gyro.x) * gyroLerp
     gyro.y += (gyroRaw.y - gyro.y) * gyroLerp
 
@@ -290,13 +275,13 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
     const dy       = targetY - value.y
     const distance = Math.hypot(dx, dy)
 
-    if (!tweening && distance > JUMP_DISTANCE) {
+    if (!tweening && distance > CONFIG.pan.jumpDistance) {
       tweening      = true
       tweenElapsed  = 0
       tweenDuration = clamp(
-        distance * JUMP_SECONDS_PER_UNIT,
-        JUMP_MIN_DURATION,
-        JUMP_MAX_DURATION,
+        distance * CONFIG.pan.jumpSecondsPerUnit,
+        CONFIG.pan.jumpMinSeconds,
+        CONFIG.pan.jumpMaxSeconds,
       )
       tweenFromX = value.x
       tweenFromY = value.y
@@ -314,7 +299,7 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
       return value
     }
 
-    const follow = 1 - Math.exp(-FOLLOW_RATE * step)
+    const follow = 1 - Math.exp(-CONFIG.pan.followRate * step)
     value.x += dx * follow
     value.y += dy * follow
     return value

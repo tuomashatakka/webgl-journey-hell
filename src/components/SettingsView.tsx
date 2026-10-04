@@ -5,15 +5,9 @@
 // in app/globals.css. Mounted by SettingsButton (grid + journeys) and by the
 // bespoke liminal route.
 
+import { CONFIG } from '@wjh/config/config'
 import { X as CloseIcon } from 'lucide-react'
-import {
-  GraphicsSettings,
-  RESOLUTION_CHOICES,
-  resolutionLabel,
-  SPEED_CHOICES,
-  FRAME_RATE_CHOICES,
-  frameRateLabel,
-} from '@wjh/quality/settings'
+import { GraphicsSettings, resolutionLabel, frameRateLabel } from '@wjh/quality/settings'
 import { requestGyroscopePermission } from '@wjh/web/panControl'
 
 
@@ -65,7 +59,7 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
           </p>
 
           <p className="settings-choices">
-            {RESOLUTION_CHOICES.map(res =>
+            {CONFIG.settings.resolutionChoices.map(res =>
               <button
                 key={ res }
                 type="button"
@@ -86,7 +80,7 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
           </p>
 
           <p className="settings-choices">
-            {SPEED_CHOICES.map(spd =>
+            {CONFIG.settings.speedChoices.map(spd =>
               <button
                 key={ spd }
                 type="button"
@@ -107,7 +101,7 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
           </p>
 
           <p className="settings-choices">
-            {FRAME_RATE_CHOICES.map(fps =>
+            {CONFIG.settings.frameRateChoices.map(fps =>
               <button
                 key={ fps }
                 type="button"

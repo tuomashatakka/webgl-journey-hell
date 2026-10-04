@@ -23,11 +23,8 @@
 //     20 fps under a 60 cap played every journey at a third of its speed.
 //   • the cap tolerates rAF jitter. A 60 cap on a 60 Hz display used to skip
 //     any frame that arrived 0.1 ms early — a dropped frame every few seconds.
-/** How early (ms) a capped frame may arrive and still run. */
-const JITTER_MS = 1.5
 
-/** Longest delta ever delivered. */
-const MAX_DELTA_MS = 100
+import { CONFIG } from '@wjh/config/config'
 
 
 class FrameLoopManager {
@@ -149,8 +146,8 @@ class FrameLoopManager {
     this._elapsedTimeAccumulator += currentDeltaMs
 
     if (this._msPerFrame > 0) {
-      // Up to JITTER_MS early still counts as on time.
-      if (this._elapsedTimeAccumulator < this._msPerFrame - JITTER_MS)
+      // Up to CONFIG.frameLoop.jitterMs early still counts as on time.
+      if (this._elapsedTimeAccumulator < this._msPerFrame - CONFIG.frameLoop.jitterMs)
         return
       this._elapsedTimeAccumulator -= this._msPerFrame
       // Fell more than a frame behind: drop the debt rather than trying to
@@ -164,7 +161,7 @@ class FrameLoopManager {
     const elapsedMs   = currentTime - this._lastRunTime
     this._lastRunTime = currentTime
 
-    this.deltaTime = Math.min(Math.max(elapsedMs, 0), MAX_DELTA_MS) / 1000
+    this.deltaTime = Math.min(Math.max(elapsedMs, 0), CONFIG.frameLoop.maxDeltaMs) / 1000
     this.totalTime += this.deltaTime
 
     // Execute callbacks
