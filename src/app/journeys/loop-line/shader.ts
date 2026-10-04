@@ -3,7 +3,7 @@
 // Two versions of GLSL live here on purpose:
 //
 //   * everything prefixed `loopLine…` and the post chain is **GLSL ES 3.00**,
-//     for the WebGL2 context withGeometryJourney asks for;
+//     for the WebGL2 context geometryRenderer asks for;
 //   * `loopLinePreviewFrag` is **GLSL ES 1.00**, because the landing grid draws
 //     every card's preview through one shared WebGL 1.0 context and has no
 //     simulation to feed it — it fakes the shot from iTime alone.

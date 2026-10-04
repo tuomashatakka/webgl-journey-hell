@@ -13,6 +13,7 @@
 
 import { clamp01, smoothstep } from './math'
 import { mulberry32 } from './rng'
+import { spacedText, spacedWidth } from './canvasText'
 
 
 export interface GlitchTitleOptions {
@@ -71,17 +72,31 @@ function canvasOf (w: number, h: number): HTMLCanvasElement {
   return c
 }
 
-/** Letter-spaced text, centred on x — canvas letterSpacing is not everywhere yet. */
-function spacedText (ctx: CanvasRenderingContext2D, text: string, x: number, y: number, spacing: number): void {
-  const chars  = [ ...text ]
-  const widths = chars.map(ch => ctx.measureText(ch).width)
-  const total  = widths.reduce((a, b) => a + b, 0) + spacing * Math.max(0, chars.length - 1)
-  let cx        = x - total / 2
-  ctx.textAlign = 'left'
-  chars.forEach((ch, i) => {
-    ctx.fillText(ch, cx, y)
-    cx += widths[i] + spacing
-  })
+/**
+ * The largest size, at most `size`, at which `text` (letter-spaced by
+ * `spacingRatio` of the size) fits `maxWidth`. Width is linear in size, so one
+ * measurement settles it.
+ */
+function fitSize (ctx: CanvasRenderingContext2D, font: (px: number) => string, text: string, size: number, spacingRatio: number, maxWidth: number): number {
+  ctx.font    = font(size)
+
+  const width = spacedWidth(ctx, text, size * spacingRatio)
+  return width > maxWidth ? size * maxWidth / width : size
+}
+
+/** Split `text` into two lines at the word boundary nearest its middle. */
+function twoLines (text: string): [ string, string ] {
+  const words = text.split(' ')
+  let best    = 1
+  let bestGap = Infinity
+  for (let i = 1; i < words.length; i++) {
+    const gap = Math.abs(words.slice(0, i).join(' ').length - words.slice(i).join(' ').length)
+    if (gap < bestGap) {
+      bestGap = gap
+      best    = i
+    }
+  }
+  return [ words.slice(0, best).join(' '), words.slice(best).join(' ') ]
 }
 
 /** A copy of `src` in one flat colour (its alpha kept). */
@@ -174,23 +189,35 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
   let layers: Layers | null = null
 
   const build = (w: number, h: number): Layers => {
-    const base = canvasOf(w, h)
-    const b    = base.getContext('2d')!
-    const size = Math.max(18, Math.min(w * 0.058, h * 0.11))
-    const midY = h * 0.5
+    const base  = canvasOf(w, h)
+    const b     = base.getContext('2d')!
+    const maxW  = w * 0.88
+    const title = opts.title.toUpperCase()
+    const head  = (px: number) => `700 ${px}px "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif`
+    const body  = (px: number) => `400 ${px}px "Helvetica Neue", Helvetica, Arial, sans-serif`
+    const size  = fitSize(b, head, title, Math.max(18, Math.min(w * 0.058, h * 0.11)), 0.32, maxW)
+    const midY  = h * 0.5
 
     b.fillStyle    = '#f4f4f4'
     b.textBaseline = 'middle'
-    b.font         = `700 ${size}px "Arial Narrow", "Helvetica Neue", Helvetica, Arial, sans-serif`
-    spacedText(b, opts.title.toUpperCase(), w / 2, midY, size * 0.32)
+    b.font         = head(size)
+    spacedText(b, title, w / 2, midY, size * 0.32)
 
     let bottom = midY + size * 0.75
     if (opts.subtitle) {
-      const sub     = Math.max(10, size * 0.26)
+      // A tagline that will not fit on one line at a readable size takes two.
+      const text  = opts.subtitle.toUpperCase()
+      const want  = Math.max(10, size * 0.26)
+      const fit   = fitSize(b, body, text, want, 0.42, maxW)
+      const lines = fit < want * 0.8 ? twoLines(text) : [ text ]
+      const sub   = lines.length > 1
+        ? Math.min(...lines.map(l => fitSize(b, body, l, want, 0.42, maxW)))
+        : fit
+
       b.globalAlpha = 0.62
-      b.font        = `400 ${sub}px "Helvetica Neue", Helvetica, Arial, sans-serif`
-      spacedText(b, opts.subtitle.toUpperCase(), w / 2, midY + size * 1.15, sub * 0.42)
-      bottom = midY + size * 1.15 + sub
+      b.font        = body(sub)
+      lines.forEach((line, i) => spacedText(b, line, w / 2, midY + size * 1.15 + i * sub * 1.6, sub * 0.42))
+      bottom = midY + size * 1.15 + (lines.length - 1) * sub * 1.6 + sub
       b.globalAlpha = 1
     }
 

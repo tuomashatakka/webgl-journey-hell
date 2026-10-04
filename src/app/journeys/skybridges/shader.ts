@@ -4,7 +4,7 @@
 // caught — each section a distinct scene placed in its own world-Z band. See
 // SPEC.md in this directory for the full design.
 //
-// Single-pass raymarch via lib/shaderQuad.ts. WebGL 1.0 / GLSL ES 1.00 — no
+// Single-pass raymarch via lib/gl/shaderQuad.ts. WebGL 1.0 / GLSL ES 1.00 — no
 // bitwise ops, constant loop bounds only, no dynamic array indexing. Uniforms:
 // iResolution, iTime, uPointer, uHeavy (heavyEffects -> see-through glass),
 // uEnv (equirect env), uEnvLoaded.

@@ -229,7 +229,7 @@ climbs (120–180, 330–360), bank into helix (420–480).
 - `src/app/journeys/skybridges/kinematics.ts` — section names/Z windows (HUD);
   must mirror the nine bands above.
 - `src/app/journeys/skybridges/page.tsx` — wires `envMapUrl`.
-- `src/lib/shaderQuad.ts`, `src/components/withShaderJourney.tsx` — uniforms
+- `src/lib/gl/shaderQuad.ts`, `src/lib/journey/definition.ts` — uniforms
   plumbing (`uEnv`, `uEnvLoaded`, `uHeavy`).
 
 ---

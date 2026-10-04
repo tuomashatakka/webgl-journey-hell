@@ -1,7 +1,7 @@
 'use client'
 
 // The gear button + settings panel, wired to the global SettingsProvider.
-// Reused by the landing grid and by every templated journey (via withShaderJourney).
+// Reused by the landing grid and by every journey (via withJourneyShell).
 
 import { useEffect, useState } from 'react'
 import { Settings as SettingsIcon } from 'lucide-react'

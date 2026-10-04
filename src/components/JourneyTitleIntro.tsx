@@ -41,17 +41,28 @@ export default function JourneyTitleIntro ({ title, subtitle, accent, onDone }: 
     )
     resize()
 
-    const start = performance.now()
-    let raf     = 0
-    const tick  = (now: number) => {
-      if (card.draw((now - start) / 1000))
+    // The card's clock is its own frames, each capped: the journey compiles
+    // its shaders right after this mounts, which can block for seconds on a
+    // phone, and a card timed from mount would be over before its first frame.
+    // Until that first frame the canvas is plain black via CSS, so the hitch
+    // is covered too.
+    let t    = 0
+    let last = 0
+    let raf  = 0
+    const tick = (now: number) => {
+      if (last === 0)
+        canvas.style.background = 'transparent'
+      else
+        t += Math.min(Math.max(0, (now - last) / 1000), 1 / 20)
+      last = now
+      if (card.draw(t))
         raf = requestAnimationFrame(tick)
       else
         doneRef.current()
     }
     raf = requestAnimationFrame(tick)
 
-    const skip = () => card.skip((performance.now() - start) / 1000)
+    const skip = () => card.skip(t)
     window.addEventListener('resize', resize)
     window.addEventListener('pointerdown', skip)
     window.addEventListener('keydown', skip)
@@ -63,5 +74,5 @@ export default function JourneyTitleIntro ({ title, subtitle, accent, onDone }: 
     }
   }, [ title, subtitle, accent ])
 
-  return <canvas id="journey-title-intro" ref={ canvasRef } aria-hidden="true" />
+  return <canvas id="journey-title-intro" ref={ canvasRef } aria-hidden="true" style={{ background: '#000' }} />
 }

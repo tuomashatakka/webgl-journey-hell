@@ -40,7 +40,10 @@ src/app/
   page.tsx                  # index grid landing
   assets/page.tsx           # Δ — every material as a lit sphere, every sky as a pan
   journeys/
-    registry.ts             # journey metadata (single source of truth for the grid)
+    registry.ts             # journey metadata: title, tagline, accent, poster, preview shader
+    definitions.ts          # every journey's definition by slug, for the harness and tools
+    <slug>/journey.ts       # the journey, declared once (renderer, simulation, audio)
+    <slug>/page.tsx         # one line: withJourneyShell(journey)
     liminal/                # THE LIMINAL JOURNEY (raymarched descent + audio)
     stairwell/              # THE STAIRWELL (six acts joined through walls, Δ-lit + audio)
     skybridges/             # SKYBRIDGES (collapsing glass spans over a cloud sea)
@@ -54,23 +57,28 @@ components/
   JourneyGrid.tsx           # grid + shared-preview host
   JourneyCard.tsx           # screenshot poster + hover-to-live preview
   ShaderPreviewLayer.tsx    # ONE shared WebGL canvas for all card previews
-  withJourneyShell.tsx      # the route: context, resize, pointer, HUD, ?t= seeking
-  JourneyTransport.tsx      # the VHS transport bar (rewind / skip / fast-forward)
-  withShaderJourney.tsx     # a journey that is one fragment shader (six of them)
-  withGeometryJourney.tsx   # a journey that is actual triangles (loop-line, scenic-route)
+  withJourneyShell.tsx      # every route: the view (canvas, HUD, transport, title card)
+  JourneyTransport.tsx      # the tape deck: chapter/lap jumps, a scrubbable bar
+  JourneyTitleIntro.tsx     # the glitching title card every journey opens on
   AssetBrowser.tsx          # the /assets page: one shared canvas, scissored per card
 hooks/
+  use-journey-runtime.ts    # the engine under every route: GL, simulation, transport, governor, frame
   use-pan-control.ts        # pointer + gyroscope view panning (tweened)
-  use-journey-runtime.ts    # settings ref, display filter, resize, FPS, fullscreen
   use-audio-engine.ts       # lazy per-journey audio + mute button state
 lib/
-  shaderQuad.ts             # reusable full-screen-quad shader runner
-  frameLoopManager.ts       # ONE frame-capped rAF shared by every templated journey
+  journey/                  # the contracts, definitions, frame evaluation, seek, transport, labels
+  gl/                       # context, programs, the quad, uniforms, targets + post chain, CRT pass
+  glsl/                     # shared GLSL: hashes, value noise + fbm generators, SDFs, ACES
+  audio/                    # the JourneyAudio base every soundtrack extends, noise, uniform readers
+  quality/                  # device profile, quality tiers, the adaptive resolution governor
+  math.ts                   # clamp, mix, smoothstep, smootherstep, hash1 — GLSL's, on the CPU
+  glitchTitle.ts            # the title card's renderer (displacement + byte corruption)
+  canvasText.ts             # letter-spaced 2D canvas text
+  frameLoopManager.ts       # ONE frame-capped rAF shared by every journey
   panControl.ts             # framework-free pan controller behind use-pan-control
   mat4.ts                   # column-major 4x4s, out-param and allocation-free
   curve.ts                  # closed Catmull-Rom, arc-length LUT, transported frames
   mesh.ts                   # VAO/VBO/IBO + instancing, and pre-fracturing into shards
-  glProgram.ts              # WebGL2 program + lazily cached uniform locations
   rng.ts                    # mulberry32 + integer hashes, for reproducible decay
 tools/
   shoot-posters.mjs         # re-capture public/journeys/<slug>.jpg (live routes, or --bare)
@@ -318,9 +326,9 @@ canvas that speaks the same protocol — `?t=&w=&h=&pointer=&dt=`, `window.__jou
 `data-journey-ready` — so every command works against it unchanged. It starts
 in about a second where a Next dev server compiles for a minute, and the bundle
 is rebuilt on every page load, so an edited shader is in the next shot. It
-covers the journeys listed in `tools/harness/entry.ts` (loop-line, stairwell);
-add a line there for another. `node tools/harness/serve.mjs` runs it standalone
-for a browser.
+covers every journey — it runs the same definitions the pages do — plus
+`previews`, which compiles every landing-page preview shader. `node
+tools/harness/serve.mjs` runs it standalone for a browser.
 
 * **contact** is the cheap way to *look*: many instants in one image, each tile
   labelled with its time and section. Twelve 320×180 tiles cost about what one
@@ -450,47 +458,59 @@ one map, every sky as a slow pan, on one shared canvas.
 
 ### adding a new journey
 
-There are two kinds of journey, and they share everything except the renderer.
-`components/withJourneyShell` owns *all* the route boilerplate — context, resize,
-pointer, FPS, fullscreen, settings, frame loop, `?t=` seeking, HUD, debug panel —
-and takes a factory returning anything with `{ draw, dispose }`. Pick the path:
+A journey is **declared once**, in `app/journeys/<slug>/journey.ts`, and
+everything that runs journeys reads that declaration: the page, the bare harness,
+the tools. `components/withJourneyShell` (a view over `hooks/use-journey-runtime`)
+owns all the route machinery — context, resize, adaptive resolution, pointer,
+settings, the frame loop, `?t=` seeking, HUD, transport, title card, debug panel.
 
-* **`withShaderJourney(frag, options)`** — the journey is one fragment shader on a
-  full-screen quad, in GLSL ES 1.00, on a WebGL 1.0 context with no depth buffer.
-  Six of the seven originals are this.
-* **`withGeometryJourney(createScene, options)`** — the journey is triangles. You
-  get a WebGL2 context with `depth: true` and hand back your own scene object.
-  Reach for `lib/mat4`, `lib/curve`, `lib/mesh` and `lib/glProgram`. `loop-line`
-  is the worked example.
+```ts
+// app/journeys/<slug>/journey.ts
+export default defineJourney({
+  slug:             '<slug>',
+  renderer:         shaderRenderer(frag),          // or geometryRenderer / passRenderer
+  createSimulation: createMySimulation,             // optional
+  createAudio:      createMyAudio,                  // optional: renders the mute button
+  sectionTitleClassName: '<slug>-sector-title',     // optional
+})
 
-  A rasterizer needs that depth buffer: without one it draws its rooms in
-  submission order and you see straight through the walls. A raymarch resolves
-  visibility along the ray, which is why the shell's default is `depth: false`.
+// app/journeys/<slug>/page.tsx
+'use client'
+import { withJourneyShell } from '✦/components/withJourneyShell'
+import journey from './journey'
+export default withJourneyShell(journey)
+```
 
-1. Create `app/journeys/<slug>/page.tsx` — a `'use client'` route that hands one
-   fragment shader to `withShaderJourney` (or a scene factory to
-   `withGeometryJourney`). The route itself is about ten lines. Options:
+Pick the renderer by what the journey is (`lib/journey/definition`):
 
-   * `accent` — the `--accent` CSS var for the route
-   * `getSectionName(time)` — HUD label, when pacing is a pure function of time
-   * `createSimulation()` — a CPU simulation instead, when it isn't: it is stepped
-     once per capped frame, its `uniforms()` go straight to the shader and its
-     `label()` drives the HUD. Use this whenever speed varies by section, because
-     then position is an *integral* and has no closed form.
-   * `marks()` on the simulation — or `getMarks(time)` in the options, for a
-     journey with no simulation at all. Which lap, which section, how far
-     through: the transport controls navigate by *structure* rather than by the
-     clock when a journey supplies it. See `lib/journeyTransport.ts`.
-   * `createAudioEngine()` — a Web Audio engine (see `hooks/use-audio-engine.ts`).
-     Passing it is what renders the mute button; its optional `update(time, state)`
-     is fed the same uniforms the shader is drawn with, so sound and geometry stay
-     on one clock.
-   * `sectionTitleClassName`, `envMapUrl`
+* **`shaderRenderer(frag, { envMapUrl })`** — one GLSL ES 1.00 fragment shader on a
+  full-screen quad, WebGL 1, no depth buffer. Six of the journeys are this.
+* **`geometryRenderer(createScene)`** — triangles: WebGL 2 with `depth: true`; hand
+  back your own scene object. Reach for `lib/mat4`, `lib/curve`, `lib/mesh`, and
+  `lib/gl`'s `createPostChain` for the MSAA → resolve → bloom frame. `loop-line` is
+  the worked example. (A rasterizer without a depth buffer draws its rooms in
+  submission order and you see straight through the walls.)
+* **`passRenderer(create)`** / **`passRendererWebGL1(create)`** — a hand-built
+  multi-pass renderer (raymarch into a target, then post): `stairwell/` on WebGL 2,
+  `liminal/` on WebGL 1.
 
-   `liminal/` still predates the HOC and hand-rolls its route. `stairwell/` is the
-   reference for a custom two-pass renderer inside the shared shell;
-   `foundry/`, `skybridges/` and `hollow-orchard/` cover single-shader routes,
-   while `natatorium/` and `switchback/` are worked examples of routes that turn.
+The rest of the definition:
+
+* `createSimulation()` — a CPU simulation, stepped once per frame on the
+  speed-scaled delta; its `uniforms()` go straight to the renderer and its
+  `label()` drives the HUD. Use it whenever speed varies by section, because then
+  position is an *integral* and has no closed form.
+* `marks()` on the simulation — or `marksAt(time)` in the definition, for a
+  journey with no simulation (`sectionNameAt(time)` for its label). Which lap,
+  which section, how far through: the transport navigates by *structure*.
+* `createAudio()` — a soundtrack: extend `JourneyAudio` (`lib/audio`), build the
+  graph in `build()`, and modulate it from the frame's uniforms in `update()`.
+* Shared GLSL comes from `lib/glsl` (`${HASH21}`, `${valueNoise2('hash21')}`,
+  `${SD_BOX}`, `${ACES}`…); shared scalar maths from `lib/math`; HUD labels from
+  `lapLabel`.
+
+Then add it to `app/journeys/definitions.ts`, and:
+
 2. Append an entry to `JOURNEYS` in `app/journeys/registry.ts` (title, tagline,
    tags, accent, gradient, and a compact `previewShader` for the hover preview).
    Export the preview shader from your own `shader.ts` and import it here. Keep it
@@ -506,7 +526,8 @@ and takes a factory returning anything with `{ draw, dispose }`. Pick the path:
    the screenshot wherever WebGL or hover isn't available (phones, mostly), the
    CSS gradient only if the image itself fails to load.
 
-The landing grid picks it up automatically from the registry.
+The landing grid picks it up automatically from the registry; the journey's title
+card takes its title, tagline and accent from the same entry.
 
 > **Note:** the card hover previews all share a **single** WebGL context
 > (`ShaderPreviewLayer`) so the page never trips the browser's per-document
@@ -521,30 +542,79 @@ bun run build
 ```
 
 
+## phones, and frame rate
+
+The journeys are fragment-bound raymarches and HDR rasterizers, and a phone's GPU
+is a tenth of a desktop's driving a screen with as many pixels, so the render
+scale is not a constant (`lib/quality`):
+
+* **AUTO resolution** (the default) hands the backing-store scale to a governor.
+  It measures windows of real frame times, steps the scale down by √(budget /
+  frame time) when a window runs over (fragment cost is proportional to pixel
+  count), and probes back up 10% at a time once frames have held the budget for a
+  while. A probe that costs more than there was is reverted and the next waits
+  twice as long, so a device exactly at its limit settles instead of hunting.
+* **Device tiers** set the starting point and the knobs a renderer reads from
+  `frame.quality`: on a phone the scale starts around half of CSS resolution, MSAA
+  is off and the bloom chain is three levels deep; heavy effects default off.
+* **The frame loop** delivers real elapsed time even when capped — it used to
+  hand a fixed 1/fps step to every frame, so a device managing 20 fps under a 60
+  cap played every journey at a third of its speed — and tolerates rAF jitter, so
+  a 60 cap on a 60 Hz display no longer drops frames that arrive 0.1 ms early.
+* **Nothing composites that need not.** The display grade rides on the CRT pass
+  instead of a CSS filter on the canvas (a full-screen compositing pass per frame
+  at native resolution); the section title's glitch layers stop animating once it
+  has faded; the scanline layer is left off on a low-tier phone; the transport
+  bar and the FPS readout write to the DOM directly instead of re-rendering React
+  sixteen times a second.
+
+## the title card
+
+Every journey opens on its name (`components/JourneyTitleIntro`,
+`lib/glitchTitle`): it fades up out of black with the tagline under it, holds,
+and then the signal carrying it fails — the black tears away in bands, the title's
+channels separate and its slices slide sideways, and its bytes go bad (copies at
+offsets that are not multiples of four rotate the channels, rows smear, bits flip,
+8×8 blocks posterise like a codec that lost its residuals). The corrupted variants
+are built one per frame during the hold, so the card never stalls a frame, and its
+clock is its own frames — a journey compiling its shaders behind it cannot eat it.
+A tap or a key skips to the tear-out; reduced motion gets a plain fade. Never shown
+under `?t=` or `?hud=0`.
+
 ## the transport, and the CRT
 
-Every journey carries a tape deck: `⏮ ◀◀ ▶▶ ⏭` and a VHS-style position bar
-(`components/JourneyTransport`), driven by `lib/journeyTransport`.
+Every journey carries a tape deck (`components/JourneyTransport`), driven by
+`lib/journey/transport`:
+
+* **◀◀ / ▶▶** — previous / next *chapter*: a cut to the start of the section, never
+  a shuttle through time. ◀◀ restarts the chapter you are in, or goes one further
+  if you have only just entered it.
+* **⏮ / ⏭** — the start of this lap / the next lap.
+* **the bar** — press, drag, or tap anywhere on it to scrub through the lap; arrow
+  keys step it when focused. The ticks are the section boundaries.
 
 The hard part is that a journey is an *integrator*, not a timeline — `z += speed(z)
 * dt`, with speed depending on where you already are — so a time cannot be jumped
-to, only replayed. `seekSimulation` (`lib/debugParams`) already established the
-replay; the transport establishes which `t` to replay to. Forward and backward are
-therefore asymmetric on purpose:
+to, only replayed (`seekSimulation`, `lib/journey/seek`). The transport decides
+which `t` to replay to, and forward and backward are asymmetric on purpose:
 
 * **forward** — the destination is not known in advance, so the live simulation is
-  stepped fast while `marks()` is watched for the index to change.
+  stepped fast, in one frame, while `marks()` is watched until it gets there.
 * **backward** — the destination *is* known, because time only ever starts at
-  zero. Every boundary the journey has crossed was crossed while being watched, so
-  an append-only log of "the time lap N began" is complete for every lap at or
-  below the current one. Rewinding reads the log and replays a fresh simulation.
+  zero. Everything behind the playhead was watched on the way out: a log of when
+  each section began, and a track of where along the lap every instant was. Going
+  back reads the log (or interpolates the track, for a scrub) and replays a fresh
+  simulation to that time.
 
-Rewind lands on exactly the timestamp it left from, because the seek divides `t`
-into equal steps rather than stepping until it overshoots.
+A cut lands on exactly the timestamp it left from, because the seek divides `t`
+into equal steps rather than stepping until it overshoots. A scrub applies at most
+once per frame, the latest pointer position winning, so a fast drag never queues
+replays.
 
-`lib/crtPass` is the one post-process every journey shares: tube curvature,
-chromatic offset, aperture mask, vignette, and the tape treatment the transport
-plays over the top. It does **not** re-plumb the renderers to draw into an FBO —
+`lib/gl/crtPass` is the one post-process every journey shares: tube curvature,
+chromatic offset, aperture mask, vignette, the tape treatment the transport
+plays over the top — and the display grade (brightness, contrast), so the canvas
+never needs a CSS filter. It does **not** re-plumb the renderers to draw into an FBO —
 every journey already finishes its frame on the default framebuffer, so the pass
 copies that back buffer into a texture mid-frame and draws over it. Nothing
 upstream knows it exists. Two constraints worth knowing before touching it: the
@@ -571,7 +641,7 @@ drops in under it with the reception falling away.
 
 Three things about it are worth knowing before touching it.
 
-**The caption is composited in GL, not DOM.** `lib/crtPass` works by reading the
+**The caption is composited in GL, not DOM.** `lib/gl/crtPass` works by reading the
 canvas back buffer and drawing over it, so anything in DOM ends up flat and square
 on top of a curved, torn, fringed picture — which gives the whole effect away in
 one frame. `lib/signalOverlay` draws to a 2D canvas instead, and the pass samples
@@ -597,7 +667,7 @@ the four that lap forever trigger on `SIGNAL_LOSS_LAP`, a per-journey constant
 (5 everywhere) standing in for an ending they do not have.
 
 One trap, already paid for: anything that hashes on time must wrap the clock
-first (`tickAt` in `crtPass`). These journeys run for an hour, and `hash()` takes
+first (`tickAt` in `lib/gl/crtPass`). These journeys run for an hour, and `hash()` takes
 `sin()` of a dot product — feed it an unwrapped clock and the argument runs past
 what a highp float carries, `sin()` stops varying, and the noise freezes into a
 constant. A constant offset does not read as noise; at signal-loss amplitudes it

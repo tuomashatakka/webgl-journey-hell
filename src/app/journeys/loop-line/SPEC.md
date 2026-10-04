@@ -5,7 +5,7 @@ It never stops running because the timetable has no last train, and it comes bac
 round a little more broken every time.
 
 This is the repo's rasterized journey: actual triangles through a WebGL2 context
-with a depth buffer (`components/withGeometryJourney`), shaded from the Δ library
+with a depth buffer (`geometryRenderer` (lib/journey)), shaded from the Δ library
 — photographed CC0 surfaces and skies from ambientCG (`delta/`, see the README).
 
 ## Why a closed loop is allowed to cheat
@@ -128,7 +128,9 @@ camera passes through a mouth and the walls sweep past — motion, not a pop.
   with the car, lit by whatever it is passing.
 * HDR (`RGBA16F`, 4× MSAA) where `EXT_color_buffer_float` exists, Reinhard-
   encoded RGBA8 otherwise; a five-level bloom (13-tap down, tent up), a radial
-  speed smear at the frame's edges, ACES.
+  speed smear at the frame's edges, ACES. All through `lib/gl`'s post chain, so
+  the sample count and the bloom depth follow the device's quality tier (no MSAA
+  and three bloom levels on a phone).
 
 ## One scalar
 

@@ -1462,7 +1462,7 @@ void main () {
 
 /**
  * Composite: bloom, exposure, the ACES fit (Narkowicz 2016), a speed blur that
- * only bites in the fall, a light vignette, sRGB. lib/crtPass adds the tube and
+ * only bites in the fall, a light vignette, sRGB. lib/gl/crtPass adds the tube and
  * the signal loss on top of whatever comes out of here.
  */
 export const compositeFrag = /* glsl */`#version 300 es

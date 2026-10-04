@@ -1,6 +1,6 @@
 // The signal-loss caption, drawn to a 2D canvas so the CRT pass can swallow it.
 //
-// It is *not* DOM. A DOM overlay sits above the canvas, and lib/crtPass works by
+// It is *not* DOM. A DOM overlay sits above the canvas, and lib/gl/crtPass works by
 // reading the canvas back buffer and drawing over it — so anything in DOM ends up
 // flat and square on top of a curved, torn, fringed picture, which gives the whole
 // effect away in one frame. This is uploaded as a texture and composited inside
@@ -16,6 +16,7 @@
 
 import { dbAt, signalHash } from './signalLoss'
 import type { SignalLoss } from './signalLoss'
+import { spacedText } from './canvasText'
 
 
 /** Redraws a second. The caption is static and the trace does not need 60. */
@@ -25,7 +26,7 @@ const TICK_HZ = 12
 const WINDOW = 12
 
 /** The readout's vertical range. */
-const DB_TOP = -4
+const DB_TOP    = -4
 const DB_BOTTOM = -76
 
 /** Cap on the drawing surface. Past this the text is already past crisp. */
@@ -41,24 +42,6 @@ export interface SignalOverlay {
   update(loss: SignalLoss, w: number, h: number): boolean;
 
   dispose(): void;
-}
-
-/** Letterspaced monospace, positioned by hand — ctx.letterSpacing is not universal. */
-function spacedText (
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  cx: number,
-  y: number,
-  spacing: number,
-): void {
-  const widths = [ ...text ].map(ch => ctx.measureText(ch).width)
-  const total  = widths.reduce((a, b) => a + b, 0) + spacing * (text.length - 1)
-
-  let x = cx - total / 2
-  for (let i = 0; i < text.length; i++) {
-    ctx.fillText(text[i], x, y)
-    x += widths[i] + spacing
-  }
 }
 
 /** The warning triangle, as a path. A glyph would depend on the host's fonts. */
@@ -105,7 +88,7 @@ function drawMeter (
   ctx.textBaseline = 'middle'
 
   for (const db of [ -12, -40, -68 ]) {
-    const gy = y(db)
+    const gy        = y(db)
     ctx.strokeStyle = 'rgba(255,255,255,0.10)'
     ctx.beginPath()
     ctx.moveTo(left, gy)
@@ -194,8 +177,8 @@ export function createSignalOverlay (): SignalOverlay | null {
       // The caption struggles rather than sitting there: it fades up with the
       // loss and then flickers on the same twelve-a-second tick everything else
       // moves on, hash-gated so it drops out at random rather than pulsing.
-      const settle = Math.min(1, loss.age / 2.5)
-      const flick  = signalHash(tick * 3.7) < 0.12 ? 0.55 : 1
+      const settle    = Math.min(1, loss.age / 2.5)
+      const flick     = signalHash(tick * 3.7) < 0.12 ? 0.55 : 1
       ctx.globalAlpha = Math.min(1, 0.25 + loss.level) * settle * flick
 
       ctx.strokeStyle = 'rgba(255,255,255,0.92)'

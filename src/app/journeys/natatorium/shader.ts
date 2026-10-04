@@ -1,6 +1,6 @@
 // THE NATATORIUM — a flooded pool building, carved out of solid rock.
 //
-// Single pass via lib/shaderQuad.ts, driven by createNatatoriumSimulation in
+// Single pass via lib/gl/shaderQuad.ts, driven by createNatatoriumSimulation in
 // route.ts. WebGL 1.0 / GLSL ES 1.00: constant loop bounds only, no switch, no
 // dynamic array indexing, no bitwise ops.
 //

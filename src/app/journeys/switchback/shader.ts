@@ -1,6 +1,6 @@
 // THE SWITCHBACK — six rooms seen from a mine cart that never stops.
 //
-// Single pass via lib/shaderQuad.ts, driven by createSwitchbackSimulation in
+// Single pass via lib/gl/shaderQuad.ts, driven by createSwitchbackSimulation in
 // kinematics.ts. WebGL 1.0 / GLSL ES 1.00: constant loop bounds only, no switch,
 // no `tanh` (that is ES 3.00 — there is a two-line one below), and uniform arrays
 // may only be indexed by a *constant-index-expression*. That last one is why no

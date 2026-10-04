@@ -1,6 +1,6 @@
 // THE HOLLOW ORCHARD — twelve stages of a fungal descent, one raymarch.
 //
-// Single-pass via lib/shaderQuad.ts, driven by createHollowOrchardSimulation in
+// Single-pass via lib/gl/shaderQuad.ts, driven by createHollowOrchardSimulation in
 // kinematics.ts. WebGL 1.0 / GLSL ES 1.00: constant loop bounds only, no switch,
 // no dynamic array indexing, no bitwise ops.
 //

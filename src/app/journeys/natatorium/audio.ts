@@ -2,7 +2,7 @@
 
 // THE NATATORIUM — soundtrack.
 //
-// Built lazily on the first unmute by withShaderJourney, which then calls
+// Built lazily on the first unmute by the journey shell, which then calls
 // `update` once per rendered frame with the very uniforms the shader is being
 // drawn with — so the mix and the geometry stay on one clock.
 //

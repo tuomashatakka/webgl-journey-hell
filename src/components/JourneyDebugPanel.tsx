@@ -30,7 +30,7 @@ function fmtValue (v: number | number[]): string {
   if (typeof v === 'number')
     return fmt(v)
 
-  // Uniform arrays are packed as flat runs of vec4 (see lib/shaderQuad), so
+  // Uniform arrays are packed as flat runs of vec4 (see lib/gl/uniforms), so
   // grouping them in fours is what makes them legible as what they actually are.
   if (v.length > 4) {
     const rows: string[] = []

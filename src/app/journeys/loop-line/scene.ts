@@ -886,6 +886,7 @@ export function createLoopLineScene (
       downProg!.use()
       downProg!.uniform1i('uSrc', 0)
       downProg!.uniform1f('uDecode', encoded())
+
       const bloom = chain.bloom
       for (let i = 0; i < bloom.length; i++) {
         const src = i === 0 ? chain.scene : bloom[i - 1]

@@ -3,7 +3,7 @@
 // THE HOLLOW ORCHARD — soundtrack.
 //
 // Lives in its own module rather than inline in page.tsx (which is how
-// liminal and stairwell do it) because withShaderJourney reduces the route to
+// liminal and stairwell do it) because the journey shell reduces the route to
 // eleven lines, and there is no reason to put 250 lines of Web Audio back into
 // it. The HOC builds this lazily on the first unmute — an AudioContext may only
 // start from a user gesture — and calls `update` once per rendered frame with
@@ -349,7 +349,7 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
   // ---- per-frame ----------------------------------------------------------
 
   /**
-   * Called once per rendered frame by withShaderJourney with the simulation's
+   * Called once per rendered frame by the journey shell with the simulation's
    * uniform map. Everything here is a `setTargetAtTime` glide guarded by an
    * epsilon, so a 60 Hz call rate costs almost nothing.
    */

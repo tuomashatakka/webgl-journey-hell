@@ -5,9 +5,9 @@ It goes off the cliff at the end, something down there has its mouth open, and
 the road comes out the other side of it. Three laps, and then the picture goes.
 
 This is the second rasterized journey in the repo (after `loop-line`), built on
-`components/withGeometryJourney`: a WebGL2 context with a depth buffer, real
+`geometryRenderer` (lib/journey): a WebGL2 context with a depth buffer, real
 triangles, GLSL ES 3.00, MSAA + a post chain. It is **not** three.js — the repo
-has zero 3D dependencies and `lib/curve`, `lib/mesh`, `lib/mat4`, `lib/glProgram`
+has zero 3D dependencies and `lib/curve`, `lib/mesh`, `lib/mat4`, `lib/gl`
 already cover everything a swept-road, instanced-city, lathe-monster scene needs.
 The `threejs-scenes` skill's patterns (on-rails path camera, path tubes, triplanar
 materials, instancing, bloom → grade → tonemap post chain, per-quality-tier
@@ -210,7 +210,7 @@ the same BRDF, and the shadows are real. Concretely:
   over daylight), ACES fit after
   [Narkowicz](https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/),
   a speed-driven radial blur that only bites in the fall, a light vignette. The
-  shared `lib/crtPass` then adds curvature, aberration and the signal loss on top
+  shared `lib/gl/crtPass` then adds curvature, aberration and the signal loss on top
   without knowing any of this exists.
 
 The sun is drawn as a small emissive disc *in the geometry pass*, depth-tested,

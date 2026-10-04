@@ -16,9 +16,13 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
  * caller's URL form isn't known.
  */
 export function assetUrl (path: string): string {
-  if (!BASE_PATH) return path
-  if (!path.startsWith('/')) return path // relative or scheme-qualified
-  if (path.startsWith('//')) return path // protocol-relative
-  if (path === BASE_PATH || path.startsWith(`${BASE_PATH}/`)) return path
+  if (!BASE_PATH)
+    return path
+  if (!path.startsWith('/'))
+    return path // relative or scheme-qualified
+  if (path.startsWith('//'))
+    return path // protocol-relative
+  if (path === BASE_PATH || path.startsWith(`${BASE_PATH}/`))
+    return path
   return BASE_PATH + path
 }

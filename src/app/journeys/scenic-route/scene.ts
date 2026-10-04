@@ -1,6 +1,6 @@
 // THE SCENIC ROUTE — the renderer.
 //
-// A WebGL2 rasterizer behind components/withGeometryJourney, following
+// A WebGL2 rasterizer behind geometryRenderer (lib/journey), following
 // loop-line's shape: everything built once at construction, a frame that is a
 // few dozen draws and a post chain, nothing uploaded per frame but uniforms.
 //
@@ -17,7 +17,7 @@
 //   4. sky dome     — a fullscreen triangle at far depth, filling what is left.
 //   5. resolve → bright → blur ×2 → composite (exposure, ACES, speed blur).
 //
-// lib/crtPass then reads the back buffer and adds the tube and the signal loss
+// lib/gl/crtPass then reads the back buffer and adds the tube and the signal loss
 // without knowing any of this exists.
 //
 // ---------------------------------------------------------------------------
@@ -357,6 +357,7 @@ export function createScenicRouteScene (
     if (!chain.resize(w, h, { msaa, bloomLevels: 0 }))
       return
     blur.forEach(b => b.dispose())
+
     const bw = Math.max(1, w >> 1)
     const bh = Math.max(1, h >> 1)
     blur = [ createRenderTarget(gl, bw, bh, rgba8(gl)), createRenderTarget(gl, bw, bh, rgba8(gl)) ]

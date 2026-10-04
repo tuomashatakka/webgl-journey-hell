@@ -53,6 +53,7 @@ describe('journey transport', () => {
     const r = rig()
     r.play(1)
     r.transport.request('next')
+
     const { marks, z } = r.now()
     expect(marks.section).toBe(1)
     expect(z).toBeGreaterThanOrEqual(10)

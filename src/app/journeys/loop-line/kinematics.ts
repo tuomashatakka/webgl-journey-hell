@@ -179,8 +179,8 @@ class LoopLineRide implements JourneySimulation {
     this.swayV   += (lateral * 0.010 - this.sway * 7.0 - this.swayV * 2.6) * h
     this.sway    += this.swayV * h
 
-    const wear   = clamp01(this.lapF * 0.16)
-    const joint  = this.travelled / 12.5
+    const wear  = clamp01(this.lapF * 0.16)
+    const joint = this.travelled / 12.5
     // Rail joints at fixed places: hashed on distance, so the same joint is
     // in the same metre forever.
     const jitter = (hash1(Math.floor(joint)) - 0.5) * 2

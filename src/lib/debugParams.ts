@@ -1,4 +1,4 @@
-// Debug query parameters, honoured by every journey through withShaderJourney.
+// Debug query parameters, honoured by every journey through the journey shell.
 //
 // The problem this solves: a journey is a clock. Everything interesting about it
 // — which room you are in, how flooded it is, how far a doorway has assembled —

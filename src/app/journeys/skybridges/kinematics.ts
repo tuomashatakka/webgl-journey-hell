@@ -41,7 +41,7 @@ export function getSkybridgesSectionName (time: number): string {
 /**
  * Where the route is, for the transport controls. This journey has no
  * simulation — its walk is a constant speed authored in GLSL — so the shell
- * takes this through getMarks rather than through JourneySimulation.
+ * takes this through marksAt rather than through JourneySimulation.
  */
 export function getSkybridgesMarks (time: number): JourneyMarks {
   const z       = time * SKYBRIDGES_SPEED
@@ -55,7 +55,7 @@ export function getSkybridgesMarks (time: number): JourneyMarks {
 
     // No simulation to keep a counter in, and none needed: this route is a pure
     // function of the clock, so the seconds since the signal-loss lap are too.
-    signalAge:    Math.max(0, time - SIGNAL_LOSS_LAP * SKYBRIDGES_LOOP_Z / SKYBRIDGES_SPEED),
+    signalAge: Math.max(0, time - SIGNAL_LOSS_LAP * SKYBRIDGES_LOOP_Z / SKYBRIDGES_SPEED),
   }
 }
 
@@ -70,4 +70,3 @@ export function getSkybridgesMarks (time: number): JourneyMarks {
  * into a rhythm, short enough that breaking it lands.
  */
 export const SIGNAL_LOSS_LAP = 2
-

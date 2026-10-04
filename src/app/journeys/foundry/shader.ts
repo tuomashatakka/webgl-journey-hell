@@ -9,7 +9,7 @@
 // piston extension, and two pendulums swung by the cage's acceleration and by
 // your own footsteps. The shader draws state; it does not invent motion.
 //
-// Single-pass raymarch via lib/shaderQuad.ts. WebGL 1.0 / GLSL ES 1.00 — no
+// Single-pass raymarch via lib/gl/shaderQuad.ts. WebGL 1.0 / GLSL ES 1.00 — no
 // bitwise ops, constant loop bounds only. Uniforms beyond the shared set:
 //   uWalk    = (cyclicZ, smoothLoop, decay, headRoll)
 //   uGait    = (eyeY, swayX, headYaw, headPitch)

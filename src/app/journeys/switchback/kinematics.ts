@@ -3,7 +3,7 @@
 // A mine cart on a gravity railway through six dreamcore rooms. The cart is
 // never driven: it is braked, chained up two lift hills, and otherwise falls.
 // Speed is therefore an *integral* and has no closed form, which is exactly the
-// case withShaderJourney's createSimulation exists for.
+// case a journey definition's createSimulation exists for.
 //
 // ---------------------------------------------------------------------------
 // The third way of turning
@@ -1183,14 +1183,14 @@ export function assertRouteSane (): string[] {
  * read immediately after, so the frame renders the state this step produced.
  */
 export function createSwitchbackSimulation (): JourneySimulation {
-  let s     = 0
-  let v     = 9.0
-  let roll  = 0
+  let s    = 0
+  let v    = 9.0
+  let roll = 0
 
   // Counted inside the simulation, not by the shell: seekSimulation replays
   // step() from zero without anyone watching. See lib/signalLoss.
   let signalAge = 0
-  let state = getSwitchbackState(0, v, 0)
+  let state     = getSwitchbackState(0, v, 0)
 
   if (process.env.NODE_ENV !== 'production') {
     const problems = assertRouteSane()

@@ -20,6 +20,7 @@ describe('resolution governor', () => {
   test('holds steady at the budget, then probes up, and reverts a probe that fails', () => {
     const g = createGovernor({ min: 0.3, max: 1.5, start: 1, targetFps: 60 })
     feed(g, 1 / 60, 24 * 4)
+
     const probed = g.scale
     expect(probed).toBeGreaterThan(1)
     feed(g, 1 / 30, 24)

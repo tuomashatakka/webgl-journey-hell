@@ -5,7 +5,7 @@
 // Unlike app/journeys/liminal, none of this table is mirrored in GLSL — the
 // simulation uploads the answer as uniforms every frame, so the shader owns
 // geometry and nothing else. That is the whole reason this journey is built on
-// `JourneySimulation` rather than a `getSectionName(time)` lookup: walk speed
+// `JourneySimulation` rather than a `sectionNameAt(time)` lookup: walk speed
 // varies per stage, so z is an *integral*, not `time * SPEED`.
 //
 // Three things carry the horror arc, all continuous, none table-driven:

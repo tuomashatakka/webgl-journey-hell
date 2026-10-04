@@ -51,6 +51,7 @@
 
 import { smoothstep } from '✦/lib/math'
 
+
 const DT           = 1 / 120 // fixed integration step
 const MAX_SUBSTEPS = 6 // clamp so a stalled tab can't spiral
 
