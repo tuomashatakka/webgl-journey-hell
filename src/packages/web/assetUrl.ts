@@ -15,7 +15,7 @@ const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
  * returned untouched, so this is safe to apply at a shared boundary where the
  * caller's URL form isn't known.
  */
-export function assetUrl (path: string): string {
+function assetUrl (path: string): string {
   if (!BASE_PATH)
     return path
   if (!path.startsWith('/'))

@@ -63,7 +63,6 @@ import type { SignalOverlay } from '@wjh/journey/signalOverlay'
 import type { TransportHandle } from '✦/components/JourneyTransport'
 
 
-
 /**
  * Stand-in for journeys with no soundtrack. useAudioEngine has to be called
  * unconditionally (hook order) but only builds on the first unmute — which,
@@ -704,4 +703,3 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
 }
 
 /** For callers that only need the settings type alongside the runtime. */
-

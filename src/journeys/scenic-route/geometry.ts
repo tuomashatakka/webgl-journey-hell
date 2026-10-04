@@ -94,13 +94,15 @@ function cliffX (z: number): number {
 
 // --- the height field ----------------------------------------------------------
 
-const SEA_LEVEL   = 0
-const SEABED      = -28
-const PLAZA_Y     = 78
+const SEA_LEVEL = 0
+const SEABED    = -28
+const PLAZA_Y   = 78
+
 export const PLAZA       = { x: 385, z: 665, r0: 130, r1: 210 }
-const VALLEY_Y    = -60
-const RIDGE_Y     = 125
-const SHELF_Y     = 85
+
+const VALLEY_Y = -60
+const RIDGE_Y  = 125
+const SHELF_Y  = 85
 
 /** The land before anything is built on it. */
 function naturalHeight (x: number, z: number): number {

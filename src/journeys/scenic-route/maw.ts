@@ -19,7 +19,7 @@ import type { Route } from './course'
 
 
 /** Jaw opening in radians at lap 0, and its growth per lap. */
-const JAW_BASE   = 0.42
+const JAW_BASE    = 0.42
 const JAW_PER_LAP = 0.13
 
 interface V3 { x: number; y: number; z: number }

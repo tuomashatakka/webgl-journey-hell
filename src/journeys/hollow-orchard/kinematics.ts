@@ -33,12 +33,18 @@ export const STAGE_CATHEDRAL = 2
 export const STAGE_MARROW    = 3
 export const STAGE_ROOTS     = 4
 export const STAGE_FRUITING  = 5
-const STAGE_TRANSIT   = 6
-const STAGE_BLOOM     = 7
+
+const STAGE_TRANSIT = 6
+const STAGE_BLOOM   = 7
+
 export const STAGE_HOST      = 8
+
 const STAGE_HARVEST   = 9
+
 export const STAGE_MYCELIAL  = 10
+
 const STAGE_SEEDVAULT = 11
+
 export const STAGE_COMPOST   = 12
 
 const ORCHARD_LOOP_Z = 660

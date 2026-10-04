@@ -40,5 +40,3 @@ export function hash2 (x: number, y: number): number {
   h = h ^ h >>> 16
   return (h >>> 0) / 4294967296
 }
-
-

@@ -214,7 +214,7 @@ for (const curve of [ c.main, c.alt ])
     maxGrade  = Math.max(maxGrade, Math.abs(curve.frameAtDistance(s).forward.y))
     minRadius = Math.min(minRadius, 1 / Math.max(1e-9, curve.curvatureAtDistance(s)))
   }
-ok('max gradient under 10%', maxGrade < 0.10, `${(maxGrade * 100).toFixed(1)}%`)
+ok('max gradient under 10%', maxGrade < 0.1, `${(maxGrade * 100).toFixed(1)}%`)
 ok('min radius over 50 m', minRadius > 50, `${minRadius.toFixed(0)} m`)
 
 

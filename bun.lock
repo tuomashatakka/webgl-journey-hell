@@ -45,6 +45,9 @@
     "src/packages/delta": {
       "name": "@wjh/delta",
       "version": "1.0.0",
+      "dependencies": {
+        "@wjh/web": "workspace:*",
+      },
     },
     "src/packages/geometry": {
       "name": "@wjh/geometry",
@@ -59,7 +62,6 @@
       "dependencies": {
         "@wjh/config": "workspace:*",
         "@wjh/geometry": "workspace:*",
-        "@wjh/web": "workspace:*",
       },
     },
     "src/packages/glsl": {

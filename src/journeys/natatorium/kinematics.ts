@@ -49,6 +49,7 @@ const TYPE_TILE   = 0 // white tile, the default pool finish
 const TYPE_GUTTER = 1 // narrow service corridor, darker tile
 const TYPE_VAULT  = 2 // big vaulted hall, columns, clerestory
 const TYPE_LOCKER = 3 // lockers and benches along the walls
+
 export const TYPE_PLANT  = 4 // pumps and pipework, the only warm light
 export const TYPE_RAW    = 5 // bare concrete, below the tile line
 
@@ -870,4 +871,3 @@ export function createNatatoriumSimulation (): JourneySimulation {
     },
   }
 }
-

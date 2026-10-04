@@ -337,6 +337,7 @@ export const SWITCH_LAP = 2
 
 /** The bay the chord leaves from and the bay it rejoins in. */
 const JUNCTION_BAY = 2
+
 export const REJOIN_BAY = 4
 
 /** How far inside the concourse the points are, before the end wall. */

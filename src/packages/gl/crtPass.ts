@@ -408,5 +408,3 @@ export function createCrtPass (gl: AnyGl): CrtPass | null {
     },
   }
 }
-
-

@@ -42,17 +42,17 @@ export function whiteNoise (ctx: BaseAudioContext, seconds = 2): AudioBuffer {
 export interface DriftingChord {
 
   /** [frequency Hz, static detune cents] per voice. */
-  voices:    readonly (readonly [number, number])[];
+  voices: readonly (readonly [number, number])[];
 
   /** Lowpass cutoff (Hz) the whole chord sits behind. */
   cutoff:    number;
   voiceGain: number;
 
   /** Wow LFO rate is `wowRate + frequency * 0.0004` Hz. */
-  wowRate:   number;
+  wowRate: number;
 
   /** Wow depth, cents. */
-  wowDepth:  number;
+  wowDepth: number;
 }
 
 /**

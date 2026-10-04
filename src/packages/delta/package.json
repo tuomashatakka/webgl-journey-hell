@@ -11,6 +11,9 @@
     "./manifest": "./manifest.ts",
     "./urls": "./urls.ts"
   },
+  "dependencies": {
+    "@wjh/web": "workspace:*"
+  },
   "license": "CC0-1.0",
   "scripts": {
     "build": "bun build.mjs"

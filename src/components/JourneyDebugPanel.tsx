@@ -14,7 +14,6 @@ import { useEffect, useRef, useState } from 'react'
 import type { JourneyDebugState } from '@wjh/web/debugParams'
 
 
-
 /** Enough precision to tell two frames apart, not so much that it is unreadable. */
 function fmt (v: number): string {
   if (!Number.isFinite(v))

@@ -20,12 +20,6 @@ import { CONFIG } from '@wjh/config/config'
 import { clamp, easeInOutCubic } from '@wjh/math/scalar'
 
 
-
-
-
-
-
-
 export interface PanVector {
   x: number;
   y: number;

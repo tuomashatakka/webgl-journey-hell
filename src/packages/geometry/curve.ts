@@ -513,8 +513,8 @@ function correctHolonomy (frames: PtFrame[]): void {
     return
 
   // Reference frame: the initial parallel-transported up, right, and forward.
-  const refUp    = v3Copy(frames[0].up)
-  const refFwd   = v3Copy(frames[0].forward)
+  const refUp  = v3Copy(frames[0].up)
+  const refFwd = v3Copy(frames[0].forward)
 
   // Measure the residual twist as the signed angle between the last transported
   // up and the reference up, projected onto the plane perpendicular to the
@@ -553,7 +553,6 @@ function correctHolonomy (frames: PtFrame[]): void {
     frames[i].right.y = tmpRt.y
     frames[i].right.z = tmpRt.z
   }
-
 }
 
 

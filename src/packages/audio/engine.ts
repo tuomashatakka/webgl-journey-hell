@@ -14,7 +14,7 @@ import { brownNoise, createAudioContext } from './nodes'
 
 
 /** One resonant bandpass: centre frequency Hz and Q. */
-export interface Band {
+interface Band {
   f: number;
   q: number;
 }
@@ -29,11 +29,11 @@ export interface NoiseHit {
   attack: number;
 
   /** Seconds from `at` until the envelope has fallen to silence. */
-  decay:  number;
+  decay: number;
 
   /** Seconds from `at` until the source is stopped. */
-  stop:   number;
-  to:     readonly AudioNode[];
+  stop: number;
+  to:   readonly AudioNode[];
 }
 
 /** Two impacts a wheelbase apart, the second a touch softer. */

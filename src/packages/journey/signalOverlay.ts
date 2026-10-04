@@ -20,10 +20,6 @@ import type { SignalLoss } from './signalLoss'
 import { spacedText } from '@wjh/web/canvasText'
 
 
-
-
-
-
 export interface SignalOverlay {
   canvas: HTMLCanvasElement;
 

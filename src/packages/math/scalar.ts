@@ -37,7 +37,6 @@ export function smootherstep (edge0: number, edge1: number, x: number): number {
 }
 
 
-
 /**
  * The classic shader hash, `fract(sin(n · 127.1) · 43758.5453)`. Fixed places
  * (rail joints, lamp rolls) are hashed on position with it, so the same
@@ -52,4 +51,3 @@ export function hash1 (n: number): number {
 export function easeInOutCubic (t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 }
-

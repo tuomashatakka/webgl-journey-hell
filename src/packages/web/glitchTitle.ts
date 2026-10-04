@@ -53,9 +53,6 @@ export interface GlitchTitle {
 }
 
 
-
-
-
 interface Layers {
   base:   HTMLCanvasElement;
   red:    HTMLCanvasElement;

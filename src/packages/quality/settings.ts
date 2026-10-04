@@ -43,9 +43,6 @@ export interface GraphicsSettings {
 }
 
 
-
-
-
 /** Defaults for this device: no compute-heavy branches on a phone. */
 function deviceDefaults (): GraphicsSettings {
   return { ...CONFIG.settings.defaults, heavyEffects: detectDevice().tier > 0 }

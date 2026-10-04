@@ -101,7 +101,7 @@ export const WALK_START = LIFT_Z - LIFT_STAND
 
 /** Shaft head, and the height the cage is at when the cable lets go. */
 const SHAFT_HEAD_Y = 128
-const LIFT_TOP = 120
+const LIFT_TOP     = 120
 
 /** Metres further up the shaft the cable parts on each successive run. */
 const LIFT_RISE = 26
@@ -159,7 +159,7 @@ const LANDING_Y = 0
 /** Hydraulic buffers in the pit, for the arrivals the shoes do not catch. */
 export const PIT_Y = -3
 
-const CAGE_HALF = 1.5 // cage interior half-width
+const CAGE_HALF   = 1.5 // cage interior half-width
 const CAGE_HEIGHT = 2.6
 
 // Seconds for the gate to rattle up, for the shutter to come down, and for the
@@ -285,6 +285,7 @@ const SPAN_IZ = [ 0, 1, 2, 2, 2, 3, 4, 4, 4, 4, 4, 5, 6, 7, 8, 9 ]
 
 /** Metres of walking across the span, and how much of that is forward travel. */
 export const SPAN_ARC = (SPAN_TILES - 1) * TILE
+
 const SPAN_Z_RUN = SPAN_IZ[SPAN_TILES - 1] * TILE
 
 /**

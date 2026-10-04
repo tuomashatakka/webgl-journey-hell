@@ -16,47 +16,60 @@ const AUTO_RESOLUTION = 0
 
 export const CONFIG = {
   site: {
+
     /**
      * The deployment sub-path (GitHub Pages). Next rewrites it into next/link and
      * imported assets, but not into runtime URL strings: those go through
      * assetUrl, which reads it from NEXT_PUBLIC_BASE_PATH, set from here.
      */
-    basePath: '/webgl-journey-hell',
-    title: 'webgl-journey-hell',
+    basePath:    '/webgl-journey-hell',
+    title:       'webgl-journey-hell',
     description: 'An index of WebGL shader journeys into the abyss.',
   },
 
   pan: {
+
     /** Ordinary-motion follow rate, 1/s. Higher = tighter tracking of the pointer. */
     followRate: 16,
+
     /** Target deltas beyond this (in -1..1 units) are treated as a jump and tweened. */
     jumpDistance: 0.3,
+
     /** Jump tween duration = distance × this, clamped to the bounds below. */
     jumpSecondsPerUnit: 0.35,
-    jumpMinSeconds: 0.16,
-    jumpMaxSeconds: 0.5,
+    jumpMinSeconds:     0.16,
+    jumpMaxSeconds:     0.5,
+
     /** Tilt (degrees, from the calibration pose) that maps to a full-scale ±1 pan. */
     gyroRangeDeg: 35,
+
     /** Tilt below this is ignored, so a hand-held device doesn't jitter the camera. */
     gyroDeadzoneDeg: 1.5,
+
     /** Smoothing applied to raw orientation readings, 1/s. */
     gyroFollowRate: 6,
+
     /** Largest frame delta the tweens integrate, so a stalled tab doesn't snap. */
     maxDelta: 0.1,
   },
 
   frameLoop: {
+
     /** How early (ms) a capped frame may arrive and still run. */
     jitterMs: 1.5,
+
     /** Longest delta ever delivered. */
     maxDeltaMs: 100,
   },
 
   signal: {
+
     /** Seconds in the ending before the picture starts to go. */
     graceSeconds: 8,
+
     /** ...and how long it then takes to arrive, once it has started. */
     rampSeconds: 15,
+
     /**
      * Seconds of *active* loss before the dB meter appears.
      *
@@ -65,6 +78,7 @@ export const CONFIG = {
      * separate events rather than as one receiver giving up.
      */
     meterDelaySeconds: 0,
+
     /**
      * How long the meter takes to fade in once it is due.
      *
@@ -74,6 +88,7 @@ export const CONFIG = {
      * seconds and then cutting it in over two.
      */
     meterFadeSeconds: 12,
+
     /**
      * Never 1.
      *
@@ -82,28 +97,35 @@ export const CONFIG = {
      * there has to be enough left to see that something is still down there.
      */
     peak: 0.86,
+
     /** Reception in dB at onset, and where it settles. */
     dbStart: -12,
     dbFloor: -68,
     overlay: {
+
       /** Redraws a second. The caption is static and the trace does not need 60. */
       tickHz: 12,
+
       /** Seconds of history the dB trace shows. */
       windowSeconds: 12,
+
       /** The readout's vertical range. */
-      dbTop: -4,
+      dbTop:    -4,
       dbBottom: -76,
+
       /** Cap on the drawing surface. Past this the text is already past crisp. */
       maxWidth: 1600,
     },
 
     lossLaps: {
+
       /**
        * The lap at which the route has stopped going anywhere and the signal starts to
        * go with it. This journey has no ending to reach, so the count stands in for
        * one. See lib/signalLoss.
        */
       loopLine: 5,
+
       /**
        * The lap on which the sun goes off.
        *
@@ -115,6 +137,7 @@ export const CONFIG = {
        * into a rhythm, short enough that breaking it lands.
        */
       skybridges: 2,
+
       /**
        * Three laps, then the signal. Once the lap counter reads this the fourth lap
        * begins on the county road at night and the picture starts to go eight
@@ -122,6 +145,7 @@ export const CONFIG = {
        * ?t= seek replays this simulation from zero without anyone watching.
        */
       scenicRoute: 3,
+
       /**
        * The lap at which the route has stopped going anywhere and the signal starts to
        * go with it. This journey has no ending to reach, so the count stands in for
@@ -133,15 +157,17 @@ export const CONFIG = {
   },
 
   settings: {
+
     /** The resolution value that hands the render scale to the adaptive governor. */
     autoResolution: AUTO_RESOLUTION,
-    storageKey: 'journey-graphics-settings-v2',
+    storageKey:     'journey-graphics-settings-v2',
     // Earlier keys, read once so existing users keep their config. v1 saved its
     // defaults on first visit, so a v1 resolution of 0.5 and heavy effects on are
     // what nobody chose: those migrate to the new defaults (AUTO, and heavy
     // effects only where the device can afford them).
-    v1Key: 'journey-graphics-settings-v1',
-    legacyKey: 'liminal-graphics-settings-v1',
+    v1Key:          'journey-graphics-settings-v1',
+    legacyKey:      'liminal-graphics-settings-v1',
+
     /** Static defaults: what the prerender and a desktop get. */
     defaults: {
       resolution:   AUTO_RESOLUTION,
@@ -153,28 +179,35 @@ export const CONFIG = {
       gyroscope:    true,
       crt:          true,
     },
+
     /** Allowed discrete choices surfaced in the settings UI. */
     resolutionChoices: [ AUTO_RESOLUTION, 0.15, 0.33, 0.5, 0.75, 1 ] as const,
-    speedChoices: [ 1, 2, 4 ] as const,
-    frameRateChoices: [ 30, 60, 120, 0 ] as const, // 0 = Unlimited
+    speedChoices:      [ 1, 2, 4 ] as const,
+    frameRateChoices:  [ 30, 60, 120, 0 ] as const, // 0 = Unlimited
   },
 
   governor: {
+
     /** Frames per measurement window. */
     windowFrames: 24,
+
     /** Scale steps are quantised so a reallocation is never for a rounding error. */
     scaleQuantum: 0.05,
+
     /** Over budget by more than this fraction → step down. */
     overBudget: 1.2,
+
     /** Within this fraction of budget → the window counts as "holding". */
     holdBudget: 1.06,
+
     /** Holding windows before the first probe up, and its ceiling after backoff. */
-    probeAfter: 4,
+    probeAfter:    4,
     probeAfterMax: 32,
-    probeStep: 1.1,
+    probeStep:     1.1,
   },
 
   quality: {
+
     /** What the prerender assumes, where there is no device to ask. */
     serverProfile: { mobile: false, dpr: 1, tier: 2 },
 
@@ -206,44 +239,53 @@ export const CONFIG = {
   },
 
   transport: {
+
     /** Upper bound on seek iterations, so `?t=1e9` cannot hang the tab. */
     maxSeekSteps: 200_000,
+
     /** Forward search step: coarse, because it may cover minutes in one frame. */
     searchDt: 1 / 20,
+
     /** Journey-seconds a single forward move may cover before giving up. */
     forwardBudget: 900,
+
     /** Replay dt for backward moves. */
     seekDt: 1 / 20,
+
     /** How long you must be *into* a section (or lap) before going back restarts it. */
     graceSection: 1.5,
-    graceLoop: 3,
+    graceLoop:    3,
     flashSeconds: 0.28,
+
     /** A progress sample is kept every this much of the lap. */
-    sampleStep: 0.0025,
+    sampleStep:             0.0025,
     // A journey with no marks() still gets working transport, it just moves by the
     // clock. These are the "lap" and "section" it pretends to have.
-    fallbackLoopSeconds: 30,
+    fallbackLoopSeconds:    30,
     fallbackSectionSeconds: 8,
   },
 
   titleCard: {
+
     /** Seconds: fade in until IN, hold until HOLD, torn out by OUT. */
-    fadeInAt: 1.15,
+    fadeInAt:  1.15,
     holdUntil: 2.75,
     tornOutBy: 4,
-    calm: {
-      fadeInAt: 0.8,
+    calm:      {
+      fadeInAt:  0.8,
       holdUntil: 2.2,
       tornOutBy: 3,
     },
 
     /** Byte-corrupted variants, from barely damaged to wrecked. */
     variants: 6,
+
     /** The glitch picks a new pattern this many times a second, like a frame rate. */
     glitchFps: 24,
   },
 
   crt: {
+
     /** The idle look. Subtle by design — every journey already grades its own image. */
     idle: {
       curve:      0.055,
@@ -251,6 +293,7 @@ export const CONFIG = {
       scanline:   0.045,
       vignette:   0.22,
     },
+
     /**
      * The tube switched off, for when the CRT setting is off but the pass still has
      * to run — for the signal loss, which is a story beat rather than a display
@@ -266,6 +309,7 @@ export const CONFIG = {
   },
 
   gl: {
+
     /** Defaults tuned for a full-screen raymarch: no depth, no MSAA, opaque. */
     contextAttributes: {
       alpha:     false,
@@ -275,6 +319,7 @@ export const CONFIG = {
   },
 
   runtime: {
+
     /** Loading bar progress at each stage, and what it says. */
     loading: {
       boot:      { progress: 0.04, status: 'LOADING' },
@@ -283,23 +328,26 @@ export const CONFIG = {
       warming:   { progress: 0.94, status: 'WARMING UP' },
       done:      { progress: 1, status: 'SIGNAL ACQUIRED' },
     },
-    maxDpr: 2, // Backing-store cap for the fixed resolution choices, as before AUTO (and the preview canvas).
-    warmFrames: 3, // Frames drawn at t = 0 once the assets are in, before the clock starts.
+    maxDpr:              2, // Backing-store cap for the fixed resolution choices, as before AUTO (and the preview canvas).
+    warmFrames:          3, // Frames drawn at t = 0 once the assets are in, before the clock starts.
     assetTimeoutSeconds: 20, // Seconds to wait on a renderer's assets before starting without them.
-    panEpsilon: 1e-4, // Pan movement too small to be worth redrawing a paused frame for.
+    panEpsilon:          1e-4, // Pan movement too small to be worth redrawing a paused frame for.
   },
 
   ui: {
     // Render the preview below native resolution — plenty for a thumbnail, easy on the GPU.
-    previewScale: 0.6,
+    previewScale:       0.6,
     debugPanelSampleMs: 200,
+
     /** How long the bar takes to fade once loaded; the shell unmounts it after. */
     loaderFadeMs: 450,
+
     /** Arrow-key scrub step, as a fraction of the lap. */
     transportKeyStep: 0.02,
   },
 
   tools: {
+
     /** Where `bun run dev` serves, before the base path. */
     devOrigin: 'http://localhost:3000',
 
@@ -311,19 +359,20 @@ export const CONFIG = {
      * and a 320x200 buffer resolves a popping wall just as well as a 4K one while
      * running ~40x faster. Override with --w/--h when the eye is the instrument.
      */
-    defaultWidth: 320,
+    defaultWidth:  320,
     defaultHeight: 200,
 
     /** The DOM overlays `journey.mjs hud` measures. */
     hudIds: [ 'back-btn', 'fullscreen-btn', 'audio-btn', 'settings-btn', 'fps-display' ],
 
     posters: {
+
       /** Where the landing-grid stills live; the registry imports them from here. */
-      dir: 'assets/posters',
+      dir:     'assets/posters',
       quality: 82,
 
       /** 16:10, the card's aspect ratio. */
-      width: 1280,
+      width:  1280,
       height: 800,
 
       /** The section each live shot waits for, and optionally the instant to seek to. */
@@ -344,11 +393,11 @@ export const CONFIG = {
 
       /** Seeded into localStorage: cheap settings, because software GL runs at ~1 fps. */
       settings: {
-        resolution: 0.75,
-        speed: 4,
+        resolution:   0.75,
+        speed:        4,
         heavyEffects: false,
-        brightness: 1,
-        contrast: 1,
+        brightness:   1,
+        contrast:     1,
         maxFrameRate: 60,
       },
 
@@ -357,7 +406,7 @@ export const CONFIG = {
 
       /** Seconds to wait for a section, and the settle after it is reached. */
       sectionTimeoutMs: 240_000,
-      settleMs: 4000,
+      settleMs:         4000,
     },
   },
 } as const

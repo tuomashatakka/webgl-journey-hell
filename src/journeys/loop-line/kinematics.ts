@@ -283,4 +283,3 @@ class LoopLineRide implements JourneySimulation {
 export function createLoopLineSimulation (): JourneySimulation {
   return new LoopLineRide()
 }
-

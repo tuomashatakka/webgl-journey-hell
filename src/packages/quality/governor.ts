@@ -35,11 +35,6 @@ export interface Governor {
 }
 
 
-
-
-
-
-
 export function createGovernor (opts: GovernorOptions): Governor {
   const frames = new Float32Array(CONFIG.governor.windowFrames)
   const sorted = new Float32Array(CONFIG.governor.windowFrames)
@@ -47,7 +42,7 @@ export function createGovernor (opts: GovernorOptions): Governor {
   let budget                   = 1 / Math.max(1, opts.targetFps)
   let scale                    = quantise(clamp(opts.start, opts.min, opts.max))
   let holding                  = 0
-  let probeWait: number           = CONFIG.governor.probeAfter
+  let probeWait: number        = CONFIG.governor.probeAfter
   let probeFrom: number | null = null
 
   function quantise (s: number): number {

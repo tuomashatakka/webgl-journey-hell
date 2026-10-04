@@ -18,11 +18,6 @@ import { CONFIG } from '@wjh/config/config'
 import { smootherstep } from '@wjh/math/scalar'
 
 
-
-
-
-
-
 export interface SignalLoss {
 
   /** 0..CONFIG.signal.peak. 0 while the picture is still fine. */
@@ -84,4 +79,3 @@ export function signalLossAt (signalAge: number): SignalLoss {
     age,
   }
 }
-

@@ -66,7 +66,6 @@ import type { LookParams, Route, SpeedParams } from './course'
 import { hash1, smootherstep } from '@wjh/math/scalar'
 
 
-
 const G = 9.81
 
 /** Eye height above the road surface. A low seat in a low car. */

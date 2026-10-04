@@ -13,7 +13,6 @@ import { CONFIG } from '@wjh/config/config'
 import type { JourneyLoading } from '✦/hooks/use-journey-runtime'
 
 
-
 export default function JourneyLoader ({ progress, status, done, failed, detail }: JourneyLoading) {
   const p   = Math.min(1, Math.max(0, progress))
   const pct = Math.round(p * 100)

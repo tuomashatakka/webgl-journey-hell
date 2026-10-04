@@ -21,6 +21,7 @@ import sky_NightSkyHDRI003 from './skies/NightSkyHDRI003.jpg'
 import sky_NightSkyHDRI008 from './skies/NightSkyHDRI008.jpg'
 import sky_NightSkyHDRI007 from './skies/NightSkyHDRI007.jpg'
 
+
 export const MATERIAL_URLS = {
   color:  staticUrl(colorStrip),
   normal: staticUrl(normalStrip),
@@ -29,14 +30,14 @@ export const MATERIAL_URLS = {
 
 /** Sky URL by ambientCG asset id. */
 export const SKY_URLS: Readonly<Record<string, string>> = {
-  DaySkyHDRI070B: staticUrl(sky_DaySkyHDRI070B),
-  DaySkyHDRI071B: staticUrl(sky_DaySkyHDRI071B),
+  DaySkyHDRI070B:     staticUrl(sky_DaySkyHDRI070B),
+  DaySkyHDRI071B:     staticUrl(sky_DaySkyHDRI071B),
   EveningSkyHDRI046B: staticUrl(sky_EveningSkyHDRI046B),
   EveningSkyHDRI045B: staticUrl(sky_EveningSkyHDRI045B),
   EveningSkyHDRI047B: staticUrl(sky_EveningSkyHDRI047B),
   MorningSkyHDRI011B: staticUrl(sky_MorningSkyHDRI011B),
   MorningSkyHDRI007B: staticUrl(sky_MorningSkyHDRI007B),
-  NightSkyHDRI003: staticUrl(sky_NightSkyHDRI003),
-  NightSkyHDRI008: staticUrl(sky_NightSkyHDRI008),
-  NightSkyHDRI007: staticUrl(sky_NightSkyHDRI007),
+  NightSkyHDRI003:    staticUrl(sky_NightSkyHDRI003),
+  NightSkyHDRI008:    staticUrl(sky_NightSkyHDRI008),
+  NightSkyHDRI007:    staticUrl(sky_NightSkyHDRI007),
 }

@@ -42,17 +42,17 @@ export interface MaterialAsset {
  * A set without AO gets white there, one without metalness gets black.
  */
 export const MATERIALS: readonly MaterialAsset[] = [
-  { id: 'TILE', asset: 'Tiles010', label: 'subway tile', metres: 1.0, depth: 0.012 },
-  { id: 'FLOOR', asset: 'Tiles141', label: 'quarry floor tile', metres: 2.0, depth: 0.008 },
+  { id: 'TILE', asset: 'Tiles010', label: 'subway tile', metres: 1, depth: 0.012 },
+  { id: 'FLOOR', asset: 'Tiles141', label: 'quarry floor tile', metres: 2, depth: 0.008 },
   { id: 'TERRAZZO', asset: 'Terrazzo005', label: 'terrazzo', metres: 1.2, depth: 0.002 },
   { id: 'PANEL', asset: 'Concrete031', label: 'shuttered concrete', metres: 2.6, depth: 0.03 },
-  { id: 'CONCRETE', asset: 'Concrete044D', label: 'spalled concrete', metres: 3.0, depth: 0.04 },
+  { id: 'CONCRETE', asset: 'Concrete044D', label: 'spalled concrete', metres: 3, depth: 0.04 },
   { id: 'BRICK', asset: 'Bricks097', label: 'engineering brick', metres: 1.4, depth: 0.03 },
   { id: 'BALLAST', asset: 'Gravel023', label: 'track ballast', metres: 1.5, depth: 0.06 },
-  { id: 'STEEL', asset: 'Metal024', label: 'weathered steel', metres: 2.0, depth: 0.004 },
+  { id: 'STEEL', asset: 'Metal024', label: 'weathered steel', metres: 2, depth: 0.004 },
   { id: 'CORRUGATED', asset: 'CorrugatedSteel005', label: 'corrugated sheet', metres: 1.6, depth: 0.03 },
   { id: 'WOOD', asset: 'Wood035', label: 'creosoted timber', metres: 1.4, depth: 0.01 },
-  { id: 'ROCK', asset: 'Rock051', label: 'stratified rock', metres: 5.0, depth: 0.25 },
+  { id: 'ROCK', asset: 'Rock051', label: 'stratified rock', metres: 5, depth: 0.25 },
   { id: 'PLASTER', asset: 'PaintedPlaster016', label: 'failed plaster', metres: 2.4, depth: 0.02 },
   { id: 'HAZARD', asset: 'PaintedMetal016', label: 'hazard plate', metres: 0.9, depth: 0.003 },
   { id: 'DIRT', asset: 'Ground110', label: 'spoil', metres: 2.1, depth: 0.08 },
@@ -93,12 +93,12 @@ export interface SkyAsset {
  * (`skyRadiance`), which is enough for a sky that is mostly cloud.
  */
 export const SKIES: readonly SkyAsset[] = [
-  { id: 'DAY', asset: 'DaySkyHDRI070B', label: 'cumulus noon', exposure: 1.6, sun: [ 0.50, 0.33 ]},
-  { id: 'HAZE', asset: 'DaySkyHDRI071B', label: 'hazy noon', exposure: 1.5, sun: [ 0.49, 0.30 ]},
+  { id: 'DAY', asset: 'DaySkyHDRI070B', label: 'cumulus noon', exposure: 1.6, sun: [ 0.5, 0.33 ]},
+  { id: 'HAZE', asset: 'DaySkyHDRI071B', label: 'hazy noon', exposure: 1.5, sun: [ 0.49, 0.3 ]},
   { id: 'DUSK', asset: 'EveningSkyHDRI046B', label: 'pink dusk', exposure: 0.9, sun: [ 0.49, 0.48 ]},
-  { id: 'OVERCAST', asset: 'EveningSkyHDRI045B', label: 'grey front', exposure: 0.8, sun: [ 0.50, 0.47 ]},
-  { id: 'EVENING', asset: 'EveningSkyHDRI047B', label: 'pale evening', exposure: 1.0, sun: [ 0.33, 0.36 ]},
-  { id: 'DAWN', asset: 'MorningSkyHDRI011B', label: 'cold dawn', exposure: 1.0, sun: [ 0.50, 0.48 ]},
+  { id: 'OVERCAST', asset: 'EveningSkyHDRI045B', label: 'grey front', exposure: 0.8, sun: [ 0.5, 0.47 ]},
+  { id: 'EVENING', asset: 'EveningSkyHDRI047B', label: 'pale evening', exposure: 1, sun: [ 0.33, 0.36 ]},
+  { id: 'DAWN', asset: 'MorningSkyHDRI011B', label: 'cold dawn', exposure: 1, sun: [ 0.5, 0.48 ]},
   { id: 'FOG', asset: 'MorningSkyHDRI007B', label: 'fog morning', exposure: 1.1, sun: [ 0.52, 0.45 ]},
   { id: 'NIGHT', asset: 'NightSkyHDRI003', label: 'moonlit night', exposure: 0.35, sun: [ 0.49, 0.23 ]},
   { id: 'DEEP', asset: 'NightSkyHDRI008', label: 'deep field', exposure: 0.25 },

@@ -59,21 +59,21 @@ const DEF_H = CONFIG.tools.defaultHeight
 
 function parseArgs (argv) {
   const [ cmd, journey, ...rest ] = argv
-  const opts = {}
+  const opts                      = {}
   for (const a of rest) {
-    const m = /^--([^=]+)(?:=(.*))?$/.exec(a)
+    const m = (/^--([^=]+)(?:=(.*))?$/).exec(a)
     if (m)
       opts[m[1]] = m[2] === undefined ? true : m[2]
   }
   return { cmd, journey, opts }
 }
 
-const num = (v, d) => (v === undefined ? d : Number(v))
+const num = (v, d) => v === undefined ? d : Number(v)
 
 // Flags arrive as STRINGS, and "0" is truthy in JavaScript — so `opts.hud ? …`
 // answered yes to --hud=0 and every "clean plate" ever taken with it came back
 // with the whole HUD still on it. Anything that reads as an off-switch is off.
-const flag = (v, d) => (v === undefined ? d : !/^(0|false|no|off)$/i.test(String(v)))
+const flag = (v, d) => v === undefined ? d : !(/^(0|false|no|off)$/i).test(String(v))
 
 function url (journey, t, opts, extra = {}) {
   const q = new URLSearchParams({
@@ -108,6 +108,7 @@ function url (journey, t, opts, extra = {}) {
 async function seek (page, journey, t, opts, extra) {
   await page.goto(url(journey, t, opts, extra), { waitUntil: 'commit' })
   await page.waitForSelector('html[data-journey-ready="1"]', { state: 'attached', timeout: 60_000 })
+
   const dbg = await page.evaluate(() => window.__journeyDebug)
   // The bare harness collects console.error into a list; a failed compile there
   // still produces a frame (black), so the list is the only way to know.
@@ -131,18 +132,31 @@ function statsFn () {
   // newer one first and fall back, rather than assuming every journey is a
   // full-screen quad -- which stopped being true with loop-line.
   const gl = c.getContext('webgl2') || c.getContext('webgl')
-  const w = c.width, h = c.height
+  const w  = c.width,
+    h      = c.height
   const px = new Uint8Array(w * h * 4)
   gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px)
-  let sum = 0, dark = 0, blown = 0, rSum = 0, gSum = 0, bSum = 0
+
+  let sum = 0,
+    dark  = 0,
+    blown = 0,
+    rSum  = 0,
+    gSum  = 0,
+    bSum  = 0
   for (let i = 0; i < px.length; i += 4) {
-    const r = px[i], g = px[i + 1], b = px[i + 2]
+    const r = px[i],
+      g     = px[i + 1],
+      b     = px[i + 2]
     rSum += r; gSum += g; bSum += b
+
     const l = (r + g + b) / 3
     sum += l
-    if (l < 4) dark++
-    if (l > 250) blown++
+    if (l < 4)
+      dark++
+    if (l > 250)
+      blown++
   }
+
   const n = w * h
   return {
     mean:  sum / n,
@@ -154,12 +168,13 @@ function statsFn () {
     // Base64 of a downsampled grey plate, for frame-to-frame comparison. Full
     // resolution would be accurate and far too slow to ship between processes.
     plate: (() => {
-      const S = 48
+      const S   = 48
       const out = new Uint8Array(S * S)
       for (let y = 0; y < S; y++)
         for (let x = 0; x < S; x++) {
-          const sx = Math.floor(x * w / S), sy = Math.floor(y * h / S)
-          const i = (sy * w + sx) * 4
+          const sx       = Math.floor(x * w / S),
+            sy           = Math.floor(y * h / S)
+          const i        = (sy * w + sx) * 4
           out[y * S + x] = (px[i] + px[i + 1] + px[i + 2]) / 3
         }
       return Array.from(out)
@@ -192,7 +207,7 @@ async function findChromium () {
   const candidates = []
   for (const root of roots)
     for (const dir of await readdir(root)) {
-      const rev = /^chromium(?:_headless_shell)?-(\d+)$/.exec(dir)
+      const rev = (/^chromium(?:_headless_shell)?-(\d+)$/).exec(dir)
       if (!rev)
         continue
       for (const exe of [
@@ -210,7 +225,7 @@ async function findChromium () {
           candidates.push({ rev: Number(rev[1]), full, shell: exe.includes('headless') })
       }
     }
-  candidates.sort((a, b) => (a.shell - b.shell) || (b.rev - a.rev))
+  candidates.sort((a, b) => a.shell - b.shell || b.rev - a.rev)
   return candidates[0]?.full
 }
 
@@ -233,7 +248,7 @@ async function withBrowser (fn) {
     executablePath: await findChromium(),
     // Compare plates only within one backend: SwiftShader and a real GPU agree
     // on what is in the frame but not on the last bit of every colour.
-    args: glArgs(),
+    args:           glArgs(),
   })
   try {
     const page = await browser.newPage()
@@ -285,10 +300,14 @@ async function cmdProbe (page, journey, opts) {
   const rows = []
 
   for (let t = from; t <= to + 1e-9; t += step) {
-    const dbg  = await seek(page, journey, t, opts)
-    const st   = await page.evaluate(statsFn)
-    rows.push({ t: +t.toFixed(2), label: dbg.label, mean: +st.mean.toFixed(1),
-      dark: +st.dark.toFixed(3), blown: +st.blown.toFixed(4), uniforms: dbg.uniforms })
+    const dbg = await seek(page, journey, t, opts)
+    const st  = await page.evaluate(statsFn)
+    rows.push({ t:        +t.toFixed(2),
+      label:    dbg.label,
+      mean:     +st.mean.toFixed(1),
+      dark:     +st.dark.toFixed(3),
+      blown:    +st.blown.toFixed(4),
+      uniforms: dbg.uniforms })
   }
 
   if (opts.json) {
@@ -333,7 +352,8 @@ async function cmdScan (page, journey, opts) {
     prev = st.plate
   }
 
-  const deltas = samples.slice(1).map(s => s.delta).sort((a, b) => a - b)
+  const deltas = samples.slice(1).map(s => s.delta)
+    .sort((a, b) => a - b)
   const median = deltas[Math.floor(deltas.length / 2)] || 0
 
   console.log(`baseline (median) delta/s: ${median.toFixed(2)}`)
@@ -345,7 +365,7 @@ async function cmdScan (page, journey, opts) {
 
   if (opts.json)
     await writeFile(opts.json === true ? '/tmp/scan.json' : opts.json,
-      JSON.stringify(samples, null, 2))
+                    JSON.stringify(samples, null, 2))
 }
 
 /**
@@ -363,18 +383,24 @@ function uvFn () {
   // newer one first and fall back, rather than assuming every journey is a
   // full-screen quad -- which stopped being true with loop-line.
   const gl = c.getContext('webgl2') || c.getContext('webgl')
-  const w = c.width, h = c.height
+  const w  = c.width,
+    h      = c.height
   const px = new Uint8Array(w * h * 4)
   gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px)
-  const L = (x, y) => { const i = (y * w + x) * 4; return (px[i] + px[i+1] + px[i+2]) / 3 }
-  let hAcc = 0, vAcc = 0, n = 0
+
+  const L = (x, y) => {
+    const i = (y * w + x) * 4; return (px[i] + px[i + 1] + px[i + 2]) / 3
+  }
+  let hAcc = 0,
+    vAcc   = 0,
+    n      = 0
   for (let y = 2; y < h - 2; y += 2)
     for (let x = 2; x < w - 2; x += 2) {
       hAcc += Math.abs(L(x + 1, y) - L(x - 1, y))
       vAcc += Math.abs(L(x, y + 1) - L(x, y - 1))
       n++
     }
-  return { hDetail: hAcc / n, vDetail: vAcc / n, ratio: (hAcc / n) / Math.max(vAcc / n, 1e-6) }
+  return { hDetail: hAcc / n, vDetail: vAcc / n, ratio: hAcc / n / Math.max(vAcc / n, 1e-6) }
 }
 
 // Every fixed piece of chrome, and what each is anchored to. An overlay that
@@ -391,15 +417,18 @@ const hudFn = ids => ids.map(id => {
   const el = document.getElementById(id)
   if (!el)
     return { id, present: false }
+
   const r = el.getBoundingClientRect()
   return {
-    id, present: true, text: (el.textContent ?? '').trim(),
+    id,
+    present: true,
+    text:    (el.textContent ?? '').trim(),
     // The CENTRE is what the eye tracks, and for a centred overlay it is the
     // thing that is supposed to be invariant while the width is not.
-    cx: +((r.left + r.right) / 2).toFixed(1),
-    cy: +((r.top + r.bottom) / 2).toFixed(1),
-    w:  +r.width.toFixed(1),
-    h:  +r.height.toFixed(1),
+    cx:      +((r.left + r.right) / 2).toFixed(1),
+    cy:      +((r.top + r.bottom) / 2).toFixed(1),
+    w:       +r.width.toFixed(1),
+    h:       +r.height.toFixed(1),
   }
 })
 
@@ -421,15 +450,16 @@ async function cmdHud (page, journey, opts) {
 
   for (const id of HUD_IDS) {
     const seen = rows.map(r => ({ t: r.t, label: r.label, e: r.els.find(x => x.id === id) }))
-                     .filter(x => x.e && x.e.present)
+      .filter(x => x.e && x.e.present)
     if (!seen.length) {
       console.log(`${id.padEnd(15)} absent`)
       continue
     }
-    const xs = seen.map(x => x.e.cx)
-    const ys = seen.map(x => x.e.cy)
-    const dx = Math.max(...xs) - Math.min(...xs)
-    const dy = Math.max(...ys) - Math.min(...ys)
+
+    const xs    = seen.map(x => x.e.cx)
+    const ys    = seen.map(x => x.e.cy)
+    const dx    = Math.max(...xs) - Math.min(...xs)
+    const dy    = Math.max(...ys) - Math.min(...ys)
     const moves = dx > 0.5 || dy > 0.5
     console.log(`${id.padEnd(15)} ${moves ? 'MOVES' : 'fixed'}  centre drift  x ${dx.toFixed(1)}px  y ${dy.toFixed(1)}px`)
     if (moves)
@@ -445,16 +475,20 @@ async function cmdHud (page, journey, opts) {
 // much. Held rather than moving, so the number belongs to one place on the route.
 async function cmdFps (page, journey, opts) {
   const ms = num(opts.ms, 2000)
-  for (const t of String(opts.at ?? '0').split(',').map(Number)) {
+  for (const t of String(opts.at ?? '0').split(',')
+    .map(Number)) {
     const dbg = await seek(page, journey, t, opts)
     const fps = await page.evaluate(d => new Promise(res => {
       let n = 0
-      const t0 = performance.now()
+      const t0   = performance.now()
       const loop = () => {
         n++
+
         const el = performance.now() - t0
-        if (el < d) requestAnimationFrame(loop)
-        else res(n / (el / 1000))
+        if (el < d)
+          requestAnimationFrame(loop)
+        else
+          res(n / (el / 1000))
       }
       requestAnimationFrame(loop)
     }), ms)
@@ -480,14 +514,17 @@ async function cmdUv (page, journey, opts) {
  */
 async function cmdContact (page, journey, opts) {
   const times = opts.at
-    ? String(opts.at).split(',').map(Number)
+    ? String(opts.at).split(',')
+      .map(Number)
     : (() => {
-        const out  = []
-        const from = num(opts.from, 0), to = num(opts.to, 60), step = num(opts.step, 10)
-        for (let t = from; t <= to + 1e-9; t += step)
-          out.push(+t.toFixed(3))
-        return out
-      })()
+      const out  = []
+      const from = num(opts.from, 0),
+        to       = num(opts.to, 60),
+        step     = num(opts.step, 10)
+      for (let t = from; t <= to + 1e-9; t += step)
+        out.push(+t.toFixed(3))
+      return out
+    })()
   const cols  = num(opts.cols, 4)
   const tiles = []
   for (const t of times) {
@@ -499,22 +536,27 @@ async function cmdContact (page, journey, opts) {
 
   const sheet = await page.evaluate(async ({ tiles, cols }) => {
     const imgs = await Promise.all(tiles.map(tile => new Promise(res => {
-      const im = new Image()
+      const im  = new Image()
       im.onload = () => res(im)
       im.src    = tile.data
     })))
-    const w = imgs[0].width, h = imgs[0].height, rows = Math.ceil(imgs.length / cols)
-    const c = document.createElement('canvas')
+    const w  = imgs[0].width,
+      h      = imgs[0].height,
+      rows   = Math.ceil(imgs.length / cols)
+    const c  = document.createElement('canvas')
     c.width  = cols * w + (cols + 1) * 2
     c.height = rows * h + (rows + 1) * 2
-    const g = c.getContext('2d')
+
+    const g     = c.getContext('2d')
     g.fillStyle = '#111'
     g.fillRect(0, 0, c.width, c.height)
     imgs.forEach((im, i) => {
-      const x = 2 + (i % cols) * (w + 2), y = 2 + Math.floor(i / cols) * (h + 2)
+      const x = 2 + i % cols * (w + 2),
+        y     = 2 + Math.floor(i / cols) * (h + 2)
       g.drawImage(im, x, y)
-      const text = `${tiles[i].t}s  ${tiles[i].label}`
-      g.font = `${Math.max(9, Math.round(h / 16))}px monospace`
+
+      const text  = `${tiles[i].t}s  ${tiles[i].label}`
+      g.font      = `${Math.max(9, Math.round(h / 16))}px monospace`
       g.fillStyle = 'rgba(0,0,0,0.6)'
       g.fillRect(x, y + h - Math.round(h / 11), w, Math.round(h / 11))
       g.fillStyle = '#fff'
@@ -541,9 +583,10 @@ async function cmdGlsl (page, journey, opts) {
     if (m.type() === 'error')
       errors.push(m.text())
   })
-  const dbg = await seek(page, journey, num(opts.t, 0), { w: 64, h: 40, ...opts })
+
+  const dbg     = await seek(page, journey, num(opts.t, 0), { w: 64, h: 40, ...opts })
   const harness = await page.evaluate(() => window.__harnessErrors ?? [])
-  const all = [ ...new Set([ ...errors, ...harness ]) ]
+  const all     = [ ...new Set([ ...errors, ...harness ]) ]
   if (all.length) {
     console.log(`${journey}: ${all.length} error(s)`)
     process.exitCode = 1
@@ -553,8 +596,15 @@ async function cmdGlsl (page, journey, opts) {
 }
 
 const COMMANDS = {
-  shot: cmdShot, film: cmdFilm, probe: cmdProbe, scan: cmdScan, uv: cmdUv,
-  hud: cmdHud, fps: cmdFps, contact: cmdContact, glsl: cmdGlsl,
+  shot:    cmdShot,
+  film:    cmdFilm,
+  probe:   cmdProbe,
+  scan:    cmdScan,
+  uv:      cmdUv,
+  hud:     cmdHud,
+  fps:     cmdFps,
+  contact: cmdContact,
+  glsl:    cmdGlsl,
 }
 
 const { cmd, journey, opts } = parseArgs(process.argv.slice(2))

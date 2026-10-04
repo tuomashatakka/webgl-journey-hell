@@ -56,6 +56,7 @@ if (bare) {
       console.warn(`${slug}: not covered by the bare harness, skipped`)
       continue
     }
+
     const t = posters.bare[slug]
     await page.goto(`${harness.url}/journeys/${slug}?t=${t}&w=${posters.width}&h=${posters.height}&hud=0&debug=0`)
     await page.waitForSelector('html[data-journey-ready="1"]', { state: 'attached', timeout: 300_000 })

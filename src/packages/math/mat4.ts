@@ -30,8 +30,6 @@ const EPSILON = 1e-6
 // scratch buffer for internal operations that need a temporary matrix
 
 
-
-
 function identity (out: Mat4): Mat4 {
   out[0]  = 1
   out[1]  = 0
@@ -291,9 +289,3 @@ export function invert (out: Mat4, a: Mat4): Mat4 | null {
 
   return out
 }
-
-
-
-
-
-

@@ -10,7 +10,7 @@ interface SkybridgesSection {
 }
 
 // Twelve seconds per section at default speed gives each theme room to land.
-const SKYBRIDGES_SPEED = 5
+const SKYBRIDGES_SPEED  = 5
 const SKYBRIDGES_LOOP_Z = 540
 
 // Nine themed scenes on one continuous first-person run (~60 units each). The
@@ -59,4 +59,3 @@ export function getSkybridgesMarks (time: number): JourneyMarks {
     signalAge: Math.max(0, time - CONFIG.signal.lossLaps.skybridges * SKYBRIDGES_LOOP_Z / SKYBRIDGES_SPEED),
   }
 }
-

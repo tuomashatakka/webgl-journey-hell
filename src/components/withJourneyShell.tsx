@@ -192,4 +192,3 @@ export function withJourneyShell (definition: JourneyDefinition) {
   JourneyShell.displayName = `JourneyShell(${definition.slug})`
   return JourneyShell
 }
-

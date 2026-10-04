@@ -98,12 +98,6 @@ export interface JourneyTransport {
 }
 
 
-
-
-
-
-
-
 interface Boundary {
   time:    number;
   loop:    number;
