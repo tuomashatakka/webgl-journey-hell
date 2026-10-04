@@ -116,5 +116,3 @@ export function signalLossAt (signalAge: number): SignalLoss {
   }
 }
 
-/** Nothing to draw and nothing to degrade. Lets callers skip the whole path. */
-const NO_SIGNAL_LOSS: SignalLoss = { level: 0, meter: 0, db: DB_START, age: 0 }

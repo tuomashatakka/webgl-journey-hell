@@ -54,7 +54,7 @@ const V1_KEY     = 'journey-graphics-settings-v1'
 const LEGACY_KEY = 'liminal-graphics-settings-v1'
 
 /** Static defaults: what the prerender and a desktop get. */
-export const DEFAULT_SETTINGS: GraphicsSettings = {
+const DEFAULT_SETTINGS: GraphicsSettings = {
   resolution:   AUTO_RESOLUTION,
   speed:        1,
   heavyEffects: true,

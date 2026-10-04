@@ -202,7 +202,6 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
   const bay        = span.bay
   const d          = new Dresser(curve, bay.id, mulberry32(seed))
   const { s0, s1 } = span
-  const len        = s1 - s0
   const R          = d.rand
 
   const woodTrack = bay.theme === Theme.CUT || bay.theme === Theme.DEPOT ||

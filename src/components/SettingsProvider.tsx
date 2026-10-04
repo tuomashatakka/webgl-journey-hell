@@ -17,9 +17,7 @@ import {
 import type { ReactNode } from 'react'
 import {
   loadSettings,
-  saveSettings,
-  DEFAULT_SETTINGS
-
+  saveSettings
 } from '@wjh/quality/settings'
 import type { GraphicsSettings } from '@wjh/quality/settings'
 import { frameLoopManager } from '@wjh/web/frameLoopManager'

@@ -54,50 +54,8 @@ function pieceAt (loop: number, k: number): number {
 }
 
 // Floor depth target per setpiece id.
-function pieceDepth (id: number): number {
-  if (id === 1)
-    return -15
-  if (id === 2)
-    return -28
-  if (id === 3)
-    return -45
-  if (id === 4)
-    return -55
-  if (id === 5)
-    return -62
-  if (id === 6)
-    return -110
-  if (id === 7)
-    return -180
-  if (id === 8)
-    return -30
-  if (id === 9)
-    return -350
-  return -30
-}
 
 // Eye height (camera offset above floor) per setpiece id.
-function pieceEye (id: number): number {
-  if (id === 1)
-    return 0.45
-  if (id === 2)
-    return 1.8
-  if (id === 3)
-    return 1.6
-  if (id === 4)
-    return 0.42
-  if (id === 5)
-    return 1.35
-  if (id === 6)
-    return 1.75
-  if (id === 7)
-    return 1.8
-  if (id === 8)
-    return 1.6
-  if (id === 9)
-    return 1.2
-  return 1.8
-}
 
 // Continuous fall pitch amount per setpiece id.
 function pieceFall (id: number): number {
@@ -113,19 +71,6 @@ function pieceFall (id: number): number {
 }
 
 // Gentle per-piece horizontal sway.
-function pieceSway (id: number, z: number): number {
-  if (id === 1)
-    return Math.sin(z * 0.15) * 1.8
-  if (id === 5)
-    return Math.sin(z * 0.6) * 0.6
-  if (id === 6)
-    return Math.sin(z * 0.08) * 2.2
-  if (id === 7)
-    return Math.sin(z * 0.4) * 0.8
-  if (id === 9)
-    return Math.sin(z * 0.05) * 1.2
-  return Math.sin(z * 0.1) * 0.6
-}
 
 // Per-piece walk speed.
 function pieceSpeed (id: number): number {
@@ -314,104 +259,11 @@ function getKinematicState (z: number): KinematicState {
 }
 
 // Horizontal swaying and alignment offsets
-function getCamX (z: number): number {
-  const state = getKinematicState(z)
-
-  if (state.sector === 1)
-    return 0
-  if (state.sector === 2) {
-    const s = smoothstep(5, 15, state.localZ) * (1 - smoothstep(55, 65, state.localZ))
-    return s * Math.sin(z * 0.15) * 4
-  }
-  if (state.sector === 3) {
-    const s = smoothstep(0, 5, state.localZ) * (1 - smoothstep(75, 80, state.localZ))
-    return s * Math.sin(z * 0.4) * 1.5
-  }
-  if (state.sector === 4) {
-    const s = smoothstep(0, 10, state.localZ) * (1 - smoothstep(60, 70, state.localZ))
-    return s * Math.sin(z * 0.08) * 1.8
-  }
-  if (state.sector === 5) {
-    // Elegant winding stair sway
-    const t5 = state.localZ / state.secLen
-    return Math.sin(t5 * Math.PI * 3) * 3.5
-  }
-  if (state.sector === 6)
-    return 0
-  if (state.sector === 666)
-    return mix(pieceSway(state.setpieceA, z), pieceSway(state.setpieceB, z), state.blend)
-  return 0
-}
 
 // Camera vertical layout height offset
-function getCamOffset (z: number): number {
-  const state = getKinematicState(z)
-
-  if (state.sector === 2) {
-    if (state.localZ < 10)
-      return mix(1.8, 0.95, smoothstep(0, 10, state.localZ)); else if (state.localZ < 60)
-      return 0.95; else
-      return mix(0.95, 1, smoothstep(60, 70, state.localZ))
-  }
-  if (state.sector === 3)
-    return mix(1, 1.8, smoothstep(70, 80, state.localZ))
-  if (state.sector === 666)
-    return mix(pieceEye(state.setpieceA), pieceEye(state.setpieceB), state.blend)
-  return 1.8
-}
 
 // Evaluates the physical floor Y elevation
-function getFloorY (z: number): number {
-  const state = getKinematicState(z)
 
-  if (state.sector === 1)
-    return 0
-  if (state.sector === 2) {
-    const t = state.localZ / state.secLen
-    return mix(0, -25, t * t * (3 - 2 * t))
-  }
-  if (state.sector === 3) {
-    const t = state.localZ / state.secLen
-    return mix(-25, -125, t * t * (3 - 2 * t))
-  }
-  if (state.sector === 4) {
-    const t         = state.localZ / state.secLen
-    const bridgeArc = Math.sin(t * Math.PI) * 7.5
-    return -125 + bridgeArc
-  }
-  if (state.sector === 5) {
-    if (state.localZ < 52) {
-      const stepSize    = 3.25
-      const s           = state.localZ / stepSize
-      const smoothStair = Math.floor(s) + smoothstep(0.6, 1, s - Math.floor(s))
-      return -125 + smoothStair * 3.44
-    }
-    else if (state.localZ < 72) {
-      const tFall = (state.localZ - 52) / 20
-      return mix(-70, -180, tFall * tFall)
-    }
-    else
-      return -180
-  }
-  if (state.sector === 6) {
-    const t = Math.max(0, Math.min(1, state.localZ / state.secLen))
-    return mix(-180, 0, smoothstep(0, 1, t))
-  }
-  if (state.sector === 666) {
-    let depth = mix(pieceDepth(state.setpieceA), pieceDepth(state.setpieceB), state.blend)
-    // Entry blend from sector 5 exit floor (-180) into the abyss.
-    depth = mix(-180, depth, smoothstep(0, 0.08, state.descent))
-    // Loop closure: return floor to 0 for the next loop's sector 1, except the loop 3 finale.
-    if (state.loop < 3)
-      depth = mix(depth, 0, smoothstep(0.8, 1, state.descent))
-    return depth
-  }
-  return 0
-}
-
-function getCamY (z: number): number {
-  return getFloorY(z)
-}
 
 // Determines the player's walking speed dynamically
 function getWalkSpeed (z: number): number {

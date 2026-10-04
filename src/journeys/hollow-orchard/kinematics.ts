@@ -72,10 +72,6 @@ const PATH_A1 = 32
 const PATH_K2 = Math.PI * 2 / ORCHARD_LOOP_Z * 5 // five tighter kinks
 const PATH_A2 = 7
 
-/** Lateral offset of the route centreline at a distance along it. */
-function pathX (z: number): number {
-  return Math.sin(z * PATH_K1) * PATH_A1 + Math.sin(z * PATH_K2) * PATH_A2
-}
 
 /** Its slope — the tangent of the heading, so the camera can face down it. */
 function pathDX (z: number): number {

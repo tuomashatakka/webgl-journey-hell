@@ -23,23 +23,13 @@
 export type Vec3 = [number, number, number] | Float32Array
 
 export type Mat4 = Float32Array
-type Mat3 = Float32Array
 
 
 const EPSILON = 1e-6
 
 // scratch buffer for internal operations that need a temporary matrix
-const _scratch = new Float32Array(16)
 
 
-function create (): Mat4 {
-  const out = new Float32Array(16)
-  out[0]    = 1
-  out[5]    = 1
-  out[10]   = 1
-  out[15]   = 1
-  return out
-}
 
 
 function identity (out: Mat4): Mat4 {
@@ -303,104 +293,7 @@ export function invert (out: Mat4, a: Mat4): Mat4 | null {
 }
 
 
-/**
- * Compose a TRS matrix from Euler angles (yaw/pitch/roll in radians), a
- * translation, and a uniform scale. This covers the common case for
- * placing objects in a scene without allocating separate rotation,
- * translation, and scale matrices only to multiply them together.
- */
-function fromRotationTranslationScale (
-  out:          Mat4,
-  yawRadians:   number,
-  pitchRadians: number,
-  rollRadians:  number,
-  tx:           number,
-  ty:           number,
-  tz:           number,
-  scale:        number,
-): Mat4 {
-  const cy = Math.cos(yawRadians),
-    sy     = Math.sin(yawRadians)
-  const cp = Math.cos(pitchRadians),
-    sp     = Math.sin(pitchRadians)
-  const cr = Math.cos(rollRadians),
-    sr     = Math.sin(rollRadians)
-
-  // combined rotation: Rz(roll) × Rx(pitch) × Ry(yaw)
-  const r00 = cy * cr + sy * sp * sr
-  const r01 = sr * cp
-  const r02 = -sy * cr + cy * sp * sr
-  const r10 = -cy * sr + sy * sp * cr
-  const r11 = cr * cp
-  const r12 = sr * sy + cy * sp * cr
-  const r20 = sy * cp
-  const r21 = -sp
-  const r22 = cy * cp
-
-  out[0]  = r00 * scale
-  out[1]  = r10 * scale
-  out[2]  = r20 * scale
-  out[3]  = 0
-  out[4]  = r01 * scale
-  out[5]  = r11 * scale
-  out[6]  = r21 * scale
-  out[7]  = 0
-  out[8]  = r02 * scale
-  out[9]  = r12 * scale
-  out[10] = r22 * scale
-  out[11] = 0
-  out[12] = tx
-  out[13] = ty
-  out[14] = tz
-  out[15] = 1
-
-  return out
-}
 
 
-/**
- * Extract the normal matrix (transpose of the inverse of the upper-left 3x3)
- * from a model matrix. Used to transform surface normals correctly when the
- * model matrix includes non-uniform scale. The output is a Mat3 (Float32Array
- * of 9 elements, column-major).
- */
-function normalMatrix (out: Mat3, model: Mat4): Mat3 {
-  const inv = invert(_scratch, model)
-  if (!inv) {
-    out[0] = 1; out[1] = 0; out[2] = 0
-    out[3]                         = 0; out[4] = 1; out[5] = 0
-    out[6]                                                 = 0; out[7] = 0; out[8] = 1
-    return out
-  }
-
-  // transpose the upper-left 3x3 of the inverse
-  out[0] = inv[0]
-  out[1] = inv[4]
-  out[2] = inv[8]
-  out[3] = inv[1]
-  out[4] = inv[5]
-  out[5] = inv[9]
-  out[6] = inv[2]
-  out[7] = inv[6]
-  out[8] = inv[10]
-
-  return out
-}
 
 
-/**
- * Transform a 3D point by a 4x4 matrix with perspective divide. The input w
- * component defaults to 1 (an ordinary point, not a direction).
- */
-function transformPoint (out: Vec3, m: Mat4, p: Vec3): Vec3 {
-  const x = p[0],
-    y     = p[1],
-    z     = p[2]
-  const w = m[3] * x + m[7] * y + m[11] * z + m[15]
-
-  out[0] = (m[0] * x + m[4] * y + m[8] * z + m[12]) / w
-  out[1] = (m[1] * x + m[5] * y + m[9] * z + m[13]) / w
-  out[2] = (m[2] * x + m[6] * y + m[10] * z + m[14]) / w
-
-  return out
-}

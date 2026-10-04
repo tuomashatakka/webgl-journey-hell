@@ -78,7 +78,7 @@ import type { CustomUniforms } from '@wjh/gl/uniforms'
 // derivative of the eased quantity, so it vanishes at every beat boundary; the
 // bank angle is a function of curvature, so the car cannot snap into or out of
 // a roll at a join. The route table has no way to express a kink.
-import { clamp01, mix, smootherstep, smoothstep } from '@wjh/math/scalar'
+import { clamp01, mix, smootherstep } from '@wjh/math/scalar'
 
 
 const D = Math.PI / 180

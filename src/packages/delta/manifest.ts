@@ -116,10 +116,6 @@ export const MAT: Readonly<Record<string, number>> = Object.fromEntries(
   MATERIALS.map((m, i) => [ m.id, i ]),
 )
 
-/** Sky index by id. */
-const SKY: Readonly<Record<string, number>> = Object.fromEntries(
-  SKIES.map((s, i) => [ s.id, i ]),
-)
 
 /**
  * The light direction for a sky's sun, given the yaw the journey samples the

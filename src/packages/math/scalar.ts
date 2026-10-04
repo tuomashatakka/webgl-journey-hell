@@ -36,15 +36,7 @@ export function smootherstep (edge0: number, edge1: number, x: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10)
 }
 
-/** GLSL's `fract`: always in [0, 1), negative inputs included. */
-function fract (x: number): number {
-  return x - Math.floor(x)
-}
 
-/** Linear remap of `x` from [a0, a1] onto [b0, b1], unclamped. */
-function remap (x: number, a0: number, a1: number, b0: number, b1: number): number {
-  return b0 + (b1 - b0) * (x - a0) / (a1 - a0)
-}
 
 /**
  * The classic shader hash, `fract(sin(n · 127.1) · 43758.5453)`. Fixed places
@@ -61,10 +53,3 @@ export function easeInOutCubic (t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2
 }
 
-/**
- * Frame-rate independent exponential approach: move `current` toward `target`
- * as a first-order lag with time constant `tau` seconds.
- */
-function approach (current: number, target: number, dt: number, tau: number): number {
-  return current + (target - current) * (1 - Math.exp(-dt / tau))
-}

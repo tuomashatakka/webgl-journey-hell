@@ -67,12 +67,6 @@ export const SECTION_COUNT = 7
 /** One full circuit of the foundry, metres. Geometry is periodic in this. */
 export const CYCLE_LEN = SECTION_LEN * SECTION_COUNT
 
-/**
- * Length of the cross-fade at *every* section boundary, metres — including the
- * wrap from the furnace floor back into the loading bay. One rule for all seven
- * seams is what makes the loop read as a single continuous walk.
- */
-const TRANSITION = 9
 
 // Metres of travel per footstep. CYCLE_LEN is a whole number of these, so the
 // stride phase is continuous across the wrap.
@@ -102,8 +96,6 @@ const LIFT_STAND = 0.55
 /** Where the walk starts and ends: standing in the cage at the landing. */
 export const WALK_START = LIFT_Z - LIFT_STAND
 
-/** Half-width of the square hoist shaft. */
-const SHAFT_R = 3
 
 /** Shaft head, and the height the cage is at when the cable lets go. */
 const SHAFT_HEAD_Y = 128
@@ -318,8 +310,6 @@ export const MAX_SQUEEZE = 0.18
 export const SPAN_HALF_W =
   Math.max(...SPAN_IX.map(Math.abs)) * TILE + TILE_HALF
 
-/** Molten surface far below the span. */
-const MELT_Y = -30
 
 const UNFOLD_LEAD = 14 // metres of warning before you reach a tile
 const REFOLD_LAG  = 5 // metres behind you before it folds away again
@@ -629,10 +619,6 @@ export function decayFor (smoothLoop: number): number {
   return Math.min(0.85, smoothLoop * 0.11)
 }
 
-/** True while the camera is riding the cage rather than walking. */
-function riding (state: FoundryState): boolean {
-  return state.mode !== MODE_WALK
-}
 
 // --- deterministic RNG ------------------------------------------------------
 function mulberry32 (seed: number): () => number {

@@ -61,7 +61,6 @@ const GLIDE = 0.45
 /** Glide for the room crossfade, which happens at a portal and should be quick. */
 const ROOM_GLIDE = 0.3
 
-const EPS = 0.004
 
 /** Rail length in metres — joint impacts fire every JOINT_PITCH of travel. */
 const JOINT_PITCH = 12.5
@@ -943,7 +942,6 @@ export class LoopLineAudioEngine extends JourneyAudio {
 
     // Emit splash events — rate tracks speed.
     if (this.bay === 3 && this.splashGain) {
-      const splashInterval = Math.max(100, 800 - this.speed * 30)
       if (Math.random() < this.speed / 18 * 0.08)
         this.fireSplash()
     }

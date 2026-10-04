@@ -4,7 +4,6 @@
   "workspaces": {
     ".": {
       "entry": [
-        "src/app/**/{page,layout}.tsx",
         "src/**/*.test.mjs",
         "tools/*.{mjs,ts}",
         "tools/harness/entry.ts"
@@ -13,14 +12,6 @@
         "src/**/*.{ts,tsx,mjs}",
         "tools/**/*.{mjs,ts}",
         "!src/packages/**"
-      ],
-      "ignoreIssues": {
-        "src/app/**": [
-          "exports"
-        ]
-      },
-      "ignoreDependencies": [
-        "@tuomashatakka/eslint-config"
       ]
     },
     "src/packages/*": {

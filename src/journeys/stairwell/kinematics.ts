@@ -2,7 +2,7 @@
 // derivative as well is what removed the kick as a blend opened and closed.
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { lapLabel } from '@wjh/journey/label'
-import { clamp01, smootherstep, smoothstep } from '@wjh/math/scalar'
+import { clamp01, smoothstep } from '@wjh/math/scalar'
 
 
 export const LOOP_LENGTH = 500

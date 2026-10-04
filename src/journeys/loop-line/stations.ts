@@ -323,8 +323,6 @@ export const CHORD_BAY: Bay = {
   sound:      6,
 }
 
-/** Every bay that can own geometry, indexed by id. */
-const ALL_BAYS: Bay[] = [ ...BAYS, CHORD_BAY ]
 
 /**
  * THE TURNBACK is where the lap counter advances: no walls, no ceiling, signal
@@ -592,14 +590,6 @@ function buildCircuits (): Circuits {
   }
 }
 
-/** The span owning an arc length on a given circuit. Total: the spans tile it. */
-function spanAt (spans: BaySpan[], s: number, loopLength: number): BaySpan {
-  const t = (s % loopLength + loopLength) % loopLength
-  for (const span of spans)
-    if (t < span.s1)
-      return span
-  return spans[spans.length - 1]
-}
 
 /** Index of the span owning `s`, for neighbour lookups. */
 export function spanIndexAt (spans: BaySpan[], s: number, loopLength: number): number {

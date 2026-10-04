@@ -5,7 +5,6 @@
 // in app/globals.css. Mounted by SettingsButton (grid + journeys) and by the
 // bespoke liminal route.
 
-import React from 'react'
 import { X as CloseIcon } from 'lucide-react'
 import {
   GraphicsSettings,

@@ -61,7 +61,7 @@ import {
 
 } from './course'
 import type { LookParams, Route, SpeedParams } from './course'
-import { clamp01, hash1, smootherstep } from '@wjh/math/scalar'
+import { hash1, smootherstep } from '@wjh/math/scalar'
 
 
 /**

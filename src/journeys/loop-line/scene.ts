@@ -165,7 +165,6 @@ export function createLoopLineScene (
     return null
   }
 
-  const geoProgs = [ surfProg!, wallProg!, waterProg! ]
 
   const materials = createMaterialArrays(gl)
   const skyIds    = [ ...new Set([ ...BAYS, CHORD_BAY ].map(b => b.sky).filter(Boolean) as string[]) ]
