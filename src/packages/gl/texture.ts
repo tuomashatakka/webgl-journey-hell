@@ -3,18 +3,6 @@
 import type { AnyGl } from './context'
 
 
-/** Resolve once `url` has decoded; reject with the url on failure. */
-function loadImage (url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img       = new Image()
-    img.crossOrigin = 'anonymous'
-    img.decoding    = 'async'
-    img.onload      = () => resolve(img)
-    img.onerror     = () => reject(new Error(`image failed to load: ${url}`))
-    img.src         = url
-  })
-}
-
 export interface ImageTexture {
   readonly tex: WebGLTexture;
 
@@ -30,6 +18,18 @@ export interface ImageTextureOptions {
   wrapS?:       number;
   wrapT?:       number;
   mipmaps?:     boolean;
+}
+
+/** Resolve once `url` has decoded; reject with the url on failure. */
+function loadImage (url: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img       = new Image()
+    img.crossOrigin = 'anonymous'
+    img.decoding    = 'async'
+    img.onload      = () => resolve(img)
+    img.onerror     = () => reject(new Error(`image failed to load: ${url}`))
+    img.src         = url
+  })
 }
 
 /**

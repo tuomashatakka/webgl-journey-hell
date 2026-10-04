@@ -40,6 +40,8 @@ export const SWEEP_LAYOUT: AttribSpec[] = [
   { location: 3, size: 4, offset: 12 },
 ]
 
+const WORLD_UP = { x: 0, y: 1, z: 0 }
+
 /** One point of a cross-section: right offset, up offset, metres. */
 export type ProfilePoint = [ number, number ]
 
@@ -73,8 +75,6 @@ export interface SweepArrays {
   vertexCount: number;
   indexCount:  number;
 }
-
-const WORLD_UP = { x: 0, y: 1, z: 0 }
 
 /**
  * The frame a road is laid on: the curve's tangent, with right and up taken

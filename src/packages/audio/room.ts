@@ -5,6 +5,11 @@
 // loop per room ringing into nothing. Sweeping one pair means a portal is a
 // *transition* rather than a switch.
 
+/** The second, longer tap, at a ratio that never lines up into a pitch. */
+const TAIL_RATIO    = 3.7
+const TAIL_FEEDBACK = 0.8
+
+
 /** Per-room reverb: delay time, feedback, damping cutoff, wet level. */
 export interface RoomTone {
   time: number;
@@ -21,10 +26,6 @@ export interface RoomReverb {
   /** Glide every parameter to a room. Only call it when the room changes. */
   tune(room: RoomTone, now: number, glide: number): void;
 }
-
-/** The second, longer tap, at a ratio that never lines up into a pitch. */
-const TAIL_RATIO    = 3.7
-const TAIL_FEEDBACK = 0.8
 
 /** Build the reverb into `out`, tuned to `room` and sending at `wetLevel`. */
 export function createRoomReverb (ctx: AudioContext, out: AudioNode, room: RoomTone, wetLevel: number): RoomReverb {

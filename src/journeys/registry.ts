@@ -19,34 +19,6 @@ import { skybridgesPreviewFrag } from './skybridges/shader'
 import { switchbackPreviewFrag } from './switchback/shader'
 import { HASH_SIN } from '@wjh/glsl/hash'
 
-
-export interface Journey {
-
-  /** Route segment + folder name under app/journeys/. */
-  slug:    string;
-  title:   string;
-  tagline: string;
-  tags:    string[];
-
-  /** Drives the card's border glow + tag color. */
-  accent: string;
-
-  /** CSS poster gradient — the last-resort backdrop if the poster 404s too. */
-  gradient: [string, string];
-
-  /**
-   * Screenshot of the running journey (assets/posters), shown before hover and
-   * wherever the live preview can't run: touch devices with no hover, browsers
-   * without WebGL, a preview shader that failed to compile. Captured with
-   * `tools/shoot-posters.mjs`.
-   */
-  poster: string;
-
-  /** Compact fragment shader for the hover-to-live preview (iTime/iResolution/uPointer). */
-  previewShader: string;
-  status:        'live';
-}
-
 // Liminal hover preview: a lightweight stand-in for the real (1100-line) fsScene —
 // a descending neon tunnel with a red void core and CRT scanlines.
 const liminalPreviewFrag = `
@@ -218,6 +190,33 @@ export const JOURNEYS: Journey[] = [
     status:        'live',
   },
 ]
+
+export interface Journey {
+
+  /** Route segment + folder name under app/journeys/. */
+  slug:    string;
+  title:   string;
+  tagline: string;
+  tags:    string[];
+
+  /** Drives the card's border glow + tag color. */
+  accent: string;
+
+  /** CSS poster gradient — the last-resort backdrop if the poster 404s too. */
+  gradient: [string, string];
+
+  /**
+   * Screenshot of the running journey (assets/posters), shown before hover and
+   * wherever the live preview can't run: touch devices with no hover, browsers
+   * without WebGL, a preview shader that failed to compile. Captured with
+   * `tools/shoot-posters.mjs`.
+   */
+  poster: string;
+
+  /** Compact fragment shader for the hover-to-live preview (iTime/iResolution/uPointer). */
+  previewShader: string;
+  status:        'live';
+}
 
 export function getJourney (slug: string): Journey | undefined {
   return JOURNEYS.find(j => j.slug === slug)

@@ -2,6 +2,23 @@
 
 type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
 
+/** A chord of triangle voices, each detuned and wobbling by its own slow LFO. */
+export interface DriftingChord {
+
+  /** [frequency Hz, static detune cents] per voice. */
+  voices: readonly (readonly [number, number])[];
+
+  /** Lowpass cutoff (Hz) the whole chord sits behind. */
+  cutoff:    number;
+  voiceGain: number;
+
+  /** Wow LFO rate is `wowRate + frequency * 0.0004` Hz. */
+  wowRate: number;
+
+  /** Wow depth, cents. */
+  wowDepth: number;
+}
+
 /** A new AudioContext (webkit-prefixed on older Safari), or null without Web Audio. */
 export function createAudioContext (): AudioContext | null {
   if (typeof window === 'undefined')
@@ -35,24 +52,6 @@ export function whiteNoise (ctx: BaseAudioContext, seconds = 2): AudioBuffer {
   for (let i = 0; i < size; i++)
     out[i] = Math.random() * 2 - 1
   return buffer
-}
-
-
-/** A chord of triangle voices, each detuned and wobbling by its own slow LFO. */
-export interface DriftingChord {
-
-  /** [frequency Hz, static detune cents] per voice. */
-  voices: readonly (readonly [number, number])[];
-
-  /** Lowpass cutoff (Hz) the whole chord sits behind. */
-  cutoff:    number;
-  voiceGain: number;
-
-  /** Wow LFO rate is `wowRate + frequency * 0.0004` Hz. */
-  wowRate: number;
-
-  /** Wow depth, cents. */
-  wowDepth: number;
 }
 
 /**

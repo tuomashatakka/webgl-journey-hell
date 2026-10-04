@@ -10,86 +10,17 @@ import { JourneyAudio } from '@wjh/audio/engine'
 
 
 class LiminalAudioEngine extends JourneyAudio {
+  private lowpassLFO: OscillatorNode | null = null
+  private droneOscL:  OscillatorNode | null = null
+  private droneOscR:  OscillatorNode | null = null
+
+  private noiseVolume: GainNode | null = null
+
+  private waterVolume:  GainNode | null = null
+  private glitchVolume: GainNode | null = null
   protected readonly name = 'Liminal'
   protected readonly level = 0.8
   protected readonly fade = 0.02
-
-  private lowpassLFO: OscillatorNode | null = null
-
-  private droneOscL:    OscillatorNode | null = null
-  private droneOscR:    OscillatorNode | null = null
-  private noiseVolume:  GainNode | null = null
-  private waterVolume:  GainNode | null = null
-  private glitchVolume: GainNode | null = null
-
-  protected build (): void {
-    try {
-      const ctx         = this.ctx!
-      const main        = this.main!
-      const noiseSource = this.noiseSource(true)!
-
-      const filter = ctx.createBiquadFilter()
-      filter.type  = 'lowpass'
-      filter.frequency.setValueAtTime(140, ctx.currentTime)
-      filter.Q.setValueAtTime(2.5, ctx.currentTime)
-
-      this.lowpassLFO = ctx.createOscillator()
-      this.lowpassLFO.frequency.setValueAtTime(0.08, ctx.currentTime)
-
-      const lfoGain = ctx.createGain()
-      lfoGain.gain.setValueAtTime(110, ctx.currentTime)
-
-      this.lowpassLFO.connect(lfoGain)
-      lfoGain.connect(filter.frequency)
-      this.lowpassLFO.start()
-
-      this.noiseVolume = ctx.createGain()
-      this.noiseVolume.gain.setValueAtTime(0.25, ctx.currentTime)
-
-      noiseSource.connect(filter)
-      filter.connect(this.noiseVolume)
-      this.noiseVolume.connect(main)
-      noiseSource.start()
-
-      this.droneOscL      = ctx.createOscillator()
-      this.droneOscR      = ctx.createOscillator()
-      this.droneOscL.type = 'sine'
-      this.droneOscR.type = 'triangle'
-
-      this.droneOscL.frequency.setValueAtTime(54.4, ctx.currentTime)
-      this.droneOscR.frequency.setValueAtTime(55.2, ctx.currentTime)
-
-      const droneGain = ctx.createGain()
-      droneGain.gain.setValueAtTime(0.12, ctx.currentTime)
-
-      const droneFilter = ctx.createBiquadFilter()
-      droneFilter.type  = 'lowpass'
-      droneFilter.frequency.setValueAtTime(80, ctx.currentTime)
-
-      this.droneOscL.connect(droneFilter)
-      this.droneOscR.connect(droneFilter)
-      droneFilter.connect(droneGain)
-      droneGain.connect(main)
-
-      this.droneOscL.start()
-      this.droneOscR.start()
-
-      this.waterVolume = ctx.createGain()
-      this.waterVolume.gain.setValueAtTime(0.48, ctx.currentTime)
-      this.waterVolume.connect(main)
-
-      this.startWaterDripper()
-
-      this.glitchVolume = ctx.createGain()
-      this.glitchVolume.gain.setValueAtTime(0.35, ctx.currentTime)
-      this.glitchVolume.connect(main)
-
-      this.startGlitchEngine()
-    }
-    catch (e) {
-      console.error('Audio Context initialization failed:', e)
-    }
-  }
 
   private startWaterDripper () {
     const playDrip = () => {
@@ -163,6 +94,75 @@ class LiminalAudioEngine extends JourneyAudio {
     }
 
     runGlitch()
+  }
+
+  protected build (): void {
+    try {
+      const ctx         = this.ctx!
+      const main        = this.main!
+      const noiseSource = this.noiseSource(true)!
+
+      const filter = ctx.createBiquadFilter()
+      filter.type  = 'lowpass'
+      filter.frequency.setValueAtTime(140, ctx.currentTime)
+      filter.Q.setValueAtTime(2.5, ctx.currentTime)
+
+      this.lowpassLFO = ctx.createOscillator()
+      this.lowpassLFO.frequency.setValueAtTime(0.08, ctx.currentTime)
+
+      const lfoGain = ctx.createGain()
+      lfoGain.gain.setValueAtTime(110, ctx.currentTime)
+
+      this.lowpassLFO.connect(lfoGain)
+      lfoGain.connect(filter.frequency)
+      this.lowpassLFO.start()
+
+      this.noiseVolume = ctx.createGain()
+      this.noiseVolume.gain.setValueAtTime(0.25, ctx.currentTime)
+
+      noiseSource.connect(filter)
+      filter.connect(this.noiseVolume)
+      this.noiseVolume.connect(main)
+      noiseSource.start()
+
+      this.droneOscL      = ctx.createOscillator()
+      this.droneOscR      = ctx.createOscillator()
+      this.droneOscL.type = 'sine'
+      this.droneOscR.type = 'triangle'
+
+      this.droneOscL.frequency.setValueAtTime(54.4, ctx.currentTime)
+      this.droneOscR.frequency.setValueAtTime(55.2, ctx.currentTime)
+
+      const droneGain = ctx.createGain()
+      droneGain.gain.setValueAtTime(0.12, ctx.currentTime)
+
+      const droneFilter = ctx.createBiquadFilter()
+      droneFilter.type  = 'lowpass'
+      droneFilter.frequency.setValueAtTime(80, ctx.currentTime)
+
+      this.droneOscL.connect(droneFilter)
+      this.droneOscR.connect(droneFilter)
+      droneFilter.connect(droneGain)
+      droneGain.connect(main)
+
+      this.droneOscL.start()
+      this.droneOscR.start()
+
+      this.waterVolume = ctx.createGain()
+      this.waterVolume.gain.setValueAtTime(0.48, ctx.currentTime)
+      this.waterVolume.connect(main)
+
+      this.startWaterDripper()
+
+      this.glitchVolume = ctx.createGain()
+      this.glitchVolume.gain.setValueAtTime(0.35, ctx.currentTime)
+      this.glitchVolume.connect(main)
+
+      this.startGlitchEngine()
+    }
+    catch (e) {
+      console.error('Audio Context initialization failed:', e)
+    }
   }
 
   public update (_time: number, state?: CustomUniforms) {

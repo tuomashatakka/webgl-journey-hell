@@ -4,9 +4,14 @@
 import { clamp01 } from '@wjh/math/scalar'
 import { SYLLABLES } from './patches'
 
+/** The door chime lasts this long before the first syllable. */
+const CHIME_SECONDS = 0.4
 
 type Ctx = AudioContext
 type Out = AudioNode
+
+/** One formant syllable. Pitch and duration are syllable-specific. */
+type VoiceType = { f1: BiquadFilterNode; f2: BiquadFilterNode; mix: GainNode }
 
 /** A short filtered click of the relays in THE STACKS. */
 export function relayClick (ctx: Ctx, buffer: AudioBuffer, to: Out): void {
@@ -96,9 +101,6 @@ export function doorChime (ctx: Ctx, chime: GainNode): void {
   }
 }
 
-/** One formant syllable. Pitch and duration are syllable-specific. */
-type VoiceType = { f1: BiquadFilterNode; f2: BiquadFilterNode; mix: GainNode }
-
 export function syllable (
   ctx: Ctx, voice: VoiceType, pitch: number, duration: number,
 ): void {
@@ -110,9 +112,6 @@ export function syllable (
   voice.mix.gain.setValueAtTime(0.14, now + duration - 0.02)
   voice.mix.gain.linearRampToValueAtTime(0, now + duration)
 }
-
-/** The door chime lasts this long before the first syllable. */
-const CHIME_SECONDS = 0.4
 
 /**
  * The syllables of one announcement, and when each starts (seconds after the

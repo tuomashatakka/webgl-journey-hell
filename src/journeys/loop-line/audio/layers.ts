@@ -4,12 +4,31 @@
 
 import { driftingChord } from '@wjh/audio/nodes'
 
+/** Glide for slow-moving continuous parameters. */
+export const GLIDE = 0.45
 
 type Ctx = AudioContext
 type Out = AudioNode
 
-/** Glide for slow-moving continuous parameters. */
-export const GLIDE = 0.45
+/**
+ * THE ANNEX. Water — lapping and dripping, plus a splash whose rate tracks
+ * speed. The splash gain is only created here; the splashes are events.
+ */
+type BuildWaterReturnType = { water: GainNode; splash: GainNode }
+
+/**
+ * THE STACKS. Fan-wall noise — several detuned bandpass-filtered noise bands —
+ * plus coil whine. The relay gain is created here; the clicks are events.
+ */
+type BuildStacksReturnType = { fan: GainNode; coil: GainNode; relay: GainNode }
+
+/** The formant announcement's voice: a sawtooth through two bandpass formants. */
+export interface FormantVoice {
+  f1:    BiquadFilterNode;
+  f2:    BiquadFilterNode;
+  mix:   GainNode;
+  chime: GainNode;
+}
 
 /** A bandpass filter at `f` with quality `q`. */
 function bandpass (ctx: Ctx, f: number, q: number): BiquadFilterNode {
@@ -115,12 +134,6 @@ export function buildWind (ctx: Ctx, dry: Out, wet: Out, src: AudioBufferSourceN
   return windGain
 }
 
-/**
- * THE ANNEX. Water — lapping and dripping, plus a splash whose rate tracks
- * speed. The splash gain is only created here; the splashes are events.
- */
-type BuildWaterReturnType = { water: GainNode; splash: GainNode }
-
 export function buildWater (ctx: Ctx, dry: Out, wet: Out, water: AudioBufferSourceNode | null): BuildWaterReturnType {
   const now        = ctx.currentTime
   const waterGain  = gainAt(ctx, 0)
@@ -145,12 +158,6 @@ export function buildWater (ctx: Ctx, dry: Out, wet: Out, water: AudioBufferSour
   waterGain.connect(wet)
   return { water: waterGain, splash: splashGain }
 }
-
-/**
- * THE STACKS. Fan-wall noise — several detuned bandpass-filtered noise bands —
- * plus coil whine. The relay gain is created here; the clicks are events.
- */
-type BuildStacksReturnType = { fan: GainNode; coil: GainNode; relay: GainNode }
 
 export function buildStacks (ctx: Ctx, dry: Out, wet: Out, noise: AudioBufferSourceNode | null): BuildStacksReturnType {
   const fan   = gainAt(ctx, 0)
@@ -230,14 +237,6 @@ export function buildShimmer (ctx: Ctx, wet: Out): void {
   g.connect(lp)
   lp.connect(bp)
   bp.connect(wet)
-}
-
-/** The formant announcement's voice: a sawtooth through two bandpass formants. */
-export interface FormantVoice {
-  f1:    BiquadFilterNode;
-  f2:    BiquadFilterNode;
-  mix:   GainNode;
-  chime: GainNode;
 }
 
 /**

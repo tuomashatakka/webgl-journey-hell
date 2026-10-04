@@ -19,6 +19,82 @@ export interface ColorFormat {
   hdr: boolean;
 }
 
+interface TextureOptions {
+  filter?: number;
+  wrap?:   number;
+
+  /** Allocate the full mip chain (texStorage2D) so generateMipmap can fill it. */
+  mips?: boolean;
+}
+
+export interface RenderTarget {
+  readonly fbo:    WebGLFramebuffer;
+  readonly tex:    WebGLTexture;
+  readonly width:  number;
+  readonly height: number;
+
+  /** Bind for drawing and set the viewport to cover it. */
+  bind(): void;
+  dispose(): void;
+}
+
+export interface RenderTargetOptions extends TextureOptions {
+
+  /** Attach a 24-bit depth renderbuffer (WebGL 2) / 16-bit (WebGL 1). */
+  depth?: boolean;
+}
+
+interface MsaaTarget {
+  readonly fbo:     WebGLFramebuffer;
+  readonly samples: number;
+  readonly width:   number;
+  readonly height:  number;
+  bind(): void;
+
+  /** Resolve the colour into `target` by blit. */
+  resolveTo(target: RenderTarget): void;
+  dispose(): void;
+}
+
+export interface PostChainOptions {
+
+  /** Prefer a half-float scene (falls back to RGBA8 when unsupported). */
+  hdr?: boolean;
+
+  /** MSAA samples for the scene pass; 0 renders straight into the resolve target. */
+  msaa?: number;
+
+  /** How many half-resolution bloom levels to build under the scene. */
+  bloomLevels?: number;
+}
+
+/**
+ * The rasterizer's frame: draw the scene into `bindScene()` (multisampled when
+ * the device and the quality tier allow), `resolve()`, then read `scene.tex`
+ * and walk `bloom` down and back up. Reallocates only when the size or the
+ * options actually change, so calling `resize` every frame is free.
+ */
+export interface PostChain {
+  readonly format: ColorFormat;
+  readonly width:  number;
+  readonly height: number;
+
+  /** Samples actually in use (0 when MSAA is off or unsupported). */
+  readonly samples: number;
+
+  /** The resolved scene colour. */
+  readonly scene: RenderTarget;
+
+  /** Each half the size of the one before; [0] is half the scene. */
+  readonly bloom: readonly RenderTarget[];
+
+  /** Returns true when anything was reallocated. */
+  resize(width: number, height: number, opts?: PostChainOptions): boolean;
+  bindScene(): void;
+  resolve(): void;
+  dispose(): void;
+}
+
 /** Plain 8-bit RGBA: renderable and filterable everywhere. */
 export function rgba8 (gl: AnyGl): ColorFormat {
   return {
@@ -40,14 +116,6 @@ export function sceneFormat (gl: WebGL2RenderingContext, preferHdr = true): Colo
     return { internal: gl.RGBA16F, format: gl.RGBA, type: gl.HALF_FLOAT, hdr: true }
   }
   return rgba8(gl)
-}
-
-interface TextureOptions {
-  filter?: number;
-  wrap?:   number;
-
-  /** Allocate the full mip chain (texStorage2D) so generateMipmap can fill it. */
-  mips?: boolean;
 }
 
 /** How many mip levels a w × h texture has. */
@@ -73,23 +141,6 @@ function createTexture (gl: AnyGl, w: number, h: number, fmt: ColorFormat, opts:
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap)
   return tex
-}
-
-export interface RenderTarget {
-  readonly fbo:    WebGLFramebuffer;
-  readonly tex:    WebGLTexture;
-  readonly width:  number;
-  readonly height: number;
-
-  /** Bind for drawing and set the viewport to cover it. */
-  bind(): void;
-  dispose(): void;
-}
-
-export interface RenderTargetOptions extends TextureOptions {
-
-  /** Attach a 24-bit depth renderbuffer (WebGL 2) / 16-bit (WebGL 1). */
-  depth?: boolean;
 }
 
 /** A texture-backed framebuffer of `fmt`. */
@@ -139,18 +190,6 @@ function maxSamples (gl: WebGL2RenderingContext, fmt: ColorFormat): number {
     return s && s.length ? Math.max(0, ...Array.from(s)) : 0
   }
   return gl.getParameter(gl.MAX_SAMPLES) as number
-}
-
-interface MsaaTarget {
-  readonly fbo:     WebGLFramebuffer;
-  readonly samples: number;
-  readonly width:   number;
-  readonly height:  number;
-  bind(): void;
-
-  /** Resolve the colour into `target` by blit. */
-  resolveTo(target: RenderTarget): void;
-  dispose(): void;
 }
 
 /** A multisampled colour (+ depth) renderbuffer target. */
@@ -203,45 +242,6 @@ function createMsaaTarget (
         gl.deleteRenderbuffer(depthRb)
     },
   }
-}
-
-export interface PostChainOptions {
-
-  /** Prefer a half-float scene (falls back to RGBA8 when unsupported). */
-  hdr?: boolean;
-
-  /** MSAA samples for the scene pass; 0 renders straight into the resolve target. */
-  msaa?: number;
-
-  /** How many half-resolution bloom levels to build under the scene. */
-  bloomLevels?: number;
-}
-
-/**
- * The rasterizer's frame: draw the scene into `bindScene()` (multisampled when
- * the device and the quality tier allow), `resolve()`, then read `scene.tex`
- * and walk `bloom` down and back up. Reallocates only when the size or the
- * options actually change, so calling `resize` every frame is free.
- */
-export interface PostChain {
-  readonly format: ColorFormat;
-  readonly width:  number;
-  readonly height: number;
-
-  /** Samples actually in use (0 when MSAA is off or unsupported). */
-  readonly samples: number;
-
-  /** The resolved scene colour. */
-  readonly scene: RenderTarget;
-
-  /** Each half the size of the one before; [0] is half the scene. */
-  readonly bloom: readonly RenderTarget[];
-
-  /** Returns true when anything was reallocated. */
-  resize(width: number, height: number, opts?: PostChainOptions): boolean;
-  bindScene(): void;
-  resolve(): void;
-  dispose(): void;
 }
 
 export function createPostChain (gl: WebGL2RenderingContext, initial: PostChainOptions = {}): PostChain {

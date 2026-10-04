@@ -1,14 +1,6 @@
 import { CONFIG } from '@wjh/config/config'
 import type { JourneyMarks } from '@wjh/journey/types'
 
-
-interface SkybridgesSection {
-  id:     number;
-  name:   string;
-  startZ: number;
-  endZ:   number;
-}
-
 // Twelve seconds per section at default speed gives each theme room to land.
 const SKYBRIDGES_SPEED  = 5
 const SKYBRIDGES_LOOP_Z = 540
@@ -28,6 +20,13 @@ const SKYBRIDGES_SECTIONS: SkybridgesSection[] = [
   { id: 9, name: 'SECTION 9: SKYLIGHT RELEASE', startZ: 480, endZ: SKYBRIDGES_LOOP_Z },
 ]
 
+interface SkybridgesSection {
+  id:     number;
+  name:   string;
+  startZ: number;
+  endZ:   number;
+}
+
 function getSkybridgesSection (time: number): SkybridgesSection {
   const z = (time * SKYBRIDGES_SPEED % SKYBRIDGES_LOOP_Z + SKYBRIDGES_LOOP_Z) % SKYBRIDGES_LOOP_Z
   return SKYBRIDGES_SECTIONS.find(section => z >= section.startZ && z < section.endZ) ??
@@ -37,7 +36,6 @@ function getSkybridgesSection (time: number): SkybridgesSection {
 export function getSkybridgesSectionName (time: number): string {
   return getSkybridgesSection(time).name
 }
-
 
 /**
  * Where the route is, for the transport controls. This journey has no

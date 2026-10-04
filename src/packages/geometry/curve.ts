@@ -84,13 +84,18 @@
 // camera, potentially once per visible rail segment), so allocation-free
 // access keeps the GC quiet on long sessions.
 
+// Central-difference tangent at any global parameter, computed by evaluating
+// the spline at two nearby parameters and differencing. This avoids the
+// parameter-mapping problem that arises when the centripetal knot spacing
+// makes the global-to-local mapping non-linear.
+
+const TAN_EPS = 1e-5
 
 export interface Vec3 {
   x: number;
   y: number;
   z: number;
 }
-
 
 export interface Frame {
 
@@ -106,22 +111,6 @@ export interface Frame {
   /** forward x up, completing a right-handed basis. */
   right: Vec3;
 }
-
-/** The world frame: at the origin, looking down +z with +y up. */
-export function newFrame (): Frame {
-  return {
-    pos:     { x: 0, y: 0, z: 0 },
-    forward: { x: 0, y: 0, z: 1 },
-    up:      { x: 0, y: 1, z: 0 },
-    right:   { x: 1, y: 0, z: 0 },
-  }
-}
-
-/** A deep copy of `f`. */
-export function cloneFrame (f: Frame): Frame {
-  return { pos: { ...f.pos }, forward: { ...f.forward }, up: { ...f.up }, right: { ...f.right }}
-}
-
 
 export interface ClosedCurve {
 
@@ -144,13 +133,43 @@ export interface ClosedCurve {
   curvatureAtDistance(s: number): number;
 }
 
+// ---- arc-length LUT -----------------------------------------------------
+
+interface LutEntry {
+  cumLen: number;
+  t:      number;
+  seg:    number;
+}
+
+// ---- parallel-transport frames ------------------------------------------
+
+interface PtFrame {
+  pos:     Vec3;
+  forward: Vec3;
+  up:      Vec3;
+  right:   Vec3;
+}
+
+/** The world frame: at the origin, looking down +z with +y up. */
+export function newFrame (): Frame {
+  return {
+    pos:     { x: 0, y: 0, z: 0 },
+    forward: { x: 0, y: 0, z: 1 },
+    up:      { x: 0, y: 1, z: 0 },
+    right:   { x: 1, y: 0, z: 0 },
+  }
+}
+
+/** A deep copy of `f`. */
+export function cloneFrame (f: Frame): Frame {
+  return { pos: { ...f.pos }, forward: { ...f.forward }, up: { ...f.up }, right: { ...f.right }}
+}
 
 // ---- inline vector helpers (tiny, self-contained — no imports) -----------
 
 const v3 = (x = 0, y = 0, z = 0): Vec3 => ({ x, y, z })
 
 const v3Copy = (a: Vec3): Vec3 => v3(a.x, a.y, a.z)
-
 
 const v3Sub = (a: Vec3, b: Vec3, out: Vec3): Vec3 => {
   out.x = a.x - b.x
@@ -194,7 +213,6 @@ const v3Norm = (a: Vec3, out: Vec3): Vec3 => {
   return out
 }
 
-
 // ---- centripetal Catmull-Rom helpers -------------------------------------
 
 /**
@@ -215,7 +233,6 @@ function knotDelta (a: Vec3, b: Vec3): number {
   // the Barry-Goldman recurrence below.
   return Math.max(1e-4, Math.sqrt(Math.sqrt(dx * dx + dy * dy + dz * dz)))
 }
-
 
 /**
  * Barry-Goldman evaluation of a non-uniform Catmull-Rom segment: three rounds
@@ -279,16 +296,6 @@ function catmullRomAt (
   return out
 }
 
-
-// ---- arc-length LUT -----------------------------------------------------
-
-interface LutEntry {
-  cumLen: number;
-  t:      number;
-  seg:    number;
-}
-
-
 function buildLut (points: Vec3[], samplesPerSeg: number): LutEntry[] {
   const N               = points.length
   const lut: LutEntry[] = [{ cumLen: 0, t: 0, seg: 0 }]
@@ -314,7 +321,6 @@ function buildLut (points: Vec3[], samplesPerSeg: number): LutEntry[] {
   return lut
 }
 
-
 // ---- binary search on the LUT -------------------------------------------
 
 function findSeg (lut: LutEntry[], s: number): [number, number] {
@@ -330,7 +336,6 @@ function findSeg (lut: LutEntry[], s: number): [number, number] {
   return [ lo, hi ]
 }
 
-
 function lerpLut (lut: LutEntry[], s: number): [number, number] {
   const total = lut[lut.length - 1].cumLen
   let wrapped = s % total
@@ -342,7 +347,6 @@ function lerpLut (lut: LutEntry[], s: number): [number, number] {
   const frac       = segLen > 0 ? (wrapped - lut[i0].cumLen) / segLen : 0
   return [ i0, frac ]
 }
-
 
 // ---- public curve evaluation (non-arc-length) ---------------------------
 
@@ -358,15 +362,8 @@ function sampleAt (pts: Vec3[], t: number, out?: Vec3): Vec3 {
   )
 }
 
-
-// Central-difference tangent at any global parameter, computed by evaluating
-// the spline at two nearby parameters and differencing. This avoids the
-// parameter-mapping problem that arises when the centripetal knot spacing
-// makes the global-to-local mapping non-linear.
-
-const TAN_EPS = 1e-5
-const tanA    = v3()
-const tanB    = v3()
+const tanA = v3()
+const tanB = v3()
 
 function tangentAt (pts: Vec3[], t: number, out?: Vec3): Vec3 {
   sampleAt(pts, t - TAN_EPS, tanA)
@@ -378,7 +375,6 @@ function tangentAt (pts: Vec3[], t: number, out?: Vec3): Vec3 {
   o.z     = tanB.z - tanA.z
   return v3Norm(o, o)
 }
-
 
 // ---- Rodrigues rotation -------------------------------------------------
 
@@ -392,17 +388,6 @@ function rodrigues (axis: Vec3, angle: number, v: Vec3, out: Vec3): void {
   out.y = v.y * cosA + cross.y * sinA + axis.y * dot * (1 - cosA)
   out.z = v.z * cosA + cross.z * sinA + axis.z * dot * (1 - cosA)
 }
-
-
-// ---- parallel-transport frames ------------------------------------------
-
-interface PtFrame {
-  pos:     Vec3;
-  forward: Vec3;
-  up:      Vec3;
-  right:   Vec3;
-}
-
 
 function buildFrames (pts: Vec3[], lut: LutEntry[]): PtFrame[] {
   const frames: PtFrame[] = []
@@ -504,7 +489,6 @@ function buildFrames (pts: Vec3[], lut: LutEntry[]): PtFrame[] {
   return frames
 }
 
-
 // ---- holonomy correction ------------------------------------------------
 
 function correctHolonomy (frames: PtFrame[]): void {
@@ -554,7 +538,6 @@ function correctHolonomy (frames: PtFrame[]): void {
     frames[i].right.z = tmpRt.z
   }
 }
-
 
 // ---- public factory -----------------------------------------------------
 

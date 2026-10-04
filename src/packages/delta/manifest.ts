@@ -9,28 +9,6 @@
 // Every asset is a CC0 scan from ambientCG (https://ambientcg.com). CC0 asks
 // for nothing; the asset ids are kept so each one can be traced to its source.
 
-export interface MaterialAsset {
-
-  /** Stable name. Becomes `MAT_<ID>` in GLSL. Append-only: it is also the layer index. */
-  id: string;
-
-  /** ambientCG asset id. */
-  asset: string;
-
-  /** Human label for the asset page. */
-  label: string;
-
-  /** Physical width of one repeat, metres. Shaders divide world UVs by this. */
-  metres: number;
-
-  /**
-   * Relief depth of the displacement map, metres, at full scale. Drives
-   * parallax occlusion in the rasterized journeys and the height blend in the
-   * raymarched one. Zero for a surface that is flat in reality.
-   */
-  depth: number;
-}
-
 /**
  * The material layers, in strip order. Three strips are built from each
  * ambientCG set — every map it ships is used:
@@ -57,32 +35,6 @@ export const MATERIALS: readonly MaterialAsset[] = [
   { id: 'HAZARD', asset: 'PaintedMetal016', label: 'hazard plate', metres: 0.9, depth: 0.003 },
   { id: 'DIRT', asset: 'Ground110', label: 'spoil', metres: 2.1, depth: 0.08 },
 ]
-
-export interface SkyAsset {
-
-  /** Stable name, used by the journeys to ask for a sky. */
-  id: string;
-
-  /** ambientCG HDRI id. Only the tonemapped equirectangular JPEG is shipped. */
-  asset: string;
-  label: string;
-
-  /**
-   * Linear multiplier from the tonemapped JPEG back to scene radiance. The
-   * JPEG is display-referred; a journey's lighting is not. Picked per sky so a
-   * night sky is dim and a hazy noon is bright without every shader having to
-   * know which is which.
-   */
-  exposure: number;
-
-  /**
-   * Where the sun (or moon) is in the map, as (u, v) — measured from the
-   * brightest region of the image. A journey turns this into a light direction
-   * with `sunDirection`, so the light that falls on a wall comes from where the
-   * photograph says it does.
-   */
-  sun?: [ number, number ];
-}
 
 /**
  * Sky maps. The B variants of ambientCG's sky series are sky-only, with an
@@ -115,7 +67,53 @@ export const SKY_WIDTH = 2048
 export const MAT: Readonly<Record<string, number>> = Object.fromEntries(
   MATERIALS.map((m, i) => [ m.id, i ]),
 )
+export interface MaterialAsset {
 
+  /** Stable name. Becomes `MAT_<ID>` in GLSL. Append-only: it is also the layer index. */
+  id: string;
+
+  /** ambientCG asset id. */
+  asset: string;
+
+  /** Human label for the asset page. */
+  label: string;
+
+  /** Physical width of one repeat, metres. Shaders divide world UVs by this. */
+  metres: number;
+
+  /**
+   * Relief depth of the displacement map, metres, at full scale. Drives
+   * parallax occlusion in the rasterized journeys and the height blend in the
+   * raymarched one. Zero for a surface that is flat in reality.
+   */
+  depth: number;
+}
+
+export interface SkyAsset {
+
+  /** Stable name, used by the journeys to ask for a sky. */
+  id: string;
+
+  /** ambientCG HDRI id. Only the tonemapped equirectangular JPEG is shipped. */
+  asset: string;
+  label: string;
+
+  /**
+   * Linear multiplier from the tonemapped JPEG back to scene radiance. The
+   * JPEG is display-referred; a journey's lighting is not. Picked per sky so a
+   * night sky is dim and a hazy noon is bright without every shader having to
+   * know which is which.
+   */
+  exposure: number;
+
+  /**
+   * Where the sun (or moon) is in the map, as (u, v) — measured from the
+   * brightest region of the image. A journey turns this into a light direction
+   * with `sunDirection`, so the light that falls on a wall comes from where the
+   * photograph says it does.
+   */
+  sun?: [ number, number ];
+}
 
 /**
  * The light direction for a sky's sun, given the yaw the journey samples the

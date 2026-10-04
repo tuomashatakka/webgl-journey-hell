@@ -10,6 +10,17 @@ interface PostPrograms {
   comp: GlProgram;
 }
 
+interface CompositeInputs {
+  w:        number;
+  h:        number;
+  time:     number;
+  heavy:    number;
+  exposure: number;
+  decay:    number[];
+  ride:     number[];
+  encode:   number;
+}
+
 /** Bloom: down the chain, then back up it. */
 export function runBloom (gl: WebGL2RenderingContext, chain: Chain, progs: PostPrograms, encode: number, drawQuad: () => void): void {
   const { down: downProg, up: upProg } = progs
@@ -45,17 +56,6 @@ export function runBloom (gl: WebGL2RenderingContext, chain: Chain, progs: PostP
     drawQuad()
   }
   gl.disable(gl.BLEND)
-}
-
-interface CompositeInputs {
-  w:        number;
-  h:        number;
-  time:     number;
-  heavy:    number;
-  exposure: number;
-  decay:    number[];
-  ride:     number[];
-  encode:   number;
 }
 
 /** The final pass: scene and bloom to the screen, graded. */

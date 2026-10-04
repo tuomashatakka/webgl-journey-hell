@@ -61,6 +61,13 @@ import type { JourneyRenderer, JourneySimulation } from './types'
 
 const { runtime } = CONFIG
 
+/** What the prerendered page shows, before any script has run. */
+export const LOADING_BOOT: JourneyLoading = {
+  ...runtime.loading.boot,
+  done:   false,
+  failed: false,
+}
+
 /** The loading bar, as the engine reports it. */
 export interface JourneyLoading {
   progress: number; /** 0..1. */
@@ -142,18 +149,11 @@ export interface JourneyEngine {
   debugState(): JourneyDebugState;
 }
 
-/** What the prerendered page shows, before any script has run. */
-export const LOADING_BOOT: JourneyLoading = {
-  ...runtime.loading.boot,
-  done:   false,
-  failed: false,
-}
+/** Real pixel size for the backing store: an exact `?w=&h=`, or the viewport times the scale. */
+type BackingSizeReturnType = { w: number; h: number }
 
 const stage = (progress: number, status: string): JourneyLoading =>
   ({ progress, status, done: false, failed: false })
-
-/** Real pixel size for the backing store: an exact `?w=&h=`, or the viewport times the scale. */
-type BackingSizeReturnType = { w: number; h: number }
 
 function backingSize (
   debug: DebugParams, settings: GraphicsSettings, governorScale: number, canvas: HTMLCanvasElement,

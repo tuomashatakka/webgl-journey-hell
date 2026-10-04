@@ -76,15 +76,13 @@ const ROOMS: RoomTone[] = [
 ]
 
 export class SwitchbackAudioEngine extends JourneyAudio {
-  protected readonly name = 'Switchback'
-  protected readonly bus = true
-
-
   private room: RoomReverb | null = null
   private wet:  GainNode | null = null
 
-  private rollGain:  GainNode | null = null
-  private rollLP:    BiquadFilterNode | null = null
+
+  private rollGain: GainNode | null = null
+  private rollLP:   BiquadFilterNode | null = null
+
   private squeal:    GainNode | null = null
   private squealBP:  BiquadFilterNode | null = null
   private windGain:  GainNode | null = null
@@ -92,11 +90,11 @@ export class SwitchbackAudioEngine extends JourneyAudio {
   private motorGain: GainNode | null = null
   private muzakGain: GainNode | null = null
   private naveGain:  GainNode | null = null
-
-
   // Last-written values, so a 60 Hz update only touches what actually moved.
   private lastRoll = -1
   private lastRollCut = -1
+
+
   private lastSqueal = -1
   private lastWind = -1
   private lastWindCut = -1
@@ -104,29 +102,17 @@ export class SwitchbackAudioEngine extends JourneyAudio {
   private lastMuzak = -1
   private lastNave = -1
   private lastRoom = -1
-
   // Driven from the shader uniforms each frame.
   private phase = -1
   private travel = 0
+
   private speed = 0
   private chain = 0
   private ratchet = 0
   private secType = 0
   private lapF = 0
-
-
-  // ---- construction -------------------------------------------------------
-
-  protected build (): void {
-    this.buildRoom()
-    this.buildRoll()
-    this.buildSqueal()
-    this.buildWind()
-    this.buildMotor()
-    this.buildMuzak()
-    this.buildNave()
-    this.scheduleGroans()
-  }
+  protected readonly name = 'Switchback'
+  protected readonly bus = true
 
 
   /**
@@ -146,6 +132,7 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     this.room = createRoomReverb(this.ctx, this.masterLP, ROOMS[0], 0.5)
     this.wet  = this.room.wet
   }
+
 
   /** Wheels on rail: brown noise, opened up by speed. */
   private buildRoll (): void {
@@ -398,6 +385,65 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     })
   }
 
+  /**
+   * Crossfade the delay pair toward the current room's tail.
+   *
+   * Only touched when the room actually changes, which is five times a lap —
+   * setting a delay time every frame retunes the feedback loop at 60 Hz and
+   * turns a reverb into a chorus.
+   */
+  private setRoom (now: number): void {
+    if (this.secType === this.lastRoom)
+      return
+
+    const i       = Math.max(0, Math.min(ROOMS.length - 1, Math.round(this.secType)))
+    const r       = ROOMS[i]
+    this.lastRoom = this.secType
+
+    this.room?.tune(r, now, ROOM_GLIDE)
+  }
+
+  private ramp (
+    param: AudioParam | undefined,
+    value: number,
+    now: number,
+    key: 'lastRoll' | 'lastSqueal' | 'lastWind' | 'lastMotor' | 'lastMuzak' | 'lastNave',
+  ): void {
+    if (!param)
+      return
+    if (Math.abs(value - this[key]) < EPS)
+      return
+    this[key] = value
+    param.setTargetAtTime(value, now, GLIDE)
+  }
+
+  private rampCut (
+    param: AudioParam | undefined,
+    value: number,
+    now: number,
+    key: 'lastRollCut' | 'lastWindCut',
+  ): void {
+    if (!param)
+      return
+    if (Math.abs(value - this[key]) < 8)
+      return
+    this[key] = value
+    param.setTargetAtTime(value, now, GLIDE)
+  }
+
+  // ---- construction -------------------------------------------------------
+
+  protected build (): void {
+    this.buildRoom()
+    this.buildRoll()
+    this.buildSqueal()
+    this.buildWind()
+    this.buildMotor()
+    this.buildMuzak()
+    this.buildNave()
+    this.scheduleGroans()
+  }
+
   // ---- per-frame ----------------------------------------------------------
 
   public update (_time: number, state?: CustomUniforms): void {
@@ -497,52 +543,6 @@ export class SwitchbackAudioEngine extends JourneyAudio {
     const age = Math.min(this.lapF * 0.22, 0.62)
     this.masterLP?.frequency.setTargetAtTime(18000 * Math.pow(0.16, age), now, GLIDE)
     this.wet?.gain.setTargetAtTime(0.5 + age * 0.55, now, GLIDE)
-  }
-
-  /**
-   * Crossfade the delay pair toward the current room's tail.
-   *
-   * Only touched when the room actually changes, which is five times a lap —
-   * setting a delay time every frame retunes the feedback loop at 60 Hz and
-   * turns a reverb into a chorus.
-   */
-  private setRoom (now: number): void {
-    if (this.secType === this.lastRoom)
-      return
-
-    const i       = Math.max(0, Math.min(ROOMS.length - 1, Math.round(this.secType)))
-    const r       = ROOMS[i]
-    this.lastRoom = this.secType
-
-    this.room?.tune(r, now, ROOM_GLIDE)
-  }
-
-  private ramp (
-    param: AudioParam | undefined,
-    value: number,
-    now: number,
-    key: 'lastRoll' | 'lastSqueal' | 'lastWind' | 'lastMotor' | 'lastMuzak' | 'lastNave',
-  ): void {
-    if (!param)
-      return
-    if (Math.abs(value - this[key]) < EPS)
-      return
-    this[key] = value
-    param.setTargetAtTime(value, now, GLIDE)
-  }
-
-  private rampCut (
-    param: AudioParam | undefined,
-    value: number,
-    now: number,
-    key: 'lastRollCut' | 'lastWindCut',
-  ): void {
-    if (!param)
-      return
-    if (Math.abs(value - this[key]) < 8)
-      return
-    this[key] = value
-    param.setTargetAtTime(value, now, GLIDE)
   }
 }
 

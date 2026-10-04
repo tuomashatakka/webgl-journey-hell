@@ -1,5 +1,8 @@
 import { CONFIG } from '@wjh/config/config'
 
+
+let cached: DeviceProfile | null = null
+
 // What kind of device this is, decided once.
 //
 // Only coarse facts the browser will tell anyone: a touch-first pointer, the
@@ -22,9 +25,6 @@ export interface DeviceProfile {
    */
   tier: 0 | 1 | 2;
 }
-
-
-let cached: DeviceProfile | null = null
 
 export function detectDevice (): DeviceProfile {
   if (typeof window === 'undefined')

@@ -3,14 +3,12 @@
 // App-wide graphics-settings context. Mounted once in app/layout.tsx so every
 // route (the landing grid + each journey) reads one source of truth, persisted
 // to localStorage. This is also the single place that drives the shared frame
-// loop: it caps the global rAF rate from `maxFrameRate` and resumes the loop
-// (the vendored frameLoopManager starts paused).
+// loop (see hooks/use-settings-effects).
 
 import {
   createContext,
   useContext,
   useCallback,
-  useEffect,
   useMemo,
   useState
 
@@ -21,8 +19,10 @@ import {
   saveSettings
 } from '@wjh/quality/settings'
 import type { GraphicsSettings } from '@wjh/quality/settings'
-import { frameLoopManager } from '@wjh/web/frameLoopManager'
+import { useSettingsEffects } from '✦/hooks/use-settings-effects'
 
+
+const SettingsCtx = createContext<SettingsAPI | null>(null)
 
 interface SettingsAPI {
   settings: GraphicsSettings;
@@ -34,7 +34,7 @@ interface SettingsAPI {
   update: (patch: Partial<GraphicsSettings>) => void;
 }
 
-const SettingsCtx = createContext<SettingsAPI | null>(null)
+type SettingsProviderProps = { children: ReactNode }
 
 /** Read + mutate the global graphics settings. Must be used under <SettingsProvider>. */
 export function useSettings (): SettingsAPI {
@@ -44,26 +44,11 @@ export function useSettings (): SettingsAPI {
   return ctx
 }
 
-type SettingsProviderProps = { children: ReactNode }
-
 export function SettingsProvider ({ children }: SettingsProviderProps) {
   // loadSettings() is window-guarded → DEFAULT on the server, saved value on the client.
   const [ settings, setSettings ] = useState<GraphicsSettings>(() => loadSettings())
 
-  // Persist on every change.
-  useEffect(() => {
-    saveSettings(settings)
-  }, [ settings ])
-
-  // Drive the shared frame loop's cap from the setting (0 = uncapped).
-  useEffect(() => {
-    frameLoopManager.setFixedFrameRate(settings.maxFrameRate)
-  }, [ settings.maxFrameRate ])
-
-  // The manager starts paused; resume once the app is mounted.
-  useEffect(() => {
-    frameLoopManager.resume()
-  }, [])
+  useSettingsEffects(settings)
 
   // Functional update sees the latest state without a render-time ref, and
   // keeps its identity so key bindings are not rebound on every change.

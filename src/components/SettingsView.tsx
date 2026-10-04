@@ -48,17 +48,17 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
       <div id="settings-backdrop" aria-hidden="true" onClick={ onClose } />
 
       <aside
-        id="settings-panel"
         ref={ panelRef }
-        role="dialog"
+        id="settings-panel"
         aria-modal="true"
         aria-labelledby="settings-title"
+        role="dialog"
         tabIndex={ -1 }>
         <header id="settings-header">
           <h2 id="settings-title">GRAPHICS & CONTROLS</h2>
 
-          <button id="settings-close-btn" type="button" onClick={ onClose } aria-label="Close settings">
-            <CloseIcon size={ 16 } aria-hidden />
+          <button id="settings-close-btn" aria-label="Close settings" type="button" onClick={ onClose }>
+            <CloseIcon aria-hidden size={ 16 } />
           </button>
         </header>
 
@@ -75,8 +75,8 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
               {CONFIG.settings.resolutionChoices.map(res =>
                 <button
                   key={ res }
-                  type="button"
                   className={ `settings-choice-btn ${settings.resolution === res ? 'active' : ''}` }
+                  type="button"
                   onClick={ () => onChange({ ...settings, resolution: res }) }>
                   {resolutionLabel(res)}
                 </button>
@@ -96,8 +96,8 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
               {CONFIG.settings.speedChoices.map(spd =>
                 <button
                   key={ spd }
-                  type="button"
                   className={ `settings-choice-btn ${settings.speed === spd ? 'active' : ''}` }
+                  type="button"
                   onClick={ () => onChange({ ...settings, speed: spd }) }>
                   {spd}x
                 </button>
@@ -117,8 +117,8 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
               {CONFIG.settings.frameRateChoices.map(fps =>
                 <button
                   key={ fps }
-                  type="button"
                   className={ `settings-choice-btn ${settings.maxFrameRate === fps ? 'active' : ''}` }
+                  type="button"
                   onClick={ () => onChange({ ...settings, maxFrameRate: fps }) }>
                   {frameRateLabel(fps)}
                 </button>
@@ -137,8 +137,8 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
             <p className="settings-toggle-container">
               <label className="settings-switch-label">
                 <input
-                  type="checkbox"
                   id="heavy-effects-checkbox"
+                  type="checkbox"
                   checked={ settings.heavyEffects }
                   onChange={ () => onChange({ ...settings, heavyEffects: !settings.heavyEffects }) } />
 
@@ -163,8 +163,8 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
             <p className="settings-toggle-container">
               <label className="settings-switch-label">
                 <input
-                  type="checkbox"
                   id="crt-checkbox"
+                  type="checkbox"
                   checked={ settings.crt }
                   onChange={ () => onChange({ ...settings, crt: !settings.crt }) } />
 
@@ -213,8 +213,8 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
 
             <p className="settings-slider-row">
               <input
-                type="range"
                 className="settings-slider"
+                type="range"
                 min="0.5"
                 max="2.0"
                 step="0.05"
@@ -235,8 +235,8 @@ export default function SettingsView ({ isOpen, onClose, settings, onChange }: S
 
             <p className="settings-slider-row">
               <input
-                type="range"
                 className="settings-slider"
+                type="range"
                 min="0.5"
                 max="2.0"
                 step="0.05"

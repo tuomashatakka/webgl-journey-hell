@@ -25,6 +25,16 @@
 // sequence of deltas, so seeking with real frame times would drift between runs
 // and between machines. A fixed dt makes the seek a pure function of t.
 
+export const NO_DEBUG: DebugParams = {
+  t:       null,
+  dt:      1 / 60,
+  debug:   false,
+  hud:     true,
+  w:       null,
+  h:       null,
+  res:     null,
+  pointer: null,
+}
 export interface DebugParams {
 
   /** Journey time to hold at, in seconds. null = run live. */
@@ -50,17 +60,25 @@ export interface DebugParams {
   pointer: [ number, number ] | null;
 }
 
-export const NO_DEBUG: DebugParams = {
-  t:       null,
-  dt:      1 / 60,
-  debug:   false,
-  hud:     true,
-  w:       null,
-  h:       null,
-  res:     null,
-  pointer: null,
-}
+/** What a frozen journey publishes for whatever is driving the browser. */
+export interface JourneyDebugState {
+  journey: string;
+  time:    number;
+  label:   string;
+  seeking: boolean;
 
+  /** True once the seeked frame has actually been drawn. */
+  ready:  boolean;
+  width:  number;
+  height: number;
+  fps:    number;
+  paused: boolean;
+  speed:  number;
+
+  /** The look input the shaders receive as uPointer, x right and y up. */
+  pan:      [number, number];
+  uniforms: Record<string, number | number[]>;
+}
 
 function num (raw: string | null, min: number, max: number): number | null {
   if (raw === null)
@@ -108,26 +126,6 @@ export function readDebugParams (search?: string): DebugParams {
     res:   num(q.get('res'), 0.1, 2),
     pointer,
   }
-}
-
-/** What a frozen journey publishes for whatever is driving the browser. */
-export interface JourneyDebugState {
-  journey: string;
-  time:    number;
-  label:   string;
-  seeking: boolean;
-
-  /** True once the seeked frame has actually been drawn. */
-  ready:  boolean;
-  width:  number;
-  height: number;
-  fps:    number;
-  paused: boolean;
-  speed:  number;
-
-  /** The look input the shaders receive as uPointer, x right and y up. */
-  pan:      [number, number];
-  uniforms: Record<string, number | number[]>;
 }
 
 declare global {

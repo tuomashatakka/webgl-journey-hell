@@ -12,6 +12,14 @@ import type { JourneyAudioEngine } from '@wjh/journey/types'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
 import { brownNoise, createAudioContext } from './nodes'
 
+/** Longest gap between the two impacts of one joint, seconds. */
+const MAX_AXLE_GAP = 0.4
+
+/** The second axle's level relative to the first. */
+const REAR_AXLE_LEVEL = 0.72
+
+/** Attack of a joint's impact, seconds. */
+const JOINT_ATTACK = 0.004
 
 /** One resonant bandpass: centre frequency Hz and Q. */
 interface Band {
@@ -47,25 +55,16 @@ export interface RailJoint {
   to:    readonly AudioNode[];
 }
 
-/** Longest gap between the two impacts of one joint, seconds. */
-const MAX_AXLE_GAP = 0.4
-
-/** The second axle's level relative to the first. */
-const REAR_AXLE_LEVEL = 0.72
-
-/** Attack of a joint's impact, seconds. */
-const JOINT_ATTACK = 0.004
-
 export abstract class JourneyAudio implements JourneyAudioEngine {
+  private timers:        ReturnType<typeof setTimeout>[] = []
   protected ctx:         AudioContext | null = null
   protected main:        GainNode | null = null
   protected masterLP:    BiquadFilterNode | null = null
   protected dry:         GainNode | null = null
   protected noiseBuffer: AudioBuffer | null = null
   protected isMuted = true
-  protected isPaused = false
 
-  private timers: ReturnType<typeof setTimeout>[] = []
+  protected isPaused = false
 
   /** For the error log if the graph fails to build. */
   protected abstract readonly name: string
@@ -79,6 +78,39 @@ export abstract class JourneyAudio implements JourneyAudioEngine {
    * `build()`. Engines that close the whole mix down ask for it.
    */
   protected readonly bus: boolean = false
+
+  private init (): void {
+    try {
+      const ctx = createAudioContext()
+      if (!ctx)
+        return
+      this.ctx  = ctx
+
+      const now = ctx.currentTime
+
+      this.main = ctx.createGain()
+      this.main.gain.setValueAtTime(0, now)
+      this.main.connect(ctx.destination)
+
+      if (this.bus) {
+        this.masterLP      = ctx.createBiquadFilter()
+        this.masterLP.type = 'lowpass'
+        this.masterLP.frequency.setValueAtTime(18000, now)
+        this.masterLP.Q.setValueAtTime(0.7, now)
+        this.masterLP.connect(this.main)
+
+        this.dry = ctx.createGain()
+        this.dry.gain.setValueAtTime(1, now)
+        this.dry.connect(this.masterLP)
+      }
+
+      this.noiseBuffer = brownNoise(ctx)
+      this.build()
+    }
+    catch (e) {
+      console.error(`${this.name} audio init failed:`, e)
+    }
+  }
 
   toggleMute (): boolean {
     if (!this.ctx)
@@ -195,38 +227,5 @@ export abstract class JourneyAudio implements JourneyAudioEngine {
         stop,
         to,
       })
-  }
-
-  private init (): void {
-    try {
-      const ctx = createAudioContext()
-      if (!ctx)
-        return
-      this.ctx  = ctx
-
-      const now = ctx.currentTime
-
-      this.main = ctx.createGain()
-      this.main.gain.setValueAtTime(0, now)
-      this.main.connect(ctx.destination)
-
-      if (this.bus) {
-        this.masterLP      = ctx.createBiquadFilter()
-        this.masterLP.type = 'lowpass'
-        this.masterLP.frequency.setValueAtTime(18000, now)
-        this.masterLP.Q.setValueAtTime(0.7, now)
-        this.masterLP.connect(this.main)
-
-        this.dry = ctx.createGain()
-        this.dry.gain.setValueAtTime(1, now)
-        this.dry.connect(this.masterLP)
-      }
-
-      this.noiseBuffer = brownNoise(ctx)
-      this.build()
-    }
-    catch (e) {
-      console.error(`${this.name} audio init failed:`, e)
-    }
   }
 }

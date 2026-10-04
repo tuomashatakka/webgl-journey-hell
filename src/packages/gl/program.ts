@@ -16,6 +16,44 @@ import { uploadCustomUniforms } from './uniforms'
 
 let lastFailure: string | null = null
 
+interface LinkedProgram {
+  program: WebGLProgram;
+  vs:      WebGLShader;
+  fs:      WebGLShader;
+}
+
+export interface GlProgram {
+  program: WebGLProgram;
+  use(): void;
+
+  /** Cached uniform location; null (and cached as such) when absent or optimised out. */
+  loc(name: string): WebGLUniformLocation | null;
+  uniform1f(name: string, x: number): void;
+  uniform1i(name: string, x: number): void;
+  uniform2f(name: string, x: number, y: number): void;
+  uniform3f(name: string, x: number, y: number, z: number): void;
+  uniform4f(name: string, x: number, y: number, z: number, w: number): void;
+  uniform1fv(name: string, v: Float32Array): void;
+  uniform4fv(name: string, v: Float32Array): void;
+  uniformMatrix4fv(name: string, v: Float32Array): void;
+  uniformMatrix3fv(name: string, v: Float32Array): void;
+
+  /** Upload a whole uniform map; see CustomUniforms for the size dispatch. */
+  uniforms(custom: CustomUniforms | undefined): void;
+
+  /**
+   * The frame inputs every full-screen journey shader reads: iResolution,
+   * iTime, uPointer, uHeavy, then the custom map. `heavyDefault` is what an
+   * unset `heavy` means — the shader quad has always read it as off, the
+   * WebGL 2 renderers as on.
+   */
+  frame(frame: FrameUniforms, width: number, height: number, heavyDefault?: number): void;
+
+  /** Cached getAttribLocation. */
+  attrib(name: string): number;
+  dispose(): void;
+}
+
 /**
  * The last compile or link failure since this was last called, and clear it.
  * The console has the full log; this is for putting the gist of it in front
@@ -59,12 +97,6 @@ function compileShader (gl: AnyGl, type: number, source: string, tag = 'gl'): We
   return shader
 }
 
-interface LinkedProgram {
-  program: WebGLProgram;
-  vs:      WebGLShader;
-  fs:      WebGLShader;
-}
-
 /**
  * Compile both stages and link them. `position` is bound to attribute 0 before
  * the link, so a GLSL ES 1.00 full-screen pass and a 3.00 one with
@@ -98,38 +130,6 @@ function linkProgram (gl: AnyGl, vertexSource: string, fragmentSource: string, t
     return null
   }
   return { program, vs, fs }
-}
-
-export interface GlProgram {
-  program: WebGLProgram;
-  use(): void;
-
-  /** Cached uniform location; null (and cached as such) when absent or optimised out. */
-  loc(name: string): WebGLUniformLocation | null;
-  uniform1f(name: string, x: number): void;
-  uniform1i(name: string, x: number): void;
-  uniform2f(name: string, x: number, y: number): void;
-  uniform3f(name: string, x: number, y: number, z: number): void;
-  uniform4f(name: string, x: number, y: number, z: number, w: number): void;
-  uniform1fv(name: string, v: Float32Array): void;
-  uniform4fv(name: string, v: Float32Array): void;
-  uniformMatrix4fv(name: string, v: Float32Array): void;
-  uniformMatrix3fv(name: string, v: Float32Array): void;
-
-  /** Upload a whole uniform map; see CustomUniforms for the size dispatch. */
-  uniforms(custom: CustomUniforms | undefined): void;
-
-  /**
-   * The frame inputs every full-screen journey shader reads: iResolution,
-   * iTime, uPointer, uHeavy, then the custom map. `heavyDefault` is what an
-   * unset `heavy` means — the shader quad has always read it as off, the
-   * WebGL 2 renderers as on.
-   */
-  frame(frame: FrameUniforms, width: number, height: number, heavyDefault?: number): void;
-
-  /** Cached getAttribLocation. */
-  attrib(name: string): number;
-  dispose(): void;
 }
 
 export function createGlProgram (

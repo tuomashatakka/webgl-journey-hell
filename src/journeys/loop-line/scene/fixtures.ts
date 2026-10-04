@@ -25,6 +25,15 @@ export interface WallRender {
   nB:    number;
 }
 
+/**
+ * The flood: level water, not track-following. The annex is the bottom of a dip,
+ * so a level surface lies only where the floor is below it, and deepens by lap.
+ */
+type BuildFloodReturnType = { mesh: Mesh; base: number; annex: BayRender }
+
+/** The cab: the lip of the dashboard along the bottom of the view, one instance moved with the car. */
+type BuildCabReturnType = { instance: Float32Array; draws: Draw[] }
+
 /** One quad per headwall, with its portal polygons packed for the shader. */
 export function buildWalls (gl: WebGL2RenderingContext, circuits: Circuits, bays: BayRender[]): WallRender[] {
   return buildHeadwalls(circuits).map((wall): WallRender => {
@@ -82,12 +91,6 @@ export function buildWalls (gl: WebGL2RenderingContext, circuits: Circuits, bays
   })
 }
 
-/**
- * The flood: level water, not track-following. The annex is the bottom of a dip,
- * so a level surface lies only where the floor is below it, and deepens by lap.
- */
-type BuildFloodReturnType = { mesh: Mesh; base: number; annex: BayRender }
-
 export function buildFlood (gl: WebGL2RenderingContext, circuits: Circuits, bays: BayRender[]): BuildFloodReturnType {
   const annex      = bays[REJOIN_BAY]
   let annexLow     = Infinity
@@ -129,9 +132,6 @@ export function buildFlood (gl: WebGL2RenderingContext, circuits: Circuits, bays
 
   return { mesh: waterMesh, base: waterBase, annex }
 }
-
-/** The cab: the lip of the dashboard along the bottom of the view, one instance moved with the car. */
-type BuildCabReturnType = { instance: Float32Array; draws: Draw[] }
 
 export function buildCab (gl: WebGL2RenderingContext): BuildCabReturnType {
   // The front of a people-mover, seen from the front seat: nothing but the lip

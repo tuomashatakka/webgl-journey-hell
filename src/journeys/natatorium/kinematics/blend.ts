@@ -18,6 +18,17 @@ import { Section, localFloor, sectionAt } from './route'
 
 export type Vec3 = [ number, number, number ]
 
+/**
+ * Corner blend weight at a local z: 0.5 exactly on a boundary, 0 or 1 outside
+ * the window. Returns which neighbour is being mixed with, so scalars can ride
+ * the same curve as the position and stay continuous with it.
+ *
+ *   side = +1  mixing forward into `next`, weight is the next section's share
+ *   side = -1  mixing backward into `prev`, weight is the *current* share
+ *   side =  0  clear of any corner
+ */
+type CornerBlendReturnType = { side: number; w: number }
+
 function rotY (x: number, z: number, c: number, s: number): [ number, number ] {
   return [ c * x - s * z, s * x + c * z ]
 }
@@ -50,17 +61,6 @@ function prevToCur (q: Vec3, cur: Section, prev: Section): Vec3 {
   const [ rx, rz ] = rotY(q[0], q[2] - prev.len, c, s)
   return [ rx, q[1] + prev.drop, rz ]
 }
-
-/**
- * Corner blend weight at a local z: 0.5 exactly on a boundary, 0 or 1 outside
- * the window. Returns which neighbour is being mixed with, so scalars can ride
- * the same curve as the position and stay continuous with it.
- *
- *   side = +1  mixing forward into `next`, weight is the next section's share
- *   side = -1  mixing backward into `prev`, weight is the *current* share
- *   side =  0  clear of any corner
- */
-type CornerBlendReturnType = { side: number; w: number }
 
 function cornerBlend (idx: number, localZ: number): CornerBlendReturnType {
   const cur   = sectionAt(idx)

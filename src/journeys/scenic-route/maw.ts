@@ -17,16 +17,33 @@ import { newFrame } from '@wjh/geometry/curve'
 import type { ProfilePoint, SweepArrays } from '@wjh/geometry/sweep'
 import type { Route } from './course'
 
-
 /** Jaw opening in radians at lap 0, and its growth per lap. */
 const JAW_BASE    = 0.42
 const JAW_PER_LAP = 0.13
 
-interface V3 { x: number; y: number; z: number }
+/** Outer radius of the head by distance past the mouth. */
+const HEAD_KNOTS: [ number, number ][] = [
+  [ -6, 42 ], [ 18, 46 ], [ 55, 41 ], [ 95, 28 ], [ 125, 15 ], [ 140, 11 ],
+]
 
-export function jawAngleAt (lapF: number): number {
-  return JAW_BASE + Math.min(lapF, 3) * JAW_PER_LAP
-}
+const HEAD_SEGS = 28
+
+/** A fish head is wider than tall; the mouth is a squashed ring. */
+const WIDE = 1.1
+const TALL = 0.86
+
+// ---------------------------------------------------------------------------
+// the tube: gullet into cave
+// ---------------------------------------------------------------------------
+
+/** Where the flesh gives way to rock, in metres past the mouth. */
+export const FLESH_END  = 95
+export const ROCK_START = 210
+
+/** Metres past the mouth where the front part of the tube hands over to the fixed part. */
+const TUBE_SPLIT = 74
+
+interface V3 { x: number; y: number; z: number }
 
 export interface Jaw {
   builder: MeshBuilder;
@@ -47,10 +64,27 @@ export interface Maw {
   s0: number;
 }
 
-/** Outer radius of the head by distance past the mouth. */
-const HEAD_KNOTS: [ number, number ][] = [
-  [ -6, 42 ], [ 18, 46 ], [ 55, 41 ], [ 95, 28 ], [ 125, 15 ], [ 140, 11 ],
-]
+// ---------------------------------------------------------------------------
+// jaws
+// ---------------------------------------------------------------------------
+
+interface Basis { m: V3; r: V3; u: V3; f: V3 }
+
+export interface Tube {
+
+  /** The throat from the mouth to where it is under the sea: rises and sinks with the head. */
+  front: SweepArrays;
+
+  /** The rest, fixed: the seam between the two is under water while the head moves. */
+  back:  SweepArrays;
+  water: SweepArrays;
+  s0:    number;
+  s1:    number;
+}
+
+export function jawAngleAt (lapF: number): number {
+  return JAW_BASE + Math.min(lapF, 3) * JAW_PER_LAP
+}
 
 function headRadius (t: number): number {
   if (t <= HEAD_KNOTS[0][0])
@@ -67,12 +101,6 @@ function headRadius (t: number): number {
   return HEAD_KNOTS[HEAD_KNOTS.length - 1][1]
 }
 
-const HEAD_SEGS = 28
-
-/** A fish head is wider than tall; the mouth is a squashed ring. */
-const WIDE = 1.1
-const TALL = 0.86
-
 /**
  * Clockwise in the (r, u) plane so the sweep's front faces point outward:
  * skin outside, mouth inside.
@@ -85,12 +113,6 @@ function ring (R: number): ProfilePoint[] {
   }
   return pts
 }
-
-// ---------------------------------------------------------------------------
-// jaws
-// ---------------------------------------------------------------------------
-
-interface Basis { m: V3; r: V3; u: V3; f: V3 }
 
 function toWorld (b: Basis, r: number, u: number, f: number): [ number, number, number ] {
   return [
@@ -217,14 +239,6 @@ function jawShell (b: Basis, a0: number, a1: number, teethCount: number, seed: n
   return mb
 }
 
-// ---------------------------------------------------------------------------
-// the tube: gullet into cave
-// ---------------------------------------------------------------------------
-
-/** Where the flesh gives way to rock, in metres past the mouth. */
-export const FLESH_END  = 95
-export const ROCK_START = 210
-
 /** Inner radius of the throat and cave by arc length. */
 export function tubeRadius (t: number, s: number): number {
   const throat = 30 + (11 - 30) * smooth01(t / 120)
@@ -237,21 +251,6 @@ function smooth01 (x: number): number {
   const f = Math.min(1, Math.max(0, x))
   return f * f * (3 - 2 * f)
 }
-
-export interface Tube {
-
-  /** The throat from the mouth to where it is under the sea: rises and sinks with the head. */
-  front: SweepArrays;
-
-  /** The rest, fixed: the seam between the two is under water while the head moves. */
-  back:  SweepArrays;
-  water: SweepArrays;
-  s0:    number;
-  s1:    number;
-}
-
-/** Metres past the mouth where the front part of the tube hands over to the fixed part. */
-const TUBE_SPLIT = 74
 
 /**
  * The tube's ring sits high on the spine: the car rides the water near the

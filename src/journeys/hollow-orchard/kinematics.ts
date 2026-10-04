@@ -19,13 +19,6 @@ import { lapLabel } from '@wjh/journey/label'
 import type { CustomUniforms } from '@wjh/gl/uniforms'
 import { clamp01, mix, smoothstep } from '@wjh/math/scalar'
 
-
-function mix3 (a: RGB, b: RGB, t: number): RGB {
-  return [ mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t) ]
-}
-
-type RGB = [ number, number, number ]
-
 // ---- Stage ids (mirrored as plain float comparisons in the shader) ----
 
 export const STAGE_NURSERY   = 1
@@ -49,11 +42,15 @@ export const STAGE_COMPOST   = 12
 
 const ORCHARD_LOOP_Z = 660
 const ABYSS_START_Z  = 530
-const ABYSS_LEN      = ORCHARD_LOOP_Z - ABYSS_START_Z // 130
-const ABYSS_SLOTS    = 6
-const SCAPE_W        = 12 // scape -> scape crossfade, world units
-const PIECE_W        = 0.3 // setpiece crossfade, fraction of a slot
-const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
+const ABYSS_LEN      = ORCHARD_LOOP_Z - ABYSS_START_Z
+// 130
+const ABYSS_SLOTS = 6
+const SCAPE_W     = 12
+// scape -> scape crossfade, world units
+const PIECE_W        = 0.3
+// setpiece crossfade, fraction of a slot
+const STALL_LOOP     = 3
+// loop at which COMPOST stops letting you leave
 
 // ---- the route ------------------------------------------------------------
 //
@@ -73,23 +70,12 @@ const STALL_LOOP     = 3 // loop at which COMPOST stops letting you leave
 //     `(sqrt(s^2 + 4) + s) / 2` for a slope s, and the march has to stay under
 //     the reciprocal of that or it steps through walls. s peaks at 0.95 here
 //     (a 43 degree heading swing), so the march runs at 0.48 rather than 0.55.
-const PATH_K1 = Math.PI * 2 / ORCHARD_LOOP_Z * 2 // two long sweeps a loop
+const PATH_K1 = Math.PI * 2 / ORCHARD_LOOP_Z * 2
+// two long sweeps a loop
 const PATH_A1 = 32
-const PATH_K2 = Math.PI * 2 / ORCHARD_LOOP_Z * 5 // five tighter kinks
+const PATH_K2 = Math.PI * 2 / ORCHARD_LOOP_Z * 5
+// five tighter kinks
 const PATH_A2 = 7
-
-
-/** Its slope — the tangent of the heading, so the camera can face down it. */
-function pathDX (z: number): number {
-  return Math.cos(z * PATH_K1) * PATH_A1 * PATH_K1 +
-         Math.cos(z * PATH_K2) * PATH_A2 * PATH_K2
-}
-
-/** Its curvature, up to a factor — what the camera banks into. */
-function pathDDX (z: number): number {
-  return -Math.sin(z * PATH_K1) * PATH_A1 * PATH_K1 * PATH_K1 -
-       Math.sin(z * PATH_K2) * PATH_A2 * PATH_K2 * PATH_K2
-}
 
 // ---- the aisle ------------------------------------------------------------
 //
@@ -104,40 +90,11 @@ function pathDDX (z: number): number {
 // the walked line. It cannot fail to clear the camera, because it is defined by
 // where the camera goes, and an orchard with a row eaten through it is the
 // reading this journey wants anyway.
-const AISLE_R  = 0.95 // radius around the walked line
-const AISLE_DY = 0.35 // how far below the eye the capsule is centred
-const AISLE_HY = 0.45 // half-height of its straight part
-
-interface OrchardStage {
-
-  /** 1..12; matches the STAGE_* constants and the shader's if-chain. */
-  id:   number;
-  name: string;
-
-  /** Band length in world units. Abyss slots ignore this (they split ABYSS_LEN evenly). */
-  len: number;
-
-  /** Camera height above the local floor. The shader anchors its floor at y = 0. */
-  eye: number;
-
-  /** Base walk/fall speed in units per second. */
-  speed: number;
-
-  /** 0..1 pitch-down amount — how much this stage reads as falling rather than walking. */
-  fall: number;
-
-  /** Lateral sway amplitude. */
-  sway: number;
-
-  /** Fog / horizon colour. */
-  bg: RGB;
-
-  /** Key light colour. */
-  key: RGB;
-
-  /** Subsurface tint — what light looks like coming *through* the flesh. */
-  tint: RGB;
-}
+const AISLE_R  = 0.95
+// radius around the walked line
+const AISLE_DY = 0.35
+// how far below the eye the capsule is centred
+const AISLE_HY = 0.45
 
 // Index = id - 1. The six scape lengths sum to ABYSS_START_Z (530).
 const ORCHARD_STAGES: OrchardStage[] = [
@@ -289,10 +246,6 @@ const ORCHARD_STAGES: OrchardStage[] = [
   },
 ]
 
-function stage (id: number): OrchardStage {
-  return ORCHARD_STAGES[Math.max(0, Math.min(ORCHARD_STAGES.length - 1, id - 1))]
-}
-
 // Cumulative start of each scape band, so getOrchardState stays a lookup.
 const SCAPE_STARTS: number[] = (() => {
   const starts: number[] = []
@@ -303,6 +256,40 @@ const SCAPE_STARTS: number[] = (() => {
   }
   return starts
 })()
+
+type RGB = [ number, number, number ]
+// half-height of its straight part
+
+interface OrchardStage {
+
+  /** 1..12; matches the STAGE_* constants and the shader's if-chain. */
+  id:   number;
+  name: string;
+
+  /** Band length in world units. Abyss slots ignore this (they split ABYSS_LEN evenly). */
+  len: number;
+
+  /** Camera height above the local floor. The shader anchors its floor at y = 0. */
+  eye: number;
+
+  /** Base walk/fall speed in units per second. */
+  speed: number;
+
+  /** 0..1 pitch-down amount — how much this stage reads as falling rather than walking. */
+  fall: number;
+
+  /** Lateral sway amplitude. */
+  sway: number;
+
+  /** Fog / horizon colour. */
+  bg: RGB;
+
+  /** Key light colour. */
+  key: RGB;
+
+  /** Subsurface tint — what light looks like coming *through* the flesh. */
+  tint: RGB;
+}
 
 interface OrchardState {
 
@@ -349,6 +336,26 @@ interface OrchardState {
   tint: RGB;
 
   name: string;
+}
+
+function mix3 (a: RGB, b: RGB, t: number): RGB {
+  return [ mix(a[0], b[0], t), mix(a[1], b[1], t), mix(a[2], b[2], t) ]
+}
+
+/** Its slope — the tangent of the heading, so the camera can face down it. */
+function pathDX (z: number): number {
+  return Math.cos(z * PATH_K1) * PATH_A1 * PATH_K1 +
+         Math.cos(z * PATH_K2) * PATH_A2 * PATH_K2
+}
+
+/** Its curvature, up to a factor — what the camera banks into. */
+function pathDDX (z: number): number {
+  return -Math.sin(z * PATH_K1) * PATH_A1 * PATH_K1 * PATH_K1 -
+       Math.sin(z * PATH_K2) * PATH_A2 * PATH_K2 * PATH_K2
+}
+
+function stage (id: number): OrchardStage {
+  return ORCHARD_STAGES[Math.max(0, Math.min(ORCHARD_STAGES.length - 1, id - 1))]
 }
 
 /**

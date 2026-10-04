@@ -7,11 +7,6 @@ import type { DeviceProfile } from './device'
 import { detectDevice } from './device'
 
 
-/** What a renderer may spend at each tier. See QualityHints. */
-export function qualityForTier (tier: 0 | 1 | 2): QualityHints {
-  return { tier, ...CONFIG.quality.tiers[tier] }
-}
-
 export interface ScaleRange {
   min:   number;
   max:   number;
@@ -23,6 +18,11 @@ interface ScaleSpec {
   maxOfDpr: number;
   maxCap:   number;
   start:    number;
+}
+
+/** What a renderer may spend at each tier. See QualityHints. */
+export function qualityForTier (tier: 0 | 1 | 2): QualityHints {
+  return { tier, ...CONFIG.quality.tiers[tier] }
 }
 
 const resolveRange = (spec: ScaleSpec, dprCap: number): ScaleRange =>

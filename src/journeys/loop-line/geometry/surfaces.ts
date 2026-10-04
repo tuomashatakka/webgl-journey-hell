@@ -35,6 +35,8 @@ export interface Surface {
   pom: boolean;
 }
 
+export type SurfaceKey = keyof typeof SURF
+
 const tex = (layer: number, tint: [ number, number, number ] = [ 1, 1, 1 ], o: Partial<Surface> = {}): Surface =>
   ({ layer, tint, rough: 1, metal: 0, mode: Mode.TEXTURED, glow: [ 0, 0, 0 ], pom: true, ...o })
 
@@ -99,5 +101,3 @@ export const SURF = {
   rack:         { ...tex(MAT.STEEL, [ 0.1, 0.1, 0.11 ], { pom: false }), mode: Mode.RACK },
   carriage:     { ...paint([ 0.55, 0.56, 0.58 ], 0.4, { metal: 0.4 }), mode: Mode.CARRIAGE },
 } satisfies Record<string, Surface>
-
-export type SurfaceKey = keyof typeof SURF

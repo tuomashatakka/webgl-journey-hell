@@ -21,6 +21,9 @@ export interface KeyPress {
   altKey:  boolean;
 }
 
+/** The held look keys as one direction, each axis in -1..1. */
+type LookDirectionReturnType = { x: number; y: number }
+
 /**
  * What a key press means, or null. Meta+Arrow is the loop jump and is tested
  * before the plain arrows, which seek. Other modifiers belong to the browser.
@@ -50,9 +53,6 @@ export function bindingFor (e: KeyPress): KeyBinding | null {
 export function isLookKey (e: Pick<KeyPress, 'code' | 'metaKey' | 'ctrlKey' | 'altKey'>): boolean {
   return !e.metaKey && !e.ctrlKey && !e.altKey && e.code in CONFIG.keys.look
 }
-
-/** The held look keys as one direction, each axis in -1..1. */
-type LookDirectionReturnType = { x: number; y: number }
 
 export function lookDirection (held: Iterable<string>): LookDirectionReturnType {
   let x = 0

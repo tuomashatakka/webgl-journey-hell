@@ -33,6 +33,12 @@ const HERE  = path.dirname(fileURLToPath(import.meta.url))
 const CACHE = process.env.TEXTURE_CACHE ?? path.join(os.tmpdir(), 'ambientcg-cache')
 const size  = Number((/--size=(\d+)/).exec(process.argv.join(' '))?.[1] ?? MATERIAL_SIZE)
 
+const jpeg = [ '-sampling-factor', '4:4:4', '-strip', '-interlace', 'none' ]
+
+// --- materials -------------------------------------------------------------
+
+const work = path.join(CACHE, `_delta-${size}`)
+
 const run = (cmd, args) => execFileSync(cmd, args, { stdio: [ 'ignore', 'pipe', 'inherit' ]})
 
 async function fetchZip (asset, variant, test) {
@@ -56,12 +62,6 @@ async function mapOf (dir, suffix) {
   const hit = (await readdir(dir)).find(f => f.toLowerCase().endsWith(`_${suffix.toLowerCase()}.jpg`))
   return hit ? path.join(dir, hit) : null
 }
-
-const jpeg = [ '-sampling-factor', '4:4:4', '-strip', '-interlace', 'none' ]
-
-// --- materials -------------------------------------------------------------
-
-const work = path.join(CACHE, `_delta-${size}`)
 await mkdir(work, { recursive: true })
 await mkdir(path.join(HERE, 'materials'), { recursive: true })
 

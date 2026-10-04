@@ -2,6 +2,15 @@
 // because the journeys share the *shape* of their noise but not its hash or
 // its octave walk, and the walk is what gives each sky and each rock its grain.
 
+export interface FbmOptions {
+
+  /** Octave count: a number, or the name of a #define. */
+  octaves: number | string;
+
+  /** The domain walk between octaves, as GLSL statements on `p`. */
+  next: string;
+}
+
 /**
  * 2D value noise with a smoothstep fade, over `hash` (which must already be
  * defined — e.g. HASH21 or HASH12).
@@ -16,15 +25,6 @@ float vnoise (vec2 p) {
              mix(${hash}(i + vec2(0.0, 1.0)), ${hash}(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 `
-}
-
-export interface FbmOptions {
-
-  /** Octave count: a number, or the name of a #define. */
-  octaves: number | string;
-
-  /** The domain walk between octaves, as GLSL statements on `p`. */
-  next: string;
 }
 
 /**

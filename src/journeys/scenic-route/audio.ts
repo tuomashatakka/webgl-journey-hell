@@ -31,26 +31,22 @@ interface Voice {
   filter?: BiquadFilterNode;
 }
 
-function weightAt (surface: number, centre: number): number {
-  return Math.max(0, 1 - Math.abs(surface - centre))
-}
-
 export class ScenicRouteAudio extends JourneyAudio {
-  protected readonly name = 'Scenic Route'
-  protected readonly level = 0.8
-  protected readonly fade = 0.05
-
   private engineOsc: OscillatorNode[] = []
   private engine:    Voice | null = null
   private tyres:     Voice | null = null
-  private wind:      Voice | null = null
-  private radio:     Voice | null = null
-  private radioOsc:  OscillatorNode[] = []
-  private staticV:   Voice | null = null
-  private gullet:    Voice | null = null
-  private cave:      Voice | null = null
-  private echo:      DelayNode | null = null
+
+  private wind:     Voice | null = null
+  private radio:    Voice | null = null
+  private radioOsc: OscillatorNode[] = []
+  private staticV:  Voice | null = null
+  private gullet:   Voice | null = null
+  private cave:     Voice | null = null
+  private echo:     DelayNode | null = null
   private nextDrip = 0
+  protected readonly name = 'Scenic Route'
+  protected readonly level = 0.8
+  protected readonly fade = 0.05
 
   private noise (ctx: AudioContext, buf: AudioBuffer): AudioBufferSourceNode {
     const src  = ctx.createBufferSource()
@@ -77,6 +73,31 @@ export class ScenicRouteAudio extends JourneyAudio {
       src.connect(gain)
     gain.connect(this.main!)
     return { gain, filter }
+  }
+
+  private drip (ctx: AudioContext, strength: number): void {
+    if (!this.echo)
+      return
+
+    const osc           = ctx.createOscillator()
+    osc.type            = 'sine'
+    osc.frequency.value = 1500 + Math.random() * 1900
+
+    const g = ctx.createGain()
+    const t = ctx.currentTime
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.exponentialRampToValueAtTime(0.12 * strength, t + 0.008)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16)
+    osc.connect(g)
+    g.connect(this.echo)
+    g.connect(this.main!)
+    osc.start(t)
+    osc.stop(t + 0.2)
+  }
+
+  private set (param: AudioParam | undefined, value: number, now: number, tc = RAMP): void {
+    if (param)
+      param.setTargetAtTime(value, now, tc)
   }
 
   protected build (): void {
@@ -145,31 +166,6 @@ export class ScenicRouteAudio extends JourneyAudio {
     this.echo = echo
   }
 
-  private drip (ctx: AudioContext, strength: number): void {
-    if (!this.echo)
-      return
-
-    const osc           = ctx.createOscillator()
-    osc.type            = 'sine'
-    osc.frequency.value = 1500 + Math.random() * 1900
-
-    const g = ctx.createGain()
-    const t = ctx.currentTime
-    g.gain.setValueAtTime(0.0001, t)
-    g.gain.exponentialRampToValueAtTime(0.12 * strength, t + 0.008)
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16)
-    osc.connect(g)
-    g.connect(this.echo)
-    g.connect(this.main!)
-    osc.start(t)
-    osc.stop(t + 0.2)
-  }
-
-  private set (param: AudioParam | undefined, value: number, now: number, tc = RAMP): void {
-    if (param)
-      param.setTargetAtTime(value, now, tc)
-  }
-
   update (time: number, state?: CustomUniforms): void {
     const ctx = this.ctx
     if (!ctx || this.isMuted || !state)
@@ -234,6 +230,10 @@ export class ScenicRouteAudio extends JourneyAudio {
       this.nextDrip = time + 0.35 + Math.random() * 1.6
     }
   }
+}
+
+function weightAt (surface: number, centre: number): number {
+  return Math.max(0, 1 - Math.abs(surface - centre))
 }
 
 export function createScenicRouteAudio (): ScenicRouteAudio {

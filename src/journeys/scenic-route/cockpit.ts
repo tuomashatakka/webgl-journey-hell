@@ -45,7 +45,27 @@ export const DIAL = {
 export const SPEEDO = { u: 0.27, v: 0.5, r: 0.075, min: 0, max: 240, sweep: 250 }
 export const TACHO  = { u: 0.73, v: 0.5, r: 0.075, min: 0, max: 8000, sweep: 250 }
 
+const WHEEL = { x: 0, y: 0.93, z: 0.66, R: 0.17, tilt: 30 * Math.PI / 180 }
+
+/** The dashboard's (z, y) profile, windscreen base to the knee roll. */
+const DASH: [ number, number ][] = [
+  [ 1.3, 0.855 ], [ 1.12, 0.905 ], [ 0.98, 0.945 ], [ 0.86, 0.962 ], [ 0.76, 0.955 ],
+  [ 0.7, 0.93 ], [ 0.655, 0.885 ], [ 0.635, 0.82 ], [ 0.63, 0.74 ], [ 0.645, 0.66 ],
+  [ 0.68, 0.59 ], [ 0.72, 0.53 ],
+]
+
 export interface V3 { x: number; y: number; z: number }
+
+type P = [ number, number, number ]
+
+export interface Cockpit {
+  cabin:       MeshBuilder;
+  wheel:       MeshBuilder;
+  speedo:      MeshBuilder;
+  tacho:       MeshBuilder;
+  wheelCentre: V3;
+  wheelAxis:   V3;
+}
 
 /** Car-space point on the dial face for a face uv. */
 export function dialPoint (u: number, v: number, out = 0): V3 {
@@ -64,8 +84,6 @@ export function dialPoint (u: number, v: number, out = 0): V3 {
 export function dialNormal (): V3 {
   return { x: 0, y: Math.sin(DIAL.tilt), z: -Math.cos(DIAL.tilt) }
 }
-
-type P = [ number, number, number ]
 
 function quad (b: MeshBuilder, p0: P, p1: P, p2: P, p3: P, tag: number, v0 = 0, v1 = 1): void {
   const ux = p1[0] - p0[0]
@@ -243,24 +261,6 @@ function vent (b: MeshBuilder, cx: number, cy: number, cz: number, hw: number, h
   }
   box(b, cx, cy, cz - 0.008, 0.004, hh - 0.004, 0.012, TAG.PLASTIC)
 }
-
-export interface Cockpit {
-  cabin:       MeshBuilder;
-  wheel:       MeshBuilder;
-  speedo:      MeshBuilder;
-  tacho:       MeshBuilder;
-  wheelCentre: V3;
-  wheelAxis:   V3;
-}
-
-const WHEEL = { x: 0, y: 0.93, z: 0.66, R: 0.17, tilt: 30 * Math.PI / 180 }
-
-/** The dashboard's (z, y) profile, windscreen base to the knee roll. */
-const DASH: [ number, number ][] = [
-  [ 1.3, 0.855 ], [ 1.12, 0.905 ], [ 0.98, 0.945 ], [ 0.86, 0.962 ], [ 0.76, 0.955 ],
-  [ 0.7, 0.93 ], [ 0.655, 0.885 ], [ 0.635, 0.82 ], [ 0.63, 0.74 ], [ 0.645, 0.66 ],
-  [ 0.68, 0.59 ], [ 0.72, 0.53 ],
-]
 
 export function buildCockpit (): Cockpit {
   const cabin = createMeshBuilder()

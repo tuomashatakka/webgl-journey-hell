@@ -2,17 +2,13 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRef, useState } from 'react'
 import type { Journey } from '✦/journeys/registry'
-import { usePreview } from './ShaderPreviewLayer'
+import { useJourneyCard } from '✦/hooks/use-journey-card'
 
 
 type JourneyCardProps = { journey: Journey }
 
 export default function JourneyCard ({ journey }: JourneyCardProps) {
-  const preview  = usePreview()
-  const mountRef = useRef<HTMLDivElement>(null)
-
   // Fallback chain for the tile art: live shader preview (hover, WebGL only) →
   // journey screenshot → the journey's CSS gradient. The screenshot is what a
   // touch device or a WebGL-less browser actually sees, so it is never merely
@@ -21,18 +17,12 @@ export default function JourneyCard ({ journey }: JourneyCardProps) {
   // The poster URL comes from a static import (staticUrl), so it already carries
   // the basePath: an unoptimized next/image emits its src verbatim, which is why
   // a raw '/journeys/x.jpg' string 404ed under the sub-path deploy.
-  const [ posterFailed, setPosterFailed ] = useState(false)
-
-  const onEnter = () => {
-    if (mountRef.current)
-      preview?.activate(journey, mountRef.current)
-  }
-  const onLeave = () => preview?.deactivate(journey.slug)
+  const { mountRef, posterFailed, onPosterError, onEnter, onLeave } = useJourneyCard(journey)
 
   return <Link
-    href={ `/journeys/${journey.slug}` }
     className="journey-card"
     style={{ ['--accent' as string]: journey.accent }}
+    href={ `/journeys/${journey.slug}` }
     onMouseEnter={ onEnter }
     onMouseLeave={ onLeave }
     onFocus={ onEnter }
@@ -44,12 +34,12 @@ export default function JourneyCard ({ journey }: JourneyCardProps) {
       }}>
       {journey.poster && !posterFailed &&
           <Image
+            className="journey-card__img"
             src={ journey.poster }
             alt={ `${journey.title} — still from the journey` }
             fill
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className="journey-card__img"
-            onError={ () => setPosterFailed(true) } />
+            onError={ onPosterError } />
       }
 
       {/* Empty mount point — the shared preview canvas docks here on hover.

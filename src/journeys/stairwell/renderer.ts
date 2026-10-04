@@ -25,14 +25,6 @@ import { fsPost, fsScene } from './shaders'
 import { PURGATORY_LENGTH, SEAM_HALF, STAIRWELL_SECTIONS } from './kinematics'
 import { smoothstep } from '@wjh/math/scalar'
 
-
-interface ActLight {
-  sky:      string;
-  yaw:      number;
-  sun:      number;
-  exposure: number;
-}
-
 /** Index 6 is purgatory. */
 const ACTS: ActLight[] = [
   { sky: 'DAWN', yaw: -0.3, sun: 5, exposure: 0.95 },
@@ -46,6 +38,13 @@ const ACTS: ActLight[] = [
 
 const LENGTHS = [ ...STAIRWELL_SECTIONS.map(s => s.end - s.start), PURGATORY_LENGTH ]
 const SEAM    = SEAM_HALF
+
+interface ActLight {
+  sky:      string;
+  yaw:      number;
+  sun:      number;
+  exposure: number;
+}
 
 /**
  * The light comes from the sun's bearing in the photograph, but never from
@@ -63,7 +62,6 @@ function lightFrom (d: [ number, number, number ]): [ number, number, number ] {
   const c = Math.cos(Math.asin(minY))
   return [ d[0] / h * c, minY, d[2] / h * c ]
 }
-
 
 export function createStairwellRenderer (
   gl: WebGLRenderingContext | WebGL2RenderingContext,

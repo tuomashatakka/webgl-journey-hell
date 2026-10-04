@@ -77,7 +77,7 @@ export function withJourneyShell (definition: JourneyDefinition) {
 
     return <JourneyRuntimeProvider value={ rt }>
       <main id="app-container" style={ accentStyle } data-fullscreen={ rt.fullscreen ? '1' : undefined }>
-        <canvas id="gl-canvas" ref={ rt.canvasRef } />
+        <canvas ref={ rt.canvasRef } id="gl-canvas" />
         {scanlines && <section id="crt-overlay" />}
 
         {opening.showHeading &&

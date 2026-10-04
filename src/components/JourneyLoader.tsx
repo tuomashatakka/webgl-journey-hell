@@ -20,12 +20,12 @@ export default function JourneyLoader ({ progress, status, done, failed, detail 
     id="journey-loader"
     data-done={ done ? '1' : undefined }
     data-failed={ failed ? '1' : undefined }
-    role="progressbar"
     aria-label="Loading"
     aria-valuemin={ 0 }
     aria-valuemax={ 100 }
     aria-valuenow={ pct }
-    aria-valuetext={ status }>
+    aria-valuetext={ status }
+    role="progressbar">
     <div className="jl-bar">
       <div className="jl-fill" style={{ transform: `scaleX(${p})` }} />
     </div>

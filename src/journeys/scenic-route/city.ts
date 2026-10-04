@@ -22,15 +22,18 @@ import type { SpineIndex } from './geometry'
 
 const TOWER_FLOATS = 12
 
-/** How much the bend grows per lap: 1, 1.8, 2.6 at the lap boundaries. */
-export function bendGainAt (lapF: number): number {
-  return 1 + lapF * 0.8
-}
+/** The largest lap gain the bend is ever drawn with: `bendGainAt(3)`. */
+const BEND_GAIN_MAX = bendGainAt(3)
 
 export interface TowerSet {
   builder:   MeshBuilder;
   instances: Float32Array;
   count:     number;
+}
+
+/** How much the bend grows per lap: 1, 1.8, 2.6 at the lap boundaries. */
+export function bendGainAt (lapF: number): number {
+  return 1 + lapF * 0.8
 }
 
 function hash (n: number): number {
@@ -59,9 +62,6 @@ function unitBox (): MeshBuilder {
   face([ -h, 1, h ], [ h, 1, h ], [ h, 1, -h ], [ -h, 1, -h ], [ 0, 1, 0 ])
   return b
 }
-
-/** The largest lap gain the bend is ever drawn with: `bendGainAt(3)`. */
-const BEND_GAIN_MAX = bendGainAt(3)
 
 export function buildCity (route: Route, land: SpineIndex): TowerSet {
   const downtown       = buildSpineIndex(route, [ 2 ], 32)

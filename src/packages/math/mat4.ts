@@ -20,12 +20,11 @@
 // library: out-params, Float32Array backing, column-major layout, and
 // right-handed [-1,1] NDC depth range (webgl's default).
 
+const EPSILON = 1e-6
+
 export type Vec3 = [number, number, number] | Float32Array
 
 export type Mat4 = Float32Array
-
-
-const EPSILON = 1e-6
 
 // scratch buffer for internal operations that need a temporary matrix
 
@@ -49,7 +48,6 @@ function identity (out: Mat4): Mat4 {
   out[15] = 1
   return out
 }
-
 
 /**
  * Right-handed perspective projection, [-1,1] NDC depth range (the webgl
@@ -93,7 +91,6 @@ export function perspective (
 
   return out
 }
-
 
 /**
  * Look-at view matrix. Handles the degenerate case where the forward
@@ -175,7 +172,6 @@ export function lookAt (
   return out
 }
 
-
 /**
  * Matrix multiplication: out = a × b. Correctly handles out aliasing a or b
  * by reading all inputs into locals before writing any output elements.
@@ -227,7 +223,6 @@ export function multiply (out: Mat4, a: Mat4, b: Mat4): Mat4 {
 
   return out
 }
-
 
 /**
  * Matrix inverse. Returns null when the matrix is singular (determinant

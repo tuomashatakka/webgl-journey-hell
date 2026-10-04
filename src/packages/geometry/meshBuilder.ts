@@ -40,6 +40,13 @@ import { grownTo } from '@wjh/math/arrays'
 /** Interleaved vertex: position(3) normal(3) uv(2) shard(4) = 12 floats, stride 48 bytes. */
 export const VERTEX_FLOATS = 12
 
+/** The standard interleaved layout: position(3) normal(3) uv(2) shard(4). */
+export const STANDARD_LAYOUT: AttribSpec[] = [
+  { location: 0, size: 3, offset: 0 },
+  { location: 1, size: 3, offset: 3 },
+  { location: 2, size: 2, offset: 6 },
+  { location: 3, size: 4, offset: 8 },
+]
 
 export interface MeshBuilder {
 
@@ -83,6 +90,12 @@ export interface MeshBuilder {
   unweld(): void;
 }
 
+/** One vertex attribute of a custom layout: `size` floats at `offset` floats into the vertex. */
+export interface AttribSpec {
+  location: number;
+  size:     number;
+  offset:   number;
+}
 
 export function createMeshBuilder (): MeshBuilder {
   let verts   = new Float32Array(1024)
@@ -336,7 +349,6 @@ export function createMeshBuilder (): MeshBuilder {
   }
 }
 
-
 /**
  * Assign every triangle a shard: an integer id, the shard centroid, and a
  * seeded unit axis, written into the per-vertex `shard` attribute as
@@ -437,19 +449,3 @@ export function fracture (
     }
   }
 }
-
-
-/** One vertex attribute of a custom layout: `size` floats at `offset` floats into the vertex. */
-export interface AttribSpec {
-  location: number;
-  size:     number;
-  offset:   number;
-}
-
-/** The standard interleaved layout: position(3) normal(3) uv(2) shard(4). */
-export const STANDARD_LAYOUT: AttribSpec[] = [
-  { location: 0, size: 3, offset: 0 },
-  { location: 1, size: 3, offset: 3 },
-  { location: 2, size: 2, offset: 6 },
-  { location: 3, size: 4, offset: 8 },
-]

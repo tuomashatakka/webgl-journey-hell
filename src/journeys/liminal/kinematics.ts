@@ -2,7 +2,6 @@ import type { CustomUniforms } from '@wjh/gl/uniforms'
 import type { JourneyMarks, JourneySimulation } from '@wjh/journey/types'
 import { mix, smoothstep } from '@wjh/math/scalar'
 
-
 /** One traversal. The literals below predate this constant; it is not a rename. */
 const LIMINAL_LOOP_Z = 500
 
@@ -11,6 +10,8 @@ const LIMINAL_ABYSS_Z = 2000
 
 /** Six sectors plus the abyss. Drives the transport bar's tick marks. */
 const LIMINAL_SECTOR_COUNT = 7
+
+const PIECE_W = 0.28
 
 interface KinematicState {
   loop:      number;
@@ -23,6 +24,20 @@ interface KinematicState {
   secLen:    number;
   fallAmt:   number; // 0..1 continuous fall pitch amount
   name:      string;
+}
+
+/**
+ * The route as a replayable object.
+ *
+ * This journey predates withJourneyShell and integrates its walk inline in the
+ * render loop (see page.tsx). The transport controls need to *replay* that walk
+ * to an arbitrary time, which an inline `currentZ += speed * dt` cannot do — so
+ * the integration lives here instead, and the loop drives this.
+ */
+interface LiminalRide {
+  readonly z: number;
+  step(dt: number): void;
+  marks(): JourneyMarks;
 }
 
 // ---- Sector 666 keyframe tables (identical literals to GLSL fsScene) ----
@@ -94,8 +109,7 @@ function pieceSpeed (id: number): number {
     return 6
   return 8.2
 }
-
-const PIECE_W = 0.28 // cross-fade width
+// cross-fade width
 
 function pieceName (id: number): string {
   if (id === 1)
@@ -287,21 +301,6 @@ function getWalkSpeed (z: number): number {
     return mix(pieceSpeed(state.setpieceA), pieceSpeed(state.setpieceB), state.blend)
 
   return 8.2 // standard speed
-}
-
-
-/**
- * The route as a replayable object.
- *
- * This journey predates withJourneyShell and integrates its walk inline in the
- * render loop (see page.tsx). The transport controls need to *replay* that walk
- * to an arbitrary time, which an inline `currentZ += speed * dt` cannot do — so
- * the integration lives here instead, and the loop drives this.
- */
-interface LiminalRide {
-  readonly z: number;
-  step(dt: number): void;
-  marks(): JourneyMarks;
 }
 
 function createLiminalRide (): LiminalRide {

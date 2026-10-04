@@ -142,21 +142,21 @@ export default function JourneyTransport () {
   type PropsType = { act: TransportAction; glyph: string; title: string }
 
   const button = ({ act, glyph, title }: PropsType) =>
-    <button key={ act } className="jt-btn" type="button" title={ title } aria-label={ title } onClick={ () => onAction(act) }>
+    <button key={ act } className="jt-btn" aria-label={ title } type="button" title={ title } onClick={ () => onAction(act) }>
       {glyph}
     </button>
 
-  return <aside id="journey-transport" className="hud" ref={ rootRef } data-mode="play">
+  return <aside ref={ rootRef } id="journey-transport" className="hud" data-mode="play">
     <div className="jt-head">
       <div className="jt-buttons">
         {BACK.map(button)}
 
         <button
           className="jt-btn jt-pause"
-          type="button"
-          title={ paused ? 'Play (space)' : 'Pause (space)' }
           aria-label={ paused ? 'Play' : 'Pause' }
           aria-pressed={ paused }
+          type="button"
+          title={ paused ? 'Play (space)' : 'Pause (space)' }
           onClick={ onTogglePause }>
           {paused ? '▶' : '❚❚'}
         </button>
@@ -165,28 +165,28 @@ export default function JourneyTransport () {
       </div>
 
       <span className="jt-state">
-        <span className="jt-mode" ref={ modeRef }>{MODE_TEXT.play}</span>
-        <span className="jt-label" ref={ labelRef }>—</span>
+        <span ref={ modeRef } className="jt-mode">{MODE_TEXT.play}</span>
+        <span ref={ labelRef } className="jt-label">—</span>
       </span>
 
-      <span className="jt-counter" ref={ counterRef }>00:00</span>
+      <span ref={ counterRef } className="jt-counter">00:00</span>
     </div>
 
     <div
-      className="jt-track"
       ref={ trackRef }
-      role="slider"
-      tabIndex={ 0 }
+      className="jt-track"
       aria-label="Position in the lap — drag to scrub"
       aria-valuemin={ 0 }
       aria-valuemax={ 100 }
       aria-valuenow={ 0 }
+      role="slider"
+      tabIndex={ 0 }
       onPointerDown={ onPointerDown }
       onPointerMove={ onPointerMove }
       onPointerUp={ onPointerEnd }
       onPointerCancel={ onPointerEnd }
       onKeyDown={ onKeyDown }>
-      <div className="jt-fill" ref={ fillRef } />
+      <div ref={ fillRef } className="jt-fill" />
 
       {ticks.map(t =>
         <span key={ t } className="jt-tick" style={{ left: `${t * 100}%` }} />,

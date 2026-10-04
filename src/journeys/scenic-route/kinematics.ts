@@ -93,23 +93,6 @@ const RPM_DOWN    = 2300
 const RPM_MAX     = 7800
 const CLUTCH_TAU  = 0.18
 
-/** Rotate v about unit axis k by angle a (Rodrigues), into out. */
-function rotate (
-  vx: number, vy: number, vz: number,
-  kx: number, ky: number, kz: number, a: number,
-  out: [ number, number, number ],
-): void {
-  const c  = Math.cos(a)
-  const sn = Math.sin(a)
-  const d  = kx * vx + ky * vy + kz * vz
-  const cx = ky * vz - kz * vy
-  const cy = kz * vx - kx * vz
-  const cz = kx * vy - ky * vx
-  out[0]   = vx * c + cx * sn + kx * d * (1 - c)
-  out[1]   = vy * c + cy * sn + ky * d * (1 - c)
-  out[2]   = vz * c + cz * sn + kz * d * (1 - c)
-}
-
 export class ScenicRide implements JourneySimulation {
   private readonly route: Route
 
@@ -180,44 +163,6 @@ export class ScenicRide implements JourneySimulation {
     const m    = this.route.curve.pointAtDistance(this.route.spans[5].s0)
     this.mouth = [ m.x, m.y, m.z ]
     this.updatePose(0)
-  }
-
-  step (dt: number, time: number): void {
-    const h   = Math.min(dt, MAX_STEP)
-    this.time = time
-
-    const route = this.route
-    const p     = speedParamsAt(route, this.s, this.lapF, this.w, this.speed)
-
-    // Grade from the tangent — the curve is C¹, so this is continuous.
-    levelFrame(route.curve, this.s, this.frame)
-    this.grade = Math.asin(Math.max(-1, Math.min(1, this.frame.forward.y)))
-
-    // The driver, gravity, drag. In the cave the current is the driver: a
-    // buoyant car eases to the water's speed and gravity along the tangent is
-    // weighted out, because the water is doing the falling for it.
-    const surge = 1 + 0.12 * Math.sin(this.travelled * 0.021 + 1.3) * this.floatW
-    let a       = p.throttle * (p.vTarget * surge - this.v) / p.tau
-    a          -= p.gW * G * Math.sin(this.grade)
-    a          -= p.cD * this.v * this.v
-    this.v      = Math.max(V_MIN, this.v + a * h)
-
-    this.s         += this.v * h
-    this.travelled += this.v * h
-    if (this.s >= route.length) {
-      this.s -= route.length
-      this.lap++
-    }
-
-    if (this.lap >= CONFIG.signal.lossLaps.scenicRoute)
-      this.signalAge += h
-
-    // lapF ramps across the decay section rather than stepping at the seam.
-    const decay = route.spans[DECAY_SECTION]
-    this.lapF   = this.lap + smootherstep(decay.s0, decay.s1, this.s)
-
-    this.updateGearbox(h)
-    this.updatePose(h)
   }
 
   private updateGearbox (h: number): void {
@@ -409,6 +354,44 @@ export class ScenicRide implements JourneySimulation {
     this.camUp[2]  = cuz
   }
 
+  step (dt: number, time: number): void {
+    const h   = Math.min(dt, MAX_STEP)
+    this.time = time
+
+    const route = this.route
+    const p     = speedParamsAt(route, this.s, this.lapF, this.w, this.speed)
+
+    // Grade from the tangent — the curve is C¹, so this is continuous.
+    levelFrame(route.curve, this.s, this.frame)
+    this.grade = Math.asin(Math.max(-1, Math.min(1, this.frame.forward.y)))
+
+    // The driver, gravity, drag. In the cave the current is the driver: a
+    // buoyant car eases to the water's speed and gravity along the tangent is
+    // weighted out, because the water is doing the falling for it.
+    const surge = 1 + 0.12 * Math.sin(this.travelled * 0.021 + 1.3) * this.floatW
+    let a       = p.throttle * (p.vTarget * surge - this.v) / p.tau
+    a          -= p.gW * G * Math.sin(this.grade)
+    a          -= p.cD * this.v * this.v
+    this.v      = Math.max(V_MIN, this.v + a * h)
+
+    this.s         += this.v * h
+    this.travelled += this.v * h
+    if (this.s >= route.length) {
+      this.s -= route.length
+      this.lap++
+    }
+
+    if (this.lap >= CONFIG.signal.lossLaps.scenicRoute)
+      this.signalAge += h
+
+    // lapF ramps across the decay section rather than stepping at the seam.
+    const decay = route.spans[DECAY_SECTION]
+    this.lapF   = this.lap + smootherstep(decay.s0, decay.s1, this.s)
+
+    this.updateGearbox(h)
+    this.updatePose(h)
+  }
+
   uniforms (): CustomUniforms {
     const o    = this.out
     const look = this.look
@@ -480,6 +463,23 @@ export class ScenicRide implements JourneySimulation {
       signalAge: this.signalAge,
     }
   }
+}
+
+/** Rotate v about unit axis k by angle a (Rodrigues), into out. */
+function rotate (
+  vx: number, vy: number, vz: number,
+  kx: number, ky: number, kz: number, a: number,
+  out: [ number, number, number ],
+): void {
+  const c  = Math.cos(a)
+  const sn = Math.sin(a)
+  const d  = kx * vx + ky * vy + kz * vz
+  const cx = ky * vz - kz * vy
+  const cy = kz * vx - kx * vz
+  const cz = kx * vy - ky * vx
+  out[0]   = vx * c + cx * sn + kx * d * (1 - c)
+  out[1]   = vy * c + cy * sn + ky * d * (1 - c)
+  out[2]   = vz * c + cz * sn + kz * d * (1 - c)
 }
 
 export function createScenicRouteSimulation (): JourneySimulation {

@@ -269,6 +269,36 @@ float lampFalloff (float d, float range) {
 }
 `
 
+// --- sky ---------------------------------------------------------------------------
+
+export const skyVert = HEADER + /* glsl */`
+layout(location = 0) in vec2 aPos;
+uniform mat4 uInvViewProj;
+uniform vec3 uCamPos;
+out vec3 vDir;
+void main () {
+  vec4 far = uInvViewProj * vec4(aPos, 1.0, 1.0);
+  vDir = far.xyz / far.w - uCamPos;
+  // At the far plane, so everything drawn later wins the depth test.
+  gl_Position = vec4(aPos, 0.99999, 1.0);
+}
+`
+
+export const skyFrag = HEADER + FRAG_COMMON.replace(/in vec3 vWorld;[\s\S]*?in vec4 vInst;/, 'in vec3 vDir;') + /* glsl */`
+uniform float uSkyFog;      // effective distance the sky sits behind the air
+
+void main () {
+  vec3 rd = normalize(vDir);
+  vec3 col = skyColour(rd);
+  col = applyMedium(col, uSkyFog, uCamFog);
+  col += inscatter(uCamPos, rd, 400.0);
+  col += (hash12(gl_FragCoord.xy) - 0.5) * 0.002;
+  if (uEncode > 0.5)
+    col = col / (1.0 + col);
+  fragColor = vec4(col, 1.0);
+}
+`
+
 export const loopLineFrag = (variant: 'surface' | 'headwall' | 'water'): string => HEADER +
   (variant === 'headwall' ? '#define HEADWALL\n' : '') +
   (variant === 'water' ? '#define WATER\n' : '') + FRAG_COMMON + /* glsl */`
@@ -569,35 +599,5 @@ void main () {
 #else
   fragColor = vec4(col, 1.0);
 #endif
-}
-`
-
-// --- sky ---------------------------------------------------------------------------
-
-export const skyVert = HEADER + /* glsl */`
-layout(location = 0) in vec2 aPos;
-uniform mat4 uInvViewProj;
-uniform vec3 uCamPos;
-out vec3 vDir;
-void main () {
-  vec4 far = uInvViewProj * vec4(aPos, 1.0, 1.0);
-  vDir = far.xyz / far.w - uCamPos;
-  // At the far plane, so everything drawn later wins the depth test.
-  gl_Position = vec4(aPos, 0.99999, 1.0);
-}
-`
-
-export const skyFrag = HEADER + FRAG_COMMON.replace(/in vec3 vWorld;[\s\S]*?in vec4 vInst;/, 'in vec3 vDir;') + /* glsl */`
-uniform float uSkyFog;      // effective distance the sky sits behind the air
-
-void main () {
-  vec3 rd = normalize(vDir);
-  vec3 col = skyColour(rd);
-  col = applyMedium(col, uSkyFog, uCamFog);
-  col += inscatter(uCamPos, rd, 400.0);
-  col += (hash12(gl_FragCoord.xy) - 0.5) * 0.002;
-  if (uEncode > 0.5)
-    col = col / (1.0 + col);
-  fragColor = vec4(col, 1.0);
 }
 `

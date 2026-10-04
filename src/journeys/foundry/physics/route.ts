@@ -83,19 +83,6 @@ export const MAX_SQUEEZE = 0.18
 export const SPAN_HALF_W =
   Math.max(...SPAN_IX.map(Math.abs)) * TILE + TILE_HALF
 
-// --- cyclic helpers ---------------------------------------------------------
-
-/** Wrap a distance into one lap, 0..CYCLE_LEN. */
-export function cyclic (z: number): number {
-  return z - CYCLE_LEN * Math.floor(z / CYCLE_LEN)
-}
-
-/** Signed distance from `from` to `to` the short way round the lap. */
-export function cycDelta (to: number, from: number): number {
-  const d = cyclic(to - from)
-  return d > CYCLE_LEN * 0.5 ? d - CYCLE_LEN : d
-}
-
 // --- the route --------------------------------------------------------------
 //
 // Until the span the route *is* the hall centreline and distance walked is the
@@ -130,6 +117,30 @@ const RETURN_RUN = 22
 /** Lateral offset the span leaves you at. */
 const SPAN_X_END = SPAN_IX[SPAN_TILES - 1] * TILE
 
+export interface RoutePoint {
+
+  /** Lateral offset from the hall centreline, and cyclic-lap forward position. */
+  x: number
+  z: number
+
+  /** d/d(arc) of both — the heading, unnormalised. */
+  dx: number
+  dz: number
+}
+
+// --- cyclic helpers ---------------------------------------------------------
+
+/** Wrap a distance into one lap, 0..CYCLE_LEN. */
+export function cyclic (z: number): number {
+  return z - CYCLE_LEN * Math.floor(z / CYCLE_LEN)
+}
+
+/** Signed distance from `from` to `to` the short way round the lap. */
+export function cycDelta (to: number, from: number): number {
+  const d = cyclic(to - from)
+  return d > CYCLE_LEN * 0.5 ? d - CYCLE_LEN : d
+}
+
 /** Lateral offset of tile `i`'s centre. */
 export function tileX (i: number): number {
   return SPAN_IX[Math.min(SPAN_TILES - 1, Math.max(0, i))] * TILE
@@ -158,17 +169,6 @@ function ctlZ (k: number): number {
   if (k >= SPAN_TILES)
     return tileZ(SPAN_TILES - 1) + (k - (SPAN_TILES - 1)) * TILE
   return tileZ(k)
-}
-
-export interface RoutePoint {
-
-  /** Lateral offset from the hall centreline, and cyclic-lap forward position. */
-  x: number
-  z: number
-
-  /** d/d(arc) of both — the heading, unnormalised. */
-  dx: number
-  dz: number
 }
 
 /**

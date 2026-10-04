@@ -67,20 +67,6 @@ const HEAD_ROLL = 0.55
 const LEAD     = 26
 const LEAD_MIX = 0.38
 
-/** The rupture channels, from lapF alone. Shared with the scene and the audio. */
-function decayOf (lapF: number): [ number, number, number, number ] {
-  // The rates matter more than the effects. At three times these the line was
-  // rubble by lap four, and a room that has stopped being a room cannot decay
-  // any further. As set, lap two is a place with something wrong with it, lap
-  // four is coming apart, and the next lap is always worse than this one.
-  return [
-    clamp01((lapF - 0.8) * 0.135), // fracture
-    Math.min(0.85, lapF * 0.135), // lightFail
-    Math.min(1, lapF * 0.105), // rot
-    clamp01(lapF * 0.16), // wear
-  ]
-}
-
 class LoopLineRide implements JourneySimulation {
   private readonly circuits: Circuits
 
@@ -123,33 +109,6 @@ class LoopLineRide implements JourneySimulation {
 
   private spanIndex (): number {
     return spanIndexAt(this.spans, this.s, this.curve.length)
-  }
-
-  step (dt: number): void {
-    const h    = Math.min(dt, MAX_STEP)
-    const span = this.spans[this.spanIndex()]
-
-    // Drag falls away as the line ages: darker and faster together.
-    const target = span.bay.speed * (1 + this.lapF * 0.065)
-    this.speed  += (target - this.speed) * (1 - Math.exp(-h / SPEED_TAU))
-
-    const before = this.s
-    this.s         += this.speed * h
-    this.travelled += this.speed * h
-
-    if (this.s >= this.curve.length) {
-      this.s -= this.curve.length
-      this.lap++
-    }
-
-    if (this.lap >= CONFIG.signal.lossLaps.loopLine)
-      this.signalAge += h
-
-    this.throwPointsIfDue(before)
-
-    const decay = this.spans.find(sp => sp.bay.id === DECAY_BAY)!
-    this.lapF   = this.lap + smootherstep(decay.s0, decay.s1, this.s)
-    this.updatePose(h)
   }
 
   // The point machine: once, on the first pass through the points at or after
@@ -242,6 +201,33 @@ class LoopLineRide implements JourneySimulation {
     t[5]    = uz
   }
 
+  step (dt: number): void {
+    const h    = Math.min(dt, MAX_STEP)
+    const span = this.spans[this.spanIndex()]
+
+    // Drag falls away as the line ages: darker and faster together.
+    const target = span.bay.speed * (1 + this.lapF * 0.065)
+    this.speed  += (target - this.speed) * (1 - Math.exp(-h / SPEED_TAU))
+
+    const before = this.s
+    this.s         += this.speed * h
+    this.travelled += this.speed * h
+
+    if (this.s >= this.curve.length) {
+      this.s -= this.curve.length
+      this.lap++
+    }
+
+    if (this.lap >= CONFIG.signal.lossLaps.loopLine)
+      this.signalAge += h
+
+    this.throwPointsIfDue(before)
+
+    const decay = this.spans.find(sp => sp.bay.id === DECAY_BAY)!
+    this.lapF   = this.lap + smootherstep(decay.s0, decay.s1, this.s)
+    this.updatePose(h)
+  }
+
   uniforms (): CustomUniforms {
     const span = this.spans[this.spanIndex()]
     const cam  = this.cam
@@ -278,6 +264,20 @@ class LoopLineRide implements JourneySimulation {
       signalAge:    this.signalAge,
     }
   }
+}
+
+/** The rupture channels, from lapF alone. Shared with the scene and the audio. */
+function decayOf (lapF: number): [ number, number, number, number ] {
+  // The rates matter more than the effects. At three times these the line was
+  // rubble by lap four, and a room that has stopped being a room cannot decay
+  // any further. As set, lap two is a place with something wrong with it, lap
+  // four is coming apart, and the next lap is always worse than this one.
+  return [
+    clamp01((lapF - 0.8) * 0.135), // fracture
+    Math.min(0.85, lapF * 0.135), // lightFail
+    Math.min(1, lapF * 0.105), // rot
+    clamp01(lapF * 0.16), // wear
+  ]
 }
 
 export function createLoopLineSimulation (): JourneySimulation {

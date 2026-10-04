@@ -16,6 +16,34 @@ import { MATERIAL_SIZE, MATERIALS, skyAsset } from './manifest'
 import { MATERIAL_URLS, SKY_URLS } from './urls'
 
 
+const ANISO = 0x84FE
+
+export interface MaterialArrays {
+
+  /** sRGB colour. */
+  readonly color: WebGLTexture;
+
+  /** Normal (GL convention) in RG, roughness in B. */
+  readonly normal: WebGLTexture;
+
+  /** Displacement in R, ambient occlusion in G, metalness in B. */
+  readonly detail: WebGLTexture;
+  readonly ready:  boolean;
+
+  /** Bind the three arrays to `unit`, `unit + 1`, `unit + 2`. */
+  bind(gl: WebGL2RenderingContext, unit: number): void;
+  dispose(gl: WebGL2RenderingContext): void;
+}
+
+export interface SkyTexture {
+  readonly id:       string;
+  readonly texture:  WebGLTexture;
+  readonly exposure: number;
+  readonly ready:    boolean;
+  bind(gl: WebGL2RenderingContext, unit: number): void;
+  dispose(gl: WebGL2RenderingContext): void;
+}
+
 async function decode (url: string): Promise<HTMLImageElement> {
   const img    = new Image()
   img.decoding = 'async'
@@ -40,8 +68,7 @@ function anisotropy (gl: WebGL2RenderingContext): number {
   const ext = gl.getExtension('EXT_texture_filter_anisotropic')
   return ext ? Math.min(8, gl.getParameter(ext.MAX_TEXTURE_MAX_ANISOTROPY_EXT) as number) : 1
 }
-
-const ANISO = 0x84FE // TEXTURE_MAX_ANISOTROPY_EXT
+// TEXTURE_MAX_ANISOTROPY_EXT
 
 function placeholderArray (
   gl: WebGL2RenderingContext, internal: number, texel: number[],
@@ -71,23 +98,6 @@ function uploadArray (
   if (aniso > 1)
     gl.texParameterf(gl.TEXTURE_2D_ARRAY, ANISO, aniso)
   return tex
-}
-
-export interface MaterialArrays {
-
-  /** sRGB colour. */
-  readonly color: WebGLTexture;
-
-  /** Normal (GL convention) in RG, roughness in B. */
-  readonly normal: WebGLTexture;
-
-  /** Displacement in R, ambient occlusion in G, metalness in B. */
-  readonly detail: WebGLTexture;
-  readonly ready:  boolean;
-
-  /** Bind the three arrays to `unit`, `unit + 1`, `unit + 2`. */
-  bind(gl: WebGL2RenderingContext, unit: number): void;
-  dispose(gl: WebGL2RenderingContext): void;
 }
 
 /** Start loading the material library. Returns at once with safe placeholders. */
@@ -152,15 +162,6 @@ export function createMaterialArrays (gl: WebGL2RenderingContext): MaterialArray
       g.deleteTexture(tex.detail)
     },
   }
-}
-
-export interface SkyTexture {
-  readonly id:       string;
-  readonly texture:  WebGLTexture;
-  readonly exposure: number;
-  readonly ready:    boolean;
-  bind(gl: WebGL2RenderingContext, unit: number): void;
-  dispose(gl: WebGL2RenderingContext): void;
 }
 
 /**

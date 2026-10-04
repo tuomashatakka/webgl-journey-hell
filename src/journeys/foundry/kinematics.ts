@@ -16,12 +16,6 @@ import { MODE_BRAKE, OBLIVION_LOOP, shaftHeadFor } from './physics/cage'
 import { MODE_FALL, MODE_OBLIVION, MODE_SETTLE, MODE_WALK } from './physics/constants'
 import type { FoundryState } from './physics/types'
 
-
-interface FoundrySection {
-  id:   number
-  name: string
-}
-
 // Seven 36 m halls in a ring, each a distinct machine environment. The shader
 // keys its geometry, corridor profile, rib/lamp cadence and palette off the same
 // indices — SECTION_LEN is the single source of truth for where each one starts,
@@ -44,6 +38,11 @@ const EVENT_LANDING  = 'THE GATE OPENS'
 const EVENT_BOARD    = 'THE SHUTTER'
 const EVENT_SPAN     = 'THE STEPPING STONES'
 const EVENT_OBLIVION = 'THE PIT HAS NO FLOOR'
+
+interface FoundrySection {
+  id:   number
+  name: string
+}
 
 function sectionFor (state: FoundryState): FoundrySection {
   const band = Math.min(

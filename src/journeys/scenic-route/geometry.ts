@@ -38,6 +38,63 @@ import type { Route } from './course'
 import { tubeRadius } from './maw'
 import { smoothstep } from '@wjh/math/scalar'
 
+// --- the coastline -------------------------------------------------------------
+
+/** (z, x) knots of the sea's edge, forty metres seaward of the coast road. */
+const COAST: [ number, number ][] = [
+  [ -400, 430 ], [ 0, 425 ], [ 100, 445 ], [ 150, 490 ], [ 190, 560 ], [ 215, 572 ],
+  [ 226, 552 ], [ 242, 524 ], [ 280, 492 ], [ 335, 468 ], [ 400, 454 ], [ 470, 448 ],
+  [ 540, 446 ], [ 700, 446 ], [ 1200, 440 ],
+]
+
+// --- the height field ----------------------------------------------------------
+
+const SEA_LEVEL = 0
+const SEABED    = -28
+const PLAZA_Y   = 78
+
+export const PLAZA       = { x: 385, z: 665, r0: 130, r1: 210 }
+
+const VALLEY_Y = -60
+const RIDGE_Y  = 125
+const SHELF_Y  = 85
+
+const near = { d: 0, y: 0, s: 0 }
+
+/** The near field: 100 m chunks at 4 m over the route's bounding box. */
+const NEAR = { x0: -300, z0: -320, nx: 11, nz: 13, size: 100, cell: 4 }
+
+/** The far field: one coarse mesh to the horizon with the near field cut out. */
+const FAR = { x0: -2700, z0: -2700, size: 6000, cell: 60 }
+
+/**
+ * The waved patch: from just east of the valley's below-sea-level strip (a
+ * patch any further west would lay a lake on the hillside) out past the
+ * fish, and the length of the coast. 200 cells is an 8 m grid.
+ */
+export const SEA_PATCH = { x: 915, z: 200, halfX: 785, halfZ: 800, cells: 200 }
+
+// --- nearest spine -------------------------------------------------------------
+
+export interface SpineIndex {
+  cell:  number;
+  grid:  Map<number, number[]>; // cell key -> [x, y, z, s, x, y, z, s, ...]
+  /**
+   * The tube's spine (the throat and the river) and where it starts. A
+   * heightfield cannot tunnel: wherever the land would pass through the tube
+   * it is carved away per fragment instead, from a signed distance to the
+   * tube's wall that `carveAt` writes into every terrain vertex.
+   */
+  tube?: { idx: SpineIndex; s0: number };
+}
+
+export interface TerrainChunk {
+  builder: MeshBuilder;
+  cx:      number;
+  cy:      number;
+  cz:      number;
+  radius:  number;
+}
 
 // --- noise ---------------------------------------------------------------------
 
@@ -71,15 +128,6 @@ function fbm (x: number, z: number): number {
   return sum
 }
 
-// --- the coastline -------------------------------------------------------------
-
-/** (z, x) knots of the sea's edge, forty metres seaward of the coast road. */
-const COAST: [ number, number ][] = [
-  [ -400, 430 ], [ 0, 425 ], [ 100, 445 ], [ 150, 490 ], [ 190, 560 ], [ 215, 572 ],
-  [ 226, 552 ], [ 242, 524 ], [ 280, 492 ], [ 335, 468 ], [ 400, 454 ], [ 470, 448 ],
-  [ 540, 446 ], [ 700, 446 ], [ 1200, 440 ],
-]
-
 /** x of the cliff edge at z, smoothed and wobbled. */
 function cliffX (z: number): number {
   let i = 0
@@ -91,18 +139,6 @@ function cliffX (z: number): number {
   const t          = smoothstep(z0, z1, z)
   return x0 + (x1 - x0) * t + (fbm(z * 0.011, 3.3) - 0.5) * 22
 }
-
-// --- the height field ----------------------------------------------------------
-
-const SEA_LEVEL = 0
-const SEABED    = -28
-const PLAZA_Y   = 78
-
-export const PLAZA       = { x: 385, z: 665, r0: 130, r1: 210 }
-
-const VALLEY_Y = -60
-const RIDGE_Y  = 125
-const SHELF_Y  = 85
 
 /** The land before anything is built on it. */
 function naturalHeight (x: number, z: number): number {
@@ -124,20 +160,6 @@ function naturalHeight (x: number, z: number): number {
   const sea = smoothstep(-3, 7, d)
   h = h + (SEABED + (fbm(x * 0.03, z * 0.03) - 0.5) * 3 - h) * sea
   return h
-}
-
-// --- nearest spine -------------------------------------------------------------
-
-export interface SpineIndex {
-  cell:  number;
-  grid:  Map<number, number[]>; // cell key -> [x, y, z, s, x, y, z, s, ...]
-  /**
-   * The tube's spine (the throat and the river) and where it starts. A
-   * heightfield cannot tunnel: wherever the land would pass through the tube
-   * it is carved away per fragment instead, from a signed distance to the
-   * tube's wall that `carveAt` writes into every terrain vertex.
-   */
-  tube?: { idx: SpineIndex; s0: number };
 }
 
 /**
@@ -167,8 +189,6 @@ export function buildSpineIndex (
   }
   return { cell, grid }
 }
-
-const near = { d: 0, y: 0, s: 0 }
 
 /** Horizontal distance to the nearest spine sample within the 3×3 cells, and its height. */
 export function nearestSpine (idx: SpineIndex, x: number, z: number): typeof near {
@@ -267,14 +287,6 @@ function writeCarve (b: MeshBuilder, carve: number[]): void {
     v[i * VERTEX_FLOATS + 8] = carve[i]
 }
 
-export interface TerrainChunk {
-  builder: MeshBuilder;
-  cx:      number;
-  cy:      number;
-  cz:      number;
-  radius:  number;
-}
-
 /**
  * One square chunk of heightfield, `cells` × `cells` quads of `cell` metres,
  * smooth-shaded from central differences of the field itself. uv carries the
@@ -333,12 +345,6 @@ function buildTerrainChunk (
     radius:  Math.hypot(half, half, (maxY - minY) * 0.5),
   }
 }
-
-/** The near field: 100 m chunks at 4 m over the route's bounding box. */
-const NEAR = { x0: -300, z0: -320, nx: 11, nz: 13, size: 100, cell: 4 }
-
-/** The far field: one coarse mesh to the horizon with the near field cut out. */
-const FAR = { x0: -2700, z0: -2700, size: 6000, cell: 60 }
 
 export function buildNearChunks (idx: SpineIndex): TerrainChunk[] {
   const out: TerrainChunk[] = []
@@ -424,13 +430,6 @@ export function buildSeaPatch (
     }
   return b
 }
-
-/**
- * The waved patch: from just east of the valley's below-sea-level strip (a
- * patch any further west would lay a lake on the hillside) out past the
- * fish, and the length of the coast. 200 cells is an 8 m grid.
- */
-export const SEA_PATCH = { x: 915, z: 200, halfX: 785, halfZ: 800, cells: 200 }
 
 export function buildSeaQuad (): MeshBuilder {
   const b  = createMeshBuilder()

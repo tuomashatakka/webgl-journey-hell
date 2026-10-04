@@ -11,27 +11,6 @@ const SHAFT_HEAD_Y = 128
 const LIFT_RISE = 26
 
 /**
- * Where this run starts.
- *
- * The drop is meant to get longer every time, and moving the *brake* down alone
- * cannot do that: a lower trip point buys free-fall metres and gives them
- * straight back as braking seconds, so the drop as a whole comes out flat or
- * shorter. The shaft has to get taller as well.
- *
- * Which means the shaft is no longer a constant the shader can bake in — the
- * head goes up with the cage, and it travels as a uniform (uFall.z). Anything
- * that draws the shaft has to ask, not assume.
- */
-export function liftTopFor (loop: number): number {
-  return LIFT_TOP + Math.min(loop, OBLIVION_LOOP) * LIFT_RISE
-}
-
-/** Head of the shaft for that run — the ceiling the cage hangs just under. */
-export function shaftHeadFor (loop: number): number {
-  return liftTopFor(loop) + (SHAFT_HEAD_Y - LIFT_TOP)
-}
-
-/**
  * Height at which the emergency shoes bite. Sized against brakeForce() so the
  * cage comes to a stand a few metres short of the landing: the wedges take
  * ~0.35 s to seat, which at terminal speed is 13 m of shaft gone before there
@@ -41,21 +20,6 @@ export const LIFT_BRAKE_Y = 44
 
 /** Metres lower the trip gear fires on each successive run. */
 const BRAKE_DROP = 5
-
-/**
- * Where the shoes bite on this run.
- *
- * The guide rails are scored a little flatter by every arrival, so the trip gear
- * has less to catch on and fires later: the drop gets longer and the stop gets
- * harder, run on run. Lap 0 stops with two thirds of the shaft to spare; lap 2
- * has barely the stopping distance it needs. Lap OBLIVION_LOOP the gear fires at
- * the original height and the shoes cannot hold at all — see cageForce.
- */
-export function brakeYFor (loop: number): number {
-  if (loop >= OBLIVION_LOOP)
-    return LIFT_BRAKE_Y
-  return LIFT_BRAKE_Y - loop * BRAKE_DROP
-}
 
 /** Hydraulic buffers in the pit, for the arrivals the shoes do not catch. */
 export const PIT_Y = -3
@@ -137,6 +101,42 @@ const BUFFER_C        = 34000
 
 // N·s/m
 const BUFFER_POWER    = 1.6
+
+/**
+ * Where this run starts.
+ *
+ * The drop is meant to get longer every time, and moving the *brake* down alone
+ * cannot do that: a lower trip point buys free-fall metres and gives them
+ * straight back as braking seconds, so the drop as a whole comes out flat or
+ * shorter. The shaft has to get taller as well.
+ *
+ * Which means the shaft is no longer a constant the shader can bake in — the
+ * head goes up with the cage, and it travels as a uniform (uFall.z). Anything
+ * that draws the shaft has to ask, not assume.
+ */
+export function liftTopFor (loop: number): number {
+  return LIFT_TOP + Math.min(loop, OBLIVION_LOOP) * LIFT_RISE
+}
+
+/** Head of the shaft for that run — the ceiling the cage hangs just under. */
+export function shaftHeadFor (loop: number): number {
+  return liftTopFor(loop) + (SHAFT_HEAD_Y - LIFT_TOP)
+}
+
+/**
+ * Where the shoes bite on this run.
+ *
+ * The guide rails are scored a little flatter by every arrival, so the trip gear
+ * has less to catch on and fires later: the drop gets longer and the stop gets
+ * harder, run on run. Lap 0 stops with two thirds of the shaft to spare; lap 2
+ * has barely the stopping distance it needs. Lap OBLIVION_LOOP the gear fires at
+ * the original height and the shoes cannot hold at all — see cageForce.
+ */
+export function brakeYFor (loop: number): number {
+  if (loop >= OBLIVION_LOOP)
+    return LIFT_BRAKE_Y
+  return LIFT_BRAKE_Y - loop * BRAKE_DROP
+}
 
 export function spawnDebris (rand: () => number, cageY: number): DebrisBody[] {
   const bodies: DebrisBody[] = []

@@ -15,6 +15,10 @@ import { useSampled } from '✦/hooks/use-sampled'
 import type { JourneyDebugState } from '@wjh/web/debugParams'
 
 
+interface Props {
+  getState: () => JourneyDebugState;
+}
+
 /** Enough precision to tell two frames apart, not so much that it is unreadable. */
 function fmt (v: number): string {
   if (!Number.isFinite(v))
@@ -40,10 +44,6 @@ function fmtValue (v: number | number[]): string {
     return rows.join('\n')
   }
   return v.map(fmt).join('  ')
-}
-
-interface Props {
-  getState: () => JourneyDebugState;
 }
 
 export default function JourneyDebugPanel ({ getState }: Props) {

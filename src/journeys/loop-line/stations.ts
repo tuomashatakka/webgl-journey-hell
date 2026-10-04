@@ -56,7 +56,6 @@ import { createClosedCurve } from '@wjh/geometry/curve'
 import type { ClosedCurve, Frame, Vec3 } from '@wjh/geometry/curve'
 import { smootherstep } from '@wjh/math/scalar'
 
-
 /** What a bay is built as. */
 export const enum Theme {
   STATION = 0,
@@ -100,46 +99,6 @@ export const enum Rupture {
 
   /** The structure leaves one member at a time. */
   VANISH = 8,
-}
-
-export interface Bay {
-  id:    number;
-  name:  string;
-  theme: Theme;
-
-  /** Span as a fraction of the main loop, [u0, u1). The table tiles [0, 1). */
-  u0: number;
-  u1: number;
-
-  /** Target speed through the bay, m/s, before lap scaling. */
-  speed: number;
-
-  /** Fog colour (linear, scene-referred) and per-metre extinction. */
-  fog:        [ number, number, number ];
-  fogDensity: number;
-
-  /** Hemisphere fill from above, linear. What an enclosed room bounces around. */
-  ambient: [ number, number, number ];
-
-  /**
-   * 0 enclosed, 1 open to the sky: scales the sky-map irradiance and the sun.
-   * Not a boolean, because a deep cut sees less sky than a viaduct does.
-   */
-  open: number;
-
-  /** Which Δ sky hangs over this bay, if it is open. */
-  sky: string | null;
-
-  /** Camera exposure, EV-style multiplier. Authored, not metered: ?t= must reproduce. */
-  exposure: number;
-
-  rupture: Rupture;
-
-  /** How hard this bay's shards move per unit of the global fracture channel. */
-  shatter: number;
-
-  /** Room tone in the audio engine (its ROOMS table), not the bay id. */
-  sound: number;
 }
 
 // The nine, in running order. u1 of each is u0 of the next and the last wraps.
@@ -324,7 +283,6 @@ export const CHORD_BAY: Bay = {
   sound:      6,
 }
 
-
 /**
  * THE TURNBACK is where the lap counter advances: no walls, no ceiling, signal
  * lamps over nothing, so a bay whose parameters are sliding is a bay with
@@ -385,22 +343,49 @@ const PROFILE: [ number, number ][] = [
   [ 1, -14 ],
 ]
 
-function heightAt (u: number): number {
-  const t = u - Math.floor(u)
-  for (let i = 1; i < PROFILE.length; i++) {
-    const [ ua, ha ] = PROFILE[i - 1]
-    const [ ub, hb ] = PROFILE[i]
-    if (t <= ub)
-      return ha + (hb - ha) * ((t - ua) / (ub - ua))
-  }
-  return PROFILE[PROFILE.length - 1][1]
-}
+// Built once per page load and shared: the simulation and the scene must ride
+// the same spline, or the train rides through the ballast. A few milliseconds
+// once, rather than again on every StrictMode remount.
+let circuits: Circuits | null = null
 
-function ringPoints (y: number[]): Vec3[] {
-  return RADII.map((r, i) => {
-    const a = i / RADII.length * Math.PI * 2
-    return { x: r * Math.cos(a), y: y[i], z: r * Math.sin(a) }
-  })
+export interface Bay {
+  id:    number;
+  name:  string;
+  theme: Theme;
+
+  /** Span as a fraction of the main loop, [u0, u1). The table tiles [0, 1). */
+  u0: number;
+  u1: number;
+
+  /** Target speed through the bay, m/s, before lap scaling. */
+  speed: number;
+
+  /** Fog colour (linear, scene-referred) and per-metre extinction. */
+  fog:        [ number, number, number ];
+  fogDensity: number;
+
+  /** Hemisphere fill from above, linear. What an enclosed room bounces around. */
+  ambient: [ number, number, number ];
+
+  /**
+   * 0 enclosed, 1 open to the sky: scales the sky-map irradiance and the sun.
+   * Not a boolean, because a deep cut sees less sky than a viaduct does.
+   */
+  open: number;
+
+  /** Which Δ sky hangs over this bay, if it is open. */
+  sky: string | null;
+
+  /** Camera exposure, EV-style multiplier. Authored, not metered: ?t= must reproduce. */
+  exposure: number;
+
+  rupture: Rupture;
+
+  /** How hard this bay's shards move per unit of the global fracture channel. */
+  shatter: number;
+
+  /** Room tone in the audio engine (its ROOMS table), not the bay id. */
+  sound: number;
 }
 
 /** A bay pinned to a concrete arc-length span on one particular circuit. */
@@ -429,6 +414,24 @@ export interface Circuits {
 
   /** Inward unit vector (toward the loop's middle) — the chord bows this way. */
   inward(p: Vec3, out?: Vec3): Vec3;
+}
+
+function heightAt (u: number): number {
+  const t = u - Math.floor(u)
+  for (let i = 1; i < PROFILE.length; i++) {
+    const [ ua, ha ] = PROFILE[i - 1]
+    const [ ub, hb ] = PROFILE[i]
+    if (t <= ub)
+      return ha + (hb - ha) * ((t - ua) / (ub - ua))
+  }
+  return PROFILE[PROFILE.length - 1][1]
+}
+
+function ringPoints (y: number[]): Vec3[] {
+  return RADII.map((r, i) => {
+    const a = i / RADII.length * Math.PI * 2
+    return { x: r * Math.cos(a), y: y[i], z: r * Math.sin(a) }
+  })
 }
 
 /** Arc-length fraction of a curve parameter, by scan. Build time only. */
@@ -592,7 +595,6 @@ function buildCircuits (): Circuits {
   }
 }
 
-
 /** Index of the span owning `s`, for neighbour lookups. */
 export function spanIndexAt (spans: BaySpan[], s: number, loopLength: number): number {
   const t = (s % loopLength + loopLength) % loopLength
@@ -601,11 +603,6 @@ export function spanIndexAt (spans: BaySpan[], s: number, loopLength: number): n
       return i
   return spans.length - 1
 }
-
-// Built once per page load and shared: the simulation and the scene must ride
-// the same spline, or the train rides through the ballast. A few milliseconds
-// once, rather than again on every StrictMode remount.
-let circuits: Circuits | null = null
 
 export function getCircuits (): Circuits {
   if (!circuits)

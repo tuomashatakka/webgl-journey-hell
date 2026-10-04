@@ -22,13 +22,13 @@ export default function SettingsButton ({ side, align }: SettingsButtonProps) {
       label="Graphics and controls"
       side={ side }
       align={ align }
-      onClick={ () => setIsOpen(true) }
-      icon={ <SettingsIcon size={ 18 } strokeWidth={ 1.75 } aria-hidden /> } />
+      icon={ <SettingsIcon aria-hidden size={ 18 } strokeWidth={ 1.75 } /> }
+      onClick={ () => setIsOpen(true) } />
 
     <SettingsView
       isOpen={ isOpen }
-      onClose={ () => setIsOpen(false) }
       settings={ settings }
+      onClose={ () => setIsOpen(false) }
       onChange={ setSettings } />
   </>
 }

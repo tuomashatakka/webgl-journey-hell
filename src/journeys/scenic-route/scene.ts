@@ -48,7 +48,6 @@ import { bendGainAt } from './city'
 
 const FOV_BASE = 62 * Math.PI / 180
 
-
 const SHADOW_HALF  = 170
 const SHADOW_DEPTH = 900
 
@@ -73,6 +72,14 @@ const HEAD_DROP = 95
 const JAW_SHUT = 1
 import { cockpitPass, postPass } from './scene/post'
 
+/** The [-1,1] -> [0,1] remap the shadow lookup wants, as a matrix. */
+const BIAS: Mat4 = new Float32Array([
+  0.5, 0, 0, 0,
+  0, 0.5, 0, 0,
+  0, 0, 0.5, 0,
+  0.5, 0.5, 0.5, 1,
+])
+
 /** Column-major orthographic projection into [-1,1]^3, right-handed. */
 function ortho (out: Mat4, half: number, near: number, far: number): Mat4 {
   out.fill(0)
@@ -83,14 +90,6 @@ function ortho (out: Mat4, half: number, near: number, far: number): Mat4 {
   out[15] = 1
   return out
 }
-
-/** The [-1,1] -> [0,1] remap the shadow lookup wants, as a matrix. */
-const BIAS: Mat4 = new Float32Array([
-  0.5, 0, 0, 0,
-  0, 0.5, 0, 0,
-  0, 0, 0.5, 0,
-  0.5, 0.5, 0.5, 1,
-])
 
 export function createScenicRouteScene (
   gl: WebGL2RenderingContext,

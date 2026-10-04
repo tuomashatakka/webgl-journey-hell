@@ -20,40 +20,6 @@ export const TYPE_PLANT  = 4
 // pumps and pipework, the only warm light
 export const TYPE_RAW    = 5
 
-// bare concrete, below the tile line
-
-export interface Section {
-  id:   number;
-  name: string;
-
-  /** Length along the section's local +Z. */
-  len: number;
-
-  /** Half width in local X. */
-  halfW: number;
-
-  /** Ceiling height above the section's local floor. */
-  ceilH: number;
-
-  /** How far the floor falls start-to-end. Negative rises. */
-  drop: number;
-
-  /** Yaw applied on *entering* this section, radians. Never 0 — see below. */
-  turn: number;
-
-  /** Surface treatment; one of the TYPE_* constants. */
-  type: number;
-
-  /** How filthy this space is, 0..1 — drives mildew and grout staining. */
-  grime: number;
-
-  /** Ceiling lamp pitch along local Z. */
-  lamp: number;
-
-  /** Base walk speed before the wading penalty. */
-  speed: number;
-}
-
 const D = Math.PI / 180
 
 // The lap. Four invariants hold across this table, all checked by
@@ -247,6 +213,40 @@ export const LAP_LEN = SECTIONS.reduce((acc, s) => acc + s.len, 0)
 export const STARTS: number[] = []
 
 export const FLOOR0: number[] = []
+
+// bare concrete, below the tile line
+
+export interface Section {
+  id:   number;
+  name: string;
+
+  /** Length along the section's local +Z. */
+  len: number;
+
+  /** Half width in local X. */
+  halfW: number;
+
+  /** Ceiling height above the section's local floor. */
+  ceilH: number;
+
+  /** How far the floor falls start-to-end. Negative rises. */
+  drop: number;
+
+  /** Yaw applied on *entering* this section, radians. Never 0 — see below. */
+  turn: number;
+
+  /** Surface treatment; one of the TYPE_* constants. */
+  type: number;
+
+  /** How filthy this space is, 0..1 — drives mildew and grout staining. */
+  grime: number;
+
+  /** Ceiling lamp pitch along local Z. */
+  lamp: number;
+
+  /** Base walk speed before the wading penalty. */
+  speed: number;
+}
 
 {
   let accLen  = 0

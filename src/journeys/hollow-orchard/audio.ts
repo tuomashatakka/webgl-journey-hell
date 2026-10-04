@@ -36,46 +36,37 @@ const GLIDE = 0.7
 const EPS = 0.01
 
 export class HollowOrchardAudioEngine extends JourneyAudio {
-  protected readonly name = 'Hollow Orchard'
+  private droneLow: OscillatorNode | null = null
 
 
-  private droneLow:  OscillatorNode | null = null
   private droneHigh: OscillatorNode | null = null
   private droneFilt: BiquadFilterNode | null = null
   private droneGain: GainNode | null = null
-
   private hazeFilt:  BiquadFilterNode | null = null
+
   private hazeGain:  GainNode | null = null
   private creakGain: GainNode | null = null
   private wetBus:    GainNode | null = null
   private delayFb:   GainNode | null = null
-
-
   // Last-written parameter values, so `update` only touches what actually moved.
   private lastStage = 0
+
+
   private lastCutoff = -1
   private lastDrone = -1
   private lastHaze = -1
   private lastCreak = -1
+  private plopDensity = 0.2
 
 
-  protected teardown (): void {
-    this.droneLow?.stop()
-    this.droneHigh?.stop()
-  }
+  private clickDensity = 0
 
-  // ---- construction -------------------------------------------------------
+  private beatAmount = 0
 
-  protected build (): void {
-    this.buildDelay()
-    this.buildDrone()
-    this.buildHaze()
-    this.buildCreak()
-    this.schedulePlops()
-    this.scheduleClicks()
-    this.scheduleHeartbeat()
-  }
 
+  private beatSlow = 0
+
+  protected readonly name = 'Hollow Orchard'
 
   /** A wet room: everything one-shot goes through here, and it opens in the abyss. */
   private buildDelay (): void {
@@ -232,8 +223,6 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     this.after(900, tick)
   }
 
-  private plopDensity = 0.2
-
   /** Dry chitin ticks, panned. Dense in the root labyrinth. */
   private click (): void {
     if (!this.ctx || !this.main || this.isMuted)
@@ -264,8 +253,6 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     src.start(now)
     src.stop(now + 0.08)
   }
-
-  private clickDensity = 0
 
   private scheduleClicks (): void {
     const tick = () => {
@@ -300,8 +287,6 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     osc.stop(now + 0.34)
   }
 
-  private beatAmount = 0
-
   private scheduleHeartbeat (): void {
     const tick = () => {
       if (!this.ctx)
@@ -315,8 +300,6 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     }
     this.after(2000, tick)
   }
-
-  private beatSlow = 0
 
   /** A soft burst of spores — fired when the stage changes under you. */
   private burst (): void {
@@ -344,6 +327,40 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     env.connect(this.wetBus)
     src.start(now)
     src.stop(now + 1.7)
+  }
+
+  /** setTargetAtTime with an epsilon guard, keyed by the field caching the last write. */
+  private ramp (
+    param: AudioParam | undefined,
+    value: number,
+    now: number,
+    key: 'lastCutoff' | 'lastDrone' | 'lastHaze' | 'lastCreak',
+  ): void {
+    if (!param)
+      return
+
+    const scale = key === 'lastCutoff' ? 1 : 200
+    if (Math.abs(value - this[key]) * scale < EPS)
+      return
+    this[key] = value
+    param.setTargetAtTime(value, now, GLIDE)
+  }
+
+  protected teardown (): void {
+    this.droneLow?.stop()
+    this.droneHigh?.stop()
+  }
+
+  // ---- construction -------------------------------------------------------
+
+  protected build (): void {
+    this.buildDelay()
+    this.buildDrone()
+    this.buildHaze()
+    this.buildCreak()
+    this.schedulePlops()
+    this.scheduleClicks()
+    this.scheduleHeartbeat()
   }
 
   // ---- per-frame ----------------------------------------------------------
@@ -399,23 +416,6 @@ export class HollowOrchardAudioEngine extends JourneyAudio {
     // in COMPOST, where the simulation has already stopped moving you.
     this.beatAmount = Math.min(1, (fleshy ? 0.9 : 0.25) + rot * 0.5) * (0.55 + 0.9 * breath)
     this.beatSlow   = stage === STAGE_COMPOST ? Math.min(1, descent * 1.2) : 0
-  }
-
-  /** setTargetAtTime with an epsilon guard, keyed by the field caching the last write. */
-  private ramp (
-    param: AudioParam | undefined,
-    value: number,
-    now: number,
-    key: 'lastCutoff' | 'lastDrone' | 'lastHaze' | 'lastCreak',
-  ): void {
-    if (!param)
-      return
-
-    const scale = key === 'lastCutoff' ? 1 : 200
-    if (Math.abs(value - this[key]) * scale < EPS)
-      return
-    this[key] = value
-    param.setTargetAtTime(value, now, GLIDE)
   }
 }
 

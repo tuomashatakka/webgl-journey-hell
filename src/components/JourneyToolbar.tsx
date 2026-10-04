@@ -24,8 +24,8 @@ export default function JourneyToolbar () {
         align="end"
         label={ rt.audio.isMuted ? 'Unmute audio' : 'Mute audio' }
         pressed={ !rt.audio.isMuted }
-        onClick={ rt.audio.toggle }
-        icon={ rt.audio.isMuted ? <VolumeX { ...ICON } /> : <Volume2 { ...ICON } /> } />
+        icon={ rt.audio.isMuted ? <VolumeX { ...ICON } /> : <Volume2 { ...ICON } /> }
+        onClick={ rt.audio.toggle } />
     }
 
     <ToolbarButton
@@ -33,10 +33,10 @@ export default function JourneyToolbar () {
       align="end"
       label={ rt.fullscreen ? 'Exit fullscreen' : 'Fullscreen' }
       pressed={ rt.fullscreen }
-      onClick={ rt.toggleFullscreen }
-      icon={ rt.fullscreen ? <Minimize { ...ICON } /> : <Maximize { ...ICON } /> } />
+      icon={ rt.fullscreen ? <Minimize { ...ICON } /> : <Maximize { ...ICON } /> }
+      onClick={ rt.toggleFullscreen } />
 
     <SettingsButton align="end" />
-    <span id="fps-display" ref={ rt.statsRef }>— FPS</span>
+    <span ref={ rt.statsRef } id="fps-display">— FPS</span>
   </nav>
 }

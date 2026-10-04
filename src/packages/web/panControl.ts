@@ -21,6 +21,8 @@ import { clamp, easeInOutCubic } from '@wjh/math/scalar'
 import { stepLookOffset } from './keymap'
 
 
+let orientationPermission: OrientationPermissionState = 'unknown'
+
 export interface PanVector {
   x: number;
   y: number;
@@ -81,8 +83,6 @@ interface OrientationPermissionGate {
 
 type OrientationPermissionState = 'unknown' | 'granted' | 'denied'
 
-let orientationPermission: OrientationPermissionState = 'unknown'
-
 /** Request orientation access from an explicit UI gesture (required by iOS). */
 export async function requestGyroscopePermission (): Promise<boolean> {
   if (typeof window === 'undefined' || !('DeviceOrientationEvent' in window))
@@ -119,6 +119,40 @@ function angleDelta (a: number, b: number): number {
 function tiltAxis (deg: number): number {
   const magnitude = Math.max(0, Math.abs(deg) - CONFIG.pan.gyroDeadzoneDeg)
   return clamp(Math.sign(deg) * magnitude / CONFIG.pan.gyroRangeDeg, -1, 1)
+}
+
+/** Device-space tilt deltas rotated into screen space for the given screen angle. */
+function screenAxes (angle: number, dBeta: number, dGamma: number): [number, number] {
+  switch (angle) {
+    case 90:
+      return [ dBeta, dGamma ]
+    case 180:
+      return [ -dGamma, dBeta ]
+    case 270:
+      return [ -dBeta, -dGamma ]
+    default:
+      return [ dGamma, -dBeta ]
+  }
+}
+
+/**
+ * A device rotated mid-journey gets a fresh neutral pose, as does one coming
+ * back from a backgrounded tab (where readings stop arriving). Returns the detacher.
+ */
+function onNeutralPoseLost (recenter: () => void): () => void {
+  const onOrientationChange = () => recenter()
+  const onVisibility        = () => {
+    if (document.visibilityState === 'visible')
+      recenter()
+  }
+  screen.orientation?.addEventListener('change', onOrientationChange)
+  window.addEventListener('orientationchange', onOrientationChange)
+  document.addEventListener('visibilitychange', onVisibility)
+  return () => {
+    screen.orientation?.removeEventListener('change', onOrientationChange)
+    window.removeEventListener('orientationchange', onOrientationChange)
+    document.removeEventListener('visibilitychange', onVisibility)
+  }
 }
 
 export function createPanControl (options: PanControlOptions = {}): PanControl {
@@ -180,26 +214,8 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
 
     // Orientation is reported in device space; rotate it into screen space so
     // tilting "right" pans right in landscape as well as portrait.
-    const angle = typeof screen !== 'undefined' && screen.orientation?.angle || 0
-    let ax: number,
-      ay: number
-    switch (angle) {
-      case 90:
-        ax = dBeta
-        ay = dGamma
-        break
-      case 180:
-        ax = -dGamma
-        ay = dBeta
-        break
-      case 270:
-        ax = -dBeta
-        ay = -dGamma
-        break
-      default:
-        ax = dGamma
-        ay = -dBeta
-    }
+    const angle      = typeof screen !== 'undefined' && screen.orientation?.angle || 0
+    const [ ax, ay ] = screenAxes(angle, dBeta, dGamma)
 
     // The device is a window: tilting its top away from you (beta falling from
     // the upright pose) points its back at the sky, so that drives the view up.
@@ -244,21 +260,7 @@ export function createPanControl (options: PanControlOptions = {}): PanControl {
     else
       listen()
 
-    // A device rotated mid-journey gets a fresh neutral pose, as does one
-    // coming back from a backgrounded tab (where readings stop arriving).
-    const onOrientationChange = () => recenter()
-    const onVisibility        = () => {
-      if (document.visibilityState === 'visible')
-        recenter()
-    }
-    screen.orientation?.addEventListener('change', onOrientationChange)
-    window.addEventListener('orientationchange', onOrientationChange)
-    document.addEventListener('visibilitychange', onVisibility)
-    detachers.push(() => {
-      screen.orientation?.removeEventListener('change', onOrientationChange)
-      window.removeEventListener('orientationchange', onOrientationChange)
-      document.removeEventListener('visibilitychange', onVisibility)
-    })
+    detachers.push(onNeutralPoseLost(recenter))
   }
 
   // --- Tweening ------------------------------------------------------------

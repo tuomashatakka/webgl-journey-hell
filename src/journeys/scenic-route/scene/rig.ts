@@ -5,6 +5,9 @@ import { SPEEDO, TACHO, buildCockpit, dialNormal, dialPoint, drawDialFaces } fro
 
 import { MIRROR_W, MIRROR_H } from './shared'
 
+
+export type CockpitRig = ReturnType<typeof createCockpitRig>
+
 /** The cabin, its dials and the mirror's target. */
 export function createCockpitRig (gl: WebGL2RenderingContext) {
   // --- the cockpit -----------------------------------------------------------------
@@ -32,5 +35,3 @@ export function createCockpitRig (gl: WebGL2RenderingContext) {
 
   return { cockpit, cabinMesh, wheelMesh, speedoMesh, tachoMesh, mirror, dialTex, carMat, dialN, speedoPivot, tachoPivot }
 }
-
-export type CockpitRig = ReturnType<typeof createCockpitRig>

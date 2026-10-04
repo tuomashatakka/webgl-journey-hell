@@ -4,11 +4,10 @@ import { LIFT_BRAKE_Y, OBLIVION_LOOP, OBLIVION_PERIOD, PIT_Y, brakeYFor, liftTop
 import { MODE_OBLIVION, WALK_START } from './physics/constants'
 import { advance, createFoundryState } from './physics'
 
-
-const pt = () => ({ x: 0, z: 0, dx: 0, dz: 1 })
-
 /** decayFor caps here, so this is the tightest the corridor ever gets. */
 const MAX_DECAY = 0.85
+
+const pt = () => ({ x: 0, z: 0, dx: 0, dz: 1 })
 
 
 describe('the stepping stones', () => {
@@ -165,7 +164,6 @@ describe('the drop', () => {
 
 
 describe('oblivion', () => {
-
   /** Drive a fresh sim until `done`, or give up after `limit` seconds. */
   function run (done, limit) {
     const s = createFoundryState()

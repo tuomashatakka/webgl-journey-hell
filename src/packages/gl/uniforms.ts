@@ -3,6 +3,8 @@
 
 import { CONFIG } from '@wjh/config/config'
 
+/** The default when nothing has been measured: desktop behaviour. */
+export const HIGH_QUALITY: QualityHints = { tier: 2, ...CONFIG.quality.tiers[2] }
 
 /**
  * Extra per-frame uniforms, keyed by GLSL name. The value's length picks the
@@ -30,9 +32,6 @@ export interface QualityHints {
   /** Bloom mip levels a post chain should build. */
   bloomLevels: number;
 }
-
-/** The default when nothing has been measured: desktop behaviour. */
-export const HIGH_QUALITY: QualityHints = { tier: 2, ...CONFIG.quality.tiers[2] }
 
 export interface FrameUniforms {
   time:     number;

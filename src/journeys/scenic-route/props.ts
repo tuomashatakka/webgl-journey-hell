@@ -30,6 +30,13 @@ const MAT = {
   PAINT:     12,
 } as const
 
+/** Road half width plus the verge: how close to a spine anything may stand. */
+const ROAD_CLEAR = 3.2 + 1
+
+const HUB_Y = 62
+
+const HUB_Z = 2.4
+
 export interface PropSet {
   name:      string;
   builder:   MeshBuilder;
@@ -44,10 +51,31 @@ export interface PropSet {
   spin: number;
 }
 
-/** Road half width plus the verge: how close to a spine anything may stand. */
-const ROAD_CLEAR = 3.2 + 1
+interface Placer {
+  route: Route;
+  idx:   SpineIndex;
+  frame: ReturnType<typeof newFrame>;
+  w:     Float32Array;
+  look:  LookParams;
+}
+
+interface House {
+  wall:   MeshBuilder;
+  roof:   MeshBuilder;
+  trim:   MeshBuilder;
+  dark:   MeshBuilder;
+  glass:  MeshBuilder;
+  plinth: MeshBuilder;
+}
 
 class Instances {
+  /** One identity instance: for a mesh already built in world space. */
+  static world (): Instances {
+    const i = new Instances()
+    i.add(0, 0, 0, 0, 1, 0, 0)
+    return i
+  }
+
   data: number[] = []
 
   /** `ys` > 0 stretches the unit's height to that many metres (piers). */
@@ -61,13 +89,6 @@ class Instances {
 
   pack (): Float32Array {
     return new Float32Array(this.data)
-  }
-
-  /** One identity instance: for a mesh already built in world space. */
-  static world (): Instances {
-    const i = new Instances()
-    i.add(0, 0, 0, 0, 1, 0, 0)
-    return i
   }
 
   /** Drop every instance whose footprint any road passes through. */
@@ -150,10 +171,6 @@ function canopy (): MeshBuilder {
   return b
 }
 
-const HUB_Y = 62
-
-const HUB_Z = 2.4
-
 function turbineTower (): MeshBuilder {
   const b = createMeshBuilder()
   taperY(b, 2.1, 1.15, HUB_Y, 14)
@@ -215,14 +232,6 @@ function turbineRotor (): MeshBuilder {
 /** Yaw that turns a unit's local +z onto the world heading (fx, fz). */
 function yawOf (fx: number, fz: number): number {
   return Math.atan2(-fx, fz)
-}
-
-interface Placer {
-  route: Route;
-  idx:   SpineIndex;
-  frame: ReturnType<typeof newFrame>;
-  w:     Float32Array;
-  look:  LookParams;
 }
 
 /** World position `r` metres to the right of the spine at `s`, on the ground. */
@@ -299,15 +308,6 @@ function wireStrip (poles: Instances): MeshBuilder {
     }
   }
   return b
-}
-
-interface House {
-  wall:   MeshBuilder;
-  roof:   MeshBuilder;
-  trim:   MeshBuilder;
-  dark:   MeshBuilder;
-  glass:  MeshBuilder;
-  plinth: MeshBuilder;
 }
 
 /**

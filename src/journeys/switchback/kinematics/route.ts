@@ -1,12 +1,6 @@
 import { clamp01, mix, smootherstep } from '@wjh/math/scalar'
 import { D, DECAY_SECTION, FALL_ENTRY, TYPE_FALL } from './constants'
 
-/** d/dt of smootherstep on the unit interval. Peaks at 15/8 in the middle. */
-function dSmootherstep (t: number): number {
-  const u = clamp01(t)
-  return 30 * u * u * (u - 1) * (u - 1)
-}
-
 // ---- room types, read by the shader's material branch ---------------------
 
 const TYPE_PLATFORM  = 0
@@ -25,75 +19,6 @@ const TYPE_CHAPEL    = 4
 
 // folded stone, god-rays, no floor plan
 const TYPE_OVERLOOK  = 5
-
-// open sky over a cloud sea, drifting ash
-
-export interface Section {
-  id:   number;
-  name: string;
-
-  /** Arc length of the section, metres. */
-  len: number;
-
-  /** Surface treatment; one of the TYPE_* constants. */
-  type: number;
-
-  /**
-   * Yaw delta per beat, radians. The section is divided into `turn.length` equal
-   * beats and each one's turn is eased across it with smootherstep. Positive is
-   * a right-hand turn (toward the camera's +x).
-   */
-  turn: number[];
-
-  /**
-   * Track grade in radians at each beat *boundary*, so this is one longer than
-   * `turn`. Positive climbs. grade[0] of a section must equal grade[last] of the
-   * one before it — that single rule is the whole of tangent continuity, and
-   * assertRouteSane checks it cyclically.
-   */
-  grade: number[];
-
-  /**
-   * Per-beat chain speed in m/s, or 0 to run free. A value below the cart's
-   * current speed is a brake run and a value above it is a lift hill; the
-   * integrator does not distinguish, and neither does a real railway.
-   */
-  lift: number[];
-
-  /** Clear half-width of the bore around the track. OPEN for sections with no walls. */
-  bore: number;
-
-  /** Clearance above the rail head. */
-  ceilH: number;
-
-  /**
-   * How far the floor sits below the rail head, OPEN where there is no floor.
-   * Small everywhere it is finite: the ballast berm has to reach it, and a mine
-   * railway is laid *on* the floor. A raised boarding platform is a prop.
-   */
-  floorD: number;
-
-  /** Lamp pitch along the track. Must divide PHASE_WRAP — see assertRouteSane. */
-  lamp: number;
-
-  /**
-   * Height the lamps are mounted at, above the rail head. Authored rather than
-   * derived from `ceilH`, because a room with no ceiling still has lamps: the
-   * void's work-lights hang off the trestle and the overlook's sit on the
-   * handrail stanchions, and deriving them from a four-hundred-metre stand-in
-   * ceiling puts both of them in the stratosphere.
-   *
-   * It is also the one number the geometry and the lighting must agree on. They
-   * did not, once, and the drift's bulbs lit the room from inside the roof.
-   */
-  lampY: number;
-
-  /** How far gone this room is, 0..1 — drives staining, rust and dead lamps. */
-  grime: number;
-
-  /** 0 = enclosed, 1 = open to the sky. Blended, so it can fade a roof away. */
-  sky: number;
-}
 
 /**
  * Stand-in half-width for a section with no walls. Large enough that the bore
@@ -269,6 +194,128 @@ const DROP_CEIL = 86 * D
 
 const PITCH_GAIN = (DROP_CEIL - PITCH_BIAS) / AUTHORED_DROP - 1
 
+/** Laps of railway before the rails run out. */
+export const FALL_LAPS = 4
+
+/** Where they run out. */
+export const FALL_START = LAP_LEN * FALL_LAPS
+
+/** The scenery block the shaft is tiled from. It repeats; the fall does not end. */
+export const FALL_BLOCK = 720
+
+/** How steep the shaft gets. Not 90: cos(grade) is load-bearing in the up vector. */
+const FALL_GRADE = -89.2 * D
+
+/** The shaft's corkscrew: peak curvature, and the wavelength it snakes on. */
+const FALL_CURV = 1 / 96
+
+const FALL_WAVE = 0.019
+
+// ---- precomputed route tables ---------------------------------------------
+
+export const STARTS: number[]      = []
+
+const SEC_YAW0: number[]    = []
+
+const BEAT_YAW0: number[][] = []
+
+let LAP_TURN = 0
+
+/** Grade the shaft inherits from the railway, once the pitch-over has finished. */
+const FALL_ENTRY_GRADE = steepen(-20 * D, 1)
+
+export const FALL_SECTION: Section = {
+  id:     7,
+  name:   'THE FALL',
+  len:    FALL_BLOCK,
+  type:   TYPE_FALL,
+  turn:   [ 0 ],
+  grade:  [ FALL_ENTRY_GRADE, FALL_GRADE ],
+  lift:   [ 0 ],
+  bore:   26,
+  ceilH:  OPEN,
+  floorD: OPEN,
+  lamp:   64,
+  lampY:  9,
+  grime:  1,
+  sky:    0,
+}
+
+// open sky over a cloud sea, drifting ash
+
+export interface Section {
+  id:   number;
+  name: string;
+
+  /** Arc length of the section, metres. */
+  len: number;
+
+  /** Surface treatment; one of the TYPE_* constants. */
+  type: number;
+
+  /**
+   * Yaw delta per beat, radians. The section is divided into `turn.length` equal
+   * beats and each one's turn is eased across it with smootherstep. Positive is
+   * a right-hand turn (toward the camera's +x).
+   */
+  turn: number[];
+
+  /**
+   * Track grade in radians at each beat *boundary*, so this is one longer than
+   * `turn`. Positive climbs. grade[0] of a section must equal grade[last] of the
+   * one before it — that single rule is the whole of tangent continuity, and
+   * assertRouteSane checks it cyclically.
+   */
+  grade: number[];
+
+  /**
+   * Per-beat chain speed in m/s, or 0 to run free. A value below the cart's
+   * current speed is a brake run and a value above it is a lift hill; the
+   * integrator does not distinguish, and neither does a real railway.
+   */
+  lift: number[];
+
+  /** Clear half-width of the bore around the track. OPEN for sections with no walls. */
+  bore: number;
+
+  /** Clearance above the rail head. */
+  ceilH: number;
+
+  /**
+   * How far the floor sits below the rail head, OPEN where there is no floor.
+   * Small everywhere it is finite: the ballast berm has to reach it, and a mine
+   * railway is laid *on* the floor. A raised boarding platform is a prop.
+   */
+  floorD: number;
+
+  /** Lamp pitch along the track. Must divide PHASE_WRAP — see assertRouteSane. */
+  lamp: number;
+
+  /**
+   * Height the lamps are mounted at, above the rail head. Authored rather than
+   * derived from `ceilH`, because a room with no ceiling still has lamps: the
+   * void's work-lights hang off the trestle and the overlook's sit on the
+   * handrail stanchions, and deriving them from a four-hundred-metre stand-in
+   * ceiling puts both of them in the stratosphere.
+   *
+   * It is also the one number the geometry and the lighting must agree on. They
+   * did not, once, and the drift's bulbs lit the room from inside the roof.
+   */
+  lampY: number;
+
+  /** How far gone this room is, 0..1 — drives staining, rust and dead lamps. */
+  grime: number;
+
+  /** 0 = enclosed, 1 = open to the sky. Blended, so it can fade a roof away. */
+  sky: number;
+}
+
+/** d/dt of smootherstep on the unit interval. Peaks at 15/8 in the middle. */
+function dSmootherstep (t: number): number {
+  const u = clamp01(t)
+  return 30 * u * u * (u - 1) * (u - 1)
+}
+
 /**
  * How far the pitch-over has gone at an arc length, 0..1. Reads lapF rather than
  * the integer lap so it arrives as a ramp across THE OVERLOOK — the same seam
@@ -301,53 +348,6 @@ function steepen (g: number, t: number): number {
   return Math.max(-DROP_CEIL, g * (1 + t * PITCH_GAIN) - t * PITCH_BIAS)
 }
 
-/** Laps of railway before the rails run out. */
-export const FALL_LAPS = 4
-
-/** Where they run out. */
-export const FALL_START = LAP_LEN * FALL_LAPS
-
-/** The scenery block the shaft is tiled from. It repeats; the fall does not end. */
-export const FALL_BLOCK = 720
-
-/** How steep the shaft gets. Not 90: cos(grade) is load-bearing in the up vector. */
-const FALL_GRADE = -89.2 * D
-
-/** The shaft's corkscrew: peak curvature, and the wavelength it snakes on. */
-const FALL_CURV = 1 / 96
-
-const FALL_WAVE = 0.019
-
-/** Grade the shaft inherits from the railway, once the pitch-over has finished. */
-const FALL_ENTRY_GRADE = steepen(-20 * D, 1)
-
-export const FALL_SECTION: Section = {
-  id:     7,
-  name:   'THE FALL',
-  len:    FALL_BLOCK,
-  type:   TYPE_FALL,
-  turn:   [ 0 ],
-  grade:  [ FALL_ENTRY_GRADE, FALL_GRADE ],
-  lift:   [ 0 ],
-  bore:   26,
-  ceilH:  OPEN,
-  floorD: OPEN,
-  lamp:   64,
-  lampY:  9,
-  grime:  1,
-  sky:    0,
-}
-
-// ---- precomputed route tables ---------------------------------------------
-
-export const STARTS: number[]      = []
-
-const SEC_YAW0: number[]    = []
-
-const BEAT_YAW0: number[][] = []
-
-let LAP_TURN = 0
-
 {
   let accLen = 0
   let accYaw = 0
@@ -376,6 +376,14 @@ let LAP_TURN = 0
  */
 const FALL_YAW0 = FALL_LAPS * LAP_TURN
 
+export interface Beat {
+  sec:     Section;
+  index:   number;
+  beat:    number;
+  t:       number;
+  beatLen: number;
+}
+
 /**
  * Laps run, with the fractional part ramping across THE OVERLOOK rather than
  * stepping at the seam. Hoisted out of getSwitchbackState because the grade now
@@ -398,14 +406,6 @@ export function lapFAt (s: number): number {
 /** Metres fallen past the end of the track. Zero while there is still track. */
 export function fallDepthAt (s: number): number {
   return Math.max(0, s - FALL_START)
-}
-
-export interface Beat {
-  sec:     Section;
-  index:   number;
-  beat:    number;
-  t:       number;
-  beatLen: number;
 }
 
 /** Which section, which beat, and how far through it, for an arc length. */

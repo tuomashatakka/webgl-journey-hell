@@ -7,11 +7,6 @@ import { clamp01, smootherstep, smoothstep } from '@wjh/math/scalar'
 import { FLOOR0, LAP_LEN, SECTIONS, SECTION_COUNT, STARTS, Section, sectionAt } from './kinematics/route'
 import { blendScalar, poseInFrame } from './kinematics/blend'
 
-/** Shortest signed representation of an angle difference, in (-pi, pi]. */
-function wrapPi (a: number): number {
-  return a - Math.PI * 2 * Math.round(a / (Math.PI * 2))
-}
-
 /** Eye height above the floor. You walk on the bottom, even once that is a bad idea. */
 const EYE = 1.62
 
@@ -71,10 +66,6 @@ const RISE_TO   = 10
 const SIGHT  = 12
 
 const SETTLE = 3
-
-function deployAt (ahead: number): number {
-  return smootherstep(SIGHT, SETTLE, ahead)
-}
 
 /**
  * One neighbourhood slot: the affine map carrying a point from the *current*
@@ -157,6 +148,15 @@ interface NatatoriumState {
 
   slots: Slot[]; // always 3: prev, current, next
   name:  string;
+}
+
+/** Shortest signed representation of an angle difference, in (-pi, pi]. */
+function wrapPi (a: number): number {
+  return a - Math.PI * 2 * Math.round(a / (Math.PI * 2))
+}
+
+function deployAt (ahead: number): number {
+  return smootherstep(SIGHT, SETTLE, ahead)
 }
 
 function makeSlot (

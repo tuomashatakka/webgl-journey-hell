@@ -11,7 +11,6 @@ import type { AnyGl } from '@wjh/gl/context'
 import { createShaderQuad } from '@wjh/gl/shaderQuad'
 import type { JourneyAudioEngine, JourneyMarks, JourneyRenderer, JourneySimulation } from './types'
 
-
 /** How to get a context and build the renderer in it. */
 export interface RendererSpec {
   context: 'webgl' | 'webgl2';
@@ -31,6 +30,37 @@ export interface ShaderRendererOptions {
 
   /** Optional equirectangular environment map URL (sampled as `uEnv`). */
   envMapUrl?: string;
+}
+
+export interface JourneyDefinition {
+
+  /** Route segment and folder name under app/journeys/; keys the registry. */
+  slug: string;
+
+  renderer: RendererSpec;
+
+  /**
+   * Per-mount CPU simulation. Instantiated on mount (never shared between
+   * mounts, so remounting restarts the physics), stepped once per frame before
+   * the draw, and disposed with the GL resources.
+   */
+  createSimulation?: () => JourneySimulation;
+
+  /**
+   * Per-mount audio engine. Built lazily on the first unmute (an AudioContext
+   * may only start from a user gesture). Passing this is what renders the mute
+   * button — journeys without a soundtrack never touch Web Audio.
+   */
+  createAudio?: () => JourneyAudioEngine;
+
+  /**
+   * Structural position for a journey whose motion is authored in GLSL and has
+   * no simulation at all, as a pure function of time.
+   */
+  marksAt?: (time: number) => JourneyMarks;
+
+  /** Section title for a journey with no simulation, from time. */
+  sectionNameAt?: (time: number) => string;
 }
 
 /**
@@ -70,37 +100,6 @@ export function passRenderer (create: (gl: WebGL2RenderingContext, canvas: HTMLC
 /** The same, on WebGL 1, for a pipeline written in GLSL ES 1.00. */
 export function passRendererWebGL1 (create: (gl: AnyGl, canvas: HTMLCanvasElement) => JourneyRenderer | null): RendererSpec {
   return { context: 'webgl', create }
-}
-
-export interface JourneyDefinition {
-
-  /** Route segment and folder name under app/journeys/; keys the registry. */
-  slug: string;
-
-  renderer: RendererSpec;
-
-  /**
-   * Per-mount CPU simulation. Instantiated on mount (never shared between
-   * mounts, so remounting restarts the physics), stepped once per frame before
-   * the draw, and disposed with the GL resources.
-   */
-  createSimulation?: () => JourneySimulation;
-
-  /**
-   * Per-mount audio engine. Built lazily on the first unmute (an AudioContext
-   * may only start from a user gesture). Passing this is what renders the mute
-   * button — journeys without a soundtrack never touch Web Audio.
-   */
-  createAudio?: () => JourneyAudioEngine;
-
-  /**
-   * Structural position for a journey whose motion is authored in GLSL and has
-   * no simulation at all, as a pure function of time.
-   */
-  marksAt?: (time: number) => JourneyMarks;
-
-  /** Section title for a journey with no simulation, from time. */
-  sectionNameAt?: (time: number) => string;
 }
 
 /** Identity, for inference and for a greppable marker on every journey. */

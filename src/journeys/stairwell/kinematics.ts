@@ -40,15 +40,6 @@ const PURGATORY_DRIFT = 1.6
 /** How much of the residue has bled into the world by the last traversal. */
 const MAX_BLEED = 0.73
 
-export interface StairwellSection {
-  id:    number;
-  start: number;
-  end:   number;
-  speed: number;
-  name:  string;
-  short: string;
-}
-
 export const STAIRWELL_SECTIONS: readonly StairwellSection[] = [
   { id: 0, start: 0, end: 70, speed: 6.2, name: 'I · THE SPILLWAY THRESHOLD', short: 'spillway' },
   { id: 1, start: 70, end: 155, speed: 4.2, name: 'II · PROTEAN WEATHER BRIDGE', short: 'storm' },
@@ -71,6 +62,15 @@ const PURGATORY_SECTION: StairwellSection = {
   speed: PURGATORY_DRIFT,
   name:  'VII · PURGATORY',
   short: 'purgatory',
+}
+
+export interface StairwellSection {
+  id:    number;
+  start: number;
+  end:   number;
+  speed: number;
+  name:  string;
+  short: string;
 }
 
 export interface StairwellState {

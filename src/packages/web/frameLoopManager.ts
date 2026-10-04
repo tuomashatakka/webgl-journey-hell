@@ -37,75 +37,15 @@ class FrameLoopManager {
   private _lastRunTime:            number = 0
   private _elapsedTimeAccumulator: number = 0
 
-  public totalTime: number = 0
+  private _fixedFrameRate: number = 0
+  private _msPerFrame:     number = 0
+  public totalTime:        number = 0
+
   public deltaTime: number = 0
   public isPaused:  boolean = true
 
-  private _fixedFrameRate: number = 0
-  private _msPerFrame:     number = 0
-
   constructor () {
     this._loop = this._loop.bind(this)
-  }
-
-  public setFixedFrameRate (fps: number): void {
-    this._fixedFrameRate = fps
-    this._msPerFrame     = fps > 0 ? 1000 / fps : 0
-    this._notify()
-  }
-
-  public getFramerate (): number {
-    return this._fixedFrameRate
-  }
-
-  public registerSyncCallback (callback: (manager: FrameLoopManager) => void): void {
-    this._syncCallbacks.add(callback)
-    this._manageLoop()
-  }
-
-  public unregisterSyncCallback (callback: (manager: FrameLoopManager) => void): void {
-    this._syncCallbacks.delete(callback)
-    this._manageLoop()
-  }
-
-  public registerAsyncCallback (callback: (manager: FrameLoopManager) => void): void {
-    this._asyncCallbacks.add(callback)
-    this._manageLoop()
-  }
-
-  public unregisterAsyncCallback (callback: (manager: FrameLoopManager) => void): void {
-    this._asyncCallbacks.delete(callback)
-    this._manageLoop()
-  }
-
-  public resume (): void {
-    if (this.isPaused) {
-      this.isPaused       = false
-      this._lastFrameTime = performance.now() // Prevent large deltaTime jump
-      this._lastRunTime   = this._lastFrameTime
-      this._notify()
-    }
-  }
-
-  public pause (): void {
-    if (!this.isPaused) {
-      this.isPaused = true
-      this._notify()
-    }
-  }
-
-  public reset (): void {
-    this.totalTime               = 0
-    this.deltaTime               = 0
-    this.isPaused                = true // Resetting also pauses the loop
-    this._elapsedTimeAccumulator = 0
-    this._lastFrameTime          = performance.now()
-    this._notify()
-  }
-
-  public subscribe (listener: () => void): () => void {
-    this._listeners.add(listener)
-    return () => this._listeners.delete(listener)
   }
 
   private _notify (): void {
@@ -167,6 +107,66 @@ class FrameLoopManager {
     // Execute callbacks
     this._syncCallbacks.forEach(cb => cb(this))
     this._asyncCallbacks.forEach(cb => Promise.resolve().then(() => cb(this)))
+  }
+
+  public setFixedFrameRate (fps: number): void {
+    this._fixedFrameRate = fps
+    this._msPerFrame     = fps > 0 ? 1000 / fps : 0
+    this._notify()
+  }
+
+  public getFramerate (): number {
+    return this._fixedFrameRate
+  }
+
+  public registerSyncCallback (callback: (manager: FrameLoopManager) => void): void {
+    this._syncCallbacks.add(callback)
+    this._manageLoop()
+  }
+
+  public unregisterSyncCallback (callback: (manager: FrameLoopManager) => void): void {
+    this._syncCallbacks.delete(callback)
+    this._manageLoop()
+  }
+
+  public registerAsyncCallback (callback: (manager: FrameLoopManager) => void): void {
+    this._asyncCallbacks.add(callback)
+    this._manageLoop()
+  }
+
+  public unregisterAsyncCallback (callback: (manager: FrameLoopManager) => void): void {
+    this._asyncCallbacks.delete(callback)
+    this._manageLoop()
+  }
+
+  public resume (): void {
+    if (this.isPaused) {
+      this.isPaused       = false
+      this._lastFrameTime = performance.now() // Prevent large deltaTime jump
+      this._lastRunTime   = this._lastFrameTime
+      this._notify()
+    }
+  }
+
+  public pause (): void {
+    if (!this.isPaused) {
+      this.isPaused = true
+      this._notify()
+    }
+  }
+
+  public reset (): void {
+    this.totalTime               = 0
+    this.deltaTime               = 0
+    this.isPaused                = true // Resetting also pauses the loop
+    this._elapsedTimeAccumulator = 0
+    this._lastFrameTime          = performance.now()
+    this._notify()
+  }
+
+  public subscribe (listener: () => void): () => void {
+    this._listeners.add(listener)
+    return () => this._listeners.delete(listener)
   }
 }
 

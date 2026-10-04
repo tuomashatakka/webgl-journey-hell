@@ -71,15 +71,13 @@ const ROOM_GLIDE = 0.3
  * `audio/layers`, the one-shots in `audio/events`, the data in `audio/patches`.
  */
 export class LoopLineAudioEngine extends JourneyAudio {
-  protected readonly name = 'Loop Line'
-  protected readonly bus = true
-
-
   private room: RoomReverb | null = null
   private wet:  GainNode | null = null
 
-  private motorGain:  GainNode | null = null
-  private muzakGain:  GainNode | null = null
+
+  private motorGain: GainNode | null = null
+  private muzakGain: GainNode | null = null
+
   private windGain:   GainNode | null = null
   private waterGain:  GainNode | null = null
   private splashGain: GainNode | null = null
@@ -89,57 +87,20 @@ export class LoopLineAudioEngine extends JourneyAudio {
   private voidGain:   GainNode | null = null
   private boreGain:   GainNode | null = null
   private formant:    FormantVoice | null = null
-
-
   // Driven from the shader uniforms each frame.
   private speed = 0
   private lapF = 0
+
+
   private bay = -1
   private travel = 0
   private lastBay = -1
-
   // Reverb crossfade state — only touched on bay change.
   private lastRoom = -1
+  protected readonly name = 'Loop Line'
 
+  protected readonly bus = true
 
-  // ---- construction -------------------------------------------------------
-
-  protected build (): void {
-    const { ctx, dry } = this
-    if (!ctx || !dry)
-      return
-
-    this.buildRoom()
-
-    // Where a voice's tail goes: the room's wet bus once it exists.
-    const wet = this.wet ?? dry
-
-    this.motorGain = buildMotor(ctx, dry)
-    this.muzakGain = buildConcourse(ctx, dry, wet)
-    this.buildCut(ctx, dry, wet)
-
-    const water     = buildWater(ctx, dry, wet, this.noiseSource(true))
-    this.waterGain  = water.water
-    this.splashGain = water.splash
-
-    const stacks   = buildStacks(ctx, dry, wet, this.noiseSource(true))
-    this.fanGain   = stacks.fan
-    this.coilGain  = stacks.coil
-    this.relayGain = stacks.relay
-    this.scheduleRelayClicks()
-
-    const turnback = this.noiseSource(true)
-    if (turnback)
-      this.voidGain = buildVoid(ctx, dry, turnback)
-
-    const bore = this.noiseSource(true)
-    if (bore)
-      this.boreGain = buildBore(ctx, dry, bore)
-
-    this.formant = buildFormant(ctx, dry, wet)
-    if (this.wet)
-      buildShimmer(ctx, this.wet)
-  }
 
   /**
    * One delay pair for all seven rooms, crossfaded rather than switched.
@@ -249,6 +210,45 @@ export class LoopLineAudioEngine extends JourneyAudio {
     this.lastRoom = this.bay
 
     this.room?.tune(ROOMS[i], now, ROOM_GLIDE)
+  }
+
+  // ---- construction -------------------------------------------------------
+
+  protected build (): void {
+    const { ctx, dry } = this
+    if (!ctx || !dry)
+      return
+
+    this.buildRoom()
+
+    // Where a voice's tail goes: the room's wet bus once it exists.
+    const wet = this.wet ?? dry
+
+    this.motorGain = buildMotor(ctx, dry)
+    this.muzakGain = buildConcourse(ctx, dry, wet)
+    this.buildCut(ctx, dry, wet)
+
+    const water     = buildWater(ctx, dry, wet, this.noiseSource(true))
+    this.waterGain  = water.water
+    this.splashGain = water.splash
+
+    const stacks   = buildStacks(ctx, dry, wet, this.noiseSource(true))
+    this.fanGain   = stacks.fan
+    this.coilGain  = stacks.coil
+    this.relayGain = stacks.relay
+    this.scheduleRelayClicks()
+
+    const turnback = this.noiseSource(true)
+    if (turnback)
+      this.voidGain = buildVoid(ctx, dry, turnback)
+
+    const bore = this.noiseSource(true)
+    if (bore)
+      this.boreGain = buildBore(ctx, dry, bore)
+
+    this.formant = buildFormant(ctx, dry, wet)
+    if (this.wet)
+      buildShimmer(ctx, this.wet)
   }
 
   // ---- per-frame ----------------------------------------------------------

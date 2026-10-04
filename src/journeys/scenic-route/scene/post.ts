@@ -23,6 +23,27 @@ interface PostArgs {
   time:     number;
 }
 
+interface CockpitArgs {
+  viewProj: Mat4;
+  camPos:   number[];
+  sun:      number[];
+  env:      number[];
+  fogCol:   number[];
+  time:     number;
+  shadowOn: number;
+  exposure: number;
+  ride:     number[];
+  loop:     number[];
+  car:      number[];
+  fall:     number[];
+  carPos:   number[];
+  carFwd:   number[];
+  carRight: number[];
+  carUp:    number[];
+  cockpitP: GlProgram;
+  bindLit:  (prog: GlProgram, camPos: number[], sun: number[], env: number[], fogCol: number[], time: number, shadowOn: number) => void;
+}
+
 /** Resolve the MSAA scene, bright-pass and blur it, composite to the screen. */
 export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
   const { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time } = a
@@ -71,27 +92,6 @@ export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
   compP.uniform1f('uSpeedBlur', Math.max(0, Math.min(1, (ride[0] - 36) / 24)))
   compP.uniform1f('uTime', time)
   drawQuad()
-}
-
-interface CockpitArgs {
-  viewProj: Mat4;
-  camPos:   number[];
-  sun:      number[];
-  env:      number[];
-  fogCol:   number[];
-  time:     number;
-  shadowOn: number;
-  exposure: number;
-  ride:     number[];
-  loop:     number[];
-  car:      number[];
-  fall:     number[];
-  carPos:   number[];
-  carFwd:   number[];
-  carRight: number[];
-  carUp:    number[];
-  cockpitP: GlProgram;
-  bindLit:  (prog: GlProgram, camPos: number[], sun: number[], env: number[], fogCol: number[], time: number, shadowOn: number) => void;
 }
 
 /**

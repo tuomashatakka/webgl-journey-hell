@@ -37,50 +37,35 @@ const DUCK_GLIDE = 0.04
 const EPS = 0.004
 
 export class NatatoriumAudioEngine extends JourneyAudio {
-  protected readonly name = 'Natatorium'
-  protected readonly bus = true
-  protected readonly level = 0.9
-
-
   // Flutter echo — the tile signature.
   private flutter:   DelayNode | null = null
   private flutterFb: GainNode | null = null
   private flutterLP: BiquadFilterNode | null = null
-  private wetBus:    GainNode | null = null
 
-  private roomGain:   GainNode | null = null
-  private sloshGain:  GainNode | null = null
-  private buzzGain:   GainNode | null = null
+
+  private wetBus:    GainNode | null = null
+  private roomGain:  GainNode | null = null
+  private sloshGain: GainNode | null = null
+  private buzzGain:  GainNode | null = null
+
   private humGain:    GainNode | null = null
   private rumbleGain: GainNode | null = null
-
-
   // Last-written values, so a 60 Hz update only touches what actually moved.
   private lastCut = -1
   private lastSlosh = -1
   private lastBuzz = -1
+
+
   private lastHum = -1
   private lastRumble = -1
-
   // Driven from the shader uniforms each frame.
   private submerged = 0
   private depth = 0
   private secType = 0
 
-
-  // ---- construction -------------------------------------------------------
-
-  protected build (): void {
-    this.buildFlutter()
-    this.buildRoom()
-    this.buildSlosh()
-    this.buildBuzz()
-    this.buildHum()
-    this.buildRumble()
-    this.scheduleDrips()
-    this.scheduleFootfalls()
-    this.scheduleWhistle()
-  }
+  protected readonly name = 'Natatorium'
+  protected readonly bus = true
+  protected readonly level = 0.9
 
 
   /** 11 ms slapback between parallel tile walls, plus a longer body tap. */
@@ -119,6 +104,7 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     body.connect(this.masterLP)
     this.flutterLP.connect(this.masterLP)
   }
+
 
   /** HVAC room air: brown noise through a slowly swept bandpass. */
   private buildRoom (): void {
@@ -392,6 +378,34 @@ export class NatatoriumAudioEngine extends JourneyAudio {
     this.after(25000 + Math.random() * 20000, tick)
   }
 
+  private ramp (
+    param: AudioParam | undefined,
+    value: number,
+    now: number,
+    key: 'lastSlosh' | 'lastBuzz' | 'lastHum' | 'lastRumble',
+  ): void {
+    if (!param)
+      return
+    if (Math.abs(value - this[key]) < EPS)
+      return
+    this[key] = value
+    param.setTargetAtTime(value, now, GLIDE)
+  }
+
+  // ---- construction -------------------------------------------------------
+
+  protected build (): void {
+    this.buildFlutter()
+    this.buildRoom()
+    this.buildSlosh()
+    this.buildBuzz()
+    this.buildHum()
+    this.buildRumble()
+    this.scheduleDrips()
+    this.scheduleFootfalls()
+    this.scheduleWhistle()
+  }
+
   // ---- per-frame ----------------------------------------------------------
 
   public update (_time: number, state?: CustomUniforms): void {
@@ -434,20 +448,6 @@ export class NatatoriumAudioEngine extends JourneyAudio {
       this.secType === TYPE_PLANT ? 0.055 : this.secType === TYPE_RAW ? 0.022 : 0,
       now, 'lastHum',
     )
-  }
-
-  private ramp (
-    param: AudioParam | undefined,
-    value: number,
-    now: number,
-    key: 'lastSlosh' | 'lastBuzz' | 'lastHum' | 'lastRumble',
-  ): void {
-    if (!param)
-      return
-    if (Math.abs(value - this[key]) < EPS)
-      return
-    this[key] = value
-    param.setTargetAtTime(value, now, GLIDE)
   }
 }
 

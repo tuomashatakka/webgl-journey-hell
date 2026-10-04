@@ -32,15 +32,15 @@ export default function ToolbarButton ({ label, icon, id, href, pressed, onClick
 
   return <span
     className="tb-item"
+    style={{ ['--tb-anchor' as string]: anchor } as React.CSSProperties}
     data-side={ side }
     data-align={ align }
-    style={{ ['--tb-anchor' as string]: anchor } as React.CSSProperties}
     { ...hostProps }>
     {href
-      ? <Link id={ id } className="tb-btn" href={ href } aria-label={ label }>{icon}</Link>
-      : <button id={ id } className="tb-btn" type="button" aria-label={ label } aria-pressed={ pressed } onClick={ onClick }>{icon}</button>
+      ? <Link id={ id } className="tb-btn" aria-label={ label } href={ href }>{icon}</Link>
+      : <button id={ id } className="tb-btn" aria-label={ label } aria-pressed={ pressed } type="button" onClick={ onClick }>{icon}</button>
     }
 
-    <span ref={ tipRef } className="tb-tip" popover="manual" aria-hidden="true">{label}</span>
+    <span ref={ tipRef } className="tb-tip" aria-hidden="true" popover="manual">{label}</span>
   </span>
 }

@@ -3,111 +3,8 @@ import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { mulberry32 } from '@wjh/math/rng'
 import { SurfaceKey } from './surfaces'
 
-// --- unit props -----------------------------------------------------------------
-
-/** A flat disc or ring in the local xy plane, facing +z, both sides. */
-function disc (b: MeshBuilder, r0: number, r1: number, z: number, seg: number): void {
-  for (const side of [ 1, -1 ]) {
-    const base = b.vertexCount
-    for (let i = 0; i <= seg; i++) {
-      const a = i / seg * Math.PI * 2
-      const c = Math.cos(a),
-        s     = Math.sin(a)
-      b.vertex(c * r0, s * r0, z + side * 0.004, 0, 0, side, 0, 0)
-      b.vertex(c * r1, s * r1, z + side * 0.004, 0, 0, side, 0, 0)
-    }
-    for (let i = 0; i < seg; i++) {
-      const a0 = base + i * 2,
-        a1     = a0 + 2
-      if (side > 0) {
-        b.face(a0, a0 + 1, a1 + 1)
-        b.face(a0, a1 + 1, a1)
-      }
-      else {
-        b.face(a0, a1 + 1, a0 + 1)
-        b.face(a0, a1, a1 + 1)
-      }
-    }
-  }
-}
-
-/** A cylinder along local y, capped, for posts, masts and pendants. */
-function cylY (b: MeshBuilder, x: number, y0: number, y1: number, z: number, r: number, seg = 10): void {
-  const base = b.vertexCount
-  for (let i = 0; i <= seg; i++) {
-    const a = i / seg * Math.PI * 2
-    const c = Math.cos(a),
-      s     = Math.sin(a)
-    b.vertex(x + c * r, y0, z + s * r, c, 0, s, 0, 0)
-    b.vertex(x + c * r, y1, z + s * r, c, 0, s, 0, 0)
-  }
-  for (let i = 0; i < seg; i++) {
-    const a = base + i * 2
-    b.face(a, a + 1, a + 3)
-    b.face(a, a + 3, a + 2)
-  }
-}
-
-/** A low-poly sphere, for globes and lamp bulbs. */
-function sphere (b: MeshBuilder, x: number, y: number, z: number, r: number, seg = 8): void {
-  const base = b.vertexCount
-  const rows = seg,
-    cols     = seg * 2
-  for (let j = 0; j <= rows; j++) {
-    const v = j / rows * Math.PI
-    for (let i = 0; i <= cols; i++) {
-      const u  = i / cols * Math.PI * 2
-      const nx = Math.sin(v) * Math.cos(u),
-        ny     = Math.cos(v),
-        nz     = Math.sin(v) * Math.sin(u)
-      b.vertex(x + nx * r, y + ny * r, z + nz * r, nx, ny, nz, 0, 0)
-    }
-  }
-  for (let j = 0; j < rows; j++)
-    for (let i = 0; i < cols; i++) {
-      const a = base + j * (cols + 1) + i
-      const c = a + cols + 1
-      b.face(a, a + 1, c + 1)
-      b.face(a, c + 1, c)
-    }
-}
-
-/** A ring around the local z axis (a tunnel rib), as a swept box section. */
-function ribRing (b: MeshBuilder, cu: number, r: number, depth: number, width: number, seg: number, a0: number, a1: number): void {
-  const pts: [ number, number ][] = [[ r - depth, -width ], [ r, -width ], [ r, width ], [ r - depth, width ]]
-  for (let k = 0; k < 4; k++) {
-    const [ ra, za ] = pts[k]
-    const [ rb, zb ] = pts[(k + 1) % 4]
-    const base       = b.vertexCount
-    for (let i = 0; i <= seg; i++) {
-      const a = a0 + (a1 - a0) * (i / seg)
-      const c = Math.cos(a),
-        s     = Math.sin(a)
-      // Face normal of this side of the section, rotated with the ring.
-      const nr = zb - za,
-        nz     = -(rb - ra)
-      const l  = Math.hypot(nr, nz) || 1
-      b.vertex(c * ra, cu + s * ra, za, c * nr / l, s * nr / l, nz / l, 0, 0)
-      b.vertex(c * rb, cu + s * rb, zb, c * nr / l, s * nr / l, nz / l, 0, 0)
-    }
-    for (let i = 0; i < seg; i++) {
-      const p = base + i * 2
-      b.face(p, p + 2, p + 3)
-      b.face(p, p + 3, p + 1)
-    }
-  }
-}
-
-/**
- * One prop family: a unit mesh, the surface it is drawn with, and how coarsely
- * it shatters (0 = never). Multi-material props are several families placed
- * with the same instance data.
- */
-export interface UnitSpec {
-  surface: SurfaceKey;
-  cell:    number;
-  build:   (b: MeshBuilder) => void;
-}
+/** Sleeper pitch, metres. */
+export const TIE_PITCH = 0.744
 
 export const UNITS: Record<string, UnitSpec> = {
   sleeperConcrete: { surface: 'concreteDim', cell: 0.9, build: b => b.box(0, -0.1, 0, 1.3, 0.09, 0.13) },
@@ -300,6 +197,112 @@ export const UNITS: Record<string, UnitSpec> = {
   redPost:         { surface: 'darkGrey', cell: 0, build: b => cylY(b, 0, -0.3, 2.5, 0, 0.05, 6) },
 }
 
+/**
+ * One prop family: a unit mesh, the surface it is drawn with, and how coarsely
+ * it shatters (0 = never). Multi-material props are several families placed
+ * with the same instance data.
+ */
+export interface UnitSpec {
+  surface: SurfaceKey;
+  cell:    number;
+  build:   (b: MeshBuilder) => void;
+}
+
+// --- unit props -----------------------------------------------------------------
+
+/** A flat disc or ring in the local xy plane, facing +z, both sides. */
+function disc (b: MeshBuilder, r0: number, r1: number, z: number, seg: number): void {
+  for (const side of [ 1, -1 ]) {
+    const base = b.vertexCount
+    for (let i = 0; i <= seg; i++) {
+      const a = i / seg * Math.PI * 2
+      const c = Math.cos(a),
+        s     = Math.sin(a)
+      b.vertex(c * r0, s * r0, z + side * 0.004, 0, 0, side, 0, 0)
+      b.vertex(c * r1, s * r1, z + side * 0.004, 0, 0, side, 0, 0)
+    }
+    for (let i = 0; i < seg; i++) {
+      const a0 = base + i * 2,
+        a1     = a0 + 2
+      if (side > 0) {
+        b.face(a0, a0 + 1, a1 + 1)
+        b.face(a0, a1 + 1, a1)
+      }
+      else {
+        b.face(a0, a1 + 1, a0 + 1)
+        b.face(a0, a1, a1 + 1)
+      }
+    }
+  }
+}
+
+/** A cylinder along local y, capped, for posts, masts and pendants. */
+function cylY (b: MeshBuilder, x: number, y0: number, y1: number, z: number, r: number, seg = 10): void {
+  const base = b.vertexCount
+  for (let i = 0; i <= seg; i++) {
+    const a = i / seg * Math.PI * 2
+    const c = Math.cos(a),
+      s     = Math.sin(a)
+    b.vertex(x + c * r, y0, z + s * r, c, 0, s, 0, 0)
+    b.vertex(x + c * r, y1, z + s * r, c, 0, s, 0, 0)
+  }
+  for (let i = 0; i < seg; i++) {
+    const a = base + i * 2
+    b.face(a, a + 1, a + 3)
+    b.face(a, a + 3, a + 2)
+  }
+}
+
+/** A low-poly sphere, for globes and lamp bulbs. */
+function sphere (b: MeshBuilder, x: number, y: number, z: number, r: number, seg = 8): void {
+  const base = b.vertexCount
+  const rows = seg,
+    cols     = seg * 2
+  for (let j = 0; j <= rows; j++) {
+    const v = j / rows * Math.PI
+    for (let i = 0; i <= cols; i++) {
+      const u  = i / cols * Math.PI * 2
+      const nx = Math.sin(v) * Math.cos(u),
+        ny     = Math.cos(v),
+        nz     = Math.sin(v) * Math.sin(u)
+      b.vertex(x + nx * r, y + ny * r, z + nz * r, nx, ny, nz, 0, 0)
+    }
+  }
+  for (let j = 0; j < rows; j++)
+    for (let i = 0; i < cols; i++) {
+      const a = base + j * (cols + 1) + i
+      const c = a + cols + 1
+      b.face(a, a + 1, c + 1)
+      b.face(a, c + 1, c)
+    }
+}
+
+/** A ring around the local z axis (a tunnel rib), as a swept box section. */
+function ribRing (b: MeshBuilder, cu: number, r: number, depth: number, width: number, seg: number, a0: number, a1: number): void {
+  const pts: [ number, number ][] = [[ r - depth, -width ], [ r, -width ], [ r, width ], [ r - depth, width ]]
+  for (let k = 0; k < 4; k++) {
+    const [ ra, za ] = pts[k]
+    const [ rb, zb ] = pts[(k + 1) % 4]
+    const base       = b.vertexCount
+    for (let i = 0; i <= seg; i++) {
+      const a = a0 + (a1 - a0) * (i / seg)
+      const c = Math.cos(a),
+        s     = Math.sin(a)
+      // Face normal of this side of the section, rotated with the ring.
+      const nr = zb - za,
+        nz     = -(rb - ra)
+      const l  = Math.hypot(nr, nz) || 1
+      b.vertex(c * ra, cu + s * ra, za, c * nr / l, s * nr / l, nz / l, 0, 0)
+      b.vertex(c * rb, cu + s * rb, zb, c * nr / l, s * nr / l, nz / l, 0, 0)
+    }
+    for (let i = 0; i < seg; i++) {
+      const p = base + i * 2
+      b.face(p, p + 2, p + 3)
+      b.face(p, p + 3, p + 1)
+    }
+  }
+}
+
 /** Build one unit, fractured if its spec asks. */
 export function buildUnit (spec: UnitSpec, seed: number): MeshBuilder {
   const b = createMeshBuilder()
@@ -308,6 +311,3 @@ export function buildUnit (spec: UnitSpec, seed: number): MeshBuilder {
     fracture(b, spec.cell, mulberry32(seed))
   return b
 }
-
-/** Sleeper pitch, metres. */
-export const TIE_PITCH = 0.744

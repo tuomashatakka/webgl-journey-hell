@@ -40,6 +40,20 @@ const HINGE_C     = 7.5
 // hinge damping — lower leaves it ringing
 const HINGE_KICK  = 0.42
 
+/**
+ * The walk. Forward speed is trivially a relaxation to a walking pace; the
+ * interesting part is that everything the camera does is a *consequence* of it.
+ *
+ * Head height rides a damped leg spring whose rest length is the walking
+ * surface; every heel strike kicks that spring downward, so the head dips
+ * sharply on contact and rebounds with a decaying ring rather than tracing a
+ * sine. Weight transfer kicks an alternating lateral spring tuned to one stride
+ * period, and the head's roll and yaw are read straight off that sway. Over the
+ * folding span the spring's rest length is the panel you are standing on, so the
+ * mechanism's ring shows up in your eyes.
+ */
+const scratchRoute: RoutePoint = { x: 0, z: 0, dx: 0, dz: 1 }
+
 // --- deterministic RNG ------------------------------------------------------
 /** Cheap scalar hash, used to vary one footfall from the next. */
 function hash11 (x: number): number {
@@ -150,20 +164,6 @@ export function stepRide (s: FoundryState, impactSum: number): void {
 
   s.pitch = -0.2 - 0.42 * fast + s.cageA * 0.0035
 }
-
-/**
- * The walk. Forward speed is trivially a relaxation to a walking pace; the
- * interesting part is that everything the camera does is a *consequence* of it.
- *
- * Head height rides a damped leg spring whose rest length is the walking
- * surface; every heel strike kicks that spring downward, so the head dips
- * sharply on contact and rebounds with a decaying ring rather than tracing a
- * sine. Weight transfer kicks an alternating lateral spring tuned to one stride
- * period, and the head's roll and yaw are read straight off that sway. Over the
- * folding span the spring's rest length is the panel you are standing on, so the
- * mechanism's ring shows up in your eyes.
- */
-const scratchRoute: RoutePoint = { x: 0, z: 0, dx: 0, dz: 1 }
 
 export function stepWalker (s: FoundryState, dt: number): void {
   // Stepping out of the cage accelerates you to a pace; stepping back into it

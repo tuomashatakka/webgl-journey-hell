@@ -24,9 +24,16 @@ import { TIE_PITCH } from './geometry/units'
 import { portalFor } from './geometry/profiles'
 import type { SurfaceKey } from './geometry/surfaces'
 
-
 /** Floats per instance: (pos, sx), (fwd, sy), (up, sz), (s, bay, seed, tint). */
 export const INSTANCE_FLOATS = 16
+
+// Lamp colours, linear, before power.
+const WARM_WHITE: [ number, number, number ] = [ 1, 0.86, 0.68 ]
+const TUNGSTEN: [ number, number, number ]   = [ 1, 0.62, 0.3 ]
+const SODIUM: [ number, number, number ]     = [ 1, 0.52, 0.16 ]
+const GREENISH: [ number, number, number ]   = [ 0.7, 1, 0.84 ]
+const COLD: [ number, number, number ]       = [ 0.52, 0.74, 1 ]
+const RED: [ number, number, number ]        = [ 1, 0.1, 0.06 ]
 
 export interface Lamp {
   x: number;
@@ -81,9 +88,9 @@ interface PutOpts {
 }
 
 class Dresser {
+  private readonly f = newFrame()
   readonly out = new Map<string, number[]>()
   readonly lamps: Lamp[] = []
-  private readonly f = newFrame()
 
   constructor (
     readonly curve: ClosedCurve,
@@ -143,14 +150,6 @@ class Dresser {
     return lamp
   }
 }
-
-// Lamp colours, linear, before power.
-const WARM_WHITE: [ number, number, number ] = [ 1, 0.86, 0.68 ]
-const TUNGSTEN: [ number, number, number ]   = [ 1, 0.62, 0.3 ]
-const SODIUM: [ number, number, number ]     = [ 1, 0.52, 0.16 ]
-const GREENISH: [ number, number, number ]   = [ 0.7, 1, 0.84 ]
-const COLD: [ number, number, number ]       = [ 0.52, 0.74, 1 ]
-const RED: [ number, number, number ]        = [ 1, 0.1, 0.06 ]
 
 /**
  * Track for one stretch of one circuit: sleepers, rails, conductor rail.

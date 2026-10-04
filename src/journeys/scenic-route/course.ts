@@ -57,47 +57,6 @@ const enum Kind {
   UNDERTOW = 6,
 }
 
-export interface Section {
-  id:   number;
-  name: string;
-  kind: Kind;
-
-  // --- the speed model ---------------------------------------------------
-  /** The driver's target, m/s. */
-  vTarget: number;
-
-  /** Time constant toward it, seconds. */
-  tau: number;
-
-  /** How much the driver is in control, 0..1. Zero in the fall. */
-  throttle: number;
-
-  /** How much gravity along the tangent reaches the speed, 0..1. */
-  gW: number;
-
-  /** Quadratic drag: air on the road, slime in the throat, water in the cave. */
-  cD: number;
-
-  // --- the look ------------------------------------------------------------
-  /** Exposure offset in EV over the daylight baseline. */
-  exposure: number;
-
-  /** 0 enclosed, 1 open to the sky. Blended along s like everything else. */
-  sky: number;
-
-  /** Fog colour where the sky is not the fog (the throat, the cave). */
-  fog: [ number, number, number ];
-
-  /** Fog density, 1/m. */
-  fogDensity: number;
-
-  /** Half width of the running surface, metres. */
-  roadHalf: number;
-
-  /** 0 asphalt, 1 concrete, 2 none (the fall), 3 flesh, 4 rock. */
-  surface: number;
-}
-
 export const SECTIONS: Section[] = [
   {
     id:         0,
@@ -234,11 +193,6 @@ export const BANK_GAIN = 4
  */
 const BANK_LAP_CAP = 2.25
 
-/** The bank multiplier at lapF. One function, read by the camera and the shader. */
-export function bankGainAt (lapF: number): number {
-  return 1 + Math.min(lapF, BANK_LAP_CAP) * BANK_GAIN
-}
-
 /** Per-lap speed: targets up, drag down. */
 const SPEED_LAP = 0.08
 const DRAG_LAP  = 0.2
@@ -248,6 +202,110 @@ export const BANK_STEP = 0.5
 
 /** Half the boundary blend window: every per-section quantity crosses in 2·W metres. */
 const BLEND_W = 15
+
+let route: Route | null = null
+
+/** Sun azimuth, fixed: ahead-left on the county road. */
+const SUN_AZIMUTH = -38 * D
+
+export interface Section {
+  id:   number;
+  name: string;
+  kind: Kind;
+
+  // --- the speed model ---------------------------------------------------
+  /** The driver's target, m/s. */
+  vTarget: number;
+
+  /** Time constant toward it, seconds. */
+  tau: number;
+
+  /** How much the driver is in control, 0..1. Zero in the fall. */
+  throttle: number;
+
+  /** How much gravity along the tangent reaches the speed, 0..1. */
+  gW: number;
+
+  /** Quadratic drag: air on the road, slime in the throat, water in the cave. */
+  cD: number;
+
+  // --- the look ------------------------------------------------------------
+  /** Exposure offset in EV over the daylight baseline. */
+  exposure: number;
+
+  /** 0 enclosed, 1 open to the sky. Blended along s like everything else. */
+  sky: number;
+
+  /** Fog colour where the sky is not the fog (the throat, the cave). */
+  fog: [ number, number, number ];
+
+  /** Fog density, 1/m. */
+  fogDensity: number;
+
+  /** Half width of the running surface, metres. */
+  roadHalf: number;
+
+  /** 0 asphalt, 1 concrete, 2 none (the fall), 3 flesh, 4 rock. */
+  surface: number;
+}
+
+// ---------------------------------------------------------------------------
+// Bank knots
+// ---------------------------------------------------------------------------
+
+interface BankKnot {
+
+  /** Section index and fraction of the section's arc length. */
+  sec:  number;
+  frac: number;
+
+  /** Degrees. Magnitude when `auto`, signed when not. */
+  deg: number;
+
+  /** Take the sign from the curve's curvature there. */
+  auto: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// The built route
+// ---------------------------------------------------------------------------
+
+export interface Span {
+  section: Section;
+  s0:      number;
+  s1:      number;
+}
+
+export interface Route {
+  curve:  ClosedCurve;
+  spans:  Span[];
+  length: number;
+
+  /** Bank in radians at lap 0, every BANK_STEP metres from s = 0, cyclic. */
+  bankTable: Float32Array;
+}
+
+export interface SpeedParams {
+  vTarget:  number;
+  tau:      number;
+  throttle: number;
+  gW:       number;
+  cD:       number;
+}
+
+export interface LookParams {
+  exposure:   number;
+  sky:        number;
+  fog:        [ number, number, number ];
+  fogDensity: number;
+  roadHalf:   number;
+  surface:    number;
+}
+
+/** The bank multiplier at lapF. One function, read by the camera and the shader. */
+export function bankGainAt (lapF: number): number {
+  return 1 + Math.min(lapF, BANK_LAP_CAP) * BANK_GAIN
+}
 
 // ---------------------------------------------------------------------------
 // Control points
@@ -394,23 +452,6 @@ function pointsBySection (): Vec3[][] {
   return [ county, incline, downtown, coast, fall, gullet, undertow ]
 }
 
-// ---------------------------------------------------------------------------
-// Bank knots
-// ---------------------------------------------------------------------------
-
-interface BankKnot {
-
-  /** Section index and fraction of the section's arc length. */
-  sec:  number;
-  frac: number;
-
-  /** Degrees. Magnitude when `auto`, signed when not. */
-  deg: number;
-
-  /** Take the sign from the curve's curvature there. */
-  auto: boolean;
-}
-
 const K = (sec: number, frac: number, deg: number, auto = true): BankKnot => ({ sec, frac, deg, auto })
 
 const BANK_KNOTS: BankKnot[] = [
@@ -429,25 +470,6 @@ const BANK_KNOTS: BankKnot[] = [
   // VII — level. The float dynamics roll the car, not the table.
   K(6, 0.05, 0), K(6, 0.5, 0), K(6, 0.96, 0),
 ]
-
-// ---------------------------------------------------------------------------
-// The built route
-// ---------------------------------------------------------------------------
-
-export interface Span {
-  section: Section;
-  s0:      number;
-  s1:      number;
-}
-
-export interface Route {
-  curve:  ClosedCurve;
-  spans:  Span[];
-  length: number;
-
-  /** Bank in radians at lap 0, every BANK_STEP metres from s = 0, cyclic. */
-  bankTable: Float32Array;
-}
 
 /** Arc length of the nearest point on the curve to `p`: coarse walk, then refine. */
 function arcLengthOfPoint (curve: ClosedCurve, p: Vec3): number {
@@ -567,8 +589,6 @@ export function buildRoute (): Route {
   return { curve, spans, length: L, bankTable: tabulate(knots, L, BANK_STEP) }
 }
 
-let route: Route | null = null
-
 /** Built once per page load and shared by the simulation and the scene. */
 export function getRoute (): Route {
   if (!route)
@@ -625,14 +645,6 @@ export function sectionWeights (route: Route, s: number, out: Float32Array): Flo
   return out
 }
 
-export interface SpeedParams {
-  vTarget:  number;
-  tau:      number;
-  throttle: number;
-  gW:       number;
-  cD:       number;
-}
-
 /** Blended speed model at s on lap lapF. */
 export function speedParamsAt (
   route: Route, s: number, lapF: number, w: Float32Array, out: SpeedParams,
@@ -654,15 +666,6 @@ export function speedParamsAt (
   out.vTarget *= 1 + lapF * SPEED_LAP
   out.cD      *= Math.max(0.3, 1 - lapF * DRAG_LAP)
   return out
-}
-
-export interface LookParams {
-  exposure:   number;
-  sky:        number;
-  fog:        [ number, number, number ];
-  fogDensity: number;
-  roadHalf:   number;
-  surface:    number;
 }
 
 /** Blended look at s. `surface` is blended too: the shader treats it as a mix weight. */
@@ -697,9 +700,6 @@ export function lookAt (route: Route, s: number, w: Float32Array, out: LookParam
 export function sunElevationAt (lapF: number): number {
   return (12 - 6 * Math.min(lapF, 3)) * D
 }
-
-/** Sun azimuth, fixed: ahead-left on the county road. */
-const SUN_AZIMUTH = -38 * D
 
 export function sunDirection (lapF: number, out: [ number, number, number ]): [ number, number, number ] {
   const e = sunElevationAt(lapF)
