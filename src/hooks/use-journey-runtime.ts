@@ -62,44 +62,40 @@ import type { SignalOverlay } from '✦/lib/signalOverlay'
 import type { TransportHandle } from '✦/components/JourneyTransport'
 
 
-/** Backing-store cap for the fixed resolution choices, as before AUTO. */
-const MAX_DPR = 2
-
-/** Frames drawn at t = 0 once the assets are in, before the clock starts. */
-const WARM_FRAMES = 3
-
-/** Seconds to wait on a renderer's assets before starting without them. */
-const ASSET_TIMEOUT = 20
-
-/** Pan movement too small to be worth redrawing a paused frame for. */
-const PAN_EPSILON = 1e-4
+const MAX_DPR       = 2 // Backing-store cap for the fixed resolution choices, as before AUTO.
+const WARM_FRAMES   = 3 // Frames drawn at t = 0 once the assets are in, before the clock starts.
+const ASSET_TIMEOUT = 20 // Seconds to wait on a renderer's assets before starting without them.
+const PAN_EPSILON   = 1e-4 // Pan movement too small to be worth redrawing a paused frame for.
 
 /**
  * Stand-in for journeys with no soundtrack. useAudioEngine has to be called
  * unconditionally (hook order) but only builds on the first unmute — which,
  * with no mute button rendered, never happens.
  */
-const SILENT_ENGINE: JourneyAudioEngine = { toggleMute: () => true, destroy: () => {} }
+const SILENT_ENGINE: JourneyAudioEngine = {
+  toggleMute: () => true,
+  destroy:    () => {}
+}
+
+/**
+ * What the prerendered page shows, before any script has run.
+ */
+export const LOADING_BOOT: JourneyLoading = {
+  progress: 0.04,
+  status:   'LOADING',
+  done:     false,
+  failed:   false,
+}
 
 /** The loading bar, as the runtime reports it. */
 export interface JourneyLoading {
-
-  /** 0..1. */
-  progress: number;
+  progress: number; /** 0..1. */
   status:   string;
-
-  /** Everything is up and the clock is running: the bar can go. */
-  done: boolean;
-
-  /** The journey cannot run here; the bar stays, saying why. */
-  failed: boolean;
-
-  /** With `failed`: the compiler's own words, when it gave any. */
-  detail?: string;
+  done:     boolean; /** Everything is up and the clock is running: the bar can go. */
+  failed:   boolean; /** The journey cannot run here; the bar stays, saying why. */
+  detail?:  string; /** With `failed`: the compiler's own words, when it gave any. */
 }
 
-/** What the prerendered page shows, before any script has run. */
-export const LOADING_BOOT: JourneyLoading = { progress: 0.04, status: 'LOADING', done: false, failed: false }
 
 /** The section to announce, and a key that changes whenever it does. */
 export interface SectionAnnouncement {
