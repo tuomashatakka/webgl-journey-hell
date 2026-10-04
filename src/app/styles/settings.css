@@ -11,7 +11,7 @@
   width:                100%;
   max-width:            220px;
   height:               4px;
-  background:           #2d3139;
+  background:           var(--line);
   outline:              none;
   border:               none;
   vertical-align:       middle;
@@ -25,7 +25,7 @@
   appearance:           none;
   width:                12px;
   height:               12px;
-  background:           #00ffaa;
+  background:           var(--signal);
   border:               1px solid #000;
   cursor:               pointer;
   transition:           background 0.2s ease;
@@ -35,7 +35,7 @@
 .settings-slider::-moz-range-thumb {
   width:        12px;
   height:       12px;
-  background:   #00ffaa;
+  background:   var(--signal);
   border:       1px solid #000;
   cursor:       pointer;
   transition:   background 0.2s ease;
@@ -44,9 +44,9 @@
 
 .settings-slider-val {
   display:          inline-block;
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        11px;
-  color:            #00ffaa;
+  color:            var(--signal);
   vertical-align:   middle;
   width:            45px;
   text-align:       left;

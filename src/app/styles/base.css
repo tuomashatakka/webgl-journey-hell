@@ -1,3 +1,17 @@
+:root {
+
+  /* Design tokens. Per-journey colour arrives as --accent (set inline by the
+     shell and the cards); everything else is one palette, defined here. */
+  --signal:     #00ffaa;   /* the UI's own green: labels, focus rings, readouts */
+  --violet:     #c9b6ff;   /* selection: the checked option, the lit control */
+  --ink:        #f2f1f6;   /* text on a panel */
+  --panel:      #1a1e24;
+  --panel-deep: #15181f;
+  --line:       #2d3139;   /* hairlines and control borders */
+  --hud-row:    84px;      /* height reserved for the bottom transport row */
+  --font-mono:  monospace;
+}
+
 * {
   box-sizing:   border-box;
   margin:       0;
@@ -17,7 +31,7 @@
   height:             100vh;
   background-color:   #000;
   overflow:           hidden;
-  font-family:        monospace;
+  font-family:        var(--font-mono);
   user-select:        none;
     /* The row the HUD buttons sit on, above the transport. */
   --hud-row: 84px;
@@ -95,7 +109,7 @@
   gap:               14px;
   background:        #000;
   color:             rgba(255, 255, 255, 0.55);
-  font-family:       monospace;
+  font-family:       var(--font-mono);
   transition:        opacity 0.45s ease;
 }
 
@@ -209,7 +223,7 @@
   background:       rgba(0, 0, 0, 0.6);
   border:           1px solid rgba(255, 255, 255, 0.25);
   color:            #fff;
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        11px;
   letter-spacing:   2px;
   padding:          8px 16px;
@@ -232,7 +246,7 @@
   bottom:           var(--hud-row, 84px);
   right:            20px;
   color:            rgba(255, 255, 255, 0.45);
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        11px;
   letter-spacing:   1px;
   pointer-events:   none;

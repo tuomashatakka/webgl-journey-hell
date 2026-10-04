@@ -13,7 +13,7 @@ html, body {
         radial-gradient(ellipse at 50% -20%, rgba(0, 255, 170, 0.06), transparent 60%),
         #000;
   color:         #fff;
-  font-family:   monospace;
+  font-family:   var(--font-mono);
   padding:       64px 24px 48px;
 }
 
@@ -25,7 +25,7 @@ html, body {
 
 
 .index-sigil {
-  color:            #00ffaa;
+  color:            var(--signal);
   opacity:          0.4;
   letter-spacing:   10px;
   font-size:        12px;
@@ -44,7 +44,7 @@ html, body {
 
 .index-subtitle {
   margin-top:       12px;
-  color:            #00ffaa;
+  color:            var(--signal);
   font-size:        11px;
   letter-spacing:   4px;
   text-transform:   uppercase;
@@ -76,7 +76,7 @@ html, body {
   text-decoration:   none;
   color:             #fff;
   background:        #07080b;
-  border:            1px solid #1a1e24;
+  border:            1px solid var(--panel);
   overflow:          hidden;
   transition:        border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
 }
@@ -84,8 +84,8 @@ html, body {
 
 .journey-card:hover,
 .journey-card:focus-visible {
-  border-color:   var(--accent, #00ffaa);
-  box-shadow:     0 0 24px -4px var(--accent, #00ffaa);
+  border-color:   var(--accent, var(--signal));
+  box-shadow:     0 0 24px -4px var(--accent, var(--signal));
   transform:      translateY(-2px);
   outline:        none;
 }
@@ -138,7 +138,7 @@ html, body {
 
 .journey-card__title {
   position:         relative;
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        13px;
   font-weight:      bold;
   letter-spacing:   2px;
@@ -195,15 +195,15 @@ html, body {
   letter-spacing:   1px;
   text-transform:   uppercase;
   padding:          2px 7px;
-  border:           1px solid #2d3139;
+  border:           1px solid var(--line);
   color:            rgba(255, 255, 255, 0.55);
   transition:       color 0.25s ease, border-color 0.25s ease;
 }
 
 
 .journey-card:hover .journey-card__tag {
-  border-color: var(--accent, #00ffaa);
-  color:        var(--accent, #00ffaa);
+  border-color: var(--accent, var(--signal));
+  color:        var(--accent, var(--signal));
 }
 
 
@@ -215,7 +215,7 @@ html, body {
   background:        rgba(0, 0, 0, 0.6);
   border:            1px solid rgba(255, 255, 255, 0.25);
   color:             #fff;
-  font-family:       monospace;
+  font-family:       var(--font-mono);
   font-size:         11px;
   letter-spacing:    2px;
   padding:           8px 16px;

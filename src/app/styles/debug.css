@@ -9,7 +9,7 @@
   display:          flex;
   flex-direction:   column;
   align-items:      flex-end;
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        11px;
   line-height:      1.45;
   color:            rgba(255, 255, 255, 0.72);
@@ -166,7 +166,7 @@
   background:       rgba(0, 0, 0, 0.6);
   border:           1px solid rgba(255, 255, 255, 0.25);
   color:            #fff;
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        11px;
   letter-spacing:   2px;
   padding:          0 16px;
@@ -199,7 +199,7 @@
   outline:       none;
   transition:    all 0.2s ease;
   text-align:    center;
-  font-family:   monospace;
+  font-family:   var(--font-mono);
   line-height:   normal;
 }
 
@@ -237,7 +237,7 @@
   top:              50%;
   transform:        translateY(-50%);
   background:       #0d0e12;
-  border:           1px solid #2d3139;
+  border:           1px solid var(--line);
   width:            90%;
   max-width:        480px;
   max-height:       calc(100dvh - 32px);
@@ -254,18 +254,18 @@
 
 #settings-header {
   display:          block;
-  border-bottom:    1px solid #2d3139;
+  border-bottom:    1px solid var(--line);
   padding-bottom:   12px;
   margin-bottom:    20px;
 }
 
 
 #settings-title {
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        14px;
   font-weight:      bold;
   letter-spacing:   2px;
-  color:            #00ffaa;
+  color:            var(--signal);
 }
 
 
@@ -290,7 +290,7 @@
 #settings-close-btn:focus-visible,
 .settings-choice-btn:focus-visible,
 .settings-slider:focus-visible {
-  outline:        2px solid #00ffaa;
+  outline:        2px solid var(--signal);
   outline-offset: 3px;
 }
 
@@ -306,7 +306,7 @@
 .settings-group {
   display:         block;
   outline:         none;
-  border:          1px solid #1a1e24;
+  border:          1px solid var(--panel);
   padding:         16px;
   margin-bottom:   16px;
   background:      rgba(0, 0, 0, 0.2);
@@ -314,7 +314,7 @@
 
 
 .settings-label {
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        11px;
   letter-spacing:   1.5px;
   color:            rgba(255, 255, 255, 0.7);
@@ -323,7 +323,7 @@
 
 
 .settings-description {
-  font-family:     monospace;
+  font-family:     var(--font-mono);
   font-size:       10px;
   line-height:     1.5;
   color:           rgba(255, 255, 255, 0.4);
@@ -339,10 +339,10 @@
 
 .settings-choice-btn {
   display:         inline-block;
-  background:      #15181f;
-  border:          1px solid #2d3139;
+  background:      var(--panel-deep);
+  border:          1px solid var(--line);
   color:           rgba(255, 255, 255, 0.7);
-  font-family:     monospace;
+  font-family:     var(--font-mono);
   font-size:       11px;
   padding:         6px 12px;
   margin-right:    8px;
@@ -354,14 +354,14 @@
 
 .settings-choice-btn:hover {
   background:     rgba(0, 255, 170, 0.05);
-  border-color:   #00ffaa;
+  border-color:   var(--signal);
   color:          #fff;
 }
 
 
 .settings-choice-btn.active {
-  background:     #00ffaa;
-  border-color:   #00ffaa;
+  background:     var(--signal);
+  border-color:   var(--signal);
   color:          #000;
   font-weight:    bold;
 }
@@ -399,26 +399,26 @@
   left:               0;
   height:             16px;
   width:              16px;
-  background-color:   #15181f;
-  border:             1px solid #2d3139;
+  background-color:   var(--panel-deep);
+  border:             1px solid var(--line);
   transition:         all 0.2s ease;
 }
 
 
 .settings-switch-label:hover input ~ .settings-custom-checkbox {
-  border-color: #00ffaa;
+  border-color: var(--signal);
 }
 
 
 .settings-switch-label:has(input:focus-visible) .settings-custom-checkbox {
-  outline:        2px solid #00ffaa;
+  outline:        2px solid var(--signal);
   outline-offset: 3px;
 }
 
 
 .settings-switch-label input:checked ~ .settings-custom-checkbox {
-  background-color: #00ffaa;
-  border-color:     #00ffaa;
+  background-color: var(--signal);
+  border-color:     var(--signal);
 }
 
 
@@ -446,7 +446,7 @@
 
 
 .settings-switch-text {
-  font-family:      monospace;
+  font-family:      var(--font-mono);
   font-size:        11px;
   color:            rgba(255, 255, 255, 0.82);
   display:          inline-block;

@@ -19,7 +19,7 @@
   background:    #000;
   min-height:    100vh;
   color:         #fff;
-  font-family:   monospace;
+  font-family:   var(--font-mono);
   padding:       64px 24px 48px;
 }
 
@@ -38,7 +38,7 @@
 
 
 .assets-back a:hover {
-  color: #00ffaa;
+  color: var(--signal);
 }
 
 
@@ -84,7 +84,7 @@
   font-family:       system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size:         16px;
   font-weight:       600;
-  color:             #f2f1f6;
+  color:             var(--ink);
   cursor:            pointer;
   clear:             both;
 }
@@ -101,7 +101,7 @@
   height:          22px;
   flex:            none;
   margin:          0;
-  border:          2.5px solid #f2f1f6;
+  border:          2.5px solid var(--ink);
   border-radius:   50%;
   display:         grid;
   place-items:     center;
@@ -114,14 +114,14 @@
   width:           12px;
   height:          12px;
   border-radius:   50%;
-  background:      #c9b6ff;
+  background:      var(--violet);
   transform:       scale(0);
   transition:      transform 0.15s ease;
 }
 
 
 .assets-radio__option input:checked {
-  border-color: #c9b6ff;
+  border-color: var(--violet);
 }
 
 
@@ -131,7 +131,7 @@
 
 
 .assets-radio__option input:focus-visible {
-  outline:        2px solid #00ffaa;
+  outline:        2px solid var(--signal);
   outline-offset: 3px;
 }
 
@@ -142,7 +142,7 @@
   font-size:        11px;
   letter-spacing:   4px;
   text-transform:   uppercase;
-  color:            #00ffaa;
+  color:            var(--signal);
   opacity:          0.8;
 }
 
@@ -199,7 +199,7 @@
 
 
 .asset-card__body code {
-  color: #c9b6ff;
+  color: var(--violet);
 }
 
 
@@ -210,7 +210,7 @@
 
 
 .asset-card__body a:hover {
-  color: #00ffaa;
+  color: var(--signal);
 }
 
 
@@ -228,5 +228,5 @@
 
 
 .index-assets-link a:hover {
-  color: #c9b6ff;
+  color: var(--violet);
 }
