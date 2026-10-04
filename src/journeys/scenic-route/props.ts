@@ -69,6 +69,7 @@ interface House {
 }
 
 class Instances {
+  data: number[] = []
 
   /** One identity instance: for a mesh already built in world space. */
   static world (): Instances {
@@ -76,8 +77,6 @@ class Instances {
     i.add(0, 0, 0, 0, 1, 0, 0)
     return i
   }
-
-  data: number[] = []
 
   /** `ys` > 0 stretches the unit's height to that many metres (piers). */
   add (x: number, y: number, z: number, yaw: number, scale = 1, seed = 0, sway = 0, ys = 0): void {

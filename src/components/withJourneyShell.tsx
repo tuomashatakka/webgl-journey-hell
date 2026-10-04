@@ -35,6 +35,7 @@
 
 import type { JourneyDefinition } from '@wjh/journey/definition'
 import { getJourney } from '✦/journeys/registry'
+import type { Journey } from '✦/journeys/registry'
 import { useJourneyRuntime } from '✦/hooks/use-journey-runtime'
 import { detectDevice } from '@wjh/quality/device'
 import { useMounted } from '✦/hooks/use-mounted'
@@ -42,65 +43,77 @@ import { useOpening } from '✦/hooks/use-opening'
 import { useSettings } from './SettingsProvider'
 import JourneyKeys from './JourneyKeys'
 import JourneyToolbar from './JourneyToolbar'
-import { JourneyRuntimeProvider } from './JourneyRuntimeContext'
+import { JourneyRuntimeProvider, useJourneyRuntimeContext } from './JourneyRuntimeContext'
 import JourneyDebugPanel from './JourneyDebugPanel'
 import JourneyTransport from './JourneyTransport'
 import JourneyLoader from './JourneyLoader'
 import { SectionHeading, TitleCard } from './GlitchTitle'
 
 
+/** The journey's accent as the --accent all the chrome reads — in the prerendered HTML too. */
+type AccentStyleProps = { accent?: string }
+
+function AccentStyle ({ accent }: AccentStyleProps) {
+  return accent ? <style>{`#app-container { --accent: ${accent}; }`}</style> : null
+}
+
+/**
+ * The CSS scanline layer is part of the look where the CRT is on; on a
+ * low-tier phone it is a full-screen blend at native resolution that the GL
+ * pass's own scanlines already cover. Decided after mount: the saved settings
+ * and the device are client facts, and the prerendered HTML has to match the
+ * first client render.
+ */
+function Scanlines () {
+  const { settings } = useSettings()
+  const mounted      = useMounted()
+  return !mounted || settings.crt && detectDevice().tier > 0 ? <section id="crt-overlay" /> : null
+}
+
+interface OpeningProps {
+  meta:    Journey | undefined;
+  opening: ReturnType<typeof useOpening>;
+}
+
+/** The title card (which starts the clock as it tears away) over the loading bar. */
+function Opening ({ meta, opening }: OpeningProps) {
+  const { loading, begin } = useJourneyRuntimeContext()
+  return <>
+    {opening.showIntro && meta &&
+      <TitleCard title={ meta.title } subtitle={ meta.tagline } accent={ meta.accent } onDone={ opening.finishIntro } onOut={ begin } />
+    }
+
+    {opening.showLoader && <JourneyLoader { ...loading } />}
+  </>
+}
+
 export function withJourneyShell (definition: JourneyDefinition) {
   const meta = getJourney(definition.slug)
 
   function JourneyShell () {
-    const { settings }              = useSettings()
     const rt                        = useJourneyRuntime(definition)
     const { dbg, loading, section } = rt
-    const accent                    = meta?.accent ?? '#ffffff'
-
-    // The opening sequence plays once per mount.
-    const staged  = dbg.hud && dbg.t === null
-    const opening = useOpening({ staged, hasCard: !!meta, loading, sectionKey: section.key, sectionNamed: !!section.name })
-
-    // The CSS scanline layer is part of the look where the CRT is on; on a
-    // low-tier phone it is a full-screen blend at native resolution that the
-    // GL pass's own scanlines already cover. Decided after mount: the saved
-    // settings and the device are client facts, and the prerendered HTML has
-    // to match the first client render.
-    const mounted = useMounted()
-
-    const scanlines = !mounted || settings.crt && detectDevice().tier > 0
-
-    const accentStyle = meta?.accent
-      ? ({ ['--accent' as string]: meta.accent } as React.CSSProperties)
-      : undefined
+    const staged                    = dbg.hud && dbg.t === null
+    const opening                   = useOpening({ staged, hasCard: !!meta, begin: rt.begin, loading, sectionKey: section.key, sectionNamed: !!section.name })
 
     return <JourneyRuntimeProvider value={ rt }>
-      <main id="app-container" style={ accentStyle } data-fullscreen={ rt.fullscreen ? '1' : undefined }>
+      <main id="app-container" data-fullscreen={ rt.fullscreen ? '1' : undefined }>
+        <AccentStyle accent={ meta?.accent } />
         <canvas ref={ rt.canvasRef } id="gl-canvas" />
-        {scanlines && <section id="crt-overlay" />}
+        <Scanlines />
 
         {opening.showHeading &&
         <SectionHeading
           key={ section.key }
           title={ section.name }
-          accent={ accent }
+          accent={ meta?.accent ?? '#ffffff' }
           onDone={ opening.finishHeading } />
         }
 
         {dbg.hud && <JourneyToolbar />}
         {/* Frozen ?t= mode gets no transport: the frame is a pure function of the URL. */}
         {dbg.hud && dbg.t === null && <JourneyTransport />}
-
-        {opening.showIntro && meta &&
-        <TitleCard
-          title={ meta.title }
-          subtitle={ meta.tagline }
-          accent={ meta.accent }
-          onDone={ opening.finishIntro } />
-        }
-
-        {opening.showLoader && <JourneyLoader { ...loading } />}
+        <Opening meta={ meta } opening={ opening } />
         {dbg.debug && <JourneyDebugPanel getState={ () => window.__journeyDebug ?? rt.debugState() } />}
         <JourneyKeys enabled={ dbg.t === null && opening.opened } />
       </main>

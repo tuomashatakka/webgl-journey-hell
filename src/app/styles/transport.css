@@ -169,13 +169,17 @@
 }
 
 
-.jt-tick {
-  position:                       absolute;
-  inset-block-start:              0;
-  inline-size:                    1px;
-  block-size:                     100%;
-  background:                     rgba(0, 0, 0, 0.75);
-  pointer-events:                 none;
+/* A divider at each section boundary, over the fill; --sections is written
+   by the deck. */
+.jt-track::after {
+  position:       absolute;
+  inset:          0;
+  z-index:        1;
+  pointer-events: none;
+  content:        "";
+  background:     repeating-linear-gradient(to right,
+    transparent 0 calc(100% / var(--sections, 1) - 1px),
+    rgba(0, 0, 0, 0.75) calc(100% / var(--sections, 1) - 1px) calc(100% / var(--sections, 1)));
 }
 
 

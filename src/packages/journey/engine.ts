@@ -50,6 +50,7 @@ import type { PanVector } from '@wjh/web/panControl'
 import type { FrameLoopManager } from '@wjh/web/frameLoopManager'
 import type { JourneyDefinition } from './definition'
 import { evaluateFrame, hudLabel } from './frame'
+import type { FrameState } from './frame'
 import { seekSimulation } from './seek'
 import { signalLossAt } from './signalLoss'
 import { createSignalOverlay } from './signalOverlay'
@@ -140,6 +141,9 @@ export interface JourneyEngine {
   readonly paused: boolean;
   togglePause(): void;
 
+  /** The title card has started tearing away, or there is none: the clock may run. */
+  begin(): void;
+
   act(action: TransportAction): void;
   skip(seconds: number): void;
   scrub(fraction: number): void;
@@ -181,8 +185,11 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
   let overlay: SignalOverlay | null    = null
   let sim: JourneySimulation | null    = definition.createSimulation?.() ?? null
 
-  let iTime                         = 0
-  let paused                        = false
+  let iTime  = 0
+  let paused = false
+
+  // The title card is tearing away (or there is none): the clock may run.
+  let started                       = false
   let seeked: number | null         = null
   let debugUniforms: CustomUniforms = {}
   let label                         = ''
@@ -488,68 +495,51 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
     publishDebugState({ ...debugState(), seeking: true, ready: r.ready?.() ?? true })
   }
 
-  const liveFrame = (r: JourneyRenderer, d: DebugParams, s: GraphicsSettings, deltaTime: number) => {
-    const loaded = load.done
-    const held   = paused
-
+  /** The transport, the pan and the clock, before a frame is drawn. */
+  const advance = (s: GraphicsSettings, deltaTime: number) => {
     // Log where we are *before* moving, so every boundary ever crossed has a
     // recorded time to go back to.
     transport.observe(iTime, sim?.marks?.() ?? definition.marksAt?.(iTime) ?? null)
 
-    const ts: TransportState = transport.tick(deltaTime)
-    const moving             = ts.mode !== 'play'
+    const ts = transport.tick(deltaTime)
 
     // Input is tweened on the real delta — the speed setting must not change
     // how the camera feels to move.
     const pan = host.pan.update(deltaTime)
 
-    // The clock runs once everything is up, and not while paused. Jumps and
-    // scrubs move it either way: those are the transport's own moves, made
-    // inside tick() and request().
-    if (loaded && !held && ts.mode !== 'scrub') {
+    // The clock runs once the journey is up and revealed, and not while
+    // paused. Jumps and scrubs move it either way: those are the transport's
+    // own moves, made inside tick() and request().
+    if (load.done && started && !paused && ts.mode !== 'scrub') {
       const dt = deltaTime * s.speed
       iTime += dt
+
       // Step before the draw, so the frame shows the state just integrated.
       sim?.step(dt, iTime)
     }
+    return { ts, pan }
+  }
 
-    const target = canvas!
-    if (held && loaded && !moving && ts.scrubMix === 0 && drawn.held &&
-      drawn.time === iTime && drawn.settings === s &&
-      drawn.w === target.width && drawn.h === target.height &&
-      Math.abs(drawn.x - pan.x) < runtime.panEpsilon && Math.abs(drawn.y - pan.y) < runtime.panEpsilon) {
-      // Paused and nothing has moved: the last frame is still on the canvas
-      // (an undrawn frame is not cleared), and the GPU gets to rest.
-      countFrame()
-      return
-    }
+  /**
+   * Paused, and nothing it shows has moved: the last frame is still on the
+   * canvas (an undrawn frame is not cleared), and the GPU gets to rest.
+   */
+  const idle = (ts: TransportState, pan: PanVector, s: GraphicsSettings, target: HTMLCanvasElement) =>
+    paused && load.done && ts.mode === 'play' && ts.scrubMix === 0 && drawn.held &&
+    drawn.time === iTime && drawn.settings === s && drawn.w === target.width && drawn.h === target.height &&
+    Math.abs(drawn.x - pan.x) < runtime.panEpsilon && Math.abs(drawn.y - pan.y) < runtime.panEpsilon
 
-    // Resolution follows the frame rate, when it is the governor's to decide —
-    // from frames that are actually being made, so neither the load's hitches
-    // nor a paused frame's idling skews it.
-    if (loaded && !held && s.resolution === CONFIG.settings.autoResolution && d.res === null && !(d.w && d.h) &&
-      governor.sample(deltaTime))
-      resize()
+  /**
+   * Resolution follows the frame rate when it is the governor's to decide —
+   * from frames actually being made, so neither the load's hitches nor a
+   * paused frame's idling skews it.
+   */
+  const governs = (d: DebugParams, s: GraphicsSettings) =>
+    load.done && !paused && s.resolution === CONFIG.settings.autoResolution && d.res === null && !(d.w && d.h)
 
-    const frame = evaluateFrame(definition, sim, iTime)
-
-    // A tape has no audio at speed, and a rewound clock makes a graph click.
-    if (!moving && !held)
-      host.audio()?.update?.(iTime, frame.custom)
-
-    r.draw({ time: iTime, pointer: host.pan.pointer(), heavy: s.heavyEffects ? 1 : 0, custom: frame.custom, quality })
-    composite(iTime, ts.scrub, ts.scrubMix, frame.marks?.signalAge ?? 0)
-    drawn.x        = pan.x
-    drawn.y        = pan.y
-    drawn.time     = iTime
-    drawn.w        = target.width
-    drawn.h        = target.height
-    drawn.held     = held
-    drawn.settings = s
-
-    if (!loaded)
-      pollLoading(r)
-
+  /** The HUD's share of a live frame: the label, the heading, the transport, the stats. */
+  const publishLive = (ts: TransportState, frame: FrameState, d: DebugParams) => {
+    const m       = frame.marks
     debugUniforms = frame.custom ?? {}
     label         = hudLabel(frame.label, frame.detail)
     if (ts.mode !== 'scrub')
@@ -557,19 +547,42 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
 
     host.transportView()?.update({
       mode:         ts.mode,
-      paused:       held,
-      loop:         frame.marks?.loop ?? 0,
-      section:      frame.marks?.section ?? 0,
-      sectionCount: frame.marks?.sectionCount ?? 1,
-      progress:     frame.marks?.progress ?? 0,
+      paused,
+      loop:         m?.loop ?? 0,
+      section:      m?.section ?? 0,
+      sectionCount: m?.sectionCount ?? 1,
+      progress:     m?.progress ?? 0,
       time:         iTime,
       label,
-      hasMarks:     frame.marks !== null,
+      hasMarks:     m !== null,
     })
-
     countFrame()
     if (d.debug)
       publishDebugState(debugState())
+  }
+
+  const liveFrame = (r: JourneyRenderer, d: DebugParams, s: GraphicsSettings, deltaTime: number) => {
+    const { ts, pan } = advance(s, deltaTime)
+    const target      = canvas!
+    if (idle(ts, pan, s, target)) {
+      countFrame()
+      return
+    }
+    if (governs(d, s) && governor.sample(deltaTime))
+      resize()
+
+    const frame = evaluateFrame(definition, sim, iTime)
+
+    // A tape has no audio at speed, and a rewound clock makes a graph click.
+    if (ts.mode === 'play' && !paused)
+      host.audio()?.update?.(iTime, frame.custom)
+
+    r.draw({ time: iTime, pointer: host.pan.pointer(), heavy: s.heavyEffects ? 1 : 0, custom: frame.custom, quality })
+    composite(iTime, ts.scrub, ts.scrubMix, frame.marks?.signalAge ?? 0)
+    Object.assign(drawn, { x: pan.x, y: pan.y, time: iTime, w: target.width, h: target.height, held: paused, settings: s })
+    if (!load.done)
+      pollLoading(r)
+    publishLive(ts, frame, d)
   }
 
   const frame = (manager: Pick<FrameLoopManager, 'deltaTime'>) => {
@@ -601,6 +614,10 @@ export function createJourneyEngine (definition: JourneyDefinition, host: Engine
 
     get paused () {
       return paused
+    },
+
+    begin () {
+      started = true
     },
 
     togglePause () {

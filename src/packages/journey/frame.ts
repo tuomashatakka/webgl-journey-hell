@@ -35,18 +35,28 @@ export function evaluateFrame (
   sim: JourneySimulation | null,
   time: number,
 ): FrameState {
-  const marks = sim?.marks?.() ?? definition.marksAt?.(time) ?? null
-
-  let custom = sim?.uniforms()
-  if (marks?.signalAge)
-    (custom ??= {}).uSignalLoss = signalLossAt(marks.signalAge).level
-
+  const marks = marksOf(definition, sim, time)
   return {
-    custom,
+    custom: withSignal(sim?.uniforms(), marks),
     marks,
-    label:  sim?.label?.() ?? definition.sectionNameAt?.(time) ?? '',
+    label:  labelOf(definition, sim, time),
     detail: sim?.detail?.() ?? '',
   }
+}
+
+function marksOf (definition: Pick<JourneyDefinition, 'marksAt'>, sim: JourneySimulation | null, time: number): JourneyMarks | null {
+  return sim?.marks?.() ?? definition.marksAt?.(time) ?? null
+}
+
+function labelOf (definition: Pick<JourneyDefinition, 'sectionNameAt'>, sim: JourneySimulation | null, time: number): string {
+  return sim?.label?.() ?? definition.sectionNameAt?.(time) ?? ''
+}
+
+/** The uniform map, with the signal-loss level added once the signal is going. */
+function withSignal (custom: CustomUniforms | undefined, marks: JourneyMarks | null): CustomUniforms | undefined {
+  if (!marks?.signalAge)
+    return custom
+  return { ...custom, uSignalLoss: signalLossAt(marks.signalAge).level }
 }
 
 /** Title plus the live detail, the way the transport bar shows them. */

@@ -168,98 +168,78 @@ export function sweepProfile (curve: ClosedCurve, opts: SweepOptions): SweepArra
   const closed = opts.closed ?? false
   const rings  = Math.max(2, Math.ceil((opts.s1 - opts.s0) / opts.step))
   const frame  = newFrame()
-  const first  = opts.profile(opts.s0)
-  const n      = first.length
+  const n      = opts.profile(opts.s0).length
   const edges  = closed ? n : n - 1
   const secAt  = opts.sectionAt ?? (() => 0)
 
   grow(arr, (rings + 1) * n * SWEEP_FLOATS, rings * edges * 6)
 
   const base = arr.vertexCount
-  let v = arr.vertices
-  let o = base * SWEEP_FLOATS
-
   for (let i = 0; i <= rings; i++) {
-    const s   = opts.s0 + (opts.s1 - opts.s0) * (i / rings)
-    const pts = opts.profile(s)
-    const nrm = profileNormals(pts, closed)
-    const sec = secAt(s)
+    const s = opts.s0 + (opts.s1 - opts.s0) * (i / rings)
     levelFrame(curve, s, frame)
-
-    let edgeParam = 0
-    for (let k = 0; k < n; k++) {
-      if (k > 0)
-        edgeParam += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1])
-
-      v[o]      = frame.pos.x
-      v[o + 1]  = frame.pos.y
-      v[o + 2]  = frame.pos.z
-      v[o + 3]  = s
-      v[o + 4]  = frame.right.x
-      v[o + 5]  = frame.right.y
-      v[o + 6]  = frame.right.z
-      v[o + 7]  = pts[k][0]
-      v[o + 8]  = frame.up.x
-      v[o + 9]  = frame.up.y
-      v[o + 10] = frame.up.z
-      v[o + 11] = pts[k][1]
-      v[o + 12] = nrm[k * 2]
-      v[o + 13] = nrm[k * 2 + 1]
-      v[o + 14] = edgeParam
-      v[o + 15] = sec
-      o += SWEEP_FLOATS
-    }
+    writeRing(arr.vertices, (base + i * n) * SWEEP_FLOATS, frame, s, opts.profile(s), closed, secAt(s))
   }
   arr.vertexCount += (rings + 1) * n
-  v = arr.vertices
 
-  // Winding: compute the geometric normal of the quad in (r, u, s) space and
-  // compare it against the profile normal at its first corner. Positions along
-  // s are all "forward", so the quad's geometric normal in that space is the
-  // edge's (r,u) normal crossed with forward — which is exactly ±the profile
-  // normal, and the sign is what we need.
-  const idx = arr.indices
-  let q     = arr.indexCount
-  for (let i = 0; i < rings; i++) {
-    const ringA = base + i * n
-    const ringB = base + (i + 1) * n
-    for (let e = 0; e < edges; e++) {
-      const j  = e
-      const k  = (e + 1) % n
-      const a0 = ringA + j
-      const a1 = ringA + k
-      const b1 = ringB + k
-      const b0 = ringB + j
-
-      // Edge direction in the profile plane and its left normal.
-      const va = a0 * SWEEP_FLOATS
-      const vb = a1 * SWEEP_FLOATS
-      const dr = v[vb + 7] - v[va + 7]
-      const du = v[vb + 11] - v[va + 11]
-      const nr = v[va + 12]
-      const nu = v[va + 13]
-      // (-du, dr) is the left normal of the edge; if it agrees with the stored
-      // normal the front face is a0 -> b0 -> b1 -> a1 (counter-clockwise seen
-      // from the normal side), else the mirror.
-      const agree = -du * nr + dr * nu >= 0
-      if (agree) {
-        idx[q++] = a0
-        idx[q++] = a1
-        idx[q++] = b1
-        idx[q++] = a0
-        idx[q++] = b1
-        idx[q++] = b0
-      }
-      else {
-        idx[q++] = a0
-        idx[q++] = b1
-        idx[q++] = a1
-        idx[q++] = a0
-        idx[q++] = b0
-        idx[q++] = b1
-      }
-    }
-  }
+  let q = arr.indexCount
+  for (let i = 0; i < rings; i++)
+    for (let e = 0; e < edges; e++)
+      q = writeQuad(arr, base + i * n, base + (i + 1) * n, e, (e + 1) % n, q)
   arr.indexCount = q
   return arr
+}
+
+/** One ring of the sweep: the frame, then every profile point with its normal and edge distance. */
+function writeRing (
+  v: Float32Array, o: number, frame: ReturnType<typeof newFrame>, s: number,
+  pts: ProfilePoint[], closed: boolean, sec: number,
+): void {
+  const nrm     = profileNormals(pts, closed)
+  let edgeParam = 0
+  for (let k = 0; k < pts.length; k++, o += SWEEP_FLOATS) {
+    if (k > 0)
+      edgeParam += Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1])
+
+    v[o]      = frame.pos.x
+    v[o + 1]  = frame.pos.y
+    v[o + 2]  = frame.pos.z
+    v[o + 3]  = s
+    v[o + 4]  = frame.right.x
+    v[o + 5]  = frame.right.y
+    v[o + 6]  = frame.right.z
+    v[o + 7]  = pts[k][0]
+    v[o + 8]  = frame.up.x
+    v[o + 9]  = frame.up.y
+    v[o + 10] = frame.up.z
+    v[o + 11] = pts[k][1]
+    v[o + 12] = nrm[k * 2]
+    v[o + 13] = nrm[k * 2 + 1]
+    v[o + 14] = edgeParam
+    v[o + 15] = sec
+  }
+}
+
+/**
+ * The two triangles between profile points j and k of rings A and B, wound
+ * per quad. In (r, u, s) space every position along s is "forward", so the
+ * quad's geometric normal is the edge's (r, u) normal crossed with forward —
+ * exactly ± the profile normal, and the sign is what decides the winding.
+ */
+function writeQuad (arr: SweepArrays, ringA: number, ringB: number, j: number, k: number, q: number): number {
+  const v  = arr.vertices
+  const a0 = ringA + j
+  const a1 = ringA + k
+  const b1 = ringB + k
+  const b0 = ringB + j
+  const va = a0 * SWEEP_FLOATS
+  const vb = a1 * SWEEP_FLOATS
+  const dr = v[vb + 7] - v[va + 7]
+  const du = v[vb + 11] - v[va + 11]
+
+  // (-du, dr) is the edge's left normal: agreeing with the stored normal, the
+  // front face is a0 -> b0 -> b1 -> a1 (counter-clockwise from the normal side).
+  const agree = -du * v[va + 12] + dr * v[va + 13] >= 0
+  arr.indices.set(agree ? [ a0, a1, b1, a0, b1, b0 ] : [ a0, b1, a1, a0, b0, b1 ], q)
+  return q + 6
 }

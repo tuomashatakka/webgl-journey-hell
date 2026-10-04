@@ -4,8 +4,11 @@ import type { JourneyLoading } from '@wjh/journey/engine'
 
 
 interface OpeningInput {
-  staged:       boolean
-  hasCard:      boolean
+  staged:  boolean
+  hasCard: boolean
+
+  /** Start the journey's clock: the title card calls it as it tears away; with no card, the load does. */
+  begin:        () => void
   loading:      JourneyLoading
   sectionKey:   number
   sectionNamed: boolean
@@ -16,7 +19,7 @@ interface OpeningInput {
  * a heading for every section change. The bar fades as the card comes up under
  * it, then goes entirely; each beat reports back when it has played out.
  */
-export function useOpening ({ staged, hasCard, loading, sectionKey, sectionNamed }: OpeningInput) {
+export function useOpening ({ staged, hasCard, begin, loading, sectionKey, sectionNamed }: OpeningInput) {
   const [ loaderGone, setLoaderGone ]   = useState(false)
   const [ introDone, setIntroDone ]     = useState(false)
   const [ headingDone, setHeadingDone ] = useState(-1)
@@ -24,10 +27,12 @@ export function useOpening ({ staged, hasCard, loading, sectionKey, sectionNamed
   useEffect(() => {
     if (!loading.done)
       return
+    if (!staged || !hasCard)
+      begin()
 
     const timer = setTimeout(() => setLoaderGone(true), CONFIG.ui.loaderFadeMs)
     return () => clearTimeout(timer)
-  }, [ loading.done ])
+  }, [ loading.done, staged, hasCard, begin ])
 
   const opened = loading.done && (introDone || !staged || !hasCard)
 

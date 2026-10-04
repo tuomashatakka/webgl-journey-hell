@@ -22,6 +22,7 @@ interface CanvasProps extends Omit<GlitchTitleOptions, 'calm'> {
   maxScale?: number;
 
   onDone: () => void;
+  onOut?: () => void;
 }
 
 interface TitleCardProps {
@@ -29,6 +30,9 @@ interface TitleCardProps {
   subtitle?: string;
   accent:    string;
   onDone:    () => void;
+
+  /** The card has started tearing away: the journey's clock may run. */
+  onOut?: () => void;
 }
 
 interface SectionHeadingProps {
@@ -42,13 +46,15 @@ interface SectionHeadingProps {
 /** The name as the heading's title, and the lap under it as its tagline. */
 type SplitLabelReturnType = { title: string; subtitle?: string }
 
-function GlitchTitleCanvas ({ id, skippable, maxScale = 2, onDone, ...options }: CanvasProps) {
-  const canvasRef = useGlitchTitle(options, { skippable, maxScale, onDone })
+function GlitchTitleCanvas ({ id, skippable, maxScale = 2, onDone, onOut, ...options }: CanvasProps) {
+  const canvasRef = useGlitchTitle(options, { skippable, maxScale, onDone, onOut })
 
+  // Black until the card's first frame when it has a backdrop: the journey's
+  // compile can hold that frame up, and the card has to cover it.
   return <canvas
     ref={ canvasRef }
+    className={ options.backdrop === false ? 'gt-clear' : 'gt-black' }
     id={ id }
-    style={{ background: options.backdrop === false ? 'transparent' : '#000' }}
     aria-hidden="true" />
 }
 

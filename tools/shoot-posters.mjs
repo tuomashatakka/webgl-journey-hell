@@ -85,6 +85,7 @@ async function openPage () {
   await context.addInitScript(([ key, settings ]) => {
     localStorage.setItem(key, JSON.stringify(settings))
   }, [ CONFIG.settings.storageKey, posters.settings ])
+
   const page = await context.newPage()
   return { browser, page }
 }
@@ -96,10 +97,12 @@ for (const { slug, section, t } of shots) {
   page.on('pageerror', e => console.error(`${slug}: ${e.message}`))
   try {
     await shoot(page, slug, section, t)
-  } catch (error) {
+  }
+  catch (error) {
     failed.push(slug)
     console.error(`${slug}: ${error.message.split('\n')[0]}`)
-  } finally {
+  }
+  finally {
     await browser.close().catch(() => {})
   }
 }

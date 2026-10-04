@@ -17,15 +17,19 @@ export interface GlitchTitleBehavior {
   maxScale: number;
 
   onDone: () => void;
+
+  /** The card has started tearing away. */
+  onOut?: () => void;
 }
 
 /**
  * Run a glitch title on the returned canvas ref: sizes it, drives its own
  * requestAnimationFrame clock and calls onDone when the card has torn out.
  */
-export function useGlitchTitle (options: Omit<GlitchTitleOptions, 'calm'>, { skippable, maxScale, onDone }: GlitchTitleBehavior): RefObject<HTMLCanvasElement | null> {
+export function useGlitchTitle (options: Omit<GlitchTitleOptions, 'calm'>, { skippable, maxScale, onDone, onOut }: GlitchTitleBehavior): RefObject<HTMLCanvasElement | null> {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const doneRef   = useLatestRef(onDone)
+  const outRef    = useLatestRef(onOut)
 
   const { title, subtitle, accent, backdrop, fontScale } = options
   const timing                                           = options.timing ? `${options.timing.in}:${options.timing.hold}:${options.timing.out}` : ''
@@ -56,12 +60,17 @@ export function useGlitchTitle (options: Omit<GlitchTitleOptions, 'calm'>, { ski
     let t    = 0
     let last = 0
     let raf  = 0
+    let out  = false
     const tick = (now: number) => {
       if (last === 0)
-        canvas.style.background = 'transparent'
+        canvas.dataset.live = '1'
       else
         t += Math.min(Math.max(0, (now - last) / 1000), 1 / 20)
       last = now
+      if (!out && card.isOut(t)) {
+        out = true
+        outRef.current?.()
+      }
       if (card.draw(t))
         raf = requestAnimationFrame(tick)
       else

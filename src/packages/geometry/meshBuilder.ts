@@ -97,6 +97,30 @@ export interface AttribSpec {
   offset:   number;
 }
 
+type V3 = [ number, number, number ]
+
+/** Unit tangent of a tube's path at entry `pi`, from its neighbour (up, if they coincide). */
+function pathTangent (path: number[][], pi: number): V3 {
+  const [ px, py, pz ] = path[pi]
+  const last           = pi === path.length - 1
+  const [ qx, qy, qz ] = path[last ? pi - 1 : pi + 1]
+  const s              = last ? -1 : 1
+  const d: V3          = [ (qx - px) * s, (qy - py) * s, (qz - pz) * s ]
+  const l              = Math.hypot(...d)
+  return l < 1e-10 ? [ 0, 1, 0 ] : [ d[0] / l, d[1] / l, d[2] / l ]
+}
+
+/** A ring's right (fwd × up, or any perpendicular when fwd ≈ up) and its re-orthogonalised up. */
+function ringBasis (fwd: V3, ux: number, uy: number, uz: number): [ V3, V3 ] {
+  let rt: V3 = [ fwd[1] * uz - fwd[2] * uy, fwd[2] * ux - fwd[0] * uz, fwd[0] * uy - fwd[1] * ux ]
+  if (Math.hypot(...rt) < 1e-10)
+    rt = Math.abs(fwd[1]) < 0.9 ? [ -fwd[2], 0, fwd[0] ] : [ 1, 0, 0 ]
+
+  const rl = Math.hypot(...rt)
+  rt       = [ rt[0] / rl, rt[1] / rl, rt[2] / rl ]
+  return [ rt, [ rt[1] * fwd[2] - rt[2] * fwd[1], rt[2] * fwd[0] - rt[0] * fwd[2], rt[0] * fwd[1] - rt[1] * fwd[0] ]]
+}
+
 export function createMeshBuilder (): MeshBuilder {
   let verts   = new Float32Array(1024)
   let indices = new Uint32Array(1024)
@@ -224,86 +248,17 @@ export function createMeshBuilder (): MeshBuilder {
       if (path.length < 2 || radialSegments < 3)
         return
 
-      const base                                  = vLen / VERTEX_FLOATS | 0
-      const fwd                                   = [ 0, 0, 0 ]
-      const rt                                    = [ 0, 0, 0 ]
-      const up                                    = [ 0, 0, 0 ]
-      const ring: Array<[number, number, number]> = []
-
+      const base = vLen / VERTEX_FLOATS | 0
       for (let pi = 0; pi < path.length; pi++) {
         const [ px, py, pz, ux, uy, uz ] = path[pi]
-
-        // Tangent from consecutive path entries.
-        if (pi < path.length - 1) {
-          fwd[0] = path[pi + 1][0] - px
-          fwd[1] = path[pi + 1][1] - py
-          fwd[2] = path[pi + 1][2] - pz
-        }
-        else {
-          fwd[0] = px - path[pi - 1][0]
-          fwd[1] = py - path[pi - 1][1]
-          fwd[2] = pz - path[pi - 1][2]
-        }
-
-        let fl = Math.sqrt(fwd[0] * fwd[0] + fwd[1] * fwd[1] + fwd[2] * fwd[2])
-        if (fl < 1e-10) {
-          fwd[0] = 0
-          fwd[1] = 1
-          fwd[2] = 0
-          fl = 1
-        }
-        fwd[0] /= fl
-        fwd[1] /= fl
-        fwd[2] /= fl
-
-        // Right = fwd x up.
-        rt[0] = fwd[1] * uz - fwd[2] * uy
-        rt[1] = fwd[2] * ux - fwd[0] * uz
-        rt[2] = fwd[0] * uy - fwd[1] * ux
-
-        let rl = Math.sqrt(rt[0] * rt[0] + rt[1] * rt[1] + rt[2] * rt[2])
-        if (rl < 1e-10) {
-          // Fwd ≈ up; pick an arbitrary perpendicular.
-          if (Math.abs(fwd[1]) < 0.9) {
-            rt[0] = -fwd[2]
-            rt[1] = 0
-            rt[2] = fwd[0]
-          }
-          else {
-            rt[0] = 1
-            rt[1] = 0
-            rt[2] = 0
-          }
-          rl = Math.sqrt(rt[0] * rt[0] + rt[1] * rt[1] + rt[2] * rt[2])
-        }
-        rt[0] /= rl
-        rt[1] /= rl
-        rt[2] /= rl
-
-        // Up = right x fwd (re-orthogonalised).
-        up[0] = rt[1] * fwd[2] - rt[2] * fwd[1]
-        up[1] = rt[2] * fwd[0] - rt[0] * fwd[2]
-        up[2] = rt[0] * fwd[1] - rt[1] * fwd[0]
-
-        ring.length = 0
+        const [ rt, up ]                 = ringBasis(pathTangent(path, pi), ux, uy, uz)
         for (let r = 0; r < radialSegments; r++) {
+          // The normal points outward from the tube axis.
           const a  = 2 * Math.PI * r / radialSegments
-          const ca = Math.cos(a)
-          const sa = Math.sin(a)
-          ring.push([
-            px + radius * (rt[0] * ca + up[0] * sa),
-            py + radius * (rt[1] * ca + up[1] * sa),
-            pz + radius * (rt[2] * ca + up[2] * sa),
-          ])
-        }
-
-        // Emit vertices for this ring.
-        for (const pt of ring) {
-          // Normal points outward from the tube axis.
-          const nx_ = (pt[0] - px) / radius
-          const ny_ = (pt[1] - py) / radius
-          const nz_ = (pt[2] - pz) / radius
-          pushVert(pt[0], pt[1], pt[2], nx_, ny_, nz_, 0, 0, 0, 0, 0, 0)
+          const nx = rt[0] * Math.cos(a) + up[0] * Math.sin(a)
+          const ny = rt[1] * Math.cos(a) + up[1] * Math.sin(a)
+          const nz = rt[2] * Math.cos(a) + up[2] * Math.sin(a)
+          pushVert(px + radius * nx, py + radius * ny, pz + radius * nz, nx, ny, nz, 0, 0, 0, 0, 0, 0)
         }
       }
 
@@ -378,74 +333,47 @@ export function fracture (
   // origin — which is most of them — splits into eight octants however large a
   // cell is asked for. Offsetting by the bound makes `cellSize` mean what it
   // says: cells of that size, laid out across this mesh.
-  let minX = Infinity
-  let minY = Infinity
-  let minZ = Infinity
-  for (let i = 0; i < verts.length; i += VERTEX_FLOATS) {
-    if (verts[i] < minX)
-      minX = verts[i]
-    if (verts[i + 1] < minY)
-      minY = verts[i + 1]
-    if (verts[i + 2] < minZ)
-      minZ = verts[i + 2]
-  }
+  const min    = meshMin(verts)
+  const cellOf = ([ x, y, z ]: V3): string =>
+    `${Math.floor((x - min[0]) / cellSize)},${Math.floor((y - min[1]) / cellSize)},${Math.floor((z - min[2]) / cellSize)}`
 
-  const cellOf = (x: number, y: number, z: number): string =>
-    `${Math.floor((x - minX) / cellSize)},` +
-    `${Math.floor((y - minY) / cellSize)},` +
-    `${Math.floor((z - minZ) / cellSize)}`
-
-  // Bucket triangles by cell index → { centroid, count, seed }.
-  const shards = new Map<string, { cx: number; cy: number; cz: number; n: number; seed: number }>()
-
+  // Bucket triangles by cell: summed centroids, count, seed.
+  const shards = new Map<string, { c: V3; n: number; seed: number }>()
   for (let t = 0; t < triCount; t++) {
-    const i0 = idx[t * 3] * VERTEX_FLOATS
-    const i1 = idx[t * 3 + 1] * VERTEX_FLOATS
-    const i2 = idx[t * 3 + 2] * VERTEX_FLOATS
-
-    // Triangle centroid.
-    const tcx = (verts[i0] + verts[i1] + verts[i2]) / 3
-    const tcy = (verts[i0 + 1] + verts[i1 + 1] + verts[i2 + 1]) / 3
-    const tcz = (verts[i0 + 2] + verts[i1 + 2] + verts[i2 + 2]) / 3
-
-    const key = cellOf(tcx, tcy, tcz)
-
-    let shard = shards.get(key)
-    if (!shard) {
-      shard = { cx: 0, cy: 0, cz: 0, n: 0, seed: rand() }
-      shards.set(key, shard)
-    }
-    shard.cx += tcx
-    shard.cy += tcy
-    shard.cz += tcz
-    shard.n  += 1
+    const c   = triCentroid(verts, idx, t)
+    const key = cellOf(c)
+    const sh  = shards.get(key) ?? { c: [ 0, 0, 0 ], n: 0, seed: rand() }
+    shards.set(key, sh)
+    sh.c = [ sh.c[0] + c[0], sh.c[1] + c[1], sh.c[2] + c[2] ]
+    sh.n += 1
   }
+  for (const sh of shards.values())
+    sh.c = [ sh.c[0] / sh.n, sh.c[1] / sh.n, sh.c[2] / sh.n ]
 
-  // Compute shard centroids.
-  for (const shard of shards.values()) {
-    shard.cx /= shard.n
-    shard.cy /= shard.n
-    shard.cz /= shard.n
-  }
-
-  // Write shard attributes into every vertex.
+  // Every vertex of a triangle carries its shard: pivot xyz, seed w.
   for (let t = 0; t < triCount; t++) {
-    const i0 = idx[t * 3] * VERTEX_FLOATS
-    const i1 = idx[t * 3 + 1] * VERTEX_FLOATS
-    const i2 = idx[t * 3 + 2] * VERTEX_FLOATS
-
-    const tcx = (verts[i0] + verts[i1] + verts[i2]) / 3
-    const tcy = (verts[i0 + 1] + verts[i1 + 1] + verts[i2 + 1]) / 3
-    const tcz = (verts[i0 + 2] + verts[i1 + 2] + verts[i2 + 2]) / 3
-
-    const key   = cellOf(tcx, tcy, tcz)
-    const shard = shards.get(key)!
-
-    for (const vi of [ i0, i1, i2 ]) {
-      verts[vi + 8]  = shard.cx
-      verts[vi + 9]  = shard.cy
-      verts[vi + 10] = shard.cz
-      verts[vi + 11] = shard.seed
-    }
+    const sh = shards.get(cellOf(triCentroid(verts, idx, t)))!
+    for (let k = 0; k < 3; k++)
+      verts.set([ sh.c[0], sh.c[1], sh.c[2], sh.seed ], idx[t * 3 + k] * VERTEX_FLOATS + 8)
   }
+}
+
+/** The smallest x, y and z over every vertex. */
+function meshMin (verts: Float32Array): V3 {
+  const min: V3 = [ Infinity, Infinity, Infinity ]
+  for (let i = 0; i < verts.length; i += VERTEX_FLOATS)
+    for (let a = 0; a < 3; a++)
+      min[a] = Math.min(min[a], verts[i + a])
+  return min
+}
+
+/** Centroid of triangle `t`. */
+function triCentroid (verts: Float32Array, idx: Uint32Array, t: number): V3 {
+  const c: V3 = [ 0, 0, 0 ]
+  for (let k = 0; k < 3; k++) {
+    const v = idx[t * 3 + k] * VERTEX_FLOATS
+    for (let a = 0; a < 3; a++)
+      c[a] += verts[v + a] / 3
+  }
+  return c
 }

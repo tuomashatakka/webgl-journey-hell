@@ -48,6 +48,9 @@ export interface GlitchTitle {
   /** Jump straight to the tear-out (the viewer tapped). */
   skip(t: number): void;
 
+  /** True from the moment the card starts tearing away. */
+  isOut(t: number): boolean;
+
   /** Match the overlay's backing store to its CSS box. */
   resize(width: number, height: number): void;
 }
@@ -300,6 +303,10 @@ export function createGlitchTitle (canvas: HTMLCanvasElement, opts: GlitchTitleO
       canvas.width  = Math.max(1, w)
       canvas.height = Math.max(1, h)
       layers        = build(canvas.width, canvas.height)
+    },
+
+    isOut (t) {
+      return t >= outStart
     },
 
     skip (t) {

@@ -13,22 +13,16 @@ import type { JourneyLoading } from '@wjh/journey/engine'
 
 
 export default function JourneyLoader ({ progress, status, done, failed, detail }: JourneyLoading) {
-  const p   = Math.min(1, Math.max(0, progress))
-  const pct = Math.round(p * 100)
+  const pct = Math.round(Math.min(1, Math.max(0, progress)) * 100)
 
-  return <div
+  return <section
     id="journey-loader"
     data-done={ done ? '1' : undefined }
     data-failed={ failed ? '1' : undefined }
-    aria-label="Loading"
-    aria-valuemin={ 0 }
-    aria-valuemax={ 100 }
-    aria-valuenow={ pct }
-    aria-valuetext={ status }
-    role="progressbar">
-    <div className="jl-bar">
-      <div className="jl-fill" style={{ transform: `scaleX(${p})` }} />
-    </div>
+    aria-label="Loading">
+    <span className="jl-track">
+      <progress className="jl-bar" aria-valuetext={ status } value={ pct } max={ 100 } />
+    </span>
 
     <p className="jl-status">
       <span>{status}</span>
@@ -37,5 +31,5 @@ export default function JourneyLoader ({ progress, status, done, failed, detail 
     </p>
 
     {failed && detail && <p className="jl-detail">{detail}</p>}
-  </div>
+  </section>
 }

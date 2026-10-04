@@ -34,20 +34,24 @@ export function detectDevice (): DeviceProfile {
 
   const nav    = navigator as Navigator & { deviceMemory?: number }
   const ua     = nav.userAgent || ''
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
-  // iPadOS reports a desktop Safari user agent; touch points give it away.
-  const ipad   = (/Macintosh/).test(ua) && nav.maxTouchPoints > 1
-  const mobile = coarse || ipad || (/Android|iPhone|iPad|iPod|Mobile|Silk/i).test(ua)
-
-  const cores  = nav.hardwareConcurrency || 4
-  const memory = nav.deviceMemory ?? (mobile ? 4 : 8)
-
-  let tier: 0 | 1 | 2 = 2
-  if (mobile)
-    tier = cores >= 8 && memory >= 6 && !(/Android [4-8]\b/).test(ua) ? 1 : 0
-  else if (cores <= 4 || memory <= 4)
-    tier = 1
+  const mobile = isMobile(nav, ua)
+  const tier   = tierOf(mobile, nav, ua)
 
   cached = { mobile, dpr: window.devicePixelRatio || 1, tier }
   return cached
+}
+
+function isMobile (nav: Navigator, ua: string): boolean {
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
+  // iPadOS reports a desktop Safari user agent; touch points give it away.
+  const ipad   = (/Macintosh/).test(ua) && nav.maxTouchPoints > 1
+  return coarse || ipad || (/Android|iPhone|iPad|iPod|Mobile|Silk/i).test(ua)
+}
+
+function tierOf (mobile: boolean, nav: Navigator & { deviceMemory?: number }, ua: string): 0 | 1 | 2 {
+  const cores  = nav.hardwareConcurrency || 4
+  const memory = nav.deviceMemory ?? (mobile ? 4 : 8)
+  if (mobile)
+    return cores >= 8 && memory >= 6 && !(/Android [4-8]\b/).test(ua) ? 1 : 0
+  return cores <= 4 || memory <= 4 ? 1 : 2
 }

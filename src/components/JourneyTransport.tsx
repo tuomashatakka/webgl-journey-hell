@@ -17,7 +17,7 @@
 // through the current lap; arrow keys step it when focused.
 
 import { CONFIG } from '@wjh/config/config'
-import { useCallback, useImperativeHandle, useRef, useState } from 'react'
+import { useCallback, useImperativeHandle, useRef } from 'react'
 import type { TransportAction, TransportMode } from '@wjh/journey/transport'
 import { useJourneyRuntimeContext } from './JourneyRuntimeContext'
 
@@ -46,6 +46,38 @@ function counter (t: number): string {
   return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
 }
 
+interface Written {
+  label:    string;
+  mode:     string;
+  counter:  string;
+  sections: string;
+  progress: number;
+}
+
+/** Text only when it differs from what is already there. */
+function writeText (el: HTMLElement | null, last: Written, key: 'label' | 'mode' | 'counter', value: string): void {
+  if (!el || value === last[key])
+    return
+  el.textContent = value
+  last[key]      = value
+}
+
+/**
+ * The fill as a compositor-only transform, and the section dividers as one
+ * custom property the track's own background reads.
+ */
+function writeTrack (fill: HTMLElement | null, track: HTMLElement | null, last: Written, p: number, sections: number): void {
+  if (Math.abs(p - last.progress) > 1e-4) {
+    fill?.style.setProperty('transform', `scaleX(${p})`)
+    track?.setAttribute('aria-valuenow', String(Math.round(p * 100)))
+    last.progress = p
+  }
+  if (String(sections) !== last.sections) {
+    track?.style.setProperty('--sections', String(sections))
+    last.sections = String(sections)
+  }
+}
+
 export default function JourneyTransport () {
   const { paused, togglePause: onTogglePause, act: onAction, scrub: onScrub, release: onRelease, transportRef } = useJourneyRuntimeContext()
 
@@ -53,54 +85,24 @@ export default function JourneyTransport () {
   const labelRef   = useRef<HTMLSpanElement>(null)
   const modeRef    = useRef<HTMLSpanElement>(null)
   const counterRef = useRef<HTMLSpanElement>(null)
-  const fillRef    = useRef<HTMLDivElement>(null)
+  const fillRef    = useRef<HTMLSpanElement>(null)
   const trackRef   = useRef<HTMLDivElement>(null)
 
-  // Only the tick layout goes through React; it changes once per journey.
-  const [ ticks, setTicks ] = useState<number[]>([])
-  const last                = useRef({ label: '', mode: '', counter: '', ticks: '', progress: -1 })
-  const progressRef         = useRef(0)
+  const last        = useRef({ label: '', mode: '', counter: '', sections: '', progress: -1 })
+  const progressRef = useRef(0)
 
   useImperativeHandle(transportRef, () => ({
     update (view) {
-      const l             = last.current
       const p             = Math.min(1, Math.max(0, view.progress))
+      const mode          = view.paused && view.mode === 'play' ? 'paused' : view.mode
       progressRef.current = p
 
-      const label = view.label || '—'
-      if (label !== l.label && labelRef.current) {
-        labelRef.current.textContent = label
-        l.label                      = label
-      }
-
-      const mode = view.paused && view.mode === 'play' ? 'paused' : view.mode
-      if (mode !== l.mode) {
-        if (modeRef.current)
-          modeRef.current.textContent = MODE_TEXT[mode]
-        rootRef.current?.setAttribute('data-mode', mode)
-        l.mode = mode
-      }
-
-      const count = counter(view.time)
-      if (count !== l.counter && counterRef.current) {
-        counterRef.current.textContent = count
-        l.counter                      = count
-      }
-      if (Math.abs(p - l.progress) > 1e-4) {
-        if (fillRef.current)
-          fillRef.current.style.transform = `scaleX(${p})`
-        trackRef.current?.setAttribute('aria-valuenow', String(Math.round(p * 100)))
-        l.progress = p
-      }
-
-      // One divider per internal section boundary.
-      const key = view.hasMarks ? String(view.sectionCount) : '0'
-      if (key !== l.ticks) {
-        l.ticks = key
-        setTicks(view.hasMarks && view.sectionCount > 1
-          ? Array.from({ length: view.sectionCount - 1 }, (_, i) => (i + 1) / view.sectionCount)
-          : [])
-      }
+      const l = last.current
+      writeText(labelRef.current, l, 'label', view.label || '—')
+      writeText(modeRef.current, l, 'mode', MODE_TEXT[mode])
+      writeText(counterRef.current, l, 'counter', counter(view.time))
+      rootRef.current?.setAttribute('data-mode', mode)
+      writeTrack(fillRef.current, trackRef.current, l, p, view.hasMarks ? Math.max(1, view.sectionCount) : 1)
     },
   }), [])
 
@@ -147,8 +149,8 @@ export default function JourneyTransport () {
     </button>
 
   return <aside ref={ rootRef } id="journey-transport" className="hud" data-mode="play">
-    <div className="jt-head">
-      <div className="jt-buttons">
+    <header className="jt-head">
+      <nav className="jt-buttons" aria-label="Transport">
         {BACK.map(button)}
 
         <button
@@ -162,7 +164,7 @@ export default function JourneyTransport () {
         </button>
 
         {FORWARD.map(button)}
-      </div>
+      </nav>
 
       <span className="jt-state">
         <span ref={ modeRef } className="jt-mode">{MODE_TEXT.play}</span>
@@ -170,7 +172,7 @@ export default function JourneyTransport () {
       </span>
 
       <span ref={ counterRef } className="jt-counter">00:00</span>
-    </div>
+    </header>
 
     <div
       ref={ trackRef }
@@ -186,11 +188,7 @@ export default function JourneyTransport () {
       onPointerUp={ onPointerEnd }
       onPointerCancel={ onPointerEnd }
       onKeyDown={ onKeyDown }>
-      <div ref={ fillRef } className="jt-fill" />
-
-      {ticks.map(t =>
-        <span key={ t } className="jt-tick" style={{ left: `${t * 100}%` }} />,
-      )}
+      <span ref={ fillRef } className="jt-fill" />
     </div>
   </aside>
 }

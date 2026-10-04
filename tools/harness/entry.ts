@@ -69,6 +69,31 @@ function checkPreviews (): void {
   publishStatus('previews', `PREVIEWS · ${JOURNEYS.length}`, 64, 64)
 }
 
+/**
+ * ?u.uName=1.5 (or =1,2,3 for a vector) overrides one uniform after the seek —
+ * for bisecting a frame: hold everything else, change one input.
+ */
+function withOverrides (custom: Record<string, number | number[]>): Record<string, number | number[]> {
+  for (const [ key, value ] of new URLSearchParams(location.search))
+    if (key.startsWith('u.')) {
+      const v              = value.split(',').map(Number)
+      custom[key.slice(2)] = v.length === 1 ? v[0] : v
+    }
+  return custom
+}
+
+/**
+ * Assets load asynchronously (Δ). The shell holds its frozen frame on the
+ * same flag, so a plate is never of the placeholder.
+ */
+type RendererType = { ready?(): boolean }
+
+async function whenReady (renderer: RendererType): Promise<void> {
+  const deadline = performance.now() + 20_000
+  while (renderer.ready && !renderer.ready() && performance.now() < deadline)
+    await new Promise(r => setTimeout(r, 30))
+}
+
 async function main (): Promise<void> {
   window.__harnessErrors = errors
 
@@ -110,21 +135,8 @@ async function main (): Promise<void> {
   seekSimulation(sim, t, d.dt)
 
   const frame  = evaluateFrame(journey, sim, t)
-  const custom = frame.custom ?? {}
-
-  // ?u.uName=1.5 (or =1,2,3 for a vector) overrides one uniform after the
-  // seek — for bisecting a frame: hold everything else, change one input.
-  for (const [ key, value ] of new URLSearchParams(location.search))
-    if (key.startsWith('u.')) {
-      const v              = value.split(',').map(Number)
-      custom[key.slice(2)] = v.length === 1 ? v[0] : v
-    }
-
-  // Assets load asynchronously (Δ). The shell holds its frozen frame on the
-  // same flag, so a plate is never of the placeholder.
-  const deadline = performance.now() + 20_000
-  while (renderer.ready && !renderer.ready() && performance.now() < deadline)
-    await new Promise(r => setTimeout(r, 30))
+  const custom = withOverrides(frame.custom ?? {})
+  await whenReady(renderer)
 
   // heavyEffects defaults on for a desktop in lib/settings, so the harness
   // does too; ?heavy=0 renders the phone path.

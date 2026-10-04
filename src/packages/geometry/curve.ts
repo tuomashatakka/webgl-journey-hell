@@ -389,100 +389,69 @@ function rodrigues (axis: Vec3, angle: number, v: Vec3, out: Vec3): void {
   out.z = v.z * cosA + cross.z * sinA + axis.z * dot * (1 - cosA)
 }
 
+/** `up` made orthogonal to the unit vector `fwd`, in place. */
+function orthogonalise (up: Vec3, fwd: Vec3, scratch: Vec3): void {
+  v3Scale(fwd, v3Dot(fwd, up), scratch)
+  v3Sub(up, scratch, up)
+  v3Norm(up, up)
+}
+
+/**
+ * An up orthogonal to the starting tangent: the first candidate axis that is
+ * not parallel to it — a track heading due north would defeat a lone (0,1,0).
+ */
+function initialUp (tangent: Vec3): Vec3 {
+  const up = [ v3(0, 1, 0), v3(1, 0, 0), v3(0, 0, 1) ].find(c => Math.abs(v3Dot(tangent, c)) < 0.9) ?? v3(0, 1, 0)
+  orthogonalise(up, tangent, v3())
+  return up
+}
+
+/** Rotate `up` by the minimal rotation taking `from` to `to`, in place. */
+function parallelTransport (up: Vec3, from: Vec3, to: Vec3, axis: Vec3, scratch: Vec3): void {
+  v3Cross(from, to, axis)
+
+  const sinA = v3Len(axis)
+  if (sinA <= 1e-10)
+    return
+  v3Norm(axis, axis)
+  rodrigues(axis, Math.atan2(sinA, v3Dot(from, to)), up, scratch)
+  up.x = scratch.x
+  up.y = scratch.y
+  up.z = scratch.z
+}
+
+/** The frame at `pos` facing `fwd`; `up` is re-orthonormalised against it, in place. */
+function frameAt (pos: Vec3, fwd: Vec3, up: Vec3, scratch: Vec3): PtFrame {
+  orthogonalise(up, fwd, scratch)
+
+  const right = v3()
+  v3Cross(fwd, up, right)
+  v3Norm(right, right)
+
+  // Re-orthonormalise up against the fresh right (guards against drift).
+  v3Cross(right, fwd, up)
+  v3Norm(up, up)
+  return { pos: v3Copy(pos), forward: v3Copy(fwd), up: v3Copy(up), right: v3Copy(right) }
+}
+
 function buildFrames (pts: Vec3[], lut: LutEntry[]): PtFrame[] {
-  const frames: PtFrame[] = []
-  const N                 = pts.length
-  const tmp1              = v3()
-  const tmp2              = v3()
-  const tmp3              = v3()
-  const curUp             = v3(0, 1, 0)
-
-  // Initial tangent from the curve at t=0.
-  const initTan = v3()
-  tangentAt(pts, 0, initTan)
-
-  // Gram-Schmidt: find an up orthogonal to the initial tangent.
-  // Try candidate up vectors until one is not parallel to the tangent —
-  // a track heading due north would defeat a single (0,1,0) guess.
-  const candidates = [ v3(0, 1, 0), v3(1, 0, 0), v3(0, 0, 1) ]
-  let dot = 0
-  for (const cand of candidates) {
-    dot = Math.abs(v3Dot(initTan, cand))
-    if (dot < 0.9) {
-      curUp.x = cand.x
-      curUp.y = cand.y
-      curUp.z = cand.z
-      break
-    }
-  }
-  dot = v3Dot(initTan, curUp)
-  v3Scale(initTan, dot, tmp1)
-  v3Sub(curUp, tmp1, curUp)
-  v3Norm(curUp, curUp)
-
-  const initRight = v3()
-  v3Cross(initTan, curUp, initRight)
-  v3Norm(initRight, initRight)
-
-  frames.push({
-    pos:     v3Copy(pts[0]),
-    forward: v3Copy(initTan),
-    up:      v3Copy(curUp),
-    right:   v3Copy(initRight),
-  })
-
-  let prevFwd = v3Copy(initTan)
+  const N       = pts.length
+  const scratch = v3()
+  const axis    = v3()
+  const tan     = v3()
+  const fwd0    = tangentAt(pts, 0, v3())
+  const up      = initialUp(fwd0)
+  const frames  = [ frameAt(pts[0], fwd0, up, scratch) ]
+  let prevFwd   = v3Copy(fwd0)
 
   for (let i = 1; i < lut.length; i++) {
-    const entry = lut[i]
-    const idx   = entry.seg
-    const ip0   = pts[(idx - 1 + N) % N]
-    const ip1   = pts[idx]
-    const ip2   = pts[(idx + 1) % N]
-    const ip3   = pts[(idx + 2) % N]
-    const pos   = catmullRomAt(ip0, ip1, ip2, ip3, entry.t, v3())
+    const { seg, t } = lut[i]
+    const pos        = catmullRomAt(pts[(seg - 1 + N) % N], pts[seg], pts[(seg + 1) % N], pts[(seg + 2) % N], t, v3())
 
-    // Tangent via central difference of the spline at the correct global
-    // parameter: (segmentIndex + localT) / N. This correctly maps the LUT's
-    // segment-local parameter to the global curve parameter.
-    const globalT = (idx + entry.t) / N
-    const fwd     = tangentAt(pts, globalT, tmp1)
-
-    // Minimal rotation from prevFwd → fwd.
-    v3Cross(prevFwd, fwd, tmp2)
-
-    const sinA = v3Len(tmp2)
-    const cosA = v3Dot(prevFwd, fwd)
-
-    if (sinA > 1e-10) {
-      v3Norm(tmp2, tmp2)
-      rodrigues(tmp2, Math.atan2(sinA, cosA), curUp, tmp3)
-      curUp.x = tmp3.x
-      curUp.y = tmp3.y
-      curUp.z = tmp3.z
-    }
-
-    // Gram-Schmidt: ensure up is orthogonal to fwd.
-    dot = v3Dot(fwd, curUp)
-    v3Scale(fwd, dot, tmp3)
-    v3Sub(curUp, tmp3, curUp)
-    v3Norm(curUp, curUp)
-
-    const right = v3()
-    v3Cross(fwd, curUp, right)
-    v3Norm(right, right)
-
-    // Re-orthonormalise up against the fresh right (guards against drift).
-    v3Cross(right, fwd, curUp)
-    v3Norm(curUp, curUp)
-
-    frames.push({
-      pos:     v3Copy(pos),
-      forward: v3Copy(fwd),
-      up:      v3Copy(curUp),
-      right:   v3Copy(right),
-    })
-
+    // Tangent by central difference at the global parameter (segment + local t) / N.
+    const fwd = tangentAt(pts, (seg + t) / N, tan)
+    parallelTransport(up, prevFwd, fwd, axis, scratch)
+    frames.push(frameAt(pos, fwd, up, scratch))
     prevFwd = v3Copy(fwd)
   }
 

@@ -163,19 +163,19 @@ describe('the drop', () => {
 })
 
 
-describe('oblivion', () => {
-  /** Drive a fresh sim until `done`, or give up after `limit` seconds. */
-  function run (done, limit) {
-    const s = createFoundryState()
-    let carry = 0
-    for (let t = 0; t < limit; t += 1 / 60) {
-      carry = advance(s, 1 / 60, carry)
-      if (done(s))
-        return s
-    }
-    return null
+/** Drive a fresh sim until `done`, or give up after `limit` seconds. */
+function run (done, limit) {
+  const s = createFoundryState()
+  let carry = 0
+  for (let t = 0; t < limit; t += 1 / 60) {
+    carry = advance(s, 1 / 60, carry)
+    if (done(s))
+      return s
   }
+  return null
+}
 
+describe('oblivion', () => {
   test('every lap starts back at the boarding point', () => {
     // A lap is LAP_ARC of walking but only CYCLE_LEN of ground. Wrapping the
     // distance instead of writing the boarding point down starts each lap

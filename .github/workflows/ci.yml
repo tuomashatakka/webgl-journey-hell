@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # tsc, eslint (src and tools), knip and the unit tests — `bun run check`.
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+
+  # Every journey's shaders compiled and drawn once in a headless browser, and
+  # every landing-page preview: a broken shader still builds, so the build
+  # alone never catches one.
+  shaders:
+    runs-on: ubuntu-latest
+    env:
+      JOURNEY_CHROMIUM: /usr/bin/google-chrome
+      JOURNEY_GL: swiftshader
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: bun install --frozen-lockfile
+      - name: glsl gate
+        run: |
+          status=0
+          for dir in src/journeys/*/; do
+            slug=$(basename "$dir")
+            [ -f "$dir/journey.ts" ] || continue
+            node tools/journey.mjs glsl "$slug" --bare || status=1
+          done
+          node tools/journey.mjs glsl previews --bare || status=1
+          exit $status

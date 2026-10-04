@@ -6,11 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint src",
+    "lint": "eslint src tools",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "knip": "knip",
-    "check": "tsc --noEmit && eslint src && knip && bun test",
+    "check": "tsc --noEmit && eslint src tools && knip && bun test",
     "clean": "next clean"
   },
   "dependencies": {

@@ -253,6 +253,43 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
     }
   }
 
+  /** A journey with no marks() still moves, by the clock: a stand-in "section" and "lap". */
+  const moveByClock = (action: TransportAction, time: number) => {
+    const span = action === 'prev' || action === 'next' ? CONFIG.transport.fallbackSectionSeconds : CONFIG.transport.fallbackLoopSeconds
+    if (action === 'prev' || action === 'prev-lap') {
+      seekTo(time - span)
+      flash(-1)
+      return
+    }
+
+    const until = time + span
+    let steps   = 0
+    while (host.current().time < until && steps++ < CONFIG.transport.maxSeekSteps)
+      host.advance(CONFIG.transport.searchDt)
+    flash(1)
+  }
+
+  const moveForward = (action: TransportAction, { loop, section }: JourneyMarks) => {
+    forwardUntil(action === 'next'
+      ? now => now.section !== section || now.loop !== loop
+      : now => now.loop !== loop)
+    flash(1)
+  }
+
+  /**
+   * Media convention: back to the start of this chapter (or lap), unless you
+   * have only just entered it, in which case one further.
+   */
+  const backTarget = (action: TransportAction, time: number, loop: number): number => {
+    if (action === 'prev') {
+      const here = sectionStart(time)
+      return time - here > CONFIG.transport.graceSection ? here : previousSectionStart(time)
+    }
+
+    const here = loopStart.get(loop) ?? 0
+    return time - here > CONFIG.transport.graceLoop ? here : loopStart.get(loop - 1) ?? 0
+  }
+
   return {
     observe (time, marks) {
       if (marks)
@@ -265,56 +302,13 @@ export function createJourneyTransport (host: TransportHost): JourneyTransport {
 
       const { time } = host.current()
       const m        = marksOf()
-
-      if (!m) {
-        const span = action === 'prev' || action === 'next' ? CONFIG.transport.fallbackSectionSeconds : CONFIG.transport.fallbackLoopSeconds
-        if (action === 'next' || action === 'next-lap') {
-          const until = time + span
-          let steps   = 0
-          while (host.current().time < until && steps++ < CONFIG.transport.maxSeekSteps)
-            host.advance(CONFIG.transport.searchDt)
-          flash(1)
-        }
-        else {
-          seekTo(time - span)
-          flash(-1)
-        }
-        return
-      }
-
-      switch (action) {
-        case 'next': {
-          const { loop, section } = m
-          forwardUntil(now => now.section !== section || now.loop !== loop)
-          flash(1)
-          break
-        }
-        case 'next-lap': {
-          const { loop } = m
-          forwardUntil(now => now.loop !== loop)
-          flash(1)
-          break
-        }
-        case 'prev': {
-          if (time <= 1e-6)
-            return
-
-          // Media convention: go back to the start of this chapter, unless you
-          // have only just entered it, in which case go back one further.
-          const here = sectionStart(time)
-          seekTo(time - here > CONFIG.transport.graceSection ? here : previousSectionStart(time))
-          flash(-1)
-          break
-        }
-        case 'prev-lap': {
-          if (time <= 1e-6)
-            return
-
-          const here = loopStart.get(m.loop) ?? 0
-          seekTo(time - here > CONFIG.transport.graceLoop ? here : loopStart.get(m.loop - 1) ?? 0)
-          flash(-1)
-          break
-        }
+      if (!m)
+        moveByClock(action, time)
+      else if (action === 'next' || action === 'next-lap')
+        moveForward(action, m)
+      else if (time > 1e-6) {
+        seekTo(backTarget(action, time, m.loop))
+        flash(-1)
       }
     },
 

@@ -31,8 +31,14 @@ const journey = async p => {
   await p.mouse.move(640, 400)
 }
 const desk = { width: 1280, height: 800 }
-await shot(desk, 'app-index', async p => { await p.goto(BASE); await p.waitForTimeout(3000); await p.hover('a[href*="journeys/stairwell"]').catch(() => {}); await p.waitForTimeout(3000) })
+await shot(desk, 'app-index', async p => {
+  await p.goto(BASE); await p.waitForTimeout(3000); await p.hover('a[href*="journeys/stairwell"]').catch(() => {}); await p.waitForTimeout(3000)
+})
 await shot(desk, 'app-journey', journey)
-await shot(desk, 'app-tooltip', async p => { await journey(p); await p.hover('#fullscreen-btn'); await p.waitForTimeout(800) })
-await shot(desk, 'app-settings', async p => { await journey(p); await p.click('#settings-btn'); await p.waitForTimeout(800) })
+await shot(desk, 'app-tooltip', async p => {
+  await journey(p); await p.hover('#fullscreen-btn'); await p.waitForTimeout(800)
+})
+await shot(desk, 'app-settings', async p => {
+  await journey(p); await p.click('#settings-btn'); await p.waitForTimeout(800)
+})
 await shot({ width: 390, height: 844 }, 'app-phone', journey)

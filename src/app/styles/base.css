@@ -119,29 +119,44 @@
 }
 
 
-.jl-bar {
+.jl-track {
   position:           relative;
+  display:            block;
   inline-size:        min(320px, 70vi);
   block-size:         2px;
   overflow:           hidden;
-  background:         rgba(255, 255, 255, 0.12);
 }
 
 
-.jl-fill {
-  position:           absolute;
-  inset:              0;
-  background:         var(--accent, #fff);
-  transform:          scaleX(0);
-  transform-origin:   left center;
-  transition:         transform 0.35s ease-out;
+/* A native progress element: the bar is its value, no inline style needed. */
+.jl-bar {
+  display:            block;
+  inline-size:        100%;
+  block-size:         100%;
+  border:             0;
+  appearance:         none;
+  background:         rgba(255, 255, 255, 0.12);
+  color:              var(--accent, #fff);
+
+  &::-webkit-progress-bar {
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  &::-webkit-progress-value {
+    background: var(--accent, #fff);
+    transition: inline-size 0.35s ease-out;
+  }
+
+  &::-moz-progress-bar {
+    background: var(--accent, #fff);
+  }
 }
 
 
 /* A highlight sweeping the bar the whole time. A transform animation runs on
    the compositor, so it keeps moving while the main thread is blocked
    compiling shaders — the one stage that cannot report its progress. */
-.jl-bar::after {
+.jl-track::after {
   content:                     "";
   position:                    absolute;
   inset-block-start:           0;
@@ -180,7 +195,7 @@
 }
 
 
-#journey-loader[data-failed] .jl-bar::after {
+#journey-loader[data-failed] .jl-track::after {
   display: none;
 }
 
@@ -209,7 +224,7 @@
 
 
 @media (prefers-reduced-motion: reduce) {
-  .jl-bar::after {
+  .jl-track::after {
     display: none;
   }
 }

@@ -6,7 +6,7 @@
 // where the browser supports it (hooks/use-tooltip); otherwise the stylesheet
 // draws a plain CSS one.
 
-import { useId } from 'react'
+import { useCallback, useId } from 'react'
 import Link from 'next/link'
 import { useTooltip } from '✦/hooks/use-tooltip'
 
@@ -30,9 +30,13 @@ export default function ToolbarButton ({ label, icon, id, href, pressed, onClick
   const anchor                = `--tb-${useId().replace(/\W/g, '')}`
   const { tipRef, hostProps } = useTooltip()
 
+  // Each button anchors its own tooltip (CSS anchor positioning): the name is
+  // per instance, so it is set on the element rather than in the stylesheet.
+  const host = useCallback((el: HTMLSpanElement | null) => el?.style.setProperty('--tb-anchor', anchor), [ anchor ])
+
   return <span
+    ref={ host }
     className="tb-item"
-    style={{ ['--tb-anchor' as string]: anchor } as React.CSSProperties}
     data-side={ side }
     data-align={ align }
     { ...hostProps }>

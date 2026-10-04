@@ -60,6 +60,9 @@ export interface JourneyRuntime {
   paused:      boolean;
   togglePause: () => void;
 
+  /** The title card has started tearing away, or there is none: the clock may run. */
+  begin: () => void;
+
   /** The journey has a soundtrack, so the toolbar shows a mute button. */
   hasAudio: boolean;
 
@@ -103,7 +106,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
   // from the pointer sideways — pointer (or phone) to the right, and it turns
   // left — and follows it up and down. The shaders all look *toward* uPointer,
   // so the one inversion lives here rather than in each of them.
-  const { pointerRef, updatePan, lookPan } = usePanControl({ gyroscope: settings.gyroscope, invertX: true })
+  const { pointerRef, updatePan, lookPan } = usePanControl({ gyroscope: settings.gyroscope })
 
   // An engine built while paused (the first unmute) starts out paused, so its
   // context is never resumed only to be suspended a moment later.
@@ -165,6 +168,7 @@ export function useJourneyRuntime (definition: JourneyDefinition): JourneyRuntim
     section,
     paused,
     togglePause:      engine.togglePause,
+    begin:            engine.begin,
     audio,
     fullscreen:       fullscreen.isFullscreen,
     toggleFullscreen: fullscreen.toggle,
