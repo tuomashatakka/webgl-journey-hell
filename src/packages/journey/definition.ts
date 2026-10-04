@@ -97,11 +97,6 @@ export function passRenderer (create: (gl: WebGL2RenderingContext, canvas: HTMLC
   }
 }
 
-/** The same, on WebGL 1, for a pipeline written in GLSL ES 1.00. */
-export function passRendererWebGL1 (create: (gl: AnyGl, canvas: HTMLCanvasElement) => JourneyRenderer | null): RendererSpec {
-  return { context: 'webgl', create }
-}
-
 /** Identity, for inference and for a greppable marker on every journey. */
 export function defineJourney (definition: JourneyDefinition): JourneyDefinition {
   return definition

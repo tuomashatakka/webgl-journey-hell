@@ -13,6 +13,7 @@ export const coreGlsl = `
     uniform vec2 uPointer;
     uniform float uPlayerZ;
     uniform float uHeavy;
+    out vec4 fragColor;
 
     // LITE is the phone build (and the fallback wherever the full one will
     // not compile). Phone compilers inline every call and unroll every short
@@ -51,8 +52,15 @@ export const coreGlsl = `
     }
 
     // Procedural glowing crevices
+    // How far the place has rotted at loop count 'loop' (smooth across the
+    // turn of a loop). The first loop is clean; from the second the walls are
+    // splitting and bleeding light, and every loop after is worse.
+    float decayOf(float loop) {
+        return clamp(smoothstep(0.5, 1.0, loop) * 0.42 + max(loop - 1.0, 0.0) * 0.2, 0.0, 0.95);
+    }
+
     float getFloorCrack(vec3 p, float local_z, float it) {
-        float decayFactor = clamp(it * 0.15, 0.0, 0.95);
+        float decayFactor = decayOf(it);
         if (decayFactor < 0.05) return 0.0;
         float cNoise = sin(p.x * 3.5 + cos(p.z * 4.5)) * cos(p.z * 3.1 + sin(p.y * 4.0));
         float crackLine = abs(cNoise);

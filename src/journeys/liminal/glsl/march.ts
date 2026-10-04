@@ -11,7 +11,7 @@ export const marchGlsl = `    // Signed Distance Field Map
             smoothLoop = loop + smoothstep_custom(400.0, 500.0, currentZ);
         }
 
-        float decayFactor = clamp(smoothLoop * 0.15, 0.0, 0.95);
+        float decayFactor = decayOf(smoothLoop) * 0.75;
         float cFactor = 1.0 - clamp(smoothLoop * 0.14, 0.0, 0.72);
 
         // Squeezing/bending corridors on higher decay iterations

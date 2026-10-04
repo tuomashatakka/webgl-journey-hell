@@ -110,7 +110,7 @@ export const paletteGlsl = `    // Domain-warped ridged noise tightened into thi
         else if (sector == 6.0) baseCol = mix(c5, c6, localZ / secLen);
         
         // Environmental decay multiplier
-        float decayWeight = clamp(loop * 0.18, 0.0, 0.9);
+        float decayWeight = decayOf(loop) * 0.8;
         vec3 hellBase = vec3(0.35, 0.01, 0.02);
         return mix(baseCol, hellBase, decayWeight);
     }
