@@ -22,6 +22,9 @@
 // rather than an absolute Y ramp — which is precisely what lets the CPU own the
 // timeline without the shader duplicating it.
 
+import { HASH11, HASH21, SD_BOX, SD_SPHERE, SMAX, SMIN } from '✦/lib/glsl'
+
+
 const COMMON = `
   precision highp float;
 
@@ -78,16 +81,8 @@ const COMMON = `
   }
 
   // --- hash / noise --------------------------------------------------------
-  float hash11(float p) {
-    p = fract(p * 0.1031);
-    p *= p + 33.33;
-    return fract(p * (p + p));
-  }
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
+  ${HASH11}
+  ${HASH21}
   float hash31(vec3 p) {
     p = fract(p * 0.1031);
     p += dot(p, p.yzx + 33.33);
@@ -129,25 +124,17 @@ const COMMON = `
   float repS(float x, float s) {
     return mod(x + 0.5 * s, s) - 0.5 * s;
   }
-  float smin(float a, float b, float k) {
-    float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
-    return mix(b, a, h) - k * h * (1.0 - h);
-  }
-  float smax(float a, float b, float k) {
-    return -smin(-a, -b, k);
-  }
+  ${SMIN}
+  ${SMAX}
 
   // --- primitives ----------------------------------------------------------
-  float sdSphere(vec3 p, float r) { return length(p) - r; }
+  ${SD_SPHERE}
   float sdEllipsoid(vec3 p, vec3 r) {
     float k0 = length(p / r);
     float k1 = length(p / (r * r));
     return k0 * (k0 - 1.0) / k1;
   }
-  float sdBox(vec3 p, vec3 b) {
-    vec3 q = abs(p) - b;
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-  }
+  ${SD_BOX}
   float sdCapsule(vec3 p, vec3 a, vec3 b, float r) {
     vec3 pa = p - a, ba = b - a;
     float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
@@ -757,11 +744,7 @@ export const hollowOrchardPreviewFrag = `
   uniform float iTime;
   uniform vec2 uPointer;
 
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
+  ${HASH21}
 
   void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;

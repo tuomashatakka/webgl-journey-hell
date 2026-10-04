@@ -42,6 +42,7 @@
 // water's heave, roll and a slow yaw drift on the eddies.
 
 import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { lapLabel } from '✦/lib/journey'
 import type { CustomUniforms } from '✦/lib/gl'
 import type { Frame } from '✦/lib/curve'
 import { levelFrame, newFrame } from '✦/lib/sweep'
@@ -453,7 +454,7 @@ export class ScenicRide implements JourneySimulation {
 
   label (): string {
     const span = spanAt(this.route, this.s)
-    return `LAP ${this.lap + 1} · ${span.section.name}`
+    return lapLabel(this.lap, span.section.name)
   }
 
   detail (): string {

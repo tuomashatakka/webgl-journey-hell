@@ -71,6 +71,9 @@
 //   uSun     (sun direction in the track's frame, intensity)
 //   uUp      (world up in the track's frame, sky of the current room)
 
+import { HASH21, SD_BOX, SD_BOX2, SD_ROUND_BOX, fbm2, valueNoise2 } from '✦/lib/glsl'
+
+
 const COMMON = `
   precision highp float;
 
@@ -173,42 +176,19 @@ const COMMON = `
     float lit;
   };
 
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
+  ${HASH21}
 
-  float vnoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
-               mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
-  }
-  float fbm(vec2 p) {
-    float a = 0.5, s = 0.0;
-    for (int i = 0; i < 4; i++) {
-      s += a * vnoise(p);
-      p = mat2(1.6, 1.2, -1.2, 1.6) * p;
-      a *= 0.5;
-    }
-    return s;
-  }
+  ${valueNoise2('hash21')}
+  ${fbm2({ octaves: 4, next: 'p = mat2(1.6, 1.2, -1.2, 1.6) * p;' })}
 
   /** Grid Run's hue ramp. Three phase-shifted sines, and it never leaves gamut. */
   vec3 hue(float a) { return 0.5 + 0.5 * sin(3.14159 * a + vec3(1.0, 2.0, 3.0)); }
 
   // ---- primitives. Exact, all of them, so the step factor can stay near 1. ----
 
-  float sdBox2(vec2 p, vec2 b) {
-    vec2 q = abs(p) - b;
-    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0);
-  }
-  float sdBox(vec3 p, vec3 b) {
-    vec3 q = abs(p) - b;
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-  }
-  float sdRoundBox(vec3 p, vec3 b, float r) { return sdBox(p, b - r) - r; }
+  ${SD_BOX2}
+  ${SD_BOX}
+  ${SD_ROUND_BOX}
 
   /**
    * Fold onto the nearest cell of an unbounded lattice. Exact for identical
@@ -1508,11 +1488,7 @@ export const switchbackPreviewFrag = `
   uniform float iTime;
   uniform vec2 uPointer;
 
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
+  ${HASH21}
 
   void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;

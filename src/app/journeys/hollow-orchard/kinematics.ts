@@ -15,6 +15,7 @@
 //   • fall    — per-stage pitch amount; the camera never flips, it leans
 
 import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { lapLabel } from '✦/lib/journey'
 import type { CustomUniforms } from '✦/lib/gl'
 import { clamp01, mix, smoothstep } from '✦/lib/math'
 
@@ -466,7 +467,7 @@ export function getOrchardState (z: number): OrchardState {
 
 /** HUD label. Loops are counted from 1 the way the other journeys count them. */
 export function labelFor (state: OrchardState): string {
-  return state.loop > 0 ? `LOOP ${state.loop + 1} · ${state.name}` : state.name
+  return lapLabel(state.loop, state.name, { word: 'LOOP', bareFirst: true })
 }
 
 /**

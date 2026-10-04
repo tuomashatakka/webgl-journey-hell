@@ -1,6 +1,7 @@
 // smootherstep, not smoothstep, wherever an act hands over: zeroing the second
 // derivative as well is what removed the kick as a blend opened and closed.
 import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { lapLabel } from '✦/lib/journey'
 import { clamp01, smootherstep, smoothstep } from '✦/lib/math'
 
 
@@ -259,7 +260,7 @@ export function getSectionLabel (state: StairwellState): string {
     return `VII · PURGATORY · ∞${String(state.purgatoryLap + 1).padStart(2, '0')}`
   if (state.finale > 0.76)
     return 'VI · THE WORLD COMES APART'
-  return `LOOP ${state.loop + 1} · ${state.section.name}`
+  return lapLabel(state.loop, state.section.name, { word: 'LOOP' })
 }
 
 export function assertStairwellRoute (): string[] {

@@ -37,6 +37,7 @@
 // a bend instead of the world sliding sideways.
 
 import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { lapLabel } from '✦/lib/journey'
 import type { CustomUniforms } from '✦/lib/gl'
 import type { Frame } from '✦/lib/curve'
 import type { BaySpan, Circuits } from './stations'
@@ -259,7 +260,7 @@ class LoopLineRide implements JourneySimulation {
   }
 
   label (): string {
-    return `LAP ${this.lap + 1} · ${this.spans[this.spanIndex()].bay.name}`
+    return lapLabel(this.lap, this.spans[this.spanIndex()].bay.name)
   }
 
   detail (): string {

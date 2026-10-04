@@ -19,7 +19,7 @@
 // Section blending comes from uFogCol.w, the "surface" scalar the simulation
 // already blends across section windows: 0 asphalt, 2 fall, 3 gullet, 4 water.
 
-import type { JourneyAudioEngine } from '✦/lib/journey'
+import { JourneyAudio, whiteNoise } from '✦/lib/audio'
 import type { CustomUniforms } from '✦/lib/gl'
 
 
@@ -29,24 +29,15 @@ function weightAt (surface: number, centre: number): number {
   return Math.max(0, 1 - Math.abs(surface - centre))
 }
 
-function noiseBuffer (ctx: AudioContext, seconds = 2): AudioBuffer {
-  const n   = Math.floor(ctx.sampleRate * seconds)
-  const buf = ctx.createBuffer(1, n, ctx.sampleRate)
-  const d   = buf.getChannelData(0)
-  for (let i = 0; i < n; i++)
-    d[i] = Math.random() * 2 - 1
-  return buf
-}
-
 interface Voice {
   gain:    GainNode;
   filter?: BiquadFilterNode;
 }
 
-export class ScenicRouteAudio implements JourneyAudioEngine {
-  private ctx:    AudioContext | null = null
-  private master: GainNode | null = null
-  private muted = true
+export class ScenicRouteAudio extends JourneyAudio {
+  protected readonly name = 'Scenic Route'
+  protected readonly level = 0.8
+  protected readonly fade = 0.05
 
   private engineOsc: OscillatorNode[] = []
   private engine:    Voice | null = null
@@ -61,26 +52,6 @@ export class ScenicRouteAudio implements JourneyAudioEngine {
   private echo:      DelayNode | null = null
   private nextDrip = 0
   private lastTime = 0
-
-  toggleMute (): boolean {
-    this.muted = !this.muted
-    if (!this.muted && !this.ctx)
-      this.build()
-
-    const ctx = this.ctx
-    if (ctx && this.master) {
-      if (ctx.state === 'suspended')
-        void ctx.resume()
-      this.master.gain.setTargetAtTime(this.muted ? 0 : 0.8, ctx.currentTime, 0.05)
-    }
-    return this.muted
-  }
-
-  destroy (): void {
-    if (this.ctx)
-      void this.ctx.close()
-    this.ctx = null
-  }
 
   private noise (ctx: AudioContext, buf: AudioBuffer): AudioBufferSourceNode {
     const src  = ctx.createBufferSource()
@@ -105,18 +76,13 @@ export class ScenicRouteAudio implements JourneyAudioEngine {
     }
     else
       src.connect(gain)
-    gain.connect(this.master!)
+    gain.connect(this.main!)
     return { gain, filter }
   }
 
-  private build (): void {
-    const ctx              = new AudioContext()
-    this.ctx               = ctx
-    this.master            = ctx.createGain()
-    this.master.gain.value = 0
-    this.master.connect(ctx.destination)
-
-    const buf = noiseBuffer(ctx)
+  protected build (): void {
+    const ctx = this.ctx!
+    const buf = whiteNoise(ctx)
 
     // Engine: saw, detuned saw an octave up, sub square.
     const mix = ctx.createGain()
@@ -177,7 +143,7 @@ export class ScenicRouteAudio implements JourneyAudioEngine {
     fb.gain.value = 0.42
     echo.connect(fb)
     fb.connect(echo)
-    echo.connect(this.master)
+    echo.connect(this.main!)
     this.echo = echo
   }
 
@@ -196,7 +162,7 @@ export class ScenicRouteAudio implements JourneyAudioEngine {
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16)
     osc.connect(g)
     g.connect(this.echo)
-    g.connect(this.master!)
+    g.connect(this.main!)
     osc.start(t)
     osc.stop(t + 0.2)
   }
@@ -208,7 +174,7 @@ export class ScenicRouteAudio implements JourneyAudioEngine {
 
   update (time: number, state?: CustomUniforms): void {
     const ctx = this.ctx
-    if (!ctx || this.muted || !state)
+    if (!ctx || this.isMuted || !state)
       return
 
     const now    = ctx.currentTime

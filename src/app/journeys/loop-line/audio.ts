@@ -50,12 +50,10 @@
 //    plus an occasional power-cut dropout gated on uDecay[1] where everything
 //    ducks for 100-200 ms.
 
-import type { JourneyAudioEngine } from '✦/lib/journey'
+import { JourneyAudio } from '✦/lib/audio'
 import type { CustomUniforms } from '✦/lib/gl'
 import { clamp01 } from '✦/lib/math'
 
-
-type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
 
 /** Glide for slow-moving continuous parameters. */
 const GLIDE = 0.45
@@ -116,14 +114,12 @@ const SYLLABLES: [number, number][][] = [
 ]
 
 
-export class LoopLineAudioEngine implements JourneyAudioEngine {
-  private ctx:     AudioContext | null = null
-  private isMuted: boolean = true
+export class LoopLineAudioEngine extends JourneyAudio {
+  protected readonly name = 'Loop Line'
+  protected readonly bus = true
 
-  private main:     GainNode | null = null
-  private masterLP: BiquadFilterNode | null = null
-  private dry:      GainNode | null = null
-  private wet:      GainNode | null = null
+
+  private wet: GainNode | null = null
 
   // One delay pair for all seven rooms, crossfaded on portal.
   private tap:     DelayNode | null = null
@@ -143,8 +139,6 @@ export class LoopLineAudioEngine implements JourneyAudioEngine {
   private voidGain:   GainNode | null = null
   private boreGain:   GainNode | null = null
 
-  private noiseBuffer: AudioBuffer | null = null
-  private timers:      ReturnType<typeof setTimeout>[] = []
 
   // Driven from the shader uniforms each frame.
   private speed = 0
@@ -157,96 +151,22 @@ export class LoopLineAudioEngine implements JourneyAudioEngine {
   // Reverb crossfade state — only touched on bay change.
   private lastRoom = -1
 
-  public toggleMute (): boolean {
-    if (!this.ctx)
-      this.init()
-    this.isMuted = !this.isMuted
-    if (this.ctx && this.main)
-      this.main.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.85, this.ctx.currentTime, 0.25)
-    if (!this.isMuted)
-      void this.ctx?.resume()
-    return this.isMuted
-  }
-
-  public destroy (): void {
-    for (const t of this.timers)
-      clearTimeout(t)
-    this.timers = []
-    void this.ctx?.close()
-    this.ctx = null
-  }
-
-  private after (ms: number, fn: (...args: unknown[]) => void, ...args: unknown[]): void {
-    this.timers.push(setTimeout(() => fn(...args), ms))
-  }
 
   // ---- construction -------------------------------------------------------
 
-  private init (): void {
-    try {
-      const AudioCtx = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext
-      if (!AudioCtx)
-        return
-      this.ctx = new AudioCtx()
-
-      const now = this.ctx.currentTime
-
-      this.main = this.ctx.createGain()
-      this.main.gain.setValueAtTime(0.0, now)
-      this.main.connect(this.ctx.destination)
-
-      this.masterLP      = this.ctx.createBiquadFilter()
-      this.masterLP.type = 'lowpass'
-      this.masterLP.frequency.setValueAtTime(18000, now)
-      this.masterLP.Q.setValueAtTime(0.7, now)
-      this.masterLP.connect(this.main)
-
-      this.dry = this.ctx.createGain()
-      this.dry.gain.setValueAtTime(1.0, now)
-      this.dry.connect(this.masterLP)
-
-      this.noiseBuffer = this.makeNoise()
-      this.buildRoom()
-      this.buildMotor()
-      this.buildConcourse()
-      this.buildCut()
-      this.buildAnnex()
-      this.buildStacks()
-      this.buildTurnback()
-      this.buildChord()
-      this.buildFormant()
-      this.buildShimmer()
-    }
-    catch (e) {
-      console.error('Loop Line audio init failed:', e)
-    }
+  protected build (): void {
+    this.buildRoom()
+    this.buildMotor()
+    this.buildConcourse()
+    this.buildCut()
+    this.buildAnnex()
+    this.buildStacks()
+    this.buildTurnback()
+    this.buildChord()
+    this.buildFormant()
+    this.buildShimmer()
   }
 
-  private makeNoise (): AudioBuffer | null {
-    if (!this.ctx)
-      return null
-
-    const size   = 2 * this.ctx.sampleRate
-    const buffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate)
-    const out    = buffer.getChannelData(0)
-    let last = 0.0
-    for (let i = 0; i < size; i++) {
-      const white = Math.random() * 2.0 - 1.0
-      last        = (last + 0.02 * white) / 1.02
-      out[i]      = last * 3.5
-    }
-    return buffer
-  }
-
-  private noiseSource (loop: boolean): AudioBufferSourceNode | null {
-    if (!this.ctx || !this.noiseBuffer)
-      return null
-
-    const src  = this.ctx.createBufferSource()
-    src.buffer = this.noiseBuffer
-    src.loop   = loop
-    return src
-  }
 
   /**
    * One delay pair for all seven rooms, crossfaded rather than switched.
@@ -881,7 +801,8 @@ export class LoopLineAudioEngine implements JourneyAudioEngine {
     for (let i = 0; i < keep; i++) {
       const idx            = indices[i]
       const [ pitch, dur ] = pattern[idx]
-      this.after(t * 1000, (p, d) => this.fireSyllable(p as number, d as number), pitch * pitchDrift, dur)
+      const p              = pitch * pitchDrift
+      this.after(t * 1000, () => this.fireSyllable(p, dur))
       t += dur + 0.03
     }
   }

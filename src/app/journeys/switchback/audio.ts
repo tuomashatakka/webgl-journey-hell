@@ -33,12 +33,10 @@
 //    centre, a nave, and — over the overlook — almost nothing at all, which
 //    after the nave is the loudest thing in the journey.
 
-import type { JourneyAudioEngine } from '✦/lib/journey'
+import { JourneyAudio } from '✦/lib/audio'
 import type { CustomUniforms } from '✦/lib/gl'
 import { PHASE_WRAP } from './kinematics'
 
-
-type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
 
 /** Glide for slow-moving parameters. */
 const GLIDE = 0.45
@@ -82,14 +80,12 @@ const ROOMS: RoomTone[] = [
   { time: 0.090, fb: 0.10, damp: 8000, wet: 0.08 }, // overlook — open air, and it is a shock
 ]
 
-export class SwitchbackAudioEngine implements JourneyAudioEngine {
-  private ctx:     AudioContext | null = null
-  private isMuted: boolean = true
+export class SwitchbackAudioEngine extends JourneyAudio {
+  protected readonly name = 'Switchback'
+  protected readonly bus = true
 
-  private main:     GainNode | null = null
-  private masterLP: BiquadFilterNode | null = null
-  private dry:      GainNode | null = null
-  private wet:      GainNode | null = null
+
+  private wet: GainNode | null = null
 
   // The room, as one delay pair whose character is crossfaded between portals.
   private tap:     DelayNode | null = null
@@ -108,8 +104,6 @@ export class SwitchbackAudioEngine implements JourneyAudioEngine {
   private muzakGain: GainNode | null = null
   private naveGain:  GainNode | null = null
 
-  private noiseBuffer: AudioBuffer | null = null
-  private timers:      ReturnType<typeof setTimeout>[] = []
 
   // Last-written values, so a 60 Hz update only touches what actually moved.
   private lastRoll = -1
@@ -131,96 +125,20 @@ export class SwitchbackAudioEngine implements JourneyAudioEngine {
   private secType = 0
   private lapF = 0
 
-  public toggleMute (): boolean {
-    if (!this.ctx)
-      this.init()
-    this.isMuted = !this.isMuted
-    if (this.ctx && this.main)
-      this.main.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.85, this.ctx.currentTime, 0.25)
-    if (!this.isMuted)
-      void this.ctx?.resume()
-    return this.isMuted
-  }
-
-  public destroy (): void {
-    for (const t of this.timers)
-      clearTimeout(t)
-    this.timers = []
-    void this.ctx?.close()
-    this.ctx = null
-  }
-
-  private after (ms: number, fn: () => void): void {
-    this.timers.push(setTimeout(fn, ms))
-  }
 
   // ---- construction -------------------------------------------------------
 
-  private init (): void {
-    try {
-      const AudioCtx = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext
-      if (!AudioCtx)
-        return
-      this.ctx = new AudioCtx()
-
-      const now = this.ctx.currentTime
-
-      this.main = this.ctx.createGain()
-      this.main.gain.setValueAtTime(0.0, now)
-      this.main.connect(this.ctx.destination)
-
-      // Everything passes through here. The laps close it, slowly.
-      this.masterLP      = this.ctx.createBiquadFilter()
-      this.masterLP.type = 'lowpass'
-      this.masterLP.frequency.setValueAtTime(18000, now)
-      this.masterLP.Q.setValueAtTime(0.7, now)
-      this.masterLP.connect(this.main)
-
-      this.dry = this.ctx.createGain()
-      this.dry.gain.setValueAtTime(1.0, now)
-      this.dry.connect(this.masterLP)
-
-      this.noiseBuffer = this.makeNoise()
-      this.buildRoom()
-      this.buildRoll()
-      this.buildSqueal()
-      this.buildWind()
-      this.buildMotor()
-      this.buildMuzak()
-      this.buildNave()
-
-      this.scheduleGroans()
-    }
-    catch (e) {
-      console.error('Switchback audio init failed:', e)
-    }
+  protected build (): void {
+    this.buildRoom()
+    this.buildRoll()
+    this.buildSqueal()
+    this.buildWind()
+    this.buildMotor()
+    this.buildMuzak()
+    this.buildNave()
+    this.scheduleGroans()
   }
 
-  private makeNoise (): AudioBuffer | null {
-    if (!this.ctx)
-      return null
-
-    const size   = 2 * this.ctx.sampleRate
-    const buffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate)
-    const out    = buffer.getChannelData(0)
-    let last = 0.0
-    for (let i = 0; i < size; i++) {
-      const white = Math.random() * 2.0 - 1.0
-      last        = (last + 0.02 * white) / 1.02
-      out[i]      = last * 3.5
-    }
-    return buffer
-  }
-
-  private noiseSource (loop: boolean): AudioBufferSourceNode | null {
-    if (!this.ctx || !this.noiseBuffer)
-      return null
-
-    const src  = this.ctx.createBufferSource()
-    src.buffer = this.noiseBuffer
-    src.loop   = loop
-    return src
-  }
 
   /**
    * One delay pair for all six rooms, crossfaded rather than switched.

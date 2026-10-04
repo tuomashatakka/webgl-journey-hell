@@ -50,6 +50,7 @@
 // two atans per lamp and gives every lamp its halo without a single texture.
 
 import { MATERIAL_GLSL, SKY_GLSL, SURFACE_GLSL } from 'Δ/glsl'
+import { ACES, HASH11, HASH12 } from '✦/lib/glsl'
 
 
 /** Lamps per draw. A bay uploads its nearest this many to the camera. */
@@ -223,18 +224,9 @@ uniform vec4 uSun;         // direction, intensity
 
 out vec4 fragColor;
 
-float hash12 (vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
+${HASH12}
 
-float hash11 (float p) {
-  p = fract(p * 0.1031);
-  p *= p + 33.33;
-  p *= p + p;
-  return fract(p);
-}
+${HASH11}
 
 vec3 skyColour (vec3 d) {
   vec3 a = skyRadiance(skyTexel(uSkyA, d, uSky.w), uSky.y);
@@ -723,11 +715,7 @@ uniform float uHeavy;
 uniform vec2 uAspect;
 out vec4 fragColor;
 
-float hash12 (vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
+${HASH12}
 
 vec3 fetch (vec2 uv) {
   vec3 c = texture(uScene, uv).rgb;
@@ -736,9 +724,7 @@ vec3 fetch (vec2 uv) {
 }
 
 // Narkowicz's fitted ACES curve.
-vec3 aces (vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+${ACES}
 
 void main () {
   vec2 c = vUv - 0.5;

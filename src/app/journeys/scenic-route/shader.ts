@@ -18,30 +18,18 @@
 // shared chunks
 // ---------------------------------------------------------------------------
 
+import { ACES, HASH11, HASH12, HASH_SIN, fbm2, valueNoise2 } from '✦/lib/glsl'
+
+
 const noiseChunk = /* glsl */`
-float hash11 (float p) {
-  p = fract(p * 0.1031);
-  p *= p + 33.33;
-  p *= p + p;
-  return fract(p);
-}
-float hash12 (vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
+${HASH11}
+${HASH12}
 float hash13 (vec3 p3) {
   p3 = fract(p3 * 0.1031);
   p3 += dot(p3, p3.zyx + 31.32);
   return fract((p3.x + p3.y) * p3.z);
 }
-float vnoise (vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  f = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), f.x),
-             mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y);
-}
+${valueNoise2('hash12')}
 float vnoise3 (vec3 p) {
   vec3 i = floor(p);
   vec3 f = fract(p);
@@ -51,16 +39,7 @@ float vnoise3 (vec3 p) {
     mix(mix(hash13(i + vec3(0, 0, 1)), hash13(i + vec3(1, 0, 1)), f.x), mix(hash13(i + vec3(0, 1, 1)), hash13(i + vec3(1, 1, 1)), f.x), f.y),
     f.z);
 }
-float fbm (vec2 p) {
-  float a = 0.5;
-  float s = 0.0;
-  for (int i = 0; i < 5; i++) {
-    s += a * vnoise(p);
-    p = p * 2.03 + 17.1;
-    a *= 0.5;
-  }
-  return s;
-}
+${fbm2({ octaves: 5, next: 'p = p * 2.03 + 17.1;' })}
 float fbm3 (vec3 p) {
   float a = 0.5;
   float s = 0.0;
@@ -1389,10 +1368,7 @@ ${brdfChunk}
 ${noiseChunk}
 ${skyLookupChunk}
 ${lightingChunk}
-vec3 aces (vec3 x) {
-  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
+${ACES}
 void main () {
   vec3 p = vWorld;
   vec3 n = normalize(vNormal);
@@ -1498,10 +1474,7 @@ uniform float uExposure;   // linear multiplier
 uniform float uSpeedBlur;  // 0..1
 uniform float uTime;
 out vec4 fragColor;
-vec3 aces (vec3 x) {
-  const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-  return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
+${ACES}
 void main () {
   vec2 uv = vUv;
   vec2 c = uv - 0.5;
@@ -1545,7 +1518,7 @@ export const scenicRoutePreviewFrag = `
   uniform float iTime;
   uniform vec2 uPointer;
 
-  float hash (vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+  ${HASH_SIN}
 
   void main () {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;

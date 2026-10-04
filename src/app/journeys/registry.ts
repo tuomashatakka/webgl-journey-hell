@@ -7,6 +7,7 @@ import { natatoriumPreviewFrag } from './natatorium/shader'
 import { scenicRoutePreviewFrag } from './scenic-route/shader'
 import { skybridgesPreviewFrag } from './skybridges/shader'
 import { switchbackPreviewFrag } from './switchback/shader'
+import { HASH_SIN } from '✦/lib/glsl'
 
 
 export interface Journey {
@@ -73,9 +74,7 @@ const stairwellPreviewFrag = `
   uniform float iTime;
   uniform vec2 uPointer;
 
-  float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-  }
+  ${HASH_SIN}
 
   void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;

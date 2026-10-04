@@ -14,7 +14,7 @@
 // Layers: a wet sub-drone, a spore haze, wall plops, fibrous creak, chitin
 // clicks, a heartbeat, and a delay that opens as you fall.
 
-import type { JourneyAudioEngine } from '✦/lib/journey'
+import { JourneyAudio } from '✦/lib/audio'
 import type { CustomUniforms } from '✦/lib/gl'
 import {
   STAGE_CATHEDRAL,
@@ -29,19 +29,16 @@ import {
 } from './kinematics'
 
 
-type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
-
 /** Smoothing constant for the per-frame parameter ramps, in seconds. */
 const GLIDE = 0.7
 
 /** Don't re-target an AudioParam for a move smaller than this. */
 const EPS = 0.01
 
-export class HollowOrchardAudioEngine implements JourneyAudioEngine {
-  private ctx:     AudioContext | null = null
-  private isMuted: boolean = true
+export class HollowOrchardAudioEngine extends JourneyAudio {
+  protected readonly name = 'Hollow Orchard'
 
-  private main:      GainNode | null = null
+
   private droneLow:  OscillatorNode | null = null
   private droneHigh: OscillatorNode | null = null
   private droneFilt: BiquadFilterNode | null = null
@@ -53,8 +50,6 @@ export class HollowOrchardAudioEngine implements JourneyAudioEngine {
   private wetBus:    GainNode | null = null
   private delayFb:   GainNode | null = null
 
-  private noiseBuffer: AudioBuffer | null = null
-  private timers:      ReturnType<typeof setTimeout>[] = []
 
   // Last-written parameter values, so `update` only touches what actually moved.
   private lastStage = 0
@@ -63,81 +58,24 @@ export class HollowOrchardAudioEngine implements JourneyAudioEngine {
   private lastHaze = -1
   private lastCreak = -1
 
-  public toggleMute (): boolean {
-    if (!this.ctx)
-      this.init()
-    this.isMuted = !this.isMuted
-    if (this.ctx && this.main)
-      this.main.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.85, this.ctx.currentTime, 0.25)
-    if (!this.isMuted)
-      void this.ctx?.resume()
-    return this.isMuted
-  }
 
-  public destroy (): void {
-    for (const t of this.timers)
-      clearTimeout(t)
-    this.timers = []
+  protected teardown (): void {
     this.droneLow?.stop()
     this.droneHigh?.stop()
-    void this.ctx?.close()
-    this.ctx = null
   }
 
   // ---- construction -------------------------------------------------------
 
-  private init (): void {
-    try {
-      const AudioCtx = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext
-      if (!AudioCtx)
-        return
-      this.ctx = new AudioCtx()
-
-      this.main = this.ctx.createGain()
-      this.main.gain.setValueAtTime(0.0, this.ctx.currentTime)
-      this.main.connect(this.ctx.destination)
-
-      this.noiseBuffer = this.makeNoise()
-      this.buildDelay()
-      this.buildDrone()
-      this.buildHaze()
-      this.buildCreak()
-
-      this.schedulePlops()
-      this.scheduleClicks()
-      this.scheduleHeartbeat()
-    }
-    catch (e) {
-      console.error('Hollow Orchard audio init failed:', e)
-    }
+  protected build (): void {
+    this.buildDelay()
+    this.buildDrone()
+    this.buildHaze()
+    this.buildCreak()
+    this.schedulePlops()
+    this.scheduleClicks()
+    this.scheduleHeartbeat()
   }
 
-  /** Brown-ish noise: integrated white, the same recipe the other journeys use. */
-  private makeNoise (): AudioBuffer | null {
-    if (!this.ctx)
-      return null
-
-    const size   = 2 * this.ctx.sampleRate
-    const buffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate)
-    const out    = buffer.getChannelData(0)
-    let last = 0.0
-    for (let i = 0; i < size; i++) {
-      const white = Math.random() * 2.0 - 1.0
-      last        = (last + 0.02 * white) / 1.02
-      out[i]      = last * 3.5
-    }
-    return buffer
-  }
-
-  private noiseSource (loop: boolean): AudioBufferSourceNode | null {
-    if (!this.ctx || !this.noiseBuffer)
-      return null
-
-    const src  = this.ctx.createBufferSource()
-    src.buffer = this.noiseBuffer
-    src.loop   = loop
-    return src
-  }
 
   /** A wet room: everything one-shot goes through here, and it opens in the abyss. */
   private buildDelay (): void {
@@ -260,9 +198,6 @@ export class HollowOrchardAudioEngine implements JourneyAudioEngine {
 
   // ---- one-shots ----------------------------------------------------------
 
-  private after (ms: number, fn: () => void): void {
-    this.timers.push(setTimeout(fn, ms))
-  }
 
   /** A wet drop landing on meat — pitch falls fast, unlike liminal's ringing drip. */
   private plop (gain: number): void {

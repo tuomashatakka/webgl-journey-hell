@@ -70,6 +70,7 @@
 // because a rider's head does lag the car, and because it is the shot.
 
 import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { lapLabel } from '✦/lib/journey'
 import type { CustomUniforms } from '✦/lib/gl'
 // Every turn and every grade change in the table is eased with smootherstep —
 // zero first *and* second derivative at both ends — and nothing else, which is
@@ -1065,7 +1066,7 @@ export function labelFor (state: SwitchbackState): string {
       ? 'THE TRACK ENDS'
       : `THE FALL · ${Math.round(state.fallDepth)}M · ${kph} KM/H`
 
-  const head = state.lap > 0 ? `LAP ${state.lap + 1} · ${state.name}` : state.name
+  const head = lapLabel(state.lap, state.name, { bareFirst: true })
   return `${head} · ${kph} KM/H`
 }
 

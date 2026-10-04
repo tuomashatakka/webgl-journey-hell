@@ -19,12 +19,10 @@
 //    slow constant smears those dips into one dull fade instead of rendering
 //    every individual moment the ears break the surface.
 
-import type { JourneyAudioEngine } from '✦/lib/journey'
+import { JourneyAudio } from '✦/lib/audio'
 import type { CustomUniforms } from '✦/lib/gl'
 import { TYPE_PLANT, TYPE_RAW } from './kinematics'
 
-
-type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext }
 
 /** Glide for slow-moving parameters. */
 const GLIDE = 0.6
@@ -38,13 +36,11 @@ const DUCK_GLIDE = 0.04
 
 const EPS = 0.004
 
-export class NatatoriumAudioEngine implements JourneyAudioEngine {
-  private ctx:     AudioContext | null = null
-  private isMuted: boolean = true
+export class NatatoriumAudioEngine extends JourneyAudio {
+  protected readonly name = 'Natatorium'
+  protected readonly bus = true
+  protected readonly level = 0.9
 
-  private main:     GainNode | null = null
-  private masterLP: BiquadFilterNode | null = null
-  private dry:      GainNode | null = null
 
   // Flutter echo — the tile signature.
   private flutter:   DelayNode | null = null
@@ -58,8 +54,6 @@ export class NatatoriumAudioEngine implements JourneyAudioEngine {
   private humGain:    GainNode | null = null
   private rumbleGain: GainNode | null = null
 
-  private noiseBuffer: AudioBuffer | null = null
-  private timers:      ReturnType<typeof setTimeout>[] = []
 
   // Last-written values, so a 60 Hz update only touches what actually moved.
   private lastCut = -1
@@ -73,91 +67,21 @@ export class NatatoriumAudioEngine implements JourneyAudioEngine {
   private depth = 0
   private secType = 0
 
-  public toggleMute (): boolean {
-    if (!this.ctx)
-      this.init()
-    this.isMuted = !this.isMuted
-    if (this.ctx && this.main)
-      this.main.gain.setTargetAtTime(this.isMuted ? 0.0 : 0.9, this.ctx.currentTime, 0.25)
-    if (!this.isMuted)
-      void this.ctx?.resume()
-    return this.isMuted
-  }
-
-  public destroy (): void {
-    for (const t of this.timers)
-      clearTimeout(t)
-    this.timers = []
-    void this.ctx?.close()
-    this.ctx = null
-  }
 
   // ---- construction -------------------------------------------------------
 
-  private init (): void {
-    try {
-      const AudioCtx = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext
-      if (!AudioCtx)
-        return
-      this.ctx = new AudioCtx()
-
-      this.main = this.ctx.createGain()
-      this.main.gain.setValueAtTime(0.0, this.ctx.currentTime)
-      this.main.connect(this.ctx.destination)
-
-      // Everything passes through here. Submersion closes it.
-      this.masterLP      = this.ctx.createBiquadFilter()
-      this.masterLP.type = 'lowpass'
-      this.masterLP.frequency.setValueAtTime(18000, this.ctx.currentTime)
-      this.masterLP.Q.setValueAtTime(0.7, this.ctx.currentTime)
-      this.masterLP.connect(this.main)
-
-      this.dry = this.ctx.createGain()
-      this.dry.gain.setValueAtTime(1.0, this.ctx.currentTime)
-      this.dry.connect(this.masterLP)
-
-      this.noiseBuffer = this.makeNoise()
-      this.buildFlutter()
-      this.buildRoom()
-      this.buildSlosh()
-      this.buildBuzz()
-      this.buildHum()
-      this.buildRumble()
-
-      this.scheduleDrips()
-      this.scheduleFootfalls()
-      this.scheduleWhistle()
-    }
-    catch (e) {
-      console.error('Natatorium audio init failed:', e)
-    }
+  protected build (): void {
+    this.buildFlutter()
+    this.buildRoom()
+    this.buildSlosh()
+    this.buildBuzz()
+    this.buildHum()
+    this.buildRumble()
+    this.scheduleDrips()
+    this.scheduleFootfalls()
+    this.scheduleWhistle()
   }
 
-  private makeNoise (): AudioBuffer | null {
-    if (!this.ctx)
-      return null
-
-    const size   = 2 * this.ctx.sampleRate
-    const buffer = this.ctx.createBuffer(1, size, this.ctx.sampleRate)
-    const out    = buffer.getChannelData(0)
-    let last = 0.0
-    for (let i = 0; i < size; i++) {
-      const white = Math.random() * 2.0 - 1.0
-      last        = (last + 0.02 * white) / 1.02
-      out[i]      = last * 3.5
-    }
-    return buffer
-  }
-
-  private noiseSource (loop: boolean): AudioBufferSourceNode | null {
-    if (!this.ctx || !this.noiseBuffer)
-      return null
-
-    const src  = this.ctx.createBufferSource()
-    src.buffer = this.noiseBuffer
-    src.loop   = loop
-    return src
-  }
 
   /** 11 ms slapback between parallel tile walls, plus a longer body tap. */
   private buildFlutter (): void {
@@ -343,9 +267,6 @@ export class NatatoriumAudioEngine implements JourneyAudioEngine {
 
   // ---- one-shots ----------------------------------------------------------
 
-  private after (ms: number, fn: () => void): void {
-    this.timers.push(setTimeout(fn, ms))
-  }
 
   /** A drip landing in standing water, drenched in the flutter bus. */
   private drip (): void {

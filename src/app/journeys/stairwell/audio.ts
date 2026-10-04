@@ -1,11 +1,7 @@
 import type { JourneyAudioEngine } from '✦/lib/journey'
+import { JourneyAudio, brownNoise, scalar } from '✦/lib/audio'
 import type { CustomUniforms } from '✦/lib/gl'
 
-
-function scalar (state: CustomUniforms | undefined, name: string): number {
-  const value = state?.[name]
-  return typeof value === 'number' ? value : 0
-}
 
 function audioTargets (section: number, rupture: number, finale: number, purgatory: number) {
   let wind = 0.24 + rupture * 0.18
@@ -30,29 +26,20 @@ function audioTargets (section: number, rupture: number, finale: number, purgato
   return { finale, machine, wind }
 }
 
-class StairwellAudioEngine implements JourneyAudioEngine {
-  private ctx:         AudioContext | null = null
-  private muted = true
-  private master:      GainNode | null = null
-  private wind:        GainNode | null = null
-  private machine:     GainNode | null = null
-  private impact:      GainNode | null = null
-  private lowOsc:      OscillatorNode | null = null
-  private motorOsc:    OscillatorNode | null = null
-  private pulseOsc:    OscillatorNode | null = null
-  private impactTimer: ReturnType<typeof setTimeout> | null = null
+class StairwellAudioEngine extends JourneyAudio {
+  protected readonly name = 'Stairwell'
+  protected readonly level = 0.78
+  protected readonly fade = 0.08
 
-  toggleMute (): boolean {
-    if (!this.ctx)
-      this.initialize()
-    this.muted = !this.muted
-    if (this.ctx && this.master)
-      this.master.gain.setTargetAtTime(this.muted ? 0 : 0.78, this.ctx.currentTime, 0.08)
-    return this.muted
-  }
+  private wind:     GainNode | null = null
+  private machine:  GainNode | null = null
+  private impact:   GainNode | null = null
+  private lowOsc:   OscillatorNode | null = null
+  private motorOsc: OscillatorNode | null = null
+  private pulseOsc: OscillatorNode | null = null
 
   update (_time: number, state?: CustomUniforms): void {
-    if (!this.ctx || this.muted)
+    if (!this.ctx || this.isMuted)
       return
 
     const section   = scalar(state, 'uSection')
@@ -82,32 +69,16 @@ class StairwellAudioEngine implements JourneyAudioEngine {
       0.7 + section * 0.18 + finale * 2.2 - purgatory * 0.45, now, 0.4)
   }
 
-  destroy (): void {
-    if (this.impactTimer)
-      clearTimeout(this.impactTimer)
-    void this.ctx?.close()
-    this.ctx = null
-  }
-
-  private initialize (): void {
-    const AudioCtx = window.AudioContext ||
-      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AudioCtx)
-      return
-
-    this.ctx               = new AudioCtx()
-    this.master            = this.ctx.createGain()
-    this.master.gain.value = 0
-    this.master.connect(this.ctx.destination)
-
-    const compressor           = this.ctx.createDynamicsCompressor()
+  protected build (): void {
+    const ctx                  = this.ctx!
+    const compressor           = ctx.createDynamicsCompressor()
     compressor.threshold.value = -18
     compressor.ratio.value     = 5
-    compressor.connect(this.master)
+    compressor.connect(this.main!)
 
     this.wind    = this.createWind(compressor)
-    this.machine = this.ctx.createGain()
-    this.impact  = this.ctx.createGain()
+    this.machine = ctx.createGain()
+    this.impact  = ctx.createGain()
     this.machine.connect(compressor)
     this.impact.connect(compressor)
     this.createTonalBed(compressor)
@@ -155,14 +126,8 @@ class StairwellAudioEngine implements JourneyAudioEngine {
 
   private createWind (destination: AudioNode): GainNode {
     const ctx    = this.ctx!
-    const length = ctx.sampleRate * 2
-    const buffer = ctx.createBuffer(1, length, ctx.sampleRate)
-    const data   = buffer.getChannelData(0)
-    let brown = 0
-    for (let i = 0; i < length; i++) {
-      brown = (brown + 0.025 * (Math.random() * 2 - 1)) / 1.025
-      data[i] = brown * 3.4
-    }
+    // A little leakier and quieter than the other journeys' brown noise.
+    const buffer = brownNoise(ctx, 2, 3.4, 0.025)
 
     const source           = ctx.createBufferSource()
     const filter           = ctx.createBiquadFilter()
@@ -182,7 +147,7 @@ class StairwellAudioEngine implements JourneyAudioEngine {
 
   private scheduleImpact (): void {
     const strike = () => {
-      if (this.ctx && !this.muted && this.impact) {
+      if (this.ctx && !this.isMuted && this.impact) {
         const osc  = this.ctx.createOscillator()
         const gain = this.ctx.createGain()
         const now  = this.ctx.currentTime
@@ -197,7 +162,7 @@ class StairwellAudioEngine implements JourneyAudioEngine {
         osc.start(now)
         osc.stop(now + 1.3)
       }
-      this.impactTimer = setTimeout(strike, 1400 + Math.random() * 3200)
+      this.after(1400 + Math.random() * 3200, strike)
     }
     strike()
   }

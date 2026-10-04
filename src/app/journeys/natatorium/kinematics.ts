@@ -27,6 +27,7 @@
 // you drown and resurface, lap 2 you barely surface, lap 3 you never do.
 
 import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { lapLabel } from '✦/lib/journey'
 import type { CustomUniforms } from '✦/lib/gl'
 // The corner blend weights the two frames' path predictions with smootherstep,
 // whose second derivative also vanishes at the edges, so the blended path is
@@ -713,9 +714,7 @@ export function getNatatoriumState (dist: number): NatatoriumState {
 /** HUD label. Laps count from 1 the way the other journeys count them. */
 export function labelFor (state: NatatoriumState): string {
   const under = state.above < 0.5 ? ' ↓' : ''
-  return state.lap > 0
-    ? `LAP ${state.lap + 1} · ${state.name}${under}`
-    : `${state.name}${under}`
+  return lapLabel(state.lap, `${state.name}${under}`, { bareFirst: true })
 }
 
 /**

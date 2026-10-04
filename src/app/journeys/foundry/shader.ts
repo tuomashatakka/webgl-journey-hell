@@ -51,6 +51,9 @@
 // barrels, whole scanlines tear sideways and the grade rots toward oxblood.
 // Same road, one level deeper, worse every time round.
 
+import { HASH11, HASH21, ROT, SD_BOX, SD_BOX2, fbm2, valueNoise2 } from '✦/lib/glsl'
+
+
 const COMMON = `
   precision highp float;
   uniform vec2 iResolution;
@@ -115,25 +118,11 @@ const COMMON = `
   float gGlow;     // emissive weight
 
   // --- hash / noise --------------------------------------------------------
-  float hash11(float p) { p = fract(p * 0.1031); p *= p + 33.33; return fract(p * (p + p)); }
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
-  float vnoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    float a = hash21(i), b = hash21(i + vec2(1.0, 0.0));
-    float c = hash21(i + vec2(0.0, 1.0)), d = hash21(i + vec2(1.0, 1.0));
-    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
-  }
-  float fbm(vec2 p) {
-    float s = 0.0, amp = 0.5;
-    for (int i = 0; i < FBM_OCTAVES; i++) { s += amp * vnoise(p); p *= 2.03; amp *= 0.5; }
-    return s;
-  }
-  mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+  ${HASH11}
+  ${HASH21}
+  ${valueNoise2('hash21')}
+  ${fbm2({ octaves: 'FBM_OCTAVES', next: 'p *= 2.03;' })}
+  ${ROT}
 
   // Rotate v by quaternion q / by its inverse. Used to bring a world-space
   // sample point into each debris body's local frame.
@@ -141,8 +130,8 @@ const COMMON = `
   vec3 qinv(vec4 q, vec3 v) { return qrot(vec4(-q.xyz, q.w), v); }
 
   // --- SDF primitives ------------------------------------------------------
-  float sdBox(vec3 p, vec3 b) { vec3 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, max(d.y, d.z)), 0.0); }
-  float sdBox2(vec2 p, vec2 b) { vec2 d = abs(p) - b; return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0); }
+  ${SD_BOX}
+  ${SD_BOX2}
   float sdCylY(vec3 p, float r, float h) {
     vec2 d = vec2(length(p.xz) - r, abs(p.y) - h);
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
@@ -1668,11 +1657,7 @@ export const foundryPreviewFrag = `
   uniform float iTime;
   uniform vec2 uPointer;
 
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
+  ${HASH21}
 
   void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;

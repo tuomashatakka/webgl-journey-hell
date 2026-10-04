@@ -1,3 +1,6 @@
+import { SD_BOX, SMIN } from '✦/lib/glsl'
+
+
 export const fsScene = `
     precision highp float;
     uniform vec2 iResolution;
@@ -297,10 +300,7 @@ export const fsScene = `
     #define SMOKE_RED vec3(0.18, 0.03, 0.03)
 
     // Polynomial smooth-min for cross-fading SDF setpieces.
-    float smin(float a, float b, float k) {
-        float h = clamp(0.5 + 0.5 * (b - a) / k, 0.0, 1.0);
-        return mix(b, a, h) - k * h * (1.0 - h);
-    }
+    ${SMIN}
 
     // Domain-warped ridged noise tightened into thin glowing veins.
     float veinField(vec3 p, float t) {
@@ -360,10 +360,7 @@ export const fsScene = `
         return vec3(c * p.x - s * p.y, s * p.x + c * p.y, p.z);
     }
 
-    float sdBox(vec3 p, vec3 b) {
-        vec3 q = abs(p) - b;
-        return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-    }
+    ${SD_BOX}
 
     // Narrow staircase SDF for M.C. Escher gravity labyrinth
     float sdNarrowStaircase(vec3 p) {

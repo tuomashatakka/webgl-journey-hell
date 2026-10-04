@@ -8,6 +8,7 @@
 // same sections in the same order.
 
 import type { JourneyMarks, JourneySimulation } from '✦/lib/journey'
+import { lapLabel } from '✦/lib/journey'
 import {
   advance,
   createFoundryState,
@@ -110,7 +111,7 @@ export function labelFor (state: FoundryState): string {
     event = EVENT_SPAN
 
   const name = event ? `SECTION ${section.id}: ${event}` : section.name
-  return state.loop > 0 ? `LOOP ${state.loop + 1} · ${name}` : name
+  return lapLabel(state.loop, name, { word: 'LOOP', bareFirst: true })
 }
 
 /**

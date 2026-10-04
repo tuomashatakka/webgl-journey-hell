@@ -44,6 +44,7 @@
 
 import { MATERIAL_GLSL, SKY_GLSL, SURFACE_GLSL } from 'Δ/glsl'
 import { PURGATORY_LENGTH, SEAM_HALF, STAIRWELL_SECTIONS } from './kinematics'
+import { ACES, HASH11, HASH12, ROT, SATURATE, SD_BOX } from '✦/lib/glsl'
 
 
 // The act lengths, from the route table: the shader must agree with the
@@ -125,19 +126,12 @@ float gJLB;      // and at the seam after that
 float gCamZ;
 float gTime;
 
-float saturate (float x) { return clamp(x, 0.0, 1.0); }
-float hash11 (float p) { p = fract(p * 0.1031); p *= p + 33.33; p *= p + p; return fract(p); }
-float hash21 (vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
-mat2 rotate2 (float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+${SATURATE}
+${HASH11}
+${HASH12}
+${ROT}
 
-float sdBox (vec3 p, vec3 b) {
-  vec3 q = abs(p) - b;
-  return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-}
+${SD_BOX}
 float sdCylinderX (vec3 p, float h, float r) {
   vec2 q = vec2(length(p.yz) - r, abs(p.x) - h);
   return min(max(q.x, q.y), 0.0) + length(max(q, 0.0));
@@ -152,7 +146,7 @@ float sdCylinderZ (vec3 p, float h, float r) {
 }
 float sdTorusY (vec3 p, vec2 t) { return length(vec2(length(p.xz) - t.x, p.y)) - t.y; }
 float sdTorusX (vec3 p, vec2 t) { return length(vec2(length(p.yz) - t.x, p.x)) - t.y; }
-float brace (vec3 q, float lean, vec3 b) { q.xy *= rotate2(lean); return sdBox(q, b); }
+float brace (vec3 q, float lean, vec3 b) { q.xy *= rot(lean); return sdBox(q, b); }
 float benchedGround (float x, float stepW, float stepH, float slope) {
   float a = abs(x);
   return a * slope - floor(a / stepW) * stepH;
@@ -446,13 +440,13 @@ vec2 turbineCanyon (vec3 p) {
   talus = max(talus, abs(dx) - 17.0);
   float floorRock = p.y - py + 3.6 + sin(p.x * 0.3) * sin(p.z * 0.21) * 0.3;
   vec3 rotorP = vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell);
-  rotorP.yz *= rotate2(animTime() * 0.32 + hash11(floor(p.z / 28.0)) * 6.28);
+  rotorP.yz *= rot(animTime() * 0.32 + hash11(floor(p.z / 28.0)) * 6.28);
   float housing = sdCylinderX(rotorP, 2.0, 3.5);
   float hub = sdCylinderX(rotorP, 2.9, 0.65);
   float blades = sdBox(rotorP, vec3(2.25, 0.16, 3.0));
-  rotorP.yz *= rotate2(2.0944);
+  rotorP.yz *= rot(2.0944);
   blades = min(blades, sdBox(rotorP, vec3(2.25, 0.16, 3.0)));
-  rotorP.yz *= rotate2(2.0944);
+  rotorP.yz *= rot(2.0944);
   blades = min(blades, sdBox(rotorP, vec3(2.25, 0.16, 3.0)));
   float tail = sdBox(vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell + 3.4), vec3(1.1, 1.1, 2.6));
   float penstock = sdCylinderZ(vec3(abs(dx) - 11.0, p.y - py + 1.2, zCell), 13.0, 1.6);
@@ -484,10 +478,10 @@ vec2 conveyorEscarpment (vec3 p) {
   float trestle = sdBox(vec3(abs(dx - 7.0) - 1.7, p.y - py - 2.0, mod(p.z + 5.0, 10.0) - 5.0), vec3(0.2, 2.4, 0.25));
   float roller = sdCylinderX(vec3(dx - 7.0, p.y - py - 4.15, mod(p.z + 0.6, 1.2) - 0.6), 2.0, 0.16);
   vec3 wheelP = vec3(dx - 11.0, p.y - py - 4.0, mod(p.z + 25.0, 50.0) - 25.0);
-  wheelP.yz *= rotate2(animTime() * 0.18);
+  wheelP.yz *= rot(animTime() * 0.18);
   float wheel = sdTorusX(wheelP, vec2(4.2, 0.35));
   vec3 bucketP = wheelP;
-  bucketP.yz *= rotate2(floor(atan(wheelP.z, wheelP.y) * 1.9099 + 0.5) * -0.5236);
+  bucketP.yz *= rot(floor(atan(wheelP.z, wheelP.y) * 1.9099 + 0.5) * -0.5236);
   float bucket = sdBox(vec3(bucketP.x, bucketP.y - 4.2, bucketP.z), vec3(0.7, 0.5, 0.5));
   float boom = sdBox(vec3(dx + 9.0, p.y - py - 7.0, zCell), vec3(0.28, 7.0, 0.28));
   vec3 towerP = vec3(dx - 7.0, p.y - py - 7.0, mod(p.z + 60.0, 120.0) - 60.0);
@@ -543,19 +537,19 @@ vec2 shearHorizon (vec3 p) {
   float dx = p.x - px;
   float angle = (hash11(cell * 4.7) - 0.5) * (0.4 + uRupture * 1.4);
   vec3 shardP = vec3(abs(dx) - 7.0 - hash11(cell) * 7.0, p.y - py - 3.0, zCell);
-  shardP.xy *= rotate2(angle + uFinale * sin(cell) * 1.2);
+  shardP.xy *= rot(angle + uFinale * sin(cell) * 1.2);
   float shard = sdBox(shardP, vec3(2.8 + hash11(cell + 2.0) * 3.0, 0.5, 5.0));
   float sCell = floor((p.z + 19.0) / 38.0);
   vec3 slabP = vec3(dx + (hash11(sCell) - 0.5) * 26.0, p.y - py + 6.0 - hash11(sCell + 4.0) * 16.0, mod(p.z + 19.0, 38.0) - 19.0);
-  slabP.xy *= rotate2((hash11(sCell + 7.0) - 0.5) * 2.2);
+  slabP.xy *= rot((hash11(sCell + 7.0) - 0.5) * 2.2);
   float slab = sdBox(slabP, vec3(7.0, 0.42, 9.0));
   float fCell = floor((p.z + 8.0) / 16.0);
   vec3 fragP = vec3(dx - (hash11(fCell + 2.0) - 0.5) * 30.0, p.y - py - 2.0 - hash11(fCell + 11.0) * 14.0, mod(p.z + 8.0, 16.0) - 8.0);
-  fragP.xy *= rotate2(hash11(fCell + 3.0) * 3.0 + uFinale);
+  fragP.xy *= rot(hash11(fCell + 3.0) * 3.0 + uFinale);
   float tread = sdBox(vec3(fragP.x, mod(fragP.y + 0.35, 0.7) - 0.35, fragP.z), vec3(1.6, 0.09, 0.42));
   float frag = max(tread, sdBox(fragP, vec3(1.7, 2.2, 3.0)));
   vec3 ringP = vec3(dx, p.y - py - 12.0, mod(p.z + 40.0, 80.0) - 40.0);
-  ringP.xy *= rotate2(0.7 + uFinale * 0.8);
+  ringP.xy *= rot(0.7 + uFinale * 0.8);
   float ring = sdTorusX(ringP, vec2(13.0, 0.6));
   float monolith = sdBox(vec3(abs(dx) - 18.0, p.y - py - 7.0, zCell), vec3(2.0, 11.0, 3.5));
   float rift = max(abs(p.y - py + 14.0) - 0.35, abs(dx) - 40.0);
@@ -602,7 +596,7 @@ vec2 debris (vec3 p) {
   float x = pathXJ(p.z) + side * (5.0 + hash11(cell) * 11.0);
   float y = railJ(p.z) + 2.0 + hash11(cell + 9.0) * 10.0;
   vec3 q = p - vec3(x, y, p.z - zCell);
-  q.xy *= rotate2(gTime * 0.07 * side + hash11(cell + 3.0) * 3.0);
+  q.xy *= rot(gTime * 0.07 * side + hash11(cell + 3.0) * 3.0);
   float d = sdBox(q, vec3(0.25 + hash11(cell) * 1.1, 0.18, 1.2 + hash11(cell + 2.0) * 2.5));
   return vec2(d, hash11(cell + 6.0) > 0.92 ? M_EMISSIVE : M_MACHINE);
 }
@@ -652,7 +646,7 @@ vec2 mapScene (vec3 p) {
   // A machine face that has stopped being one: rift light where steel was.
   if (uDecay >= 1.0 && res.y > 2.5 && res.y < 3.5) {
     vec3 pc = p - zoneOffset(zoneOf(p.z));
-    float v = hash21(floor(pc.xz * 0.6) + floor(pc.y * 0.5));
+    float v = hash12(floor(pc.xz * 0.6) + floor(pc.y * 0.5));
     if (v > 0.97 - clamp(uDecay * 0.05, 0.0, 0.16)) res.y = M_EMISSIVE;
   }
 
@@ -741,8 +735,8 @@ float cloudField (vec3 p) {
   for (int i = 0; i < 4; i++) {
     vec3 warp = sin(p.yzx * 1.37 + gTime * vec3(0.19, 0.13, 0.16));
     sum += abs(dot(sin(p + warp * 0.45), cos(p.zxy * 1.11))) * amp;
-    p.xy *= rotate2(0.82 + float(i) * 0.17);
-    p.yz *= rotate2(-0.54 + float(i) * 0.11);
+    p.xy *= rot(0.82 + float(i) * 0.17);
+    p.yz *= rot(-0.54 + float(i) * 0.11);
     p = p * 1.68 + vec3(1.7, -1.1, 0.8);
     amp *= 0.52;
   }
@@ -819,9 +813,7 @@ void materialOf (float m, float a, out float layer, out vec3 tint, out float rou
   }
 }
 
-vec3 aces (vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+${ACES}
 
 void main () {
   vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
@@ -863,7 +855,7 @@ void main () {
   forward = normalize(forward);
   vec3 right = normalize(cross(forward, vec3(0.0, 1.0, 0.0)));
   vec3 up = cross(right, forward);
-  right.xy *= rotate2(uFinale * 0.18 * sin(gTime * 0.43));
+  right.xy *= rot(uFinale * 0.18 * sin(gTime * 0.43));
   up = cross(right, forward);
   vec3 rd = normalize(uv.x * right + uv.y * up + mix(1.28, 0.78, uFinale) *
                       (forward + right * uPointer.x * 0.42 + up * uPointer.y * 0.32));
@@ -1054,11 +1046,7 @@ uniform float uExposure;
 
 out vec4 fragColor;
 
-float hash21 (vec2 p) {
-  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
-  p3 += dot(p3, p3.yzx + 33.33);
-  return fract((p3.x + p3.y) * p3.z);
-}
+${HASH12}
 
 vec3 fetch (vec2 uv, float lod) {
   vec3 c = textureLod(uTexture, uv, lod).rgb;
@@ -1066,9 +1054,7 @@ vec3 fetch (vec2 uv, float lod) {
   return c;
 }
 
-vec3 aces (vec3 x) {
-  return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0);
-}
+${ACES}
 
 void main () {
   float t = mod(iTime, 3600.0);
@@ -1084,11 +1070,11 @@ void main () {
   // liminal's two-tier interference: a hash-gated band displacement, and,
   // independently, an injected red flash.
   float band = floor(warped.y * 38.0 + t * 8.0);
-  float glitch = step(0.92 - uRupture * 0.11 - uFinale * 0.18, hash21(vec2(band, floor(t * 7.0))));
-  warped.x += (hash21(vec2(band, 17.0)) - 0.5) * glitch * (0.012 + uFinale * 0.045) * (1.0 - uPurgatory * 0.85);
+  float glitch = step(0.92 - uRupture * 0.11 - uFinale * 0.18, hash12(vec2(band, floor(t * 7.0))));
+  warped.x += (hash12(vec2(band, 17.0)) - 0.5) * glitch * (0.012 + uFinale * 0.045) * (1.0 - uPurgatory * 0.85);
   float fineBand = floor(warped.y * 28.0 + t * 35.0);
-  if (hash21(vec2(fineBand, 91.0)) < damage * 0.25)
-    warped.x += (hash21(vec2(fineBand, 15.0)) - 0.5) * damage * 0.07;
+  if (hash12(vec2(fineBand, 91.0)) < damage * 0.25)
+    warped.x += (hash12(vec2(fineBand, 15.0)) - 0.5) * damage * 0.07;
 
   float caScale = 0.012 + uRupture * 0.05 + uFinale * 0.08;
   if (uFinale > 0.5) {
@@ -1111,7 +1097,7 @@ void main () {
   }
   color += bloom * 0.6;
 
-  if (hash21(vec2(floor(t * 18.0), 3.0)) < damage * 0.18)
+  if (hash12(vec2(floor(t * 18.0), 3.0)) < damage * 0.18)
     color += vec3(0.18, 0.01, 0.02) * damage * sin(warped.y * 30.0);
 
   color *= uExposure;
@@ -1128,7 +1114,7 @@ void main () {
   }
   color *= 1.0 - smoothstep(0.82, 1.0, uFinale) * 0.22;
   color = pow(color, vec3(1.0 / 2.2));
-  color += (hash21(gl_FragCoord.xy + fract(t) * 71.0) - 0.5) * 0.03;
+  color += (hash12(gl_FragCoord.xy + fract(t) * 71.0) - 0.5) * 0.03;
   fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
 }
 `

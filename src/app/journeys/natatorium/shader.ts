@@ -29,6 +29,9 @@
 //   uLook    (pitch, roll, above, depth)
 //   uWave    (waterY-local, lap, dist, curType)
 
+import { HASH11, HASH21, SD_BOX, SD_ROUND_BOX, SD_SPHERE, valueNoise2 } from '✦/lib/glsl'
+
+
 const COMMON = `
   precision highp float;
 
@@ -70,29 +73,16 @@ const COMMON = `
   // Coving radius on every room corner. Exact outside, conservative inside.
   const float COVE = 0.06;
 
-  float hash11(float p) {
-    p = fract(p * 0.1031);
-    p *= p + 33.33;
-    return fract(p * (p + p));
-  }
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
+  ${HASH11}
+  ${HASH21}
 
-  float sdBox(vec3 p, vec3 b) {
-    vec3 q = abs(p) - b;
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-  }
-  float sdRoundBox(vec3 p, vec3 b, float r) {
-    return sdBox(p, b - r) - r;
-  }
+  ${SD_BOX}
+  ${SD_ROUND_BOX}
 
   // The fittings need more than boxes. All exact — nothing here is a cheap
   // approximation with a Lipschitz constant above 1, which is the failure that
   // would force the step factor down for the whole journey.
-  float sdSphere(vec3 p, float r) { return length(p) - r; }
+  ${SD_SPHERE}
 
   float sdCapsuleX(vec3 p, float h, float r) { p.x -= clamp(p.x, -h, h); return length(p) - r; }
   float sdCapsuleY(vec3 p, float h, float r) { p.y -= clamp(p.y, -h, h); return length(p) - r; }
@@ -802,12 +792,7 @@ const COMMON = `
     return h;
   }
 
-  float vnoise(vec2 p) {
-    vec2 i = floor(p), f = fract(p);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash21(i),                 hash21(i + vec2(1.0, 0.0)), f.x),
-               mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
-  }
+  ${valueNoise2('hash21')}
 
   // What is floating ON it. A dead flat mirror is the most artificial thing a
   // shader can put in a room; a pool nobody has skimmed in years is not a mirror
@@ -1625,11 +1610,7 @@ export const natatoriumPreviewFrag = `
   uniform float iTime;
   uniform vec2 uPointer;
 
-  float hash21(vec2 p) {
-    p = fract(p * vec2(123.34, 345.45));
-    p += dot(p, p + 34.345);
-    return fract(p.x * p.y);
-  }
+  ${HASH21}
 
   // Ridged sum-of-sines sharpened into filaments. The pow() is the whole trick:
   // without it this is noise, with it it is caustics.
