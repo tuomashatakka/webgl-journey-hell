@@ -1,10 +1,19 @@
 # SKYBRIDGES — Scene Specification
 
-A first-person run across a continuous chain of luminous glass skybridges suspended
-above a cloud sea, with skyscrapers rising from the haze in the distance. The path
-is **one unbroken journey** that morphs through **nine themed sections**, linked by
-physically-grounded vertical maneuvers (climbs, jumps, a fall). Implemented as a
-single-pass raymarched WebGL 1.0 / GLSL ES 1.00 fragment shader (`shader.ts`).
+A first-person sprint across glass skybridges strung between glass supertalls,
+a cloud sea a hundred metres below. Everything here is glass and all of it is
+failing: the deck crazes under every footfall and drops away behind you, the
+towers' curtain walls spiderweb and shed their panes as the run goes past, and
+at the end of the second lap something detonates on the horizon. The flash, a
+fireball, a shockfront that crosses the cloud sea and blows the city's glass
+out, and a mushroom cloud that climbs for most of a minute before the signal
+goes.
+
+One unbroken route, nine sections. Each section is its own place — its own
+architecture, its own time of day, its own way of breaking — joined by the
+physical moves between them (a climb, a jump, a train, a fall, a catch).
+Implemented as a single-pass raymarched WebGL 1.0 / GLSL ES 1.00 fragment
+shader (`shader.ts` and `glsl/`).
 
 ---
 
@@ -12,268 +21,302 @@ single-pass raymarched WebGL 1.0 / GLSL ES 1.00 fragment shader (`shader.ts`).
 
 | Quantity | Value | Notes |
 |----------|-------|-------|
-| Units | 1 unit ≈ 1 metre | |
-| Forward speed | `SPEED = 5.0` u/s | paced for longer, distinct sections |
-| Loop length | `LOOP_Z = 540` | nine 60-unit sections; seams crossfade |
-| Section time | `(z - startZ) / SPEED` = 12 s | per section |
-| Gravity | `g ≈ 18 u/s²` | snappy-but-plausible (≈1.8× Earth for game feel) |
-| Eye height | `1.6` u above the deck | first-person |
-| Deck width | `3.2` u (half 1.6) | main path |
+| Units | 1 unit = 1 metre | the blast is authored in km |
+| Forward speed | `SPEED = 5` m/s | `kinematics.ts` exports it; the shader is built from it |
+| Lap | `LOOP_Z = 540` m, 108 s | nine 60 m sections, 12 s each |
+| Eye height | 1.6 m above the deck | first person |
+| Deck | 3.2 m wide (half 1.6) unless a section says otherwise | three panes across |
+| Pane | 1.07 × 1.5 m laminated glass, 0.16 m with its frame | the unit everything cracks in |
+| Cloud sea | cloud tops 120 m below deck level | a lit heightfield, not a backdrop |
+| Gravity | 18 m/s² | ~1.8 g, for game feel |
 
-**Camera model — FIRST PERSON.** The camera *is* the runner. Position
-`ro = (laneSway, camY(z), playerZ())`; `camY` is authored piecewise (Section 4).
-The world is transformed into camera-relative canonical space by `unbend`, and
-camera yaw anticipates the same `turnHeading` function. Scripted glances (look
-back at a collapse, look toward a bursting tower, look down on a jump, snap up on
-a climb) layer on top, plus subtle run-bob and pointer free-look (`uPointer`).
+**Camera model — first person.** The camera is the runner:
+`ro = (lateral sway, pathY(z) + bob, z)`. The world is authored straight along
++z (canonical space) and bent around the camera by `unbend`, which rotates every
+point about the runner by the route's heading change between the runner and the
+point. The camera yaws by the same heading change `LOOKAHEAD` metres ahead, so
+it looks *into* each bend (it used to look away from it).
 
-**World-Z band geometry.** Each section's signature structure lives in a fixed Z
-band of world space. As the camera advances it physically enters each scene; the
-raymarch only reaches `MAX_DIST` ahead, so each frame evaluates just the local
-band — no per-pixel blend of nine geometries.
+**The sky is world-fixed.** Sky, sun, clouds, skyline and the blast are looked
+up in true-world directions: the render frame is rotated by the route's heading
+at the camera. When the route turns, the sun swings across the sky with it.
 
-**Collapse-behind.** Every main-deck segment the runner passes begins to fall on
-a per-segment delay (`segmentFall`): a whole-slab tip far away, a shattering glass
-shard-field up close. Glancing back reveals the deck dropping into the cloud sea.
+**Route turns.** Placed between set pieces, never through one, so a radially
+symmetric structure is never sheared by `unbend`. Net +360° a lap, so the lap
+seam carries no yaw jump.
 
-**Turning route.** Restored from the original six-act shader at `6a6e320`: the
-route uses eased angular corners rather than small lateral offsets. `unbend`
-rotates the SDF world around the runner into canonical space while camera yaw
-anticipates the same heading, so bridge geometry and view turn together.
+| Centre z | Turn | Where |
+|----------|------|-------|
+| 206 | −60° (left) | at the pylon of The Wire |
+| 390 | +120° (right) | inside the Frost Gallery's tube |
+| 450 | +180° (right) | the Night Helix, around its tower |
+| 510 | +120° (right) | across the Crown's plaza |
 
-| Centre z | Turn | Themed act |
-|----------|------|------------|
-| 90 | +90° left | The Convergence |
-| 210 | −60° right | High Span |
-| 390 | +120° left | Frost Gallery |
-| 510 | −150° return | Skylight Release / loop closure |
-
-The fourth turn cancels the original route's cumulative +150° heading before the
-loop seam, preventing a snap from z=540 back to z=0.
-
-**Collapsing skyscrapers.** Two nearby towers per depth cell flank both sides of
-the path. Their upper masses detach into deterministic 2×2×2 debris fields,
-spin outward, and accelerate into the cloud sea while the curtain-wall stumps
-remain. The camera glances toward tower bursts during High Span and Frost Gallery.
+**World-Z bands.** Each section's set piece lives in a fixed band of canonical z,
+guarded by a cheap range test, so a sample only ever pays for the structures
+near it. Generic towers repeat every 36 m along both flanks (two cells and one
+side per sample) and are switched off where a set piece owns the flank.
 
 ---
 
-## 2. Lighting, sky & material
+## 2. Glass, everywhere
 
-### Sky
-- Rich vertical gradient (warm horizon → deep cool zenith), mood-tinted per section.
-- Sun disc + glow in the key direction; broad atmospheric bloom.
-- Drifting FBM cloud bands above the horizon, lit on the sun-facing side.
-- **Cloud sea** below the horizon: a luminous FBM floor the bridges float over.
-- **Distant skyline:** skyscraper silhouettes rising out of the cloud sea on the
-  horizon (parallax heightfield in `skyBg`), plus a few real far SDF towers that
-  the runner passes near junctions.
+### The deck
+Laminated panes in a steel frame: three panes across, 1.5 m long, on two
+longitudinal stringers with a cross beam every 3 m. Frameless glass balustrades
+(1.1 m) with a steel handrail and base shoe. Pane edges read green (iron in the
+glass, Beer–Lambert through the edge).
 
-### Glass (see-through)
-- **Refraction**: `refract(rd, n, 1/IOR)`, IOR ≈ 1.45.
-- **True see-through (heavyEffects ON)**: a short secondary raymarch along the
-  refracted ray hits real scene geometry / sky behind the glass — you see *through*
-  it. (heavyEffects OFF → refracts the environment/sky only.)
-- **Chromatic dispersion** (heavy): 3 refracted taps at IOR ± `gDisp` → rainbow edges.
-- **Fresnel** reflect/refract mix; low diffuse floor so glass stays transparent.
-- **Beer–Lambert** body tint from thickness; **thin-film iridescence** at grazing.
-- **Frost** (Section 7): roughness biases mip LOD → milky, still see-through.
-- Blown specular highlight toward the key light; shatter glints on collapsing shards.
+- **Flat glass does not distort.** The transmitted ray carries on along the view
+  ray; only a crack, a sag or frost bends it.
+- **Reflection:** Fresnel (Schlick, n = 1.5) of the world-fixed sky, so the
+  blast reflects in every pane once it exists.
+- **See-through:** with heavy effects the ray continues through the pane into the
+  scene behind it (stringers, decks below, towers); without, the background is the
+  sky and the cloud sea, which is most of what is under a skybridge anyway.
 
----
+### How the deck breaks
+Every pane the runner crosses cracks at the instant the foot lands on it:
 
-## 3. The Nine Sections
+- a **spiderweb** around the impact point (alternate feet, ±0.2 m): 7–12 jagged
+  radial cracks that reach the frame in about 0.12 s, then concentric chords
+  between neighbouring radials that keep appearing for seconds as the load
+  creeps. A white crush zone at the impact.
+- **Shards tilt.** Each cell between radials and chords gets its own small normal
+  tilt, so the sky reflection breaks into facets — the cue that reads as broken
+  glass rather than lines drawn on glass. The cracked pane sags a few
+  centimetres towards the impact.
+- **Running cracks.** In later sections a longitudinal crack outruns the
+  runner along the deck, stalls, and runs again.
+- **The panes fall.** About a second after cracking, each pane splits along a
+  random line into two pieces that drop and tumble independently; the steel frame
+  hangs on for a few more seconds and then goes as whole 9 m segments. Glance
+  back and the bridge is a skeleton raining glass into the cloud sea.
+- **Pressure.** Damage grows with the run: lap one starts pristine, lap two
+  starts already crazed, and side panes crack sympathetically after the centre
+  pane. Every crack pop under the foot jolts the camera.
 
-> Each entry: **theme · palette/light · geometry/setpiece · transition in→out · glass.**
+### The towers
+Glass supertalls: chamfered boxes with setbacks and crowns, in four glass tints.
+The curtain wall is a mullion grid (1.5 m), floor lines and spandrels every
+3.6 m, and *oil-canning* — every pane a fraction of a degree off true, so
+reflections break up pane by pane the way real curtain walls do. Behind the
+vision glass, **interior mapping**: a room per three panes, ceiling light
+panels, lit or dark, seen through the reflection at normal incidence and
+glowing at night.
 
-### 1 · DAWN APPROACH  (z 0–60)
-- **Theme:** quiet establishing breath; the journey begins.
-- **Light:** low warm sun, soft gold; long shadows; calm.
-- **Geometry:** single straight clear-glass deck with thin rails + posts. Distant
-  skyline glowing on the horizon; crossing bridges hinted far ahead.
-- **Transition:** opens at the loop seam (fades up from Skylight Release). Flat run.
-- **Glass:** clear, polished, low dispersion — the reference "clean glass."
-
-### 2 · THE CONVERGENCE  (z 60–120)
-- **Theme:** a junction where many spans meet.
-- **Light:** cool blue-white, hard key; prismatic.
-- **Geometry:** **crossing bridges** sweep *over and under* the main deck at
-  **30°–135°** yaw, at staggered heights (some pass below through the cloud gap,
-  some arc overhead). 3–4 crossings spaced through the band.
-- **Transition:** flat in; flat out (level unchanged). The route executes its
-  first hard corner, an eased **+90° left turn**, through the crossing network.
-- **Glass:** strong chromatic dispersion — rainbow fringing on every crossing edge.
-
-### 3 · THE ASCENT  (z 120–180)
-- **Theme:** climbing to an upper tier.
-- **Light:** opening high sky, brighter, cool.
-- **Geometry:** the deck **ramps upward** from level L0 (y 0) to L1 (y +10) over the
-  section as an inclined glass stair-ramp; crossing bridges recede below as you rise.
-- **Transition (PHYSICS — climb):** `camY` follows the ramp with an **eased
-  accel→decel** (ease-in-out) — reads as running up a slope, slight forward pitch,
-  breath/bob increases. Ends standing on the upper deck (L1).
-- **Glass:** clear with faint warm refraction of the climbing sky.
-
-### 4 · HIGH SPAN → THE DROP  (z 180–240)
-- **Theme:** a narrow exposed catwalk, then a leap to a lower span.
-- **Light:** teal, thin, high-altitude; vertigo.
-- **Geometry:** narrow high catwalk (L1, y +10), no rails on one side; crossing
-  bridges far below in the cloud sea. The path bends **−60° right** between
-  skyscrapers whose crowns burst into falling debris. Near z≈225 the catwalk
-  **ends at an edge**; a lower deck (L0, y 0) resumes ~10 u below and ahead.
-- **Transition (PHYSICS — jump down):** at the edge the camera leaves the deck with
-  a small forward hop velocity and falls under gravity: `y(τ)=yEdge + v0·τ − ½g·τ²`
-  (τ = time since edge). Camera **pitches down** to watch the approaching deck,
-  lands with a **head-dip** recoil, resumes the run on L0.
-- **Glass:** clear; the drop reveals the cloud sea refracting through the deck edge.
-
-### 5 · THE TRAIN  (z 240–300)
-- **Theme:** the set-piece — board a moving train, ride it, ride it off a cliff.
-- **Light:** dramatic side light, motion-blur energy; sparks.
-- **Geometry & beats:**
-  1. **Leap on (240–256):** the main deck gaps; **below and crossing at an angle**
-     runs a **train** on its own lower bridge, moving fast. The camera **jumps down
-     onto the train roof** (parabola, as Section 4), landing on a flat car.
-  2. **Ride (256–288):** camera rides atop the train cars (boxcar SDF chain) as the
-     train's bridge carries it forward; cars sway; wind/sparks; the main glass world
-     streaks past. Run-bob replaced by **train rock** (low-freq sway).
-  3. **Dead end + free fall (288–300):** the train's bridge **ends abruptly** —
-     sheared off. The train rolls off the edge and **pitches into free fall**;
-     camera Y accelerates downward (`−½g·τ²`, larger g), strong **pitch-down**,
-     the broken bridge stub recedes upward. Section ends mid-plunge.
-- **Glass:** the surrounding skybridges are clear; the train is dark metal+glass
-  (distinct material), reflective.
-
-### 6 · THE CATCH  (z 300–360)
-- **Theme:** salvation — out of the fall onto a rising bridge, climb back to the path.
-- **Light:** warm relief flare, golden.
-- **Geometry:** a glass bridge **sweeps up from below** to meet the falling camera;
-  the fall **decelerates** as the camera arcs onto it (parabola easing to the deck),
-  then the deck **climbs** back from the low fall altitude to L0.
-- **Transition (PHYSICS — catch + climb):** decelerating arc (fall velocity bleeds
-  off as the rising deck matches it) → eased climb (as Section 3) back to L0.
-- **Glass:** warm-tinted, see-through, relief.
-
-### 7 · FROST GALLERY  (z 360–420)
-- **Theme:** a cold gallery of frosted crossings.
-- **Light:** dim cold blue, diffuse; storm shear.
-- **Geometry:** crossing bridges return (over/under, like Section 2) but **rimed /
-  frosted**; storm wind shears the path side-to-side while a **+120° left turn**
-  threads through another field of collapsing towers.
-- **Transition:** flat level; lateral storm sway in and out.
-- **Glass:** **frosted** — high roughness, milky but still see-through (LOD-blurred
-  refraction); rain streaks.
-
-### 8 · AURORA HELIX  (z 420–480)
-- **Theme:** a spiralling iridescent ascent.
-- **Light:** sweeping aurora bands, green-magenta; ethereal.
-- **Geometry:** the path **spirals/banks** (gentle roll + climb); crossing bridges
-  arc as helical ribbons.
-- **Transition (PHYSICS — bank + climb):** gentle continuous roll and rise; camera
-  banks into the spiral.
-- **Glass:** maximal **thin-film iridescence** — glory/oil-slick sheen.
-
-### 9 · SKYLIGHT RELEASE  (z 480–540)
-- **Theme:** release — the structure dissolves to light, loops back to dawn.
-- **Light:** brilliant skylight, blooming, fades toward the warm dawn at the seam.
-- **Geometry:** deck thins and dissolves into bloom; crossings fade out; the cloud
-  sea brightens. A broad **−150° return turn** cancels the accumulated route
-  heading, then crossfades into Section 1 across the loop seam without a yaw snap.
-- **Glass:** transmission → white bloom; near-total see-through.
+The towers crack along the journey. As the runner approaches, a crack front
+spreads across the facade facing the route from a point near bridge height;
+panes inside it spiderweb, a fraction blow out (a hole onto the room, jagged
+remnants at the frame), and the burst sheds glitter. Damage accumulates over
+the laps, and the blast's shockfront finishes the job.
 
 ---
 
-## 4. Camera height profile `camY(z)` (physics summary)
+## 3. Light and sky
 
-Piecewise, continuous at every section join (z in section-local seconds τ = (z−startZ)/SPEED):
+- A Rayleigh-ish sky gradient driven by the sun's elevation, a Mie glow around
+  the sun, horizon haze, a sun disc; clouds above the horizon.
+- **The cloud sea** is a heightfield 120 m below the deck, intersected per ray
+  (so it streams past underneath with real parallax), lit from the sun's side,
+  shadowed in its hollows, fading into haze at distance. Tower bases sink into it.
+- **The skyline** to the horizon: glass towers as a heightfield silhouette, haze
+  graded, catching the sun.
+- **Shadows** are analytic: tower boxes along the sun's projection (a ray–box
+  test per nearby tower), balustrades and handrails as lines projected on the
+  deck, the Crown's space frame as a grid. No shadow march.
+- **ACES** tone map; exposure per section.
+
+---
+
+## 4. The nine sections
+
+> Each entry: **place · light · structure · how it breaks · the move out.**
+
+### 1 · DAWN APPROACH (z 0–60)
+- **Place:** a long straight bridge between two rows of slender glass towers.
+- **Light:** sun 4° up, ahead-left, gold; long tower shadows across the deck; the
+  towers' west faces on fire with reflected dawn.
+- **Structure:** the reference deck — clear panes, glass balustrades, stringers.
+- **Breaks:** the first footfalls crack the centre panes; lap one barely, lap two
+  everywhere.
+- **Out:** flat, straight on into the Interchange.
+
+### 2 · THE INTERCHANGE (z 60–120)
+- **Place:** a round glass hall (r 8 m, z 82–98) where bridges meet: a glass
+  rotunda with steel ribs every 15° and a glass dome, spokes leaving it at deck
+  level at ±70°, one span crossing overhead (+6.5 m) and one below (−7.5 m).
+- **Light:** cool white midday, sun 28°; prismatic dispersion — rainbow
+  caustics on the hall floor, coloured fringes on every rib.
+- **Breaks:** the dome panes crack in sequence over your head as you cross the
+  hall; the overhead span shatters and rains.
+- **Out:** straight through the far door.
+
+### 3 · THE CURTAIN WALL (z 120–180)
+- **Place:** a colossal tower's face, 4.5 m to the left, filling half the view —
+  the run climbs a glass stair-ramp cantilevered from it on steel brackets, 10 m
+  up over the section.
+- **Light:** high and bright (sun 45°, from the right), so the facade is a mirror
+  of the sky and of the bridge on it.
+- **Breaks:** a crack front races across the facade beside you, panes blooming
+  into spiderwebs in sequence and popping out to fall past you.
+- **Out:** onto The Wire at the top of the climb.
+
+### 4 · THE WIRE (z 180–240)
+- **Place:** a narrow (1.4 m) cable-stayed catwalk at +10 m between tower crowns.
+  A steel mast to the left at z 206 rises to +52 m, six stays fan down to the
+  catwalk; a single cable handrail, nothing on the right. The route turns −60°
+  at the mast.
+- **Light:** thin high-altitude teal, sun 62°, deep blue zenith; the cloud sea
+  far below.
+- **Breaks:** each step spiderwebs the catwalk and a running crack outruns you;
+  at z 225 the catwalk snaps. The crowns around shed their glass in sheets.
+- **Out (jump):** off the broken end with a forward hop,
+  `y(τ) = y₀ + v₀τ − ½gτ²`, pitch down to the lower deck at y 0, head-dip on
+  landing.
+
+### 5 · THE GLASS LINE (z 240–300)
+- **Place:** a short landing deck, then a leap onto the roof of a train on a
+  lower viaduct (−6.6 m) that runs *through* a glass tower's atrium station
+  (z 262–284): a tall hall cut through the tower, floor slabs and lit balconies
+  either side, then out the far facade to where the viaduct is sheared off.
+- **Light:** low side light from the right (sun 12°), hard and dramatic; sparks
+  under the cars.
+- **Breaks:** the station's facade shatters outward as the train punches through.
+- **Out (fall):** the train rolls off the sheared end at z 288; free fall at
+  g' = 26, pitch hard down, the stub receding.
+
+### 6 · THE CANYON (z 300–360)
+- **Place:** a slot 14 m wide between two towers (z 282–340): the fall drops
+  between their facades, window grids streaming up past you; a glass bridge
+  sweeps up from below between them and takes you.
+- **Light:** golden, sun 3° ahead-right, bounced between the facades.
+- **Breaks:** the catch cracks the rising deck from end to end; the facades
+  craze around the impact.
+- **Out (catch):** the fall decelerates onto the rising deck (z 300–330), then
+  climbs back to y 0 and runs out of the slot.
+
+### 7 · FROST GALLERY (z 360–420)
+- **Place:** an enclosed tube bridge (r 2.6 m, steel rings every 3 m), its glass
+  frosted and rimed; snow outside; the world beyond only blurred shapes. The tube
+  curves +120°.
+- **Light:** overcast, cold, diffuse; the sun a pale smear.
+- **Breaks:** white fracture lines run through the frost layer, crystalline, as
+  the tube flexes in the wind.
+- **Out:** level, storm sway in and out.
+
+### 8 · NIGHT HELIX (z 420–480)
+- **Place:** night. The route coils +180° around a cylindrical glass tower whose
+  floors are lit; its facade is the wall on your right, the ramp climbs and banks
+  into the curve. Aurora overhead, the moon, the city glowing orange through the
+  cloud sea.
+- **Light:** moonlight and the tower's own windows.
+- **Breaks:** the lit panes beside you crack and the light spills through.
+- **Out:** the ramp crests and levels onto the Crown.
+
+### 9 · THE CROWN (z 480–540)
+- **Place:** the top of the city: a wide glass plaza (12 m) under a steel space
+  frame, the rest of the towers far below. The plaza curves +120°.
+- **Light:** brilliant noon, sun 70°, the space frame's grid shadow on the glass;
+  the light blooms towards white and fades to dawn across the lap seam.
+- **Breaks:** the plaza's panes craze outward from your path in every direction.
+- **Out:** across the seam into the Dawn Approach.
+
+---
+
+## 5. Camera height `pathY(z)`
 
 | z band | behaviour | curve |
 |--------|-----------|-------|
-| 0–120  | level L0 (eye 1.6) | constant |
-| 120–180| climb L0→L1 (+10) | ease-in-out (accel→decel) |
-| 180–225| level L1 (eye +11.6) | constant (narrow catwalk) |
-| 225–240| **jump down** L1→L0 | parabola `y0+v0τ−½gτ²`, head-dip on land |
-| 240–256| **leap onto train** L0→train-roof (≈ −6) | parabola |
-| 256–288| ride train roof | low-freq sway |
-| 288–300| **free fall** | accelerating `−½g'τ²`, pitch-down, g'≈26 |
-| 300–330| **catch** (fall→rising deck) | decelerating arc onto deck |
-| 330–360| climb back to L0 | ease-in-out |
-| 360–420| level, storm lateral sway | constant Y, sin lateral |
-| 420–480| helix bank + gentle climb/descend | sin roll + slow rise |
-| 480–540| level, dissolve | constant, fades to seam |
+| 0–120 | level (eye 1.6) | constant |
+| 120–180 | climb to +10 | ease-in-out |
+| 180–225 | level at +10 (eye 11.6) | constant |
+| 225–240 | jump down to 0 | gravity from the edge |
+| 240–248 | landing deck | constant |
+| 248–260 | leap onto the train roof (eye −2.3) | gravity |
+| 260–288 | ride | low-frequency sway |
+| 288–300 | free fall to −39.5 | `−½g'τ²` |
+| 300–330 | catch, climb back to 0 | decelerating arc |
+| 330–420 | level; storm sway in the tube | constant |
+| 420–480 | helix: rise and fall ±4, bank right | sine |
+| 480–540 | level | constant |
 
-Glance scripting (`pitch`/`yaw` offsets): look-back at the collapse (periodic +
-strong at 288–300), look-down on jumps (225–240, 240–256, 288–300), snap-up on
-climbs (120–180, 330–360), bank into helix (420–480).
-
----
-
-## 5. Performance
-
-- Two `#define` variants: full (route page, env map bound) and preview (hover
-  thumbnail, procedural env fallback, fewer steps/octaves).
-- See-through secondary refraction march gated behind `uHeavy` (heavyEffects).
-- World-Z bands keep per-frame SDF cost local; crossing bridges / train evaluated
-  only inside their bands via cheap Z-range guards.
-- Collapse shard-field only near camera; far bridge segments fall as whole slabs.
-- Tower crowns use a fixed 2×2×2 shatter grid and only two nearby depth cells per
-  side are marched; the distant skyline remains a background heightfield.
-- Strong camera-relative bends use conservative ray steps (`STEP_K ≤ 0.62`) to
-  avoid skipping sheared SDF surfaces.
+**Glances.** Look down at the cracking deck every ~9 s; look back at the
+collapse every ~13 s; look down on every jump and the fall; up on the climbs;
+bank into the helix. During the blast the head turns to the cloud and keeps
+looking, tilting up as it climbs, and every scripted glance stands down.
 
 ---
 
-## 6. Files
+## 6. The end: the detonation
 
-- `src/journeys/skybridges/shader.ts` and `glsl/` — the scene (this spec realised).
-- `src/journeys/skybridges/kinematics.ts` — section names/Z windows (HUD);
-  must mirror the nine bands above.
-- `src/journeys/skybridges/journey.ts` — wires `envMapUrl` (static import of `assets/textures/skybridges-env.png`).
-- `src/packages/gl/shaderQuad.ts`, `src/packages/journey/definition.ts` — uniforms
-  plumbing (`uEnv`, `uEnvLoaded`, `uHeavy`).
+The run laps forever, so like every looping journey it borrows a lap count as
+its ending: `CONFIG.signal.lossLaps.skybridges = 2` (3 min 36 s). The lap-three
+boundary is the detonation, `T0 = 2 × 108 s`, and the shader keys the whole
+event off its own clock, `e = iTime − T0` — the route is a pure function of the
+clock, so this seeks like everything else.
+
+The picture holds at full quality while the event plays:
+`CONFIG.signal.holdSeconds.skybridges = 40` delays the journey's `signalAge`,
+so the signal starts going at e ≈ 48 s and is gone by e ≈ 63 s, with the cloud
+still climbing.
+
+Ground zero is 24 km out at a true-world heading of +24° (ahead-right for the
+first 42 s, when the route still runs straight).
+
+| e (s) | beat |
+|-------|------|
+| 0–1.6 | **the flash** — a total white-out for a quarter second, the whole scene lit from the blast side, then recovering |
+| 0–6 | **the fireball** — white, then yellow, then orange, rising; a condensation ring flickers round it (0.5–3.5 s) |
+| 1–10 | **the shockfront** crosses the cloud sea towards you at 2.4 km/s: a bright ring that lifts and flattens the cloud tops, dust behind it; towers' glass bursts as it reaches them |
+| 10 | **arrival** — one hard shove and a ring-down, every pane on the deck cracks at once, the nearby facades blow out, glass glitters in the air |
+| 3–60 | **the mushroom cloud** — the fireball becomes the cap and keeps rising (to ~11 km), a stem of dust drawn up under it, the cap rolling outward as a torus with an ice-cap pileus above (6–26 s); a base surge spreads across the cloud sea; the cap's underside glows and cools from orange to red to brown |
+| 12– | **the aftermath** — ash falling, the sky browning under the spreading pall, the sun dimmed; the head stays on the cloud |
+| 48–63 | the signal goes |
+
+The cloud is an impostor in the sky function: a 2D signed field (cap with
+toroidal lobes and a concave underside, stem, base surge, pileus, condensation
+ring) in the plane through ground zero, its edges displaced by domain-warped fbm
+that rolls round the cap's lobes and climbs the stem. Lit from the sun with a
+pseudo-normal from the field, self-lit from its hot core, graded into the haze.
+Because it is in the sky, it shows in every reflection.
+
+Things to keep true:
+
+- **The flash is a pulse, not a step.** A step on the intensity multiplies every
+  surface by the flash for the rest of the run.
+- **Author the sky in the scene's exposure,** not the event's: this is a daylit
+  scene whose whites already sit near 1.0.
+- **Never `pow(x, y)` on a signed `x`** — undefined in GLSL, NaN on some GPUs,
+  and a NaN frame is black, indistinguishable from a very dark explosion. Square
+  by multiplication.
 
 ---
 
-## 7. The sun goes off
+## 7. Performance
 
-The run laps forever, so like every other looping journey it borrows a lap count
-as its ending. Unlike the others, the signal loss here is not the point — it is
-the *consequence*. The star this whole run is lit by comes apart, and the picture
-failing is what that does to a camera pointed at it.
+- Two `#define` variants: full (route page, env map bound) and preview (the
+  index's channel: fewer steps and octaves, no env map, no heavy effects).
+- Heavy effects (`uHeavy`) add the see-through continuation march; everything
+  else is the same at every tier.
+- Set pieces sit behind band tests; towers are two cells on one side per sample,
+  with the far flank bounded by its distance.
+- Falling panes are a domain repetition clamped to their cell, so a march never
+  steps over a neighbour.
+- The mushroom cloud is skipped outside its bounding box; the blast costs nothing
+  before `T0`.
+- Shadows are closed-form; there is no secondary march for them.
 
-`CONFIG.signal.lossLaps.skybridges = 2` (≈3½ minutes), not the 5 used by the loop line and natatorium: an event nobody
-reaches is not an event.
+---
 
-The whole sequence is keyed off one number, `uSignalLoss / SIGNAL_PEAK`, so it
-seeks exactly like everything else. Light arrives before the wave, because it
-does.
+## 8. Files
 
-| b | beat |
-| --- | --- |
-| 0.00–0.10 | **the flash** — the disc swells two orders of magnitude, the frame whites out for about a second |
-| 0.10–0.45 | **the shockfront** — a luminous ring crosses the whole sky and out past the horizon behind you; the wave then hits the camera as a single shove and a hard ring-down |
-| 0.45–1.00 | **the aftermath** — a ragged cooling coal with convective cells and filaments, an ember sky, ash in the air |
-
-**It is applied to the key light, not to the sky.** Every pane of glass, rail and
-window on the run takes its highlight and tint from `gKeyCol`, so rewriting that
-in `setupAtmosphere` puts the event on the bridge you are standing on rather than
-only on the backdrop. `gBg`, `gGlassTint`, `gBloom` and `gFogDen` go with it.
-
-Three things this got wrong first, all worth keeping written down:
-
-- **the brightness must be a pulse, not a step.** `lit` is a step — the sun is a
-  fire now and stays one — but a *step* on the intensity multiplies every surface
-  in the scene by six for the rest of the run, and the frame sits blown out with
-  nothing readable in it.
-- **the sky terms are authored in the scene's exposure, not the star's.** This is
-  a daylit run whose whites already sit near 1.0. A shockfront written in the
-  star's own units turns every pane of glass to paper.
-- **never `pow(x, 2.0)` on a signed argument.** GLSL leaves `pow` undefined for
-  negative *x*; these gaussians are all centred mid-sequence, so the argument is
-  negative for the first half of it. It returns NaN, the NaN reaches the colour,
-  and the frame comes out black — which a screenshot cannot tell apart from a
-  very dark exploding sun. Square by multiplication.
-
-`uSignalLoss` reaches the shader through `withJourneyShell`, on **both** the live
-and the `?t=` paths. This journey has no simulation, so it had no uniforms object
-of its own and previously never received the value at all.
+- `shader.ts` — the two variants; `glsl/foundation.ts` (uniforms, timeline,
+  route, path), `glsl/atmosphere.ts` (light per section, sky, cloud sea,
+  skyline), `glsl/blast.ts` (the detonation), `glsl/cracks.ts` (spiderweb and
+  running cracks), `glsl/structures.ts` (deck, set pieces, towers),
+  `glsl/materials.ts` (scene, normals, shading), `glsl/camera.ts` (choreography,
+  main).
+- `kinematics.ts` — speed, lap, section names and bands (HUD and the shader both
+  read them).
+- `journey.ts` — wires the env map.
