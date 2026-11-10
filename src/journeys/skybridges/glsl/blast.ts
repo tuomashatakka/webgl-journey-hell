@@ -72,6 +72,34 @@ export const blastGlsl = /* glsl */`
     return min(smin(cap, stem, R * 0.35), surge);
   }
 
+  /**
+   * The cloud as a reflection sees it: the same field and the same heat, none
+   * of the billow lighting. It is inlined wherever glass reflects the sky, so
+   * it has to be cheap; the view ray gets mushroom() once per pixel instead.
+   */
+  vec4 mushroomLite(vec3 d) {
+    float e = gE;
+    if (e <= 0.0) return vec4(0.0);
+    vec2 to = gGZ - gCamW;
+    vec2 fwd = to / max(length(to), 1.0);
+    float k = dot(d.xz, fwd);
+    if (k < 0.15) return vec4(0.0);
+    vec2 q = vec2(dot(d.xz, vec2(fwd.y, -fwd.x)), d.y) / k * (length(to) * 0.001);
+    q.y += 0.12;
+    float H = capH(e), R = capR(e);
+    float wide = max(R * 1.35, 1.2 + 0.32 * max(e - 4.0, 0.0));
+    if (abs(q.x) > wide + 0.8 || q.y > H + R * 1.3 + 0.6 || q.y < -0.3) return vec4(0.0);
+    float m = smoothstep(2.0, 9.0, e);
+    float n = fbm(q * (1.7 / max(R, 0.6)) + vec2(4.1, 1.7 - e * 0.05));
+    float body = cloudField(q, e, H, R, m) + (n - 0.5) * R * 0.55;
+    vec2 c = q - vec2(0.0, H);
+    float core = length(c / vec2(R, R * mix(1.0, 0.56, m)));
+    vec3 col = vec3(0.42, 0.33, 0.27) * mix(gHorizon, gZenith, 0.5) * (0.5 + 0.6 * n);
+    col += mix(vec3(1.0, 0.30, 0.06), vec3(1.0, 0.86, 0.6), exp(-e / 6.0)) * exp(-core * core * 2.2) * (9.0 * exp(-e / 6.0) + 0.6 * exp(-e / 26.0));
+    col = mix(col, vec3(1.0, 0.92, 0.75) * 14.0, exp(-e / 0.7));
+    return vec4(mix(col, gHorizon * 0.9, 0.2), smoothstep(0.06, -0.20, body));
+  }
+
   /** The cloud for true-world direction d, as colour (not premultiplied) and coverage. */
   vec4 mushroom(vec3 d) {
     float e = gE;
@@ -179,7 +207,8 @@ export const blastGlsl = /* glsl */`
    * as high as the bridges by the time it reaches them. d is a true-world
    * direction from eye height camY; tMax the distance to whatever the ray hit.
    */
-  vec4 shockWall(vec3 d, float camY, float tMax) {
+  vec4 shockWall(vec3 d, float camY, out float tw) {
+    tw = 1e9;
     if (gE <= 0.0) return vec4(0.0);
     float R = FRONT_SPEED * gE;
     vec2 oc = gCamW - gGZ;
@@ -190,7 +219,7 @@ export const blastGlsl = /* glsl */`
     float disc = b * b - a2 * cc;
     if (disc < 0.0 || b > 0.0) return vec4(0.0);
     float t = (-b - sqrt(disc)) / a2;
-    if (t <= 0.0 || t > tMax) return vec4(0.0);
+    if (t <= 0.0) return vec4(0.0);
 
     vec2 pw = gCamW + d.xz * t;
     float y = camY + d.y * t - SEA_Y;                 // metres above the cloud tops
@@ -219,6 +248,7 @@ export const blastGlsl = /* glsl */`
     col = mix(col, vec3(0.95, 0.93, 0.9) * (amb + 0.1), smoothstep(40.0, 0.0, y) * 0.5);
 
     col = mix(col, gHorizon * 0.9, 0.6 * (1.0 - exp(-t / 7000.0)));
+    tw = t;
     return vec4(col, cov);
   }
 

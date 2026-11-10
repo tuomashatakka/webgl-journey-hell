@@ -312,6 +312,14 @@ Things to keep true:
   steps over a neighbour.
 - The mushroom cloud is skipped outside its bounding box; the blast costs nothing
   before `T0`.
+- **The event is built once per pixel.** Phone compilers inline `sky()` into all
+  of its call sites, and a sky carrying the full cloud and the pressure wave in
+  each of them is a program some phones will not link ("link: no info log").
+  `main()` evaluates the full cloud and the wall for the view ray into
+  `gViewCloud` / `gViewWall`; every `sky(…, 1.0)` call looks along the view ray
+  (flat glass bends nothing) and reuses them, and reflections take
+  `mushroomLite`, the same field without the billow lighting. Keep the inlined
+  size of `main` at or below what it was when this was written.
 - Shadows are closed-form; there is no secondary march for them.
 
 ---

@@ -172,16 +172,21 @@ export const atmosphereGlsl = /* glsl */`
    * from the specular term instead of the disc.
    */
   vec3 sky(vec3 rd, float camY, float direct) {
+    // direct is a constant at every call site, so each inlined copy keeps one
+    // branch below: the view's (built once in main, flat glass bends nothing)
+    // or a reflection's cheap cloud.
     vec3 d = toWorld(rd);
     vec3 col = skyBase(d) + (sunDisc(d) + nightSky(d)) * direct + envTex(d) * (1.0 - direct);
     vec4 cl = cloudLayer(d, camY);
     col = mix(col, cl.rgb, cl.a);
     col = skyline(d, col);
     if (d.y < 0.0) col = mix(col, cloudSea(d, camY), smoothstep(0.0, -0.004, d.y));
-    vec4 mc = mushroom(d);
-    col = mix(col, mc.rgb, mc.a);
-    vec4 sw = shockWall(d, camY, 1e5);
-    return mix(col, sw.rgb, sw.a);
+    if (direct > 0.5) {
+      col = mix(col, gViewCloud.rgb, gViewCloud.a);
+      return mix(col, gViewWall.rgb, gViewWall.a);
+    }
+    vec4 mc = mushroomLite(d);
+    return mix(col, mc.rgb, mc.a);
   }
 
   /** The colour distance fades to: the sky low in that direction. */

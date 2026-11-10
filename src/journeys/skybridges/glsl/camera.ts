@@ -73,6 +73,9 @@ export const cameraGlsl = /* glsl */`
     vec3 rgt = r0 * cos(roll) - u0 * sin(roll);
     vec3 upv = u0 * cos(roll) + r0 * sin(roll);
     vec3 rd = normalize(uv.x * rgt + uv.y * upv + 1.25 * fwd);
+    vec3 rdW = toWorld(rd);
+    gViewCloud = mushroom(rdW);
+    gViewWall = shockWall(rdW, ro.y, gWallT);
 
     // --- the march ---
     float t = 0.0, hit = 0.0;
@@ -92,8 +95,7 @@ export const cameraGlsl = /* glsl */`
       col = mix(col, cloud, smoothstep(SEA_Y + 5.0, SEA_Y - 25.0, p.y));
       col = mix(col, fogCol(rd), 1.0 - exp(-t * gHaze));
       // The pressure wave in front of whatever this is: it swallows towers whole.
-      vec4 sw = shockWall(toWorld(rd), ro.y, t);
-      col = mix(col, sw.rgb, sw.a);
+      if (gWallT < t) col = mix(col, gViewWall.rgb, gViewWall.a);
     } else {
       col = sky(rd, ro.y, 1.0);
       t = MAX_DIST * 4.0;

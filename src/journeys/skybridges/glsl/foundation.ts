@@ -63,6 +63,11 @@ export function foundationGlsl ({ speed, loopZ, blastT }: SkybridgesTimeline): s
   float gTm;       // a wrapped clock for anything that only animates
   vec2 gCamW;      // the runner's true-world position (xz, metres)
   vec2 gGZ;        // ground zero (xz, metres)
+  // The event's layers for the view ray, evaluated once per pixel. Phone
+  // compilers inline sky() into every call site; the full cloud and the wall
+  // live here so they are built once, not seven times.
+  vec4 gViewCloud, gViewWall;
+  float gWallT;    // how far along the view ray the wall stands (1e9: not in it)
   float gW1, gW2, gW3, gW4, gW5, gW6, gW7, gW8, gW9;   // section weights, sum 1
 
   // Light, blended across sections (atmosphere.ts). *W are true-world.
