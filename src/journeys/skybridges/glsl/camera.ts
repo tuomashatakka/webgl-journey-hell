@@ -75,7 +75,7 @@ export const cameraGlsl = /* glsl */`
     vec3 rd = normalize(uv.x * rgt + uv.y * upv + 1.25 * fwd);
     vec3 rdW = toWorld(rd);
     gViewCloud = mushroom(rdW);
-    gViewWall = shockWall(rdW, ro.y, gWallT);
+    gViewWall = shockWall(rdW, ro.y);
 
     // --- the march ---
     float t = 0.0, hit = 0.0;

@@ -8,7 +8,9 @@
 // landing registry, so they are written in exactly one place too.
 
 import type { AnyGl } from '@wjh/gl/context'
+import { noteGlFailure, takeGlFailure } from '@wjh/gl/program'
 import { createShaderQuad } from '@wjh/gl/shaderQuad'
+import type { ShaderQuad } from '@wjh/gl/shaderQuad'
 import { detectDevice } from '@wjh/quality/device'
 import type { JourneyAudioEngine, JourneyMarks, JourneyRenderer, JourneySimulation } from './types'
 
@@ -33,12 +35,13 @@ export interface ShaderRendererOptions {
   envMapUrl?: string;
 
   /**
-   * A lighter build of the same shader. A phone gets it outright (a phone
-   * compiler handed a program too big for it can take seconds to say no, or
-   * fail to link with no log at all); anything else tries the full build and
-   * falls back to this one if its compiler will not take it.
+   * Lighter builds of the same shader, heaviest first. A phone starts at the
+   * first of them (a phone compiler handed a program too big for it can take
+   * seconds to say no, or fail to link with no log at all); anything else
+   * starts at the full build. Each is tried until one links; if none does, the
+   * failure screen names every build and the GPU.
    */
-  lite?: string;
+  lite?: readonly string[];
 }
 
 export interface JourneyDefinition {
@@ -81,11 +84,31 @@ export function shaderRenderer (fragment: string, options: ShaderRendererOptions
   return {
     context: 'webgl',
     create:  gl => {
-      const quad = { envUrl: options.envMapUrl }
-      const full = options.lite && detectDevice().mobile ? null : createShaderQuad(gl, fragment, quad)
-      return full ?? (options.lite ? createShaderQuad(gl, options.lite, quad) : null)
+      const lite = options.lite ?? []
+      if (lite.length === 0)
+        return createShaderQuad(gl, fragment, { envUrl: options.envMapUrl })
+      const builds = detectDevice().mobile ? lite : [ fragment, ...lite ]
+      return firstThatLinks(gl, builds, options.envMapUrl)
     },
   }
+}
+
+function firstThatLinks (gl: AnyGl, builds: readonly string[], envUrl?: string): ShaderQuad | null {
+  const failures: string[] = []
+  for (const [ i, source ] of builds.entries()) {
+    const quad = createShaderQuad(gl, source, { envUrl, tag: `build ${i + 1}/${builds.length}` })
+    if (quad)
+      return quad
+    failures.push(takeGlFailure() ?? `build ${i + 1}/${builds.length} failed`)
+  }
+  noteGlFailure(`${failures.join(' · ')} · ${gpuName(gl)}`)
+  return null
+}
+
+/** What the GPU calls itself, where the browser will say. */
+function gpuName (gl: AnyGl): string {
+  const ext = gl.getExtension('WEBGL_debug_renderer_info')
+  return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER))
 }
 
 /**

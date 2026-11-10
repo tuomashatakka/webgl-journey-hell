@@ -205,10 +205,10 @@ export const blastGlsl = /* glsl */`
    * the cloud sea on the shockfront, with a white condensation crest riding it
    * while the air is still wet. It stands tall near ground zero and is about
    * as high as the bridges by the time it reaches them. d is a true-world
-   * direction from eye height camY; tMax the distance to whatever the ray hit.
+   * direction from eye height camY; sets gWallT to how far away it stands.
    */
-  vec4 shockWall(vec3 d, float camY, out float tw) {
-    tw = 1e9;
+  vec4 shockWall(vec3 d, float camY) {
+    gWallT = 1e9;
     if (gE <= 0.0) return vec4(0.0);
     float R = FRONT_SPEED * gE;
     vec2 oc = gCamW - gGZ;
@@ -248,7 +248,7 @@ export const blastGlsl = /* glsl */`
     col = mix(col, vec3(0.95, 0.93, 0.9) * (amb + 0.1), smoothstep(40.0, 0.0, y) * 0.5);
 
     col = mix(col, gHorizon * 0.9, 0.6 * (1.0 - exp(-t / 7000.0)));
-    tw = t;
+    gWallT = t;
     return vec4(col, cov);
   }
 

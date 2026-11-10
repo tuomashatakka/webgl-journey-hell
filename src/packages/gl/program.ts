@@ -66,6 +66,14 @@ export function takeGlFailure (): string | null {
   return failure
 }
 
+/**
+ * Replace the pending failure with a fuller account, for a caller that tried
+ * several programs and wants the screen to say what happened to all of them.
+ */
+export function noteGlFailure (detail: string): void {
+  lastFailure = detail
+}
+
 /** The first line that says anything, trimmed for a status line. */
 function gist (log: string): string {
   const line = log.split('\n').map(l => l.trim())

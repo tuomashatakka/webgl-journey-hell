@@ -24,6 +24,9 @@ export interface ShaderQuadOptions {
 
   /** Optional equirectangular environment map URL, bound to `uEnv` on unit 0. */
   envUrl?: string;
+
+  /** Names the program in logs and on the failure screen. */
+  tag?: string;
 }
 
 export interface ShaderQuad {
@@ -40,7 +43,7 @@ export interface ShaderQuad {
  * compile or link; callers fall back to a static poster.
  */
 export function createShaderQuad (gl: AnyGl, fragmentSource: string, options: ShaderQuadOptions = {}): ShaderQuad | null {
-  const prog = createGlProgram(gl, QUAD_VS_100, fragmentSource, 'shaderQuad')
+  const prog = createGlProgram(gl, QUAD_VS_100, fragmentSource, options.tag ?? 'shaderQuad')
   if (!prog)
     return null
 

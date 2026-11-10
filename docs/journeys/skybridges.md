@@ -302,11 +302,12 @@ Things to keep true:
 
 ## 7. Performance
 
-- Three `#define` variants: full (route page, env map bound), lite (the same
-  page on a phone, or wherever the full build will not compile or link: 64
-  steps, two octaves, no blast crazing — `shaderRenderer`'s `lite` option picks
-  it) and preview (the index's channel: fewer steps and octaves, no env map, no
-  heavy effects).
+- Four `#define` variants: full (route page, env map bound), lite (64 steps,
+  two octaves, no blast crazing), min (the index channel's budgets with the
+  ending kept) and preview (the index's channel: fewer steps and octaves, no
+  env map, no heavy effects, no ending). The page tries them in that order
+  until one links — a phone starts at lite — and if none does, the failure
+  screen lists every build's error and the GPU's name.
 - Heavy effects (`uHeavy`) add the see-through continuation march; everything
   else is the same at every tier.
 - Set pieces sit behind band tests; towers are two cells on one side per sample,

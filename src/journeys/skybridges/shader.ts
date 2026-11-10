@@ -45,6 +45,18 @@ export const skybridgesLiteFrag = `
 #define LITE
 ${COMMON}`
 
+// A phone's last resort with the ending: the index channel's budgets, the
+// detonation kept.
+export const skybridgesMinFrag = `
+#define RM_STEPS 52
+#define MAX_DIST 120.0
+#define STEP_K 0.85
+#define FBM_OCTAVES 2
+#define SEETHRU_STEPS 8
+#define SEETHRU_DIST 20.0
+#define LITE
+${COMMON}`
+
 // The index's channel: fewer steps, coarser noise, no env map, and no ending —
 // the channel loops on the run itself.
 export const skybridgesPreviewFrag = `
