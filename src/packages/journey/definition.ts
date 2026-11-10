@@ -35,13 +35,17 @@ export interface ShaderRendererOptions {
   envMapUrl?: string;
 
   /**
-   * Lighter builds of the same shader, heaviest first. A phone starts at the
-   * first of them (a phone compiler handed a program too big for it can take
-   * seconds to say no, or fail to link with no log at all); anything else
-   * starts at the full build. Each is tried until one links; if none does, the
-   * failure screen names every build and the GPU.
+   * Lighter builds of the same shader, heaviest first. Each is tried until one
+   * links; if none does, the failure screen names every build and the GPU.
    */
   lite?: readonly string[];
+
+  /**
+   * Where in `lite` a phone starts. A phone compiler handed a big program can
+   * take long enough that the browser resets the GPU, and then nothing after
+   * it links either; so a phone starts where it is known to be safe.
+   */
+  mobileFrom?: number;
 }
 
 export interface JourneyDefinition {
@@ -87,27 +91,61 @@ export function shaderRenderer (fragment: string, options: ShaderRendererOptions
       const lite = options.lite ?? []
       if (lite.length === 0)
         return createShaderQuad(gl, fragment, { envUrl: options.envMapUrl })
-      const builds = detectDevice().mobile ? lite : [ fragment, ...lite ]
+      const builds = detectDevice().mobile ? lite.slice(options.mobileFrom ?? 0) : [ fragment, ...lite ]
       return firstThatLinks(gl, builds, options.envMapUrl)
     },
   }
 }
 
+/**
+ * The first build that links, from the first one not already known to take
+ * this device's GPU down. A build that fails with the context lost has done
+ * exactly that: nothing more can link until the context comes back, and when
+ * it does (the engine rebuilds on restore) the chain must start past it, or it
+ * loses the context again, forever. Remembered across reloads too, because a
+ * browser that loses a context to the same page twice may block WebGL on it.
+ */
 function firstThatLinks (gl: AnyGl, builds: readonly string[], envUrl?: string): ShaderQuad | null {
+  const key      = `wjh.gl.from.${builds.map(b => b.length).join('.')}`
   const failures: string[] = []
-  for (const [ i, source ] of builds.entries()) {
-    const quad = createShaderQuad(gl, source, { envUrl, tag: `build ${i + 1}/${builds.length}` })
+  for (let i = recall(key); i < builds.length; i++) {
+    const quad = createShaderQuad(gl, builds[i], { envUrl, tag: `build ${i + 1}/${builds.length}` })
     if (quad)
       return quad
     failures.push(takeGlFailure() ?? `build ${i + 1}/${builds.length} failed`)
+    if (gl.isContextLost()) {
+      remember(key, i + 1)
+      failures.push('context lost')
+      break
+    }
   }
   noteGlFailure(`${failures.join(' · ')} · ${gpuName(gl)}`)
   return null
 }
 
+function recall (key: string): number {
+  try {
+    return Number(localStorage.getItem(key)) || 0
+  }
+  catch {
+    return 0
+  }
+}
+
+function remember (key: string, from: number): void {
+  try {
+    localStorage.setItem(key, String(from))
+  }
+  catch {
+    // private mode: the next reload will find out again
+  }
+}
+
 /** What the GPU calls itself, where the browser will say. */
 function gpuName (gl: AnyGl): string {
   const ext = gl.getExtension('WEBGL_debug_renderer_info')
+  if (gl.isContextLost())
+    return 'GPU unknown (context lost)'
   return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER))
 }
 

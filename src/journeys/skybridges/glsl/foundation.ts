@@ -20,6 +20,11 @@ const f = (n: number) => n.toFixed(3)
 export function foundationGlsl ({ speed, loopZ, blastT }: SkybridgesTimeline): string {
   return /* glsl */`
   precision highp float;
+  // A channel with no ending carries none of the ending's code either.
+  #ifdef NO_BLAST
+  #define PLAIN_BLAST
+  #define PLAIN_GLASS
+  #endif
   uniform vec2 iResolution;
   uniform float iTime;
   uniform vec2 uPointer;

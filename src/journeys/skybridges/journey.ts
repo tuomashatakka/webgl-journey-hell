@@ -4,12 +4,12 @@ import { staticUrl } from '@wjh/web/assetUrl'
 import skybridgesEnv from '../../../assets/textures/skybridges-env.png'
 import { defineJourney, shaderRenderer } from '@wjh/journey/definition'
 import { getSkybridgesMarks, getSkybridgesSectionName } from './kinematics'
-import { skybridgesFrag, skybridgesLiteFrag, skybridgesMinFrag, skybridgesPreviewFrag } from './shader'
+import { skybridgesFrag, skybridgesLighter, skybridgesPreviewFrag } from './shader'
 
 
 const skybridges = defineJourney({
   slug:          'skybridges',
-  renderer:      shaderRenderer(skybridgesFrag, { envMapUrl: staticUrl(skybridgesEnv), lite: [ skybridgesLiteFrag, skybridgesMinFrag, skybridgesPreviewFrag ] }),
+  renderer:      shaderRenderer(skybridgesFrag, { envMapUrl: staticUrl(skybridgesEnv), lite: [ ...skybridgesLighter, skybridgesPreviewFrag ], mobileFrom: 1 }),
   marksAt:       getSkybridgesMarks,
   sectionNameAt: getSkybridgesSectionName,
 })

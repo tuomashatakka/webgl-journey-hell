@@ -302,12 +302,17 @@ Things to keep true:
 
 ## 7. Performance
 
-- Four `#define` variants: full (route page, env map bound), lite (64 steps,
-  two octaves, no blast crazing), min (the index channel's budgets with the
-  ending kept) and preview (the index's channel: fewer steps and octaves, no
-  env map, no heavy effects, no ending). The page tries them in that order
-  until one links — a phone starts at lite — and if none does, the failure
-  screen lists every build's error and the GPU's name.
+- The full build (route page, env map bound), then lighter builds tried in
+  order until one links (`skybridgesLighter` in `shader.ts`): lite (64 steps,
+  two octaves, no blast crazing), min (the index channel's budgets), glass (no
+  crazing or burning floors: `PLAIN_GLASS`), plain (no pressure-wave wall,
+  glare or afterimage, the cloud as reflections see it: `PLAIN_BLAST`), and as
+  a last resort the preview — the index's channel, no ending, `NO_BLAST`
+  implying both plain switches so it carries none of the ending's code. A phone
+  starts at min. A build that fails with the context lost stops the chain and
+  is skipped from then on (remembered across reloads), and if nothing links the
+  failure screen lists every build's error and the GPU's name. An Adreno 722
+  would not link even the preview while it still compiled the ending's code.
 - Heavy effects (`uHeavy`) add the see-through continuation march; everything
   else is the same at every tier.
 - Set pieces sit behind band tests; towers are two cells on one side per sample,

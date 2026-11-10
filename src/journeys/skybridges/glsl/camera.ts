@@ -74,8 +74,14 @@ export const cameraGlsl = /* glsl */`
     vec3 upv = u0 * cos(roll) + r0 * sin(roll);
     vec3 rd = normalize(uv.x * rgt + uv.y * upv + 1.25 * fwd);
     vec3 rdW = toWorld(rd);
+    #ifdef PLAIN_BLAST
+    gViewCloud = mushroomLite(rdW);
+    gViewWall = vec4(0.0);
+    gWallT = 1e9;
+    #else
     gViewCloud = mushroom(rdW);
     gViewWall = shockWall(rdW, ro.y);
+    #endif
 
     // --- the march ---
     float t = 0.0, hit = 0.0;
@@ -129,6 +135,7 @@ export const cameraGlsl = /* glsl */`
     // whether or not a tower is in the way, and the burn it left where it was
     // the instant it went off: a dark blot fixed on the retina that the head
     // turns away from but cannot leave behind.
+    #ifndef PLAIN_BLAST
     if (gE > 0.0) {
       float fz = dot(gBlastDir, fwd);
       vec3 fire = mix(vec3(1.0, 0.92, 0.8), vec3(1.0, 0.5, 0.2), smoothstep(0.5, 6.0, gE));
@@ -141,10 +148,12 @@ export const cameraGlsl = /* glsl */`
         col += fire * gl * (halo * 0.5 + streak * 0.8);
       }
     }
+    #endif
 
     // --- the picture ---
     col = aces(col * gExposure * 0.8 * (1.0 + shove * 2.0));
     col = pow(col, vec3(1.0 / 2.2));
+    #ifndef PLAIN_BLAST
     if (gE > 0.0) {
       // The eyes coming back: no colour at first, and the afterimage.
       float blind = exp(-gE / 3.0);
@@ -155,6 +164,7 @@ export const cameraGlsl = /* glsl */`
       float burn = exp(-dot(db, db) / 0.003) * smoothstep(0.25, 1.0, gE) * exp(-gE / 9.0) * step(abs(a0), 0.9);
       col *= 1.0 - burn * vec3(0.55, 0.75, 0.45);
     }
+    #endif
     col = mix(col, vec3(1.0), blastFlash(gE) * 0.97);
     // The crown dissolves into light across the seam (from the second lap: the first starts in the dawn).
     float seam = smoothstep(522.0, 540.0, z) + (1.0 - smoothstep(0.0, 9.0, z)) * step(LOOP_Z, gZ);

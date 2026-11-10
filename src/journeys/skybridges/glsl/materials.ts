@@ -253,6 +253,9 @@ export const materialsGlsl = /* glsl */`
     vec4 cr = vec4(0.0);
     if (fate.x > 0.0 && near > 0.0) cr = spiderweb((f - vec2(0.3 + 0.4 * h2, 0.45 + 0.4 * h1)) * vec2(1.5, 3.6), fate.x, h1, px, 1.4) * near;
     // The shockfront: every pane crazed at once, no star at all.
+    #ifdef PLAIN_GLASS
+    float crazed = 0.0;
+    #else
     float hitAge = gE - eHit;
     float crazed = hitAge > 0.0 ? smoothstep(0.0, 0.06, hitAge) : 0.0;
     if (crazed > 0.0) {
@@ -263,6 +266,7 @@ export const materialsGlsl = /* glsl */`
       #endif
       cr = vec4(max(cr.x * 0.4, cz.x * crazed), cr.y, cz.y, 1.0);
     }
+    #endif
 
     // Oil-canning: every pane a fraction of a degree off true, and the shards more.
     vec3 Tr = renderDir(T, pc.z);
@@ -276,6 +280,7 @@ export const materialsGlsl = /* glsl */`
 
     // The heat pulse sets the rooms facing it alight: curtains and desks first,
     // whole floors a few seconds later, smoke banking under the ceilings.
+    #ifndef PLAIN_GLASS
     if (gE > 0.6) {
       vec2 rm = floor(uv / vec2(4.5, 3.6));
       float hr = hash21(rm + seed * 7.0);
@@ -289,6 +294,7 @@ export const materialsGlsl = /* glsl */`
         room *= 1.0 - 0.7 * burn * smoothstep(0.55, 0.9, vy);   // the smoke under the slab
       }
     }
+    #endif
 
     vec3 col;
     if (spandrel > 0.5) col = mix(tint * 0.06 * (ambient(n) + direct(n, sun)), refl, F);

@@ -51,7 +51,7 @@ export const cracksGlsl = /* glsl */`
     return vec4(max(radial, ring * 0.85), crush, hash21(vec2(k + seed * 7.0, band)), step(r, rmax));
   }
 
-  #ifndef LITE
+  #if !defined(LITE) && !defined(PLAIN_GLASS)
   /**
    * Blast crazing. A pane loaded all at once by the shockfront does not star
    * from one impact, it breaks everywhere: a dense mesh of small cells that

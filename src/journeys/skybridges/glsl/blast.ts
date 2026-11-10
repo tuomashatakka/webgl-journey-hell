@@ -100,6 +100,7 @@ export const blastGlsl = /* glsl */`
     return vec4(mix(col, gHorizon * 0.9, 0.2), smoothstep(0.06, -0.20, body));
   }
 
+  #ifndef PLAIN_BLAST
   /** The cloud for true-world direction d, as colour (not premultiplied) and coverage. */
   vec4 mushroom(vec3 d) {
     float e = gE;
@@ -199,7 +200,9 @@ export const blastGlsl = /* glsl */`
     col = mix(col, gHorizon * 0.9, 0.2);
     return vec4(col, a);
   }
+  #endif
 
+  #ifndef PLAIN_BLAST
   /**
    * The pressure wave, seen: a wall of dust, spray and torn cloud rolling over
    * the cloud sea on the shockfront, with a white condensation crest riding it
@@ -251,6 +254,7 @@ export const blastGlsl = /* glsl */`
     gWallT = t;
     return vec4(col, cov);
   }
+  #endif
 
   /** The shockfront crossing the cloud sea, at true-world point p (metres). */
   vec3 seaShock(vec2 p, vec3 col, float detail) {
