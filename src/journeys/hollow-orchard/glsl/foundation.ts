@@ -26,7 +26,7 @@ export const foundationGlsl = `
 
   // Written by the SDF at the nearest hit, read by shading. Saved off before any
   // extra map() taps (normals, AO, SSS) clobber them.
-  float gMat;   // 0 flesh · 1 bark/bone · 2 root/soil · 3 wet fruit · 4 spore crust
+  float gMat;   // 0 flesh · 1 bark/bone · 2 soil (2.4 root) · 3 wet fruit · 4 spore crust
   float gWet;
   float gGlow;
 

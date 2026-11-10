@@ -97,26 +97,81 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     return d;
   }
 
-  // 4 · THE ROOT LABYRINTH — a carved corridor, braided shut.
-  float sdRootLabyrinth(vec3 p) {
-    // Interior of a box: negating keeps the march bounded no matter how the
-    // roots below chew into it.
-    vec2 c     = vec2(sin(p.z * 0.06) * 1.6, 0.0);
-    float room = -sdBox(p - vec3(c.x, 1.7, 0.0), vec3(2.4, 1.9, 1e4));
-    float d  = room;
-    gMat = 2.0; gWet = 0.35; gGlow = 0.0;
-
-    // Braided roots fused into the walls.
-    for (int i = 0; i < 4; i++) {
-      float fi = float(i);
-      float ph = fi * 1.7 + p.z * (0.18 + fi * 0.04);
-      vec3 a   = vec3(c.x + cos(ph) * 2.1, 1.7 + sin(ph) * 1.5, p.z - 3.0);
-      vec3 b   = vec3(c.x + cos(ph + 0.9) * 2.1, 1.7 + sin(ph + 0.9) * 1.5, p.z + 3.0);
-      float rt = sdCapsule(p, a, b, 0.20 + 0.08 * sin(p.z * 0.9 + fi));
-      d = smin(d, rt, 0.35);
+  // 4 · THE ROOT LABYRINTH — a passage dug through earth, braided shut.
+  //
+  // Three strands twisting about one axis that runs down z: the braid that
+  // roots make when they follow the same crack. The 2D distance to a strand is
+  // an overestimate on a helix, so it is divided by the helix's slope; far from
+  // the bundle the bound alone is returned, which keeps nine strands cheap.
+  float sdBraid(vec2 xy, float z, vec2 axis, float r, float k, float rad, float ph) {
+    vec2  o     = xy - axis;
+    float bound = length(o) - r - rad * 1.3;
+    if (bound > 0.35) return bound;
+    float d = 1e4;
+    for (int i = 0; i < 3; i++) {
+      float a = z * k + ph + float(i) * 2.0944;
+      d = min(d, length(o - r * vec2(cos(a), sin(a))) - rad * (1.0 + 0.3 * sin(z * 0.7 + a)));
     }
-    d -= rotDisp(p * 1.1, 0.14) * (0.5 + uWalk.w * 0.5);
-    if (d < room - 0.01) { gMat = 2.0; gWet = 0.5; gGlow = 0.1; }
+    return d / sqrt(1.0 + r * r * k * k);
+  }
+
+  float sdRootLabyrinth(vec3 p) {
+    float lod = lodAt(p);
+
+    // The passage is centred on the line actually walked. It used to wander on
+    // its own sine, half a sway out of phase with the camera, which put the eye
+    // inside the earth for most of the section and showed nothing but the bore
+    // of the aisle with the roots wound round it.
+    vec3 q = vec3(p.x - trackX(p.z), p.y, p.z);
+
+    // A low dug arch that pinches and swells, with a trodden floor at y = 0.
+    float w    = 1.75 + 0.35 * sin(p.z * 0.19) + 0.22 * sin(p.z * 0.071 + 1.3);
+    float h    = 2.55 + 0.30 * sin(p.z * 0.13 + 0.4);
+    vec2  e    = abs(vec2(q.x, q.y - 0.5 * h + 0.4)) - vec2(w - 0.8, 0.5 * h + 0.4 - 0.8);
+    float arch = 0.8 - length(max(e, 0.0)) - min(max(e.x, e.y), 0.0);
+    if (lod > 0.02)
+      arch += (fbm3(p * vec3(0.9, 1.6, 0.9)) - 0.45) * 0.5 * lod
+            - rotDisp(p * 1.1, 0.14) * (0.3 + 0.5 * uWalk.w) * lod;
+    float floorD = q.y;
+    if (lod > 0.02)
+      floorD += fbm3(vec3(p.x, 0.0, p.z) * 0.8) * 0.12 * lod;
+    float room = min(arch, floorD);
+
+    // Braids along both shoulders and down the crown of the ceiling.
+    float roots = sdBraid(q.xy, p.z, vec2(-w + 0.3, h - 0.6), 0.16, 0.9, 0.075, 0.0);
+    roots = min(roots, sdBraid(q.xy, p.z, vec2(w - 0.3, h - 0.7), 0.14, 1.1, 0.065, 1.7));
+    roots = min(roots, sdBraid(q.xy, p.z, vec2(0.35 * sin(p.z * 0.09), h - 0.1), 0.22, 0.7, 0.09, 3.1));
+
+    // Roots thrown across the vault from shoulder to shoulder, sagging, one
+    // every few metres. Kept above the aisle: lower, it cut them into stubs that
+    // floated in the passage like sausages.
+    float cz  = floor(p.z / 7.5);
+    float rr  = hash11(cz * 7.13 + 2.0);
+    float ux  = clamp(q.x / w, -1.0, 1.0);
+    float y0  = h - 0.25 - 0.3 * rr - 0.25 * (1.0 - ux * ux);
+    vec2  rc  = vec2(q.y - y0, p.z - (cz + 0.5) * 7.5 - q.x * (rr - 0.5) * 0.8);
+    float spn = (length(rc) - (0.09 + 0.06 * rr) * (1.0 + 0.6 * ux * ux)) / 1.4;
+    roots = min(roots, spn);
+
+    // Rootlets hanging from the ceiling, retracting with distance so they fade
+    // rather than pop at the edge of the detail range.
+    if (lod > 0.02 && q.y > h - 2.0) {
+      vec2  hc  = floor(vec2(q.x / 0.55, p.z / 0.6));
+      vec2  hl  = vec2(mod(q.x, 0.55) - 0.275, mod(p.z, 0.6) - 0.3);
+      float hr  = hash21(hc + 31.0);
+      float len = mix(0.25, 1.5, hr * hr) * lod;
+      float top = h + 0.1;
+      vec2  off = (vec2(hash21(hc + 3.0), hash21(hc + 9.0)) - 0.5) * 0.2
+                + vec2(sin(q.y * 3.0 + hr * 6.0), 0.0) * 0.03;
+      float yy  = clamp((top - q.y) / max(len, 0.01), 0.0, 1.0);
+      float rl  = length(hl - off) - mix(0.022, 0.005, yy);
+      rl = max(rl, top - len - q.y);
+      if (hr > 0.35) roots = min(roots, rl);
+    }
+
+    float d = smin(room, roots, 0.18);
+    gMat = 2.0; gWet = 0.35; gGlow = 0.0;
+    if (roots < room) { gMat = 2.4; gWet = 0.55; gGlow = 0.1; }
     return d;
   }
 
