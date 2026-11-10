@@ -82,6 +82,120 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
     return c * (1.0 - isCeil * 0.12);
   }
 
+  /** Rivet heads on a pitch, as a falloff: 1 on the crown, 0 off it. */
+  float rivets(vec2 uv, float pitch) {
+    return smoothstep(0.013, 0.007, length(vec2(uv.x, latt(uv.y, pitch))));
+  }
+
+  /**
+   * The cart, seen from inside it. It is the only thing in every frame of the
+   * journey, a metre from the lens, so it is the one surface that is never far
+   * enough away to get away with anything.
+   *
+   * An ore tub that has carried ore: works-green paint left on the outside and in
+   * patches on the walls, bare steel where the load has scoured it, the floor
+   * worn bright along the line it is tipped out, rust in the seams and running
+   * down from the rivets. The headlamp's lens faces forward, so all the rider
+   * ever sees of it is the back of a cast housing, its feed and a pilot jewel.
+   */
+  vec3 cartAlbedo(vec3 q, vec3 n, out float rough, out vec3 emit) {
+    vec3 c = q - vec3(0.0, 0.44, 0.16);
+    rough = 0.48;
+
+    // The lens, on the housing's nose. Gated on the normal: tested by distance
+    // alone, a sphere around the lens cuts through the housing's back plate too,
+    // and that is a white disc in the bottom of every frame.
+    if (n.z > 0.5 && c.z > 1.30 && length(c.xy - vec2(0.0, 0.22)) < 0.075) {
+      emit = vec3(1.00, 0.93, 0.80) * 2.4;
+      return vec3(1.0);
+    }
+
+    // The housing: cast, black, finned on the back where it sheds its heat.
+    if (abs(c.x) < 0.13 && c.y > 0.10 && c.y < 0.34 && c.z > 1.17) {
+      rough = 0.36;
+      if (n.z < -0.5 && length(c.xy - vec2(0.065, 0.29)) < 0.011) {
+        emit = vec3(1.00, 0.46, 0.10) * 0.9;     // the pilot: on, and that is all it says
+        return vec3(0.9, 0.5, 0.2);
+      }
+      vec2  hb   = vec2(abs(c.x) - 0.115, abs(c.y - 0.22) - 0.105);
+      float edge = smoothstep(-0.018, -0.004, max(hb.x, hb.y));      // the rim, rubbed back
+      float fin  = smoothstep(0.25, 0.45, abs(fract(c.y / 0.028) - 0.5)) *
+                   step(abs(c.y - 0.22), 0.07) * step(abs(c.x), 0.08);
+      vec3  iron = mix(vec3(0.16, 0.16, 0.15), vec3(0.05, 0.05, 0.048), fin);
+      return mix(iron, vec3(0.34, 0.34, 0.33), edge * 0.6);
+    }
+
+    // Its feed, a rubber-sheathed cable clipped to the wall.
+    if (length(c.xz - vec2(0.0, 1.192)) < 0.022 && c.y < 0.16) {
+      rough = 0.62;
+      return vec3(0.035, 0.034, 0.032);
+    }
+
+    float ax = abs(c.x), az = abs(c.z);
+    bool inside = ax < 0.556 && az < 1.216 && c.y > -0.245 && c.y < 0.37;
+
+    // Paint, broken by the load. Two scales of noise, stretched along the way the
+    // ore slides, so the bare patches read as scour rather than as a pattern.
+    vec2 slide = abs(n.x) > 0.6 ? vec2(c.z, c.y) : (abs(n.z) > 0.6 ? vec2(c.x, c.y) : vec2(c.x, c.z));
+    float scour = fbm(slide * vec2(1.6, 7.0) + 4.3) * 0.65 + fbm(slide * 19.0) * 0.35;
+    vec3 green = mix(vec3(0.17, 0.23, 0.20), vec3(0.12, 0.16, 0.14), fbm(slide * 5.0 + 1.7));
+    vec3 steel = mix(vec3(0.36, 0.36, 0.37), vec3(0.22, 0.21, 0.20), fbm(slide * 31.0));
+    vec3 rust  = mix(vec3(0.30, 0.15, 0.08), vec3(0.18, 0.09, 0.05), fbm(slide * 11.0 + 7.1));
+
+    float bare = 0.0;
+    float rot  = 0.0;
+    if (inside) {
+      // Low on the walls the load has had the paint off; higher up it survives.
+      bare = smoothstep(0.40, 0.70, scour + smoothstep(0.30, -0.20, c.y) * 0.35);
+      // The floor: worn bright along the middle, where the ore is tipped out, and
+      // grit and rust packed into the corners where it never quite leaves.
+      if (n.y > 0.6) {
+        bare = 0.55 + 0.45 * smoothstep(0.50, 0.20, ax);
+        rough = mix(0.62, 0.30, smoothstep(0.45, 0.15, ax));
+        rot = smoothstep(0.38, 0.54, ax) + smoothstep(1.02, 1.20, az);
+      }
+      rot = max(rot, smoothstep(-0.12, -0.24, c.y) * 0.8);
+    }
+    else {
+      // Outside: the paint is mostly there, chipped back at the edges.
+      bare = smoothstep(0.62, 0.80, scour);
+    }
+
+    // The rim: everything that has ever been climbed over or tipped across it has
+    // polished the top of the lip to bare metal.
+    float lip = smoothstep(0.355, 0.375, c.y);
+    bare = max(bare, lip * smoothstep(0.30, 0.80, n.y) * (0.65 + 0.35 * scour));
+    rough = mix(rough, 0.28, lip * step(0.5, n.y));
+
+    // Rivets, in rows on the rib lines and under the lip, with the rust that runs
+    // out of every one of them. A rivet head is the first thing to lose its paint
+    // and the last thing anyone repaints.
+    // The along-wall coordinate of the face the point is on, for the row under
+    // the lip; the rib rows only exist on the side walls.
+    float along = abs(n.x) > 0.6 ? c.z : c.x;
+    float head  = abs(n.y) < 0.6 ? rivets(vec2(c.y - 0.33, along), 0.10) : 0.0;
+    float drip  = (c.y - 0.33) / -0.26;            // 0 at the row, 1 a quarter-metre down
+    float run   = smoothstep(0.010, 0.002, abs(latt(along, 0.10))) * step(abs(n.y), 0.6) *
+                  smoothstep(0.3 + 0.7 * hash21(vec2(floor(along / 0.10), 5.0)), 0.0, drip) * step(0.0, drip);
+    if (abs(n.x) > 0.6 && az < 1.0) {
+      float rib = lattAbs(c.z + 0.31, 0.62);
+      head = max(head, rivets(vec2(rib, c.y), 0.09));
+      float below = latt(c.y, 0.09);               // negative under a rivet
+      run = max(run, smoothstep(0.014, 0.0, rib) * smoothstep(-0.045, -0.008, below) * step(below, 0.0) * 0.6);
+    }
+
+    vec3 col = mix(green, steel, bare);
+    col = mix(col, rust, clamp(rot + run * 0.55, 0.0, 1.0) * (1.0 - lip));
+    col = mix(col, steel * 1.15, head * 0.75);
+    rough = mix(rough, 0.32, head);
+
+    // The headlamp spills back into the tub. Without it the inside of the cart is
+    // a black rectangle across the bottom third of every frame in the journey,
+    // and a hole in the picture is worse than a wrong colour in it.
+    emit = vec3(1.00, 0.90, 0.76) * 0.12 * smoothstep(-0.4, 0.9, q.z) * max(0.0, -n.z * 0.5 + 0.5) * col * 0.6;
+    return col;
+  }
+
   vec3 materialAlbedo(float mat, vec3 q, vec3 n, Room r, float t,
                       out float rough, out vec3 emit) {
     rough = 0.85;
@@ -181,23 +295,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       return mix(vec3(0.40, 0.41, 0.45), vec3(0.42, 0.24, 0.15), r.grime * 0.7);
     }
 
-    // The cart. Works-green over pitted steel, with the headlamp on its nose. The
-    // lens is small and its emission is modest on purpose: it sits a metre and a
-    // half from the lens at the bottom of every frame in the journey, so a value
-    // that would read as "a lamp" anywhere else reads here as a hole in the film.
-    if (length(q - vec3(0.0, 0.66, 1.40)) < 0.085) {
-      emit = vec3(1.00, 0.93, 0.80) * 2.4;
-      return vec3(1.0);
-    }
-    rough = 0.42;
-    float wear = smoothstep(0.3, 0.8, fbm(vec2(q.z * 3.0 + q.x * 2.0, q.y * 4.0)));
-    vec3 paint = mix(vec3(0.19, 0.25, 0.22), vec3(0.34, 0.20, 0.13), wear * 0.8);
-
-    // The headlamp spills back into the tub. Without it the inside of the cart is
-    // a black rectangle across the bottom third of every frame in the journey,
-    // and a hole in the picture is worse than a wrong colour in it.
-    emit = vec3(1.00, 0.90, 0.76) * 0.12 * smoothstep(-0.4, 0.9, q.z) * max(0.0, -n.z * 0.5 + 0.5);
-    return paint;
+    return cartAlbedo(q, n, rough, emit);
   }
 
 `

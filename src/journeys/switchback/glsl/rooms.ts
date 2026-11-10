@@ -95,7 +95,19 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
                        vec3(0.035, 0.40, 0.045));
     float lampBox = sdRoundBox(c - vec3(0.0, 0.22, 1.26), vec3(0.115, 0.105, 0.075), 0.035);
 
-    return min(tub, min(band, lampBox));
+    // The rolled lip round the top of the tub, and the doubled plate it is rolled
+    // from. A plate edge seen end-on is a line one pixel wide; a lip is what makes
+    // the rim read as steel with a thickness rather than as a cut in the picture.
+    vec3  lc  = c - vec3(0.0, 0.40, 0.0);
+    float lip = max(sdRoundBox(lc, vec3(0.655, 0.030, 1.315), 0.025),
+                    -sdBox(lc, vec3(0.545, 0.10, 1.205)));
+
+    // The headlamp's feed, out of the back of the housing and down the wall to
+    // the floor, where whatever powers it lives.
+    vec3  fc   = c - vec3(0.0, -0.045, 1.192);
+    float feed = max(length(fc.xz) - 0.014, abs(fc.y) - 0.195);
+
+    return min(min(tub, lip), min(band, min(lampBox, feed)));
   }
 
   // ---- per-room dressing ---------------------------------------------------
