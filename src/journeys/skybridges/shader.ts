@@ -32,6 +32,19 @@ export const skybridgesFrag = `
 #define SEETHRU_DIST 60.0
 ${COMMON}`
 
+// A phone's: the whole run and the whole ending, in fewer steps and octaves and
+// without the blast crazing. Phone compilers unroll every loop and inline every
+// call, and the full build is more than some will link.
+export const skybridgesLiteFrag = `
+#define RM_STEPS 64
+#define MAX_DIST 150.0
+#define STEP_K 0.85
+#define FBM_OCTAVES 2
+#define SEETHRU_STEPS 16
+#define SEETHRU_DIST 40.0
+#define LITE
+${COMMON}`
+
 // The index's channel: fewer steps, coarser noise, no env map, and no ending —
 // the channel loops on the run itself.
 export const skybridgesPreviewFrag = `

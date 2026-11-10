@@ -302,8 +302,11 @@ Things to keep true:
 
 ## 7. Performance
 
-- Two `#define` variants: full (route page, env map bound) and preview (the
-  index's channel: fewer steps and octaves, no env map, no heavy effects).
+- Three `#define` variants: full (route page, env map bound), lite (the same
+  page on a phone, or wherever the full build will not compile or link: 64
+  steps, two octaves, no blast crazing — `shaderRenderer`'s `lite` option picks
+  it) and preview (the index's channel: fewer steps and octaves, no env map, no
+  heavy effects).
 - Heavy effects (`uHeavy`) add the see-through continuation march; everything
   else is the same at every tier.
 - Set pieces sit behind band tests; towers are two cells on one side per sample,

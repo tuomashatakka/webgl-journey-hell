@@ -51,6 +51,7 @@ export const cracksGlsl = /* glsl */`
     return vec4(max(radial, ring * 0.85), crush, hash21(vec2(k + seed * 7.0, band)), step(r, rmax));
   }
 
+  #ifndef LITE
   /**
    * Blast crazing. A pane loaded all at once by the shockfront does not star
    * from one impact, it breaks everywhere: a dense mesh of small cells that
@@ -76,6 +77,8 @@ export const cracksGlsl = /* glsl */`
     float line = 1.0 - smoothstep(lw * 0.5, lw, edge);
     return vec2(mix(line, 0.45, smoothstep(0.08, 0.3, lw)), id);
   }
+  #endif
+
 
   /** A crack racing ahead of the runner along the deck: it runs, stalls, and runs again. */
   float runningCrack(vec3 pc, float px) {

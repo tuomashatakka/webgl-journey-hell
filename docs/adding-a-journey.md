@@ -25,8 +25,10 @@ export default withJourneyShell(journey)
 
 Pick the renderer by what the journey is (`src/packages/journey/definition.ts`):
 
-* **`shaderRenderer(frag, { envMapUrl })`** — one GLSL ES 1.00 fragment shader on a
-  full-screen quad, WebGL 1, no depth buffer. Six of the journeys are this.
+* **`shaderRenderer(frag, { envMapUrl, lite })`** — one GLSL ES 1.00 fragment shader on a
+  full-screen quad, WebGL 1, no depth buffer. Six of the journeys are this. `lite`
+  is an optional lighter build: phones get it outright, and anything else falls
+  back to it when the full build will not compile or link.
 * **`geometryRenderer(createScene)`** — triangles: WebGL 2 with `depth: true`; hand
   back your own scene object. Reach for `src/packages/math/mat4.ts`, `src/packages/geometry/curve.ts`, `src/packages/geometry/meshBuilder.ts` and `src/packages/gl/mesh.ts`, and
   `src/packages/gl`'s `createPostChain` for the MSAA → resolve → bloom frame. `loop-line` is

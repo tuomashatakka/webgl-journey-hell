@@ -256,7 +256,11 @@ export const materialsGlsl = /* glsl */`
     float hitAge = gE - eHit;
     float crazed = hitAge > 0.0 ? smoothstep(0.0, 0.06, hitAge) : 0.0;
     if (crazed > 0.0) {
+      #ifdef LITE
+      vec2 cz = vec2(0.45, h1);
+      #else
       vec2 cz = crazing(uv + id * 0.37, px);
+      #endif
       cr = vec4(max(cr.x * 0.4, cz.x * crazed), cr.y, cz.y, 1.0);
     }
 

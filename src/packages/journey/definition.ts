@@ -9,6 +9,7 @@
 
 import type { AnyGl } from '@wjh/gl/context'
 import { createShaderQuad } from '@wjh/gl/shaderQuad'
+import { detectDevice } from '@wjh/quality/device'
 import type { JourneyAudioEngine, JourneyMarks, JourneyRenderer, JourneySimulation } from './types'
 
 /** How to get a context and build the renderer in it. */
@@ -30,6 +31,14 @@ export interface ShaderRendererOptions {
 
   /** Optional equirectangular environment map URL (sampled as `uEnv`). */
   envMapUrl?: string;
+
+  /**
+   * A lighter build of the same shader. A phone gets it outright (a phone
+   * compiler handed a program too big for it can take seconds to say no, or
+   * fail to link with no log at all); anything else tries the full build and
+   * falls back to this one if its compiler will not take it.
+   */
+  lite?: string;
 }
 
 export interface JourneyDefinition {
@@ -71,7 +80,11 @@ export interface JourneyDefinition {
 export function shaderRenderer (fragment: string, options: ShaderRendererOptions = {}): RendererSpec {
   return {
     context: 'webgl',
-    create:  gl => createShaderQuad(gl, fragment, { envUrl: options.envMapUrl }),
+    create:  gl => {
+      const quad = { envUrl: options.envMapUrl }
+      const full = options.lite && detectDevice().mobile ? null : createShaderQuad(gl, fragment, quad)
+      return full ?? (options.lite ? createShaderQuad(gl, options.lite, quad) : null)
+    },
   }
 }
 
