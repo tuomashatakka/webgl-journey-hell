@@ -268,13 +268,18 @@ first 42 s, when the route still runs straight).
 
 | e (s) | beat |
 |-------|------|
-| 0–1.6 | **the flash** — a total white-out for a quarter second, the whole scene lit from the blast side, then recovering |
-| 0–6 | **the fireball** — white, then yellow, then orange, rising; a condensation ring flickers round it (0.5–3.5 s) |
-| 1–10 | **the shockfront** crosses the cloud sea towards you at 1.6 km/s: a bright ring that lifts and flattens the cloud tops, dust behind it; towers' glass bursts as it reaches them |
-| 10 | **arrival** — one hard shove and a ring-down, every pane on the deck cracks at once, the nearby facades blow out, glass glitters in the air |
-| 3–60 | **the mushroom cloud** — the fireball becomes the cap and keeps rising (to ~8 km, its top near 10), a stem of dust drawn up under it, the cap rolling outward as a torus with an ice-cap pileus above (6–26 s); a base surge spreads across the cloud sea; the cap's underside glows and cools from orange to red to brown |
+| 0–1.6 | **the flash** — the double flash: a spike the shock cuts off within hundredths of a second, a dip, then the long second white-out; the whole scene lit from the blast side; glare and a streak round the fireball, colour gone from the picture for a few seconds and a dark afterimage burned where the fireball first was |
+| 0–6 | **the fireball** — white, then yellow, then orange, rising, boiling in bright cells with soot blooming over it as it cools; a condensation ring flickers round it (0.5–3.5 s) |
+| 1–10 | **the shockfront** crosses the cloud sea towards you at 1.6 km/s: a bright ring at its foot and a wall of dust and torn cloud on it, backlit, with a condensation crest while the air is wet, tall near ground zero and still hundreds of metres high when it arrives; it swallows the towers it passes, and their glass bursts as it reaches them |
+| 10 | **arrival** — one hard shove that rolls the head and a ring-down, every pane on the deck cracks at once, facade glass crazes milky (a dense mesh, not a star) and blows out, glass glitters in the air, and the air behind the front is dust that hides everything past a few tens of metres and thins over the next ten seconds |
+| 1– | **the fires** — rooms whose windows face the blast catch from the heat pulse, a few at first and whole floors within seconds, smoke banking under the slabs |
+| 3–60 | **the mushroom cloud** — the fireball becomes the cap and keeps rising (to ~8 km, its top near 10), a stem of dust drawn up under it in streaks, the cap rolling outward as a torus of cauliflower turrets with an ice-cap pileus above (6–26 s), rust-red with nitrogen dioxide for its first half minute; a base surge spreads across the cloud sea; the cap's underside glows through gaps in the smoke and cools from orange to red to brown |
 | 12– | **the aftermath** — ash falling, the sky browning under the spreading pall, the sun dimmed; the head stays on the cloud |
 | 48–63 | the signal goes |
+
+The pressure wave is a cylinder round ground zero of radius `1.6 km/s × e`,
+met by the ray (the view's and every reflection's), drawn in front of the sky
+and of any scene hit farther away than it.
 
 The cloud is an impostor in the sky function: a 2D signed field (cap with
 toroidal lobes and a concave underside, stem, base surge, pileus, condensation

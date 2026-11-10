@@ -244,13 +244,21 @@ export const materialsGlsl = /* glsl */`
     vec3 face = gBoxC + N * gBoxH;
     vec3 origin = vec3(an.x > an.z ? face.x : gBoxC.x, 0.0, an.x > an.z ? gBoxC.z + (seed - 0.5) * gBoxH.z : face.z);
     vec3 paneC = T * (id.x + 0.5) * 1.5 + vec3(0.0, (id.y + 0.5) * 3.6, 0.0) + N * dot(face, N);
-    vec2 fate = facadeFate(id + style * 101.0, seed, paneC, origin, gBoxC.z / SPEED, gArrive + 1.5 * (seed - 0.5));
+    float eHit = gArrive + 1.5 * (seed - 0.5);
+    vec2 fate = facadeFate(id + style * 101.0, seed, paneC, origin, gBoxC.z / SPEED, eHit);
 
     float h1 = hash21(id + seed), h2 = hash21(id.yx + seed * 3.0);
     float spandrel = step(f.y, 0.24);
     float near = 1.0 - smoothstep(120.0, 220.0, t);
     vec4 cr = vec4(0.0);
     if (fate.x > 0.0 && near > 0.0) cr = spiderweb((f - vec2(0.3 + 0.4 * h2, 0.45 + 0.4 * h1)) * vec2(1.5, 3.6), fate.x, h1, px, 1.4) * near;
+    // The shockfront: every pane crazed at once, no star at all.
+    float hitAge = gE - eHit;
+    float crazed = hitAge > 0.0 ? smoothstep(0.0, 0.06, hitAge) : 0.0;
+    if (crazed > 0.0) {
+      vec2 cz = crazing(uv + id * 0.37, px);
+      cr = vec4(max(cr.x * 0.4, cz.x * crazed), cr.y, cz.y, 1.0);
+    }
 
     // Oil-canning: every pane a fraction of a degree off true, and the shards more.
     vec3 Tr = renderDir(T, pc.z);
@@ -262,11 +270,31 @@ export const materialsGlsl = /* glsl */`
     vec3 dirF = vec3(dot(rdc, T), rdc.y, -dot(rdc, N));
     vec3 room = interior(uv, dirF, lit, seed * 31.0) * near + vec3(0.04, 0.045, 0.05) * (1.0 - near) * (0.4 + lit);
 
+    // The heat pulse sets the rooms facing it alight: curtains and desks first,
+    // whole floors a few seconds later, smoke banking under the ceilings.
+    if (gE > 0.6) {
+      vec2 rm = floor(uv / vec2(4.5, 3.6));
+      float hr = hash21(rm + seed * 7.0);
+      float facing = smoothstep(0.05, 0.4, dot(n, gBlastDir));
+      float burn = facing * smoothstep(0.6 + hr * 6.0, 3.0 + hr * 9.0, gE) * step(0.35, hr);
+      if (burn > 0.0) {
+        float lick = vnoise(vec2(uv.x * 1.3, uv.y * 0.9 - gTm * 2.2)) * 0.7 + vnoise(vec2(uv.x * 4.0 + hr, gTm * 9.0)) * 0.5;
+        float vy = fract(uv.y / 3.6);
+        vec3 flame = vec3(1.0, 0.36, 0.07) * (0.6 + 1.4 * lick) * smoothstep(0.95, 0.25, vy) * 1.6;
+        room = mix(room, room * 0.2 + flame, burn);
+        room *= 1.0 - 0.7 * burn * smoothstep(0.55, 0.9, vy);   // the smoke under the slab
+      }
+    }
+
     vec3 col;
     if (spandrel > 0.5) col = mix(tint * 0.06 * (ambient(n) + direct(n, sun)), refl, F);
     else col = mix(room * tint, refl, F);
     vec3 litC = ambient(nn) + direct(nn, sun);
-    col = mix(col, litC * 0.9 + 0.03, cr.x * 0.8 * (1.0 - spandrel));
+    col = mix(col, litC * 0.8 + 0.02, cr.x * 0.42 * (1.0 - spandrel));
+    col = mix(col, litC * 0.5, cr.w * 0.14 * (1.0 - spandrel));      // a cracked pane scatters: it goes faintly milky
+    // Round the impact the glass is ground to powder and goes pale.
+    col = mix(col, litC * 0.7 + 0.03, cr.y * 0.6 * (1.0 - spandrel));
+    col = mix(col, litC * 0.55 + room * tint * 0.3, crazed * 0.45 * (1.0 - spandrel));
 
     // Blown out: the room, and the jagged rim of glass still in the frame.
     if (fate.y > 0.5 && spandrel < 0.5) {

@@ -21,15 +21,18 @@ export const cracksGlsl = /* glsl */`
     float rmax = reach * grow;
     if (r > rmax + 0.05) return vec4(0.0);
 
-    float n = floor(7.0 + seed * 5.99);
+    float n = floor(11.0 + seed * 8.99);
     float w = 2.0 * PI / n;
-    float wob = (vnoise(vec2(r * 7.0, seed * 31.0)) - 0.5) * 0.35 + (vnoise(vec2(r * 23.0, seed * 7.0)) - 0.5) * 0.12;
+    float wob = (vnoise(vec2(r * 7.0, seed * 31.0)) - 0.5) * 0.45 + (vnoise(vec2(r * 41.0, seed * 7.0)) - 0.5) * 0.18;
     float u = (atan(q.y, q.x) + PI) / w + wob;
     float k = floor(u);
     float fu = fract(u);
     float rlen = (0.45 + 0.55 * hash21(vec2(k, seed * 13.0))) * rmax;
     float lw = px * 1.2 + 0.0012;
     float radial = (1.0 - smoothstep(lw * 0.5, lw, min(fu, 1.0 - fu) * w * r)) * step(r, rlen);
+    // A radial is a crack, not a ray of light: it catches the light in places
+    // and thins out towards its tip.
+    radial *= (1.0 - 0.75 * smoothstep(0.25, 1.0, r / max(rlen, 1e-3))) * (0.45 + 0.55 * vnoise(vec2(r * 31.0, k + seed * 17.0)));
 
     // Chords between neighbouring radials, appearing for seconds as the load creeps.
     float creep = clamp(age / 3.0, 0.0, 1.0);
@@ -46,6 +49,32 @@ export const cracksGlsl = /* glsl */`
     }
     float crush = (1.0 - smoothstep(0.012, 0.04 + 0.02 * seed, r)) * grow;
     return vec4(max(radial, ring * 0.85), crush, hash21(vec2(k + seed * 7.0, band)), step(r, rmax));
+  }
+
+  /**
+   * Blast crazing. A pane loaded all at once by the shockfront does not star
+   * from one impact, it breaks everywhere: a dense mesh of small cells that
+   * turns the glass milky before it goes. q in metres; returns (edge, cell id),
+   * edge faded to its mean as the cells shrink below a pixel, which is the milk.
+   */
+  vec2 crazing(vec2 q, float px) {
+    vec2 g = q * 8.0;
+    vec2 i = floor(g);
+    vec2 f = g - i;
+    float d1 = 8.0, d2 = 8.0, id = 0.0;
+    for (int y = -1; y <= 1; y++) {
+      for (int x = -1; x <= 1; x++) {
+        vec2 o = vec2(float(x), float(y));
+        vec2 r = o + vec2(hash21(i + o), hash21(i + o + 17.1)) - f;
+        float d = dot(r, r);
+        if (d < d1) { d2 = d1; d1 = d; id = hash21(i + o + 3.3); }
+        else if (d < d2) d2 = d;
+      }
+    }
+    float edge = sqrt(d2) - sqrt(d1);
+    float lw = px * 8.0 + 0.03;
+    float line = 1.0 - smoothstep(lw * 0.5, lw, edge);
+    return vec2(mix(line, 0.45, smoothstep(0.08, 0.3, lw)), id);
   }
 
   /** A crack racing ahead of the runner along the deck: it runs, stalls, and runs again. */

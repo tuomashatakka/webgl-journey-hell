@@ -64,12 +64,15 @@ export const cameraGlsl = /* glsl */`
       + blastOn * (0.06 + 0.2 * smoothstep(4.0, 30.0, gE))
       + jolt + uPointer.y * 0.3;
     float roll = 0.16 * win(z, 420.0, 432.0, 468.0, 480.0) + 0.3 * win(z, 288.0, 292.0, 300.0, 306.0)
-      + 0.03 * sin(gTm * 2.1) * win(z, 258.0, 262.0, 284.0, 288.0);
+      + 0.03 * sin(gTm * 2.1) * win(z, 258.0, 262.0, 284.0, 288.0)
+      + shove * 0.10 + ringDown * 0.04;               // the wave takes the runner off their feet
 
     vec3 fwd = normalize(vec3(sin(yaw) * cos(pitch), sin(pitch), cos(yaw) * cos(pitch)));
     vec3 r0 = normalize(cross(vec3(0.0, 1.0, 0.0), fwd));
     vec3 u0 = cross(fwd, r0);
-    vec3 rd = normalize(uv.x * (r0 * cos(roll) - u0 * sin(roll)) + uv.y * (u0 * cos(roll) + r0 * sin(roll)) + 1.25 * fwd);
+    vec3 rgt = r0 * cos(roll) - u0 * sin(roll);
+    vec3 upv = u0 * cos(roll) + r0 * sin(roll);
+    vec3 rd = normalize(uv.x * rgt + uv.y * upv + 1.25 * fwd);
 
     // --- the march ---
     float t = 0.0, hit = 0.0;
@@ -88,8 +91,22 @@ export const cameraGlsl = /* glsl */`
       vec3 cloud = 0.9 * (mix(gHorizon, gZenith, 0.35) * 0.8 + gSunCol * 0.04);
       col = mix(col, cloud, smoothstep(SEA_Y + 5.0, SEA_Y - 25.0, p.y));
       col = mix(col, fogCol(rd), 1.0 - exp(-t * gHaze));
+      // The pressure wave in front of whatever this is: it swallows towers whole.
+      vec4 sw = shockWall(toWorld(rd), ro.y, t);
+      col = mix(col, sw.rgb, sw.a);
     } else {
       col = sky(rd, ro.y, 1.0);
+      t = MAX_DIST * 4.0;
+    }
+
+    // Behind the wave: the air is the city, ground up. Near things stay
+    // legible; anything past a few tens of metres goes into the dust.
+    if (hitE > 0.0) {
+      float storm = smoothstep(0.0, 0.35, hitE) * (0.35 + 0.65 * exp(-hitE / 10.0));
+      vec3 dust = vec3(0.40, 0.32, 0.25) * (mix(gHorizon, gZenith, 0.4) + 0.08)
+        + gBlastCol * vec3(1.0, 0.5, 0.25) * 0.004;
+      float churn = 0.7 + 0.6 * fbm(uv * 2.4 + vec2(-hitE * 0.9, hitE * 0.2));
+      col = mix(col, dust * churn, storm * (1.0 - exp(-t * 0.025)));
     }
 
     // --- the air ---
@@ -105,9 +122,37 @@ export const cameraGlsl = /* glsl */`
     float ash = specks(uv, 18.0, vec2(0.15, -0.12), 9.0, 0.09) + specks(uv, 31.0, vec2(0.08, -0.2), 7.0, 0.07);
     col *= 1.0 - 0.6 * clamp(ash, 0.0, 1.0) * smoothstep(14.0, 24.0, gE);
 
+    // --- the fireball through the lens ---
+    // Glare and a streak where the fireball is on screen, scattered in the eye
+    // whether or not a tower is in the way, and the burn it left where it was
+    // the instant it went off: a dark blot fixed on the retina that the head
+    // turns away from but cannot leave behind.
+    if (gE > 0.0) {
+      float fz = dot(gBlastDir, fwd);
+      vec3 fire = mix(vec3(1.0, 0.92, 0.8), vec3(1.0, 0.5, 0.2), smoothstep(0.5, 6.0, gE));
+      float gl = 3.0 * blastFlash(gE) + 0.7 * exp(-gE / 3.0) + 0.12 * exp(-gE / 25.0);
+      if (fz > 0.05) {
+        vec2 sp = vec2(dot(gBlastDir, rgt), dot(gBlastDir, upv)) * 1.25 / fz;
+        vec2 dd = uv - sp;
+        float halo = 0.012 / (dot(dd, dd) + 0.012);
+        float streak = exp(-abs(dd.y) * 120.0) * exp(-abs(dd.x) * 2.5);
+        col += fire * gl * (halo * 0.5 + streak * 0.8);
+      }
+    }
+
     // --- the picture ---
     col = aces(col * gExposure * 0.8 * (1.0 + shove * 2.0));
     col = pow(col, vec3(1.0 / 2.2));
+    if (gE > 0.0) {
+      // The eyes coming back: no colour at first, and the afterimage.
+      float blind = exp(-gE / 3.0);
+      col = mix(col, vec3(dot(col, vec3(0.3, 0.55, 0.15))) * vec3(1.04, 1.0, 0.94), blind * 0.85);
+      float a0 = wrapPi(atan(gBlastDir.x, gBlastDir.z) - pathYaw - uPointer.x * 0.45);
+      vec2 burnAt = vec2(tan(clamp(a0, -1.2, 1.2)) * 1.25, 0.02);
+      vec2 db = uv - burnAt;
+      float burn = exp(-dot(db, db) / 0.003) * smoothstep(0.25, 1.0, gE) * exp(-gE / 9.0) * step(abs(a0), 0.9);
+      col *= 1.0 - burn * vec3(0.55, 0.75, 0.45);
+    }
     col = mix(col, vec3(1.0), blastFlash(gE) * 0.97);
     // The crown dissolves into light across the seam (from the second lap: the first starts in the dawn).
     float seam = smoothstep(522.0, 540.0, z) + (1.0 - smoothstep(0.0, 9.0, z)) * step(LOOP_Z, gZ);

@@ -179,7 +179,9 @@ export const atmosphereGlsl = /* glsl */`
     col = skyline(d, col);
     if (d.y < 0.0) col = mix(col, cloudSea(d, camY), smoothstep(0.0, -0.004, d.y));
     vec4 mc = mushroom(d);
-    return mix(col, mc.rgb, mc.a);
+    col = mix(col, mc.rgb, mc.a);
+    vec4 sw = shockWall(d, camY, 1e5);
+    return mix(col, sw.rgb, sw.a);
   }
 
   /** The colour distance fades to: the sky low in that direction. */
