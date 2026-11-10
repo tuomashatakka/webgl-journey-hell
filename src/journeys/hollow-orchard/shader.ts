@@ -56,10 +56,22 @@ const SCENE = `
   vec3 shadeSurface(vec3 p, vec3 rd, vec3 n, float t, float mat, float wet, float glow) {
     vec3 keyDir = normalize(vec3(-0.45, 0.72, -0.30));
 
+    // How much of THE ROOT LABYRINTH is on screen. Its root bark (mat 2.4) and
+    // its lamp are keyed to this rather than to mat alone, because a crossfade
+    // elsewhere (soil 2 into crust 4) sweeps mat through 2.4 as well.
+    float lamp = (abs(uStage.x - 4.0) < 0.5 ? 1.0 - uStage.z : 0.0)
+               + (abs(uStage.y - 4.0) < 0.5 ? uStage.z : 0.0);
+
     vec3 base;
     if (mat < 0.5)      base = uTint * 0.55 + vec3(0.10, 0.06, 0.05);   // flesh / fungus
     else if (mat < 1.5) base = vec3(0.78, 0.74, 0.66);                  // bark / bone
-    else if (mat < 2.5) base = vec3(0.20, 0.15, 0.11);                  // root / soil
+    else if (mat < 2.5) {                                               // soil, and root bark at 2.4
+      base = vec3(0.20, 0.15, 0.11);
+      if (lamp > 0.0) {
+        vec3 bark = vec3(0.30, 0.19, 0.11) * (0.7 + 0.6 * vnoise3(p * vec3(9.0, 9.0, 1.2)));
+        base      = mix(base, bark, smoothstep(2.0, 2.4, mat) * lamp);
+      }
+    }
     else if (mat < 3.5) base = uTint * 0.85 + vec3(0.12, 0.02, 0.04);   // wet fruit
     else                base = vec3(0.62, 0.66, 0.78);                  // spore crust
 
@@ -74,6 +86,12 @@ const SCENE = `
     float ndl = clamp(dot(n, keyDir), 0.0, 1.0);
     float ao  = calcAO(p, n);
     vec3  col = base * uKey * (0.12 + 0.9 * ndl) * ao;
+
+    // THE ROOT LABYRINTH is a dug passage with no sky, so the key alone lights
+    // only the floor. Light it from the eye instead, falling off with distance,
+    // the way a passage lit by what you carry looks.
+    if (lamp > 0.0)
+      col += base * uKey * clamp(dot(n, -rd), 0.0, 1.0) * ao * lamp * 2.2 / (1.0 + 0.18 * t * t);
 
     // Hemisphere ambient — the ground is dead, the air above it glows a little.
     col += base * mix(uBg * 0.5, uKey * 0.18, 0.5 + 0.5 * n.y) * ao;
