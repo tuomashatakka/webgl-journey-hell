@@ -255,11 +255,84 @@ vec3 surfaceDetail (inout Surface s, float m, float act, vec3 p, vec3 tp, vec3 n
     else if (hy < -0.1) steelDetail(s, tp, n, fp, vec3(0.20, 0.21, 0.22), 0.85, 0.6, 1.0);
     else steelDetail(s, tp, n, fp, vec3(0.0), 0.0, 0.25, 0.0);
   } else {
-    // The bridge's members carry a grey coat that the weather is winning.
-    float coat = act > 0.5 && act < 1.5 ? 0.8 : 0.0;
-    steelDetail(s, tp, n, fp, vec3(0.21, 0.25, 0.26), coat, act > 2.5 && act < 3.5 ? 0.35 : 0.8, 1.0);
+    // The bridge's members carry a dark coat that the weather is winning, so
+    // they stand against the bright weather as they do in the preview; its
+    // side decks are open bar grating over the drop.
+    bool bridge = act > 0.5 && act < 1.5;
+    steelDetail(s, tp, n, fp, vec3(0.11, 0.12, 0.13), bridge ? 0.85 : 0.0, act > 2.5 && act < 3.5 ? 0.35 : 0.8, 1.0);
+    if (bridge && n.y > 0.7) {
+      float bars = groove(tp.x, 0.05, 0.012, fp);
+      float cross = groove(tp.z, 0.12, 0.007, fp);
+      float open = (1.0 - bars) * (1.0 - cross);
+      s.albedo *= mix(1.0, 0.15, open);
+      s.ao *= mix(1.0, 0.4, open);
+    }
   }
   return vec3(0.0);
+}
+
+// --- the weather bridge's rupture -------------------------------------------
+
+// The faults drawn as the preview draws them: hashes joined straight, so a
+// fault turns at angles, broken into runs. Returns the distance to the fault.
+float jagged (float x, float seed, float coarse, float fine) {
+  float c1 = floor(x * coarse);
+  float j = mix(hash12(vec2(c1, seed)), hash12(vec2(c1 + 1.0, seed)), fract(x * coarse)) - 0.5;
+  float c2 = floor(x * fine);
+  return j + (mix(hash12(vec2(c2, seed + 9.0)), hash12(vec2(c2 + 1.0, seed + 9.0)), fract(x * fine)) - 0.5) * 0.25;
+}
+
+// How far the rupture has got: nothing on the first traversal, growing on
+// every one after it, gone in the residue.
+float bridgeRupture () { return saturate(uDecay * 0.45) * (1.0 - uPurgatory); }
+
+// On the deck and the flight: a split every 13 units, a dark gap with a lit
+// core and a halo, cold at first and hot as the decay climbs.
+vec3 bridgeFaults (inout Surface s, vec3 tp, vec3 n, float fp) {
+  float amt = bridgeRupture();
+  if (amt < 0.001 || n.y < 0.5) return vec3(0.0);
+  float cell = floor(tp.z / 13.0);
+  float zl = tp.z - cell * 13.0 - 6.5;
+  float x = tp.x - pathX(1.0, tp.z);
+  float lean = (hash12(vec2(cell, 3.0)) - 0.5) * 1.2;
+  float df = abs(zl - x * lean - jagged(x + cell * 7.0, cell, 1.3, 5.0) * 1.4);
+  float run = step(0.3, hash12(vec2(cell, 5.0)));
+  float core = 1.0 - smoothstep(0.012, 0.012 + fp, df);
+  s.albedo *= 1.0 - exp(-df * 18.0) * 0.8 * run * amt;
+  vec3 c = mix(vec3(0.25, 0.72, 1.0), vec3(1.6, 0.42, 0.08), saturate(uDecay * 0.28));
+  return c * (core * 2.5 + exp(-df * 7.0) * 0.25) * run * amt;
+}
+
+// The weather bridge's sky: the photograph's sun as a veiled disc where the
+// light comes from, with a broad warm glow round it.
+vec3 bridgeSky (vec3 c, vec3 rd, vec3 sun) {
+  float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float g = max(dot(rd, sun), 0.0);
+  return c + vec3(1.0, 0.8, 0.58) * lum * (pow(g, 900.0) * 5.0 + pow(g, 60.0) * 0.45 + pow(g, 8.0) * 0.16);
+}
+
+// Once the rupture has begun, two faults torn through the air itself, drawn
+// in direction space over whatever lies beyond the bridge's own steel: from
+// inside act II the far wall fills the view and the sky is above the frame,
+// so a tear only in the sky would never be seen. Near things stand in front
+// of it. A dark lip, a white core, a cold halo.
+vec3 bridgeTear (vec3 col, vec3 rd, float t) {
+  float amt = bridgeRupture() * smoothstep(18.0, 45.0, t);
+  if (amt < 0.001) return col;
+  float lum = max(dot(col, vec3(0.2126, 0.7152, 0.0722)), 0.3);
+  float az = atan(rd.x, rd.z);
+  float el = rd.y / max(length(rd.xz), 1e-3);
+  for (int i = 0; i < 2; i++) {
+    float fi = float(i);
+    float fx = az * 1.6 + fi * 2.3;
+    float df = abs(el - (0.16 + fi * 0.2 - az * (0.5 - fi * 0.9)) - jagged(fx, fi + 20.0, 5.0, 19.0) * 0.12);
+    float run = step(0.25, hash12(vec2(floor(fx * 2.0), fi + 4.0)));
+    float core = 1.0 - smoothstep(0.0012, 0.0035, df);
+    float halo = exp(-df * 90.0) * 0.5 + exp(-df * 18.0) * 0.1;
+    col = mix(col, col * 0.35, exp(-df * 250.0) * run * amt);
+    col += (vec3(1.0, 0.97, 0.92) * core * 3.0 + vec3(0.25, 0.72, 1.0) * halo * 2.0) * run * amt * lum;
+  }
+  return col;
 }
 
 // --- the cooling towers' plumes ------------------------------------------------

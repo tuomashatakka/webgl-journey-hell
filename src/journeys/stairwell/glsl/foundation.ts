@@ -46,6 +46,7 @@ out vec4 fragColor;
 #define HIT_EPSILON 0.012
 #define SEAM ${SEAM_HALF.toFixed(1)}
 #define WALL_TOP 50.0
+#define SEA_DEPTH 7.0
 
 #define M_CONCRETE 1.0
 #define M_STEEL 2.0

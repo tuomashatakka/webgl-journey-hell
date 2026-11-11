@@ -12,7 +12,7 @@ units the route enters purgatory and never leaves it.
 | distance | act | sky (Δ) | visual contract |
 | ---: | --- | --- | --- |
 | 0–70 | spillway threshold | `DAWN` | mass-concrete flood control: dam wall, ogee chute, sluice bays, baffle blocks, a basin of still water |
-| 70–155 | protean weather bridge | `OVERCAST` | nothing but structure and weather — suspension catenary, deck truss, wind fencing, a cloud deck below |
+| 70–155 | protean weather bridge | `OVERCAST` | nothing but structure and weather — portal pylons, suspension catenary and hangers, an open grating deck on a truss, low wind fencing, a cloud deck and a cloud sea below |
 | 155–235 | turbine canyon | `DAY` | a stratified canyon wide enough for its machines: three-blade rotors on pedestals, penstocks, a gantry |
 | 235–325 | conveyor escarpment | `EVENING` | warm quarry benches, a roofed conveyor gallery on trestles, bucket wheel, transfer tower |
 | 325–410 | cooling field | `HAZE` | hyperboloid towers on raked column rings, pipe racks, banded chimneys, cooling ponds |
@@ -143,6 +143,44 @@ its own average by the pixel's world footprint.
   own coordinates wherever act V is in view, starting and stopping with the
   act's scenery like the cloud deck.
 
+## act II, the weather bridge
+
+act II is the index preview's scape built for real: an open suspension deck seen
+down its own flight.
+
+- **structure**: portal pylons every 22 units — legs from the pier cap to 12.6
+  over the line, a portal beam at the top and a strut under the cables, a red
+  beacon on each leg — on piers that go down into the cloud. main cables hang
+  between the saddles as a parabola from 12.3 at a pylon to 5.2 at mid-span,
+  with a hanger every 2.75 down to the deck edge (4.6 off the line). either
+  side of the flight a bar-grating deck on a warren truss and floor beams;
+  wind fencing is three slats, knee high, at the deck edge, so nothing closes
+  the view. the members carry a dark coat so they stand against the weather.
+  the whole act lies within 5.4 of the line and under 13.3 over it, and past
+  that the act returns the bound itself, so rays out over the cloud cost one
+  evaluation.
+- **the cloud sea** (`seaHit`, `seaColor`): the marched cloud deck carried out
+  to the walls as a surface — a plane `SEA_DEPTH` (7) under the flight that
+  descends with it, intersected in closed form in act II's own coordinates
+  wherever act II is in view, and like the scenery it stops at the walls'
+  faces. billows on two scales, keyed to the sky's own horizon colour, lit
+  warm toward the sun. a ray that meets it takes act II's air over its length.
+- **the light**: act II's haze is 0.009 (was 0.011), and its air is lit warm
+  in a broad forward scatter toward the sun and a little cold away from it.
+  the photograph's sun sits low and almost dead ahead, so from anywhere in the
+  act it is behind the far wall (whose top is never under 26 degrees from the
+  eye); the sky still carries a veiled disc and its glow where the light comes
+  from, for a view that clears the wall.
+- **the rupture** (`bridgeRupture`, `saturate(uDecay * 0.45)`, nothing on the
+  first traversal, gone in the residue): faults split across the deck and the
+  flight every 13 units — a dark gap, a lit core, a halo, cold at first and
+  hot as the decay climbs — and two faults torn through the air in direction
+  space, over whatever lies more than about 18 units off, with a dark lip, a
+  white core and a cold halo. they are drawn over the air rather than only in
+  the sky because from inside the act the far wall fills the view.
+- the preview's cooling towers on the horizon are not brought over: the walls
+  hide the horizon over the whole forward view.
+
 ## traversal rupture
 
 `uRupture` is 0, 1/3, 2/3 and 1 on the four traversals and remains the headline
@@ -217,6 +255,7 @@ bun test src/journeys/stairwell/kinematics.test.mjs
 node tools/journey.mjs glsl stairwell --bare
 node tools/journey.mjs contact stairwell --bare --at=5,20,40,56,75,95 --cols=3
 node tools/journey.mjs scan stairwell --bare --from=11.50 --to=11.60 --step=0.01
+node tools/journey.mjs scan stairwell --bare --from=31.98 --to=32.08 --step=0.01
 ```
 
 acceptance gates:
