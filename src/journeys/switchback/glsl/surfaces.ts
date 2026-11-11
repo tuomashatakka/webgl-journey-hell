@@ -69,11 +69,27 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       c *= 1.0 - grime * 0.30;
     }
     else if (type < T_OVERLOOK - 0.5) {
-      // THE CHAPEL OF FOLDS. Cold dressed stone with a course line in it.
-      float course = smoothstep(0.46, 0.5, abs(fract(uvz.y / 0.62) - 0.5));
-      c = mix(vec3(0.50, 0.52, 0.56), vec3(0.29, 0.30, 0.35), course);
-      c *= 0.85 + 0.30 * fbm(uvz * 2.2);
-      c = mix(c, vec3(0.17, 0.18, 0.21), isFloor * 0.5);
+      // THE CHAPEL OF FOLDS. Dressed stone, laid in courses with the joints
+      // broken: a block is a thing with its own tone, quarried on a different
+      // day from the one beside it. The joints widen and fade with range like
+      // the tile grout does, for the same reason.
+      vec2  b     = vec2(uvz.x / 1.24, uvz.y / 0.62);
+      b.x        += 0.5 * mod(floor(b.y), 2.0);
+      vec2  g     = abs(fract(b) - 0.5);
+      float w     = 0.030 + t * 0.0016;
+      float joint = max(smoothstep(0.5 - w * 0.5, 0.5, g.x), smoothstep(0.5 - w, 0.5, g.y))
+                  * smoothstep(52.0, 10.0, t);
+      float tone  = hash21(floor(b) + 7.3);
+
+      c = mix(vec3(0.47, 0.49, 0.54), vec3(0.60, 0.59, 0.58), tone);
+      // Tooling across the face, and the damp that has come down it since.
+      c *= 0.80 + 0.26 * fbm(uvz * vec2(2.4, 9.0)) + 0.10 * fbm(uvz * 21.0);
+      float damp = smoothstep(0.42, 0.78, fbm(vec2(uvz.x * 0.9, uvz.y * 0.16) + 9.1));
+      c = mix(c, c * vec3(0.46, 0.52, 0.50), damp * (0.35 + grime * 0.6) * (1.0 - isFloor));
+      c = mix(c, vec3(0.20, 0.21, 0.24), joint * 0.85);
+
+      // The floor is flags, worn pale down the middle of each.
+      c = mix(c, c * 0.62 + 0.05 * (1.0 - 2.0 * max(g.x, g.y)), isFloor);
     }
     else {
       c = vec3(0.20, 0.19, 0.22);
@@ -207,6 +223,22 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       // The fissures are lit from *behind*, so they are emission and not a dark
       // line in the albedo. A crack you can see through is the whole point; one
       // painted on reads as dirt, and dirt is what this railway already has.
+      // The chapel's lancets are the room's own wall, where the embrasures
+      // reach it: leaded quarries, and the day behind them.
+      if (abs(r.type - T_CHAPEL) < 0.5 && q.x > r.bore - 0.4) {
+        float glass = smoothstep(0.0, -0.10, lancet(q, r.bore));
+        if (glass > 0.0) {
+          float zc   = lattAbs(phaseAt(q.z) + 0.5 * NAVE_BAY, NAVE_BAY);
+          vec2  dq   = vec2(zc + q.y, zc - q.y) / 0.36;
+          float came = max(smoothstep(0.38, 0.47, abs(fract(dq.x) - 0.5)),
+                           smoothstep(0.38, 0.47, abs(fract(dq.y) - 0.5)));
+          came = max(came, smoothstep(0.07, 0.03, zc));             // the mullion
+          float pane = 0.7 + 0.6 * hash21(floor(dq) + 2.9);
+          emit = naveSunTint() * glass * (1.0 - came * 0.92) * pane * 3.6;
+          return mix(c, vec3(0.05, 0.05, 0.06), glass);
+        }
+      }
+
       if (uFall.w > 0.03 && r.bore < 50.0) {
         float side = q.x < 0.0 ? -1.0 : 1.0;
         float cr = fissure(fissureUV(q, side), uFall.w) * uFall.w;
@@ -288,8 +320,19 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
         return mix(vec3(0.58, 0.54, 0.56), vec3(0.20, 0.20, 0.22), mull);
       }
       if (r.type < T_OVERLOOK - 0.5) {
-        rough = 0.75;
-        return mix(vec3(0.46, 0.47, 0.52), vec3(0.33, 0.32, 0.39), fbm(q.xz * 1.4));
+        // The votive: a brass bowl with a flame in it, on a chain.
+        if (toLamp < 0.30) {
+          emit = lampTint(r.type) * 4.5 * r.lit * smoothstep(-0.06, 0.08, q.y - r.lampY);
+          rough = 0.35;
+          return vec3(0.62, 0.44, 0.18);
+        }
+        if (abs(q.x) < 0.03 && q.y > r.lampY) { rough = 0.4; return vec3(0.30, 0.24, 0.14); }
+
+        // Everything else in here is the same stone the walls are. The fold's
+        // leaves stand at every angle, so the courses run off the wall's own
+        // projection and the tooling does the rest.
+        rough = 0.78;
+        return shellAlbedo(q, n, r.type, r.grime, t);
       }
       rough = 0.50;
       return mix(vec3(0.40, 0.41, 0.45), vec3(0.42, 0.24, 0.15), r.grime * 0.7);

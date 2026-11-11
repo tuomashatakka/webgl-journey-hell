@@ -143,6 +143,7 @@ export const mainGlsl = `  // ---- main ----------------------------------------
 
     col += lampGlow(rd, tEnd);
     col += shafts(rd, tEnd) * (0.55 + uHeavy * 0.45);
+    col += naveShafts(rd, tEnd);
     col += motes(rd, tEnd, near.type, uAtm.y);
 
     // Grid Run's atmosphere accumulator, which is as close as a single pass gets

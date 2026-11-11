@@ -14,7 +14,7 @@ along with the pointwise and windowed curvature bounds the bend fit can carry.
 | II · the chalk drift | 78 | hand-cut adit, timber sets, dust, the crest |
 | III · the scaffold void | 96 | steel lattice suspended in nothing, the big drop |
 | IV · the carpet concourse | 84 | mall interior at sunset, clerestory light |
-| V · the chapel of folds | 72 | folded stone, god-rays, the second chain |
+| V · the chapel of folds | 72 | folded stone with a nave cut through it, god-rays from lancets in the east wall, the second chain |
 | VI · the overlook | 90 | open sky over a cloud sea, drifting ash — and the seam |
 
 everything that gets worse per lap ramps across **the overlook**, which is the
@@ -85,6 +85,37 @@ then crosses the whole range inside the centimetre where the curvature changes
 sign. that is a roll stutter on every beat boundary and it is not the track. the
 bank therefore reads `min(speed, V_MAX)`; the *ride* still gets faster, the
 picture just stops pretending the banking does.
+
+## the chapel
+
+the fold on its own is a solid with no way through it and no order in it. the
+room is what is cut into it, and every cut is read by more than one caller, so a
+shaft of light cannot fail to have a window at the end of it.
+
+- **the nave** (`naveAir`): walls to a springing line at 4.6 m, then a pointed
+  vault struck from two centres, apex 9.7 m, 3.3 m to each side of the track.
+  `NAVE_W`, `NAVE_SPRING`, `NAVE_C`.
+- **a bay is 8 m** (`NAVE_BAY`, divides `PHASE_WRAP`). a rib stands on each bay
+  line, the nave's own profile thickened; a lancet stands in the middle of each
+  bay; the fold is mirrored on the same period.
+- **the lancets** (`lancet`): windows in the east wall, 2.3 m wide, sill at 3.2 m,
+  pointed head at 8.2 m. the function carries a point back along `NAVE_SUN` to
+  the wall and tests the window there, so one field is the leaded glass on the
+  wall (emission), the embrasure cut through the fold, the pool of light on the
+  floor (`directLight`) and the god-ray in the air (`naveShafts`).
+- `NAVE_SUN` is a constant in the track's frame, not `uSun`: the windows are
+  built into the wall and the wall turns with the track.
+- **the god-rays** have their own loop: 26 samples on a step that grows from
+  0.9 m, jittered with interleaved gradient noise, edges softened by the step
+  length. nothing in it touches the map. it returns before sampling when no
+  resident slot is the chapel, so every other room's frame is unchanged.
+- **the fronts**: a wall across the whole profile at both ends of the room, with
+  the nave's arch for a doorway. the fold stops at them.
+- **votive lamps** hang on chains from the crown, at the pitch and height the
+  route table already gives the room's lamps.
+- deep in the nave's air (`naveAir < -1.1`) the map returns the cut as its bound
+  and skips the fold. that is most of every ray that looks down the track, and
+  it is why the room costs no more than the bare fold did.
 
 ## the fissures
 

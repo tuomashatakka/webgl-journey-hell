@@ -210,8 +210,59 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     return min(min(pylon, fascia), min(min(ramp, planter), mull));
   }
 
+  // ---- the chapel's nave, and the light let into it -------------------------
+  //
+  // The fold on its own is a solid with no way through it and no order in it, so
+  // three things are cut into it and all three are read by more than one caller:
+  // the map carves them, the albedo finds the glass by them, and the lighting and
+  // the volumetrics take the beam from them. One set of numbers, so a shaft of
+  // light cannot fail to have a window at the end of it.
+
+  // The nave: walls to a springing line, then a pointed vault struck from two
+  // centres. Half-width, springing height, and how far each centre sits past the
+  // axis; the radius is their sum and the apex comes out at 9.7 m.
+  const float NAVE_W      = 3.3;
+  const float NAVE_SPRING = 4.6;
+  const float NAVE_C      = 2.3;
+
+  // A bay. Ribs stand on its ends and a lancet in its middle. Divides PHASE_WRAP.
+  const float NAVE_BAY = 8.0;
+
+  // The way the light travels, in the track's frame: in through the east wall,
+  // down across the nave, and a little along it. A constant, not uSun — these
+  // windows are built into the wall and the wall turns with the track.
+  const vec3 NAVE_SUN = vec3(-0.8646, -0.4925, 0.0985);
+
+  /** The nave's air, as a cross-section. Negative inside. */
+  float naveAir(vec3 q) {
+    float box  = sdBox2(vec2(q.x, q.y - 1.9), vec2(NAVE_W, 2.7));
+    float arch = length(vec2(abs(q.x) + NAVE_C, q.y - NAVE_SPRING)) - (NAVE_W + NAVE_C);
+    return min(box, arch);
+  }
+
   /**
-   * THE CHAPEL OF FOLDS: a kaleidoscopic fold, after atzedent's "Remains".
+   * A lancet in the east wall, seen along the light: negative where a beam is.
+   *
+   * The point is carried back along NAVE_SUN to the plane of the wall and tested
+   * against the window there, which makes this the window on the wall, the
+   * embrasure cut through the fold behind it, and the beam in the air, all at
+   * once. Carrying it back is a shear, so as a distance it over-states by the
+   * shear's Lipschitz constant, 1 / |NAVE_SUN.x|, and is scaled back down by it.
+   * lattAbs rather than latt: the volumetrics accumulate this along a ray.
+   */
+  float lancet(vec3 q, float bore) {
+    float back = (q.x - bore) / NAVE_SUN.x;
+    vec3  w    = q - NAVE_SUN * back;
+    float zc   = lattAbs(phaseAt(w.z) + 0.5 * NAVE_BAY, NAVE_BAY);
+
+    float box  = sdBox2(vec2(zc, w.y - 4.7), vec2(1.15, 1.5));
+    float head = length(vec2(zc + 1.15, w.y - 6.2)) - 2.3;
+    return min(box, head) * 0.8646;
+  }
+
+  /**
+   * THE CHAPEL OF FOLDS: a kaleidoscopic fold, after atzedent's "Remains", with a
+   * nave cut down the middle of it.
    *
    * Every step is abs(), a rotation and a translation, and all three are
    * isometries — so the composed field is 1-Lipschitz and the Chebyshev box at
@@ -221,17 +272,51 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
    * dragging the whole journey's step factor down with it.
    *
    * Taken as a shell (abs(d) - t) rather than as a solid, because a solid fold
-   * fills the room and a shell is a nave of ribs with light behind them. And fed
-   * a *mirrored* z, so it survives the phase fold — it is the one thing in here
-   * with no natural period, and 64 metres divides PHASE_WRAP.
+   * fills the room and a shell is leaves of stone with light behind them. And fed
+   * a *mirrored* z on the bay, so it survives the phase fold and every second bay
+   * is the first one turned round.
    */
-  float chapelProps(vec3 q, float bore, float ceilH) {
+  float chapelProps(vec3 q, vec4 A, vec4 B, vec4 C) {
+    float bore  = A.w;
+    float lamp  = B.z;
+    float lampY = C.w;
+    float zp    = phaseAt(q.z);
+    float nave  = naveAir(q);
+
+    // The ribs: the nave's own profile, thickened, on every bay line. They are
+    // what makes the cut through the fold read as a building — the fold has no
+    // period the eye can find, and an arch every eight metres is nothing else.
+    float rib = max(abs(nave - 0.07) - 0.30, lattAbs(zp, NAVE_BAY) - 0.24);
+
+    // The votive lamp and the chain it hangs on, from the crown of the vault.
+    float lz    = latt(zp, lamp);
+    float crown = NAVE_SPRING + 5.1;
+    float bowl  = length(vec3(q.x, (q.y - lampY) * 0.8, lz)) - 0.15;
+    float chain = max(length(vec2(q.x, lz)) - 0.012, abs(q.y - 0.5 * (lampY + crown)) - 0.5 * (crown - lampY));
+    float fit   = min(rib, min(bowl, chain));
+
+    // The fronts. A fold cut off square at the end of its room is a section
+    // drawing, so both ends get a wall across the whole profile with the nave's
+    // arch for a doorway. Looking back from the overlook it is a gable with a
+    // door in it; coming in off the concourse it is the first thing that says
+    // what kind of room this is.
+    float inside = min(q.z - A.x, A.y - q.z);
+    float dz     = abs(inside) - 0.45;
+    if (dz < 1.5)
+      fit = min(fit, max(max(dz, -nave), roomProfile(q, bore, B.x, B.y) - 0.70));
+
+    // Deep in the nave's air the cut is the nearer surface whatever the fold is
+    // doing, and '-nave' is a bound on the whole carve (it is one side of a max).
+    // Handing it back skips the fold for most of every ray that looks down the
+    // track, which is most of every frame in this room.
+    if (nave < -1.1) return min(fit, -nave);
+
     // Bring the room into the fold's own range before folding it.
     //
     // A fold's structure lives at the scale it subtracts by, and the Chebyshev
     // box at the end is dominated by whichever coordinate is largest. Feed a
     // sixteen-metre nave straight into a two-metre fold and every point in the
-    // room is metres away from every rib, so the room comes out as a smooth
+    // room is metres away from every leaf, so the room comes out as a smooth
     // corridor with nothing in it — which is exactly how this looked first.
     //
     // So: repeat the plan on a bay, mirrored (lattAbs is a triangle wave, so it
@@ -241,7 +326,7 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     // allowed to be wrong in.
     vec3 p = vec3(lattAbs(q.x, 5.6) - 1.35,
                   (q.y - 4.0) * 0.55,
-                  lattAbs(phaseAt(q.z), 9.0) - 2.05);
+                  lattAbs(zp, NAVE_BAY) - 2.05);
 
     float d = 1e5;
     float f = 1.0;
@@ -260,8 +345,14 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
       f *= 0.62;
     }
 
+    // The embrasures go through the fold with the nave: a beam is only a beam if
+    // nothing is standing in it.
+    float air   = min(nave, lancet(q, bore));
     float shell = abs(d) - 0.16;
-    return max(shell, -(length(vec2(q.x, q.y - 1.5)) - bore * 0.34));
+
+    // ...and the fold stops at the fronts. The room's slab runs OVERLAP past
+    // them, and a fold left to fill it stands proud of its own gable.
+    return min(fit, max(max(shell, -air), -inside));
   }
 
   /** THE OVERLOOK: nothing but the trestle, a handrail, and a very long way down. */
@@ -324,7 +415,7 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     else if (t < T_SCAFFOLD - 0.5)  d = driftProps(q, A.w, B.x, B.z, C.w);
     else if (t < T_CONCOURSE - 0.5) d = scaffoldProps(q, B.w);
     else if (t < T_CHAPEL - 0.5)    d = concourseProps(q, A.w, B.x);
-    else if (t < T_OVERLOOK - 0.5)  d = chapelProps(q, A.w, B.x);
+    else if (t < T_OVERLOOK - 0.5)  d = chapelProps(q, A, B, C);
     else if (t < T_FALL - 0.5)      d = overlookProps(q);
     else                            d = fallProps(q, B.w);
 

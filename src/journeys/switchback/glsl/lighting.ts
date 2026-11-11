@@ -50,6 +50,29 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
 
     // Ambient: the room's own fog bounced back, plus whatever the weather gets in.
     vec3 amb = roomFog(r.type, r.grime) * 3.0 + skyAmbient(r.type, uAtm.y) * r.sky * 0.65;
+
+    if (r.type > T_CONCOURSE + 0.5 && r.type < T_OVERLOOK - 0.5) {
+      // The chapel's daylight is the lancets' and nothing else's: the same field
+      // the embrasures were cut with, so a pool of light on the floor is exactly
+      // the shape of the window it came through. The shadow ray stops at the
+      // glass, which is what keeps the wall behind the window out of it.
+      float lan  = lancet(q, r.bore);
+      float back = (q.x - r.bore) / NAVE_SUN.x;
+      float beam = smoothstep(0.0, -0.30, lan);
+      if (beam > 0.003) {
+        // The ray runs the length of its own embrasure, a metre from the stone
+        // all the way, so the usual penumbra would call the whole beam shade.
+        // Only the first quarter of it is kept: things in the beam, not beside it.
+        float sh = uHeavy > 0.5 ? smoothstep(0.0, 0.25, shadowTo(q, -NAVE_SUN, min(back, 16.0))) : 1.0;
+        col += naveSunTint() * max(dot(n, -NAVE_SUN), 0.0) * beam * sh * 5.2;
+      }
+
+      // ...and what that light does besides land: the reveals of an embrasure
+      // glow with what is going past them, and a warm fill comes back off the
+      // floor and the west wall, strongest low down and facing the windows.
+      amb += naveSunTint() * smoothstep(0.9, 0.0, lan) * exp(-max(back, 0.0) * 0.16) * 1.3;
+      amb += naveSunTint() * (0.035 + 0.06 * max(n.x, 0.0)) * smoothstep(9.0, 0.0, q.y);
+    }
     return col + amb * (0.45 + 0.55 * max(dot(n, uUp.xyz), 0.0)) * ao;
   }
 
@@ -83,8 +106,8 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
   }
 
   /**
-   * Shafts: the vent holes over the drift, the clerestory over the concourse,
-   * whatever is behind the chapel's ribs.
+   * Shafts: the vent holes over the drift and the clerestory over the concourse.
+   * The chapel's are naveShafts, below.
    *
    * Built from lattAbs rather than latt, because a term accumulated along a ray
    * has to be continuous in space or it draws its own quantisation — adjacent
@@ -111,6 +134,56 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
     // The wedge: full against the wall, gone before the middle of the room.
     float inward = smoothstep(wall * 1.05, wall * 0.12, abs(q.x));
     return f * inward * uFall.w * (0.45 + uFall.x * 1.7);
+  }
+
+  /**
+   * The chapel's god-rays: the lancets' beams, seen side-on through the dust.
+   *
+   * Their own loop rather than a branch of 'shafts', because a beam a metre and
+   * a half across needs samples closer together than the five metres the vents
+   * and the clerestory get by on. The step grows with range, so the bays near
+   * the cart are resolved and the far ones are averaged, which is also what the
+   * fog does to them. Nothing here touches the map: the beam is closed-form.
+   */
+  vec3 naveShafts(vec3 rd, float tMax) {
+    // Not in the window at all: three compares, and every other room's frame is
+    // the frame it was.
+    bool any = false;
+    for (int i = 0; i < 3; i++)
+      if (abs(uSecA[i].z - T_CHAPEL) < 0.5) any = true;
+    if (!any) return vec3(0.0);
+
+    // Interleaved gradient noise for the jitter, not the white hash the other
+    // volumetrics use: these beams are bright and hard-edged, and white noise on
+    // them is a stipple where this is a weave too fine to see.
+    float acc = 0.0;
+    float j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    float t = 0.0;
+
+    for (int k = 0; k < 26; k++) {
+      float dt = 0.9 + 0.075 * float(k);
+      float ts = t + j * dt;
+      t += dt;
+      if (ts > tMax) break;
+
+      vec3 q = toTrack(rd * ts);
+      Room r = roomAt(q.z);
+      if (abs(r.type - T_CHAPEL) > 0.5) continue;
+
+      // Brightest where it comes in, thinning as the dust takes it. Only the
+      // air the nave and the embrasures actually have: behind the west wall
+      // there is stone, and a beam drawn through stone is a searchlight.
+      float back = (q.x - r.bore) / NAVE_SUN.x;
+      // The edge is as soft as the step is long. A beam narrower than the gap
+      // between two samples is not a beam any more, it is a coin toss.
+      float soft = 0.12 + 0.17 * dt;
+      float beam = smoothstep(soft, -soft, lancet(q, r.bore));
+      float open = smoothstep(-NAVE_W - 0.6, -NAVE_W + 0.4, q.x) * smoothstep(-1.2, -0.2, q.y);
+      float dust = 0.55 + 0.45 * fbm(vec2(phaseAt(q.z) * 0.35 + q.x * 0.5, q.y * 0.6 - iTime * 0.05));
+
+      acc += beam * open * dust * exp(-back * 0.075) * exp(-ts * 0.022) * dt;
+    }
+    return naveSunTint() * acc * 0.17;
   }
 
   vec3 shafts(vec3 rd, float tMax) {
@@ -147,11 +220,6 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
         // Between the mullions, raked across the concourse at sunset.
         m = smoothstep(0.42, 0.86, lattAbs(q.x, 1.9)) * smoothstep(-0.5, r.ceilH, q.y) * 0.9;
         tone = vec3(1.00, 0.68, 0.58);
-      }
-      else if (r.type < T_OVERLOOK - 0.5) {
-        // The chapel. Broad, slow, gold, and coming from behind the ribs.
-        m = smoothstep(2.2, 0.2, lattAbs(zp, 8.0)) * smoothstep(0.0, r.ceilH * 0.8, q.y) * 2.2;
-        tone = vec3(1.00, 0.82, 0.50);
       }
       else continue;
 

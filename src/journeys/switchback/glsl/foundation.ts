@@ -54,10 +54,6 @@ export const foundationGlsl = `
   const float TIE_PITCH  = 2.5;
   const float BENT_PITCH = 10.0;
 
-  // Ditto: the chapel's fold is mirrored on this period so that it, too, survives
-  // the fold in the phase. Nothing else in the journey is aperiodic along z.
-  const float FOLD_PITCH = 64.0;
-
   // Rooms extend this far past both ends of their nominal z-range. Load bearing:
   // two adjacent air volumes would otherwise only touch on a plane, the union
   // would read exactly 0 there, and the march would see the portal as sealed.

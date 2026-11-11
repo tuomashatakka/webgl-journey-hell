@@ -30,6 +30,11 @@ export const skyAndRoomsGlsl = `
     return vec3(1.00, 0.90, 0.78);
   }
 
+  /** The colour of the chapel's daylight. Gold, and greyer as the laps go by. */
+  vec3 naveSunTint() {
+    return mix(vec3(1.00, 0.76, 0.42), vec3(0.74, 0.56, 0.50), uAtm.y * 0.6);
+  }
+
   /** The colour the fog goes to. This is most of what makes six rooms six. */
   vec3 roomFog(float type, float grime) {
     vec3 c;
