@@ -12,7 +12,7 @@ const skybridges = defineJourney({
   renderer: shaderRenderer(skybridgesFrag, {
     envMapUrl:  staticUrl(skybridgesEnv),
     lite:       [ ...skybridgesLighter, skybridgesPreviewFrag, ...skybridgesLastResort ],
-    mobileFrom: 1,
+    mobileFrom: 0,
     probe:      skybridgesProbe,
   }),
   marksAt:       getSkybridgesMarks,

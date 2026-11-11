@@ -39,11 +39,20 @@ export const materialsGlsl = /* glsl */`
     return best / (1.0 + length(w.xz - vec2(0.0, gZ)) * abs(turnRate(w.z)));
   }
 
+  /**
+   * The tetrahedral normal, its four taps in a loop. Written out as four calls
+   * it is four inlined copies of the whole city, twice over (the view and the
+   * see-through march), and an Adreno 722 would not link that: the probe that
+   * stubbed either the shading or the map linked, every other one did not.
+   */
   vec3 normalAt(vec3 p, float t) {
     float e = 0.0015 + t * 0.0004;
-    vec2 k = vec2(1.0, -1.0);
-    return normalize(k.xyy * map(p + k.xyy * e) + k.yyx * map(p + k.yyx * e) +
-                     k.yxy * map(p + k.yxy * e) + k.xxx * map(p + k.xxx * e));
+    vec3 n = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+      vec3 k = i == 0 ? vec3(1.0, -1.0, -1.0) : i == 1 ? vec3(-1.0, -1.0, 1.0) : i == 2 ? vec3(-1.0, 1.0, -1.0) : vec3(1.0);
+      n += k * map(p + k * e);
+    }
+    return normalize(n);
   }
 
   // --- sunlight: closed form, no march ---------------------------------------------
@@ -364,7 +373,13 @@ export const materialsGlsl = /* glsl */`
       vec3 p = ro + rd * t;
       float d = map(p);
       if (d < 0.002 + 0.002 * t) {
+        // A phone's build lights what it sees through the glass as if it faced
+        // the eye: one copy of the city fewer for its compiler to swallow.
+        #ifdef LITE
+        vec3 nn = -rd;
+        #else
         vec3 nn = normalAt(p, t);
+        #endif
         vec3 col;
         if (abs(gMat - M_FACADE) < 0.5) col = skyBase(toWorld(reflect(rd, nn))) * 0.35 + vec3(0.03, 0.035, 0.04);
         else if (gMat < 0.5 || abs(gMat - M_FROST) < 0.5) col = mix(sky(rd, p.y, 1.0), skyBase(toWorld(reflect(rd, nn))), 0.2);

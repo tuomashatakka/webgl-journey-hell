@@ -310,7 +310,7 @@ Things to keep true:
   a last resort the preview — the index's channel, no ending, `NO_BLAST`
   implying both plain switches so it carries none of the ending's code — and
   after it the same on 28 and then 12 march steps (`skybridgesLastResort`). A phone
-  starts at min. A build that fails with the context lost stops the chain and
+  starts at lite. A build that fails with the context lost stops the chain and
   is skipped from then on (remembered across reloads), and if nothing links the
   failure screen lists every build's error and the GPU's name. An Adreno 722
   (Chrome, ANGLE over GLES 3.2) refused every build down to the preview, with
@@ -328,6 +328,13 @@ Things to keep true:
   steps over a neighbour.
 - The mushroom cloud is skipped outside its bounding box; the blast costs nothing
   before `T0`.
+- **The city is inlined as few times as possible.** A phone compiler pastes
+  `map()` in at every call, and the whole city at ten call sites (the view
+  march, the see-through march, and four taps for each of two normals) is a
+  program an Adreno 722 would not link — the `?diag=1` probes linked only with
+  the shading or the map stubbed out. The normal's four taps are a loop (one
+  call), and the phone builds (`LITE`) light what is seen through glass as if it
+  faced the eye, with no normal at all. The desktop picture is unchanged.
 - **The event is built once per pixel.** Phone compilers inline `sky()` into all
   of its call sites, and a sky carrying the full cloud and the pressure wave in
   each of them is a program some phones will not link ("link: no info log").
