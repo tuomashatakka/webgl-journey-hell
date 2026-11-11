@@ -39,6 +39,11 @@ const HUB_Y = 62
 
 const HUB_Z = 2.4
 
+/** A hedge's cross-section, (across, up): a rounded bank of leaves. */
+const HEDGE_PROFILE: [ number, number ][] = [
+  [ -0.85, 0 ], [ -1, 0.75 ], [ -0.7, 1.55 ], [ 0, 1.95 ], [ 0.7, 1.55 ], [ 1, 0.75 ], [ 0.85, 0 ],
+]
+
 export interface PropSet {
   name:      string;
   builder:   MeshBuilder;
@@ -283,11 +288,6 @@ function fenceStrip (pl: Placer, all: SpineIndex, s0: number, s1: number, side: 
   }
   return b
 }
-
-/** A hedge's cross-section, (across, up): a rounded bank of leaves. */
-const HEDGE_PROFILE: [ number, number ][] = [
-  [ -0.85, 0 ], [ -1, 0.75 ], [ -0.7, 1.55 ], [ 0, 1.95 ], [ 0.7, 1.55 ], [ 1, 0.75 ], [ 0.85, 0 ],
-]
 
 /**
  * The hedgerows: one strip mesh along every field border in the valley

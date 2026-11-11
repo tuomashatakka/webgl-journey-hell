@@ -41,6 +41,39 @@ const FARM_EAST = 320
 const COS = Math.cos(FIELD_ROT)
 const SIN = Math.sin(FIELD_ROT)
 
+/** The same layout and mask for the terrain's fragment shader. */
+export const fieldsChunk = /* glsl */`
+float fieldHash (float n) {
+  float p = fract(n * 0.1031);
+  p *= p + 33.33;
+  p *= p + p;
+  return fract(p);
+}
+float farmWeight (vec3 p, float ny) {
+  return (1.0 - smoothstep(${(FARM_TOP - 32).toFixed(1)}, ${FARM_TOP.toFixed(1)}, p.y)) * smoothstep(0.9, 0.965, ny)
+       * (1.0 - smoothstep(${(FARM_EAST - 90).toFixed(1)}, ${FARM_EAST.toFixed(1)}, p.x));
+}
+// x, y: the field's id (column, row). z: distance to its nearest border, in
+// metres. w: which way it is worked, a coordinate along its furrows.
+vec4 fieldAt (vec2 xz) {
+  const float C = ${COS.toFixed(8)};
+  const float S = ${SIN.toFixed(8)};
+  float u   = C * xz.x + S * xz.y;
+  float v   = -S * xz.x + C * xz.y;
+  float uw  = u + ${WOB_U.toFixed(1)} * sin(v * ${WOB_UK} + 1.3);
+  float col = floor(uw / ${FIELD_W.toFixed(1)});
+  float h   = ${ROW_MIN.toFixed(1)} + ${ROW_SPAN.toFixed(1)} * fieldHash(col);
+  float off = fieldHash(col + 31.7) * h;
+  float vw  = v + off + ${WOB_V.toFixed(1)} * sin(uw * ${WOB_VK} + col);
+  float row = floor(vw / h);
+  float fu  = uw - col * ${FIELD_W.toFixed(1)};
+  float fv  = vw - row * h;
+  float edge = min(min(fu, ${FIELD_W.toFixed(1)} - fu), min(fv, h - fv));
+  float along = fieldHash(col * 7.3 + row * 13.1 + 2.0) < 0.5 ? u : v;
+  return vec4(col, row, edge, along);
+}
+`
+
 function fract (x: number): number {
   return x - Math.floor(x)
 }
@@ -141,36 +174,3 @@ export function fieldBorders (x0: number, z0: number, x1: number, z1: number, st
   }
   return out
 }
-
-/** The same layout and mask for the terrain's fragment shader. */
-export const fieldsChunk = /* glsl */`
-float fieldHash (float n) {
-  float p = fract(n * 0.1031);
-  p *= p + 33.33;
-  p *= p + p;
-  return fract(p);
-}
-float farmWeight (vec3 p, float ny) {
-  return (1.0 - smoothstep(${(FARM_TOP - 32).toFixed(1)}, ${FARM_TOP.toFixed(1)}, p.y)) * smoothstep(0.9, 0.965, ny)
-       * (1.0 - smoothstep(${(FARM_EAST - 90).toFixed(1)}, ${FARM_EAST.toFixed(1)}, p.x));
-}
-// x, y: the field's id (column, row). z: distance to its nearest border, in
-// metres. w: which way it is worked, a coordinate along its furrows.
-vec4 fieldAt (vec2 xz) {
-  const float C = ${COS.toFixed(8)};
-  const float S = ${SIN.toFixed(8)};
-  float u   = C * xz.x + S * xz.y;
-  float v   = -S * xz.x + C * xz.y;
-  float uw  = u + ${WOB_U.toFixed(1)} * sin(v * ${WOB_UK} + 1.3);
-  float col = floor(uw / ${FIELD_W.toFixed(1)});
-  float h   = ${ROW_MIN.toFixed(1)} + ${ROW_SPAN.toFixed(1)} * fieldHash(col);
-  float off = fieldHash(col + 31.7) * h;
-  float vw  = v + off + ${WOB_V.toFixed(1)} * sin(uw * ${WOB_VK} + col);
-  float row = floor(vw / h);
-  float fu  = uw - col * ${FIELD_W.toFixed(1)};
-  float fv  = vw - row * h;
-  float edge = min(min(fu, ${FIELD_W.toFixed(1)} - fu), min(fv, h - fv));
-  float along = fieldHash(col * 7.3 + row * 13.1 + 2.0) < 0.5 ? u : v;
-  return vec4(col, row, edge, along);
-}
-`

@@ -8,7 +8,7 @@ import { SECTION_COUNT, lookAt as lookParamsAt, sectionWeights } from '../course
 import type { LookParams } from '../course'
 import { SEA_PATCH, buildFarMesh, buildNearChunks, buildSeaPatch, buildSeaQuad, buildSpineIndex } from '../geometry'
 import { buildMaw, buildTube } from '../maw'
-import type { Jaw } from '../maw'
+import type { Hinged, Jaw } from '../maw'
 import { buildProps } from '../props'
 import type { PropSet } from '../props'
 import { buildCity } from '../city'
@@ -89,10 +89,13 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
   const jaws: { jaw: Jaw; mesh: Mesh }[] = [ maw.upper, maw.lower ].map(jaw => ({
     jaw, mesh: createMesh(gl, jaw.builder),
   }))
-  const tube      = buildTube(route)
-  const tubeFront = createMeshFromArrays(gl, tube.front.vertices, tube.front.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
-  const tubeBack  = createMeshFromArrays(gl, tube.back.vertices, tube.back.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
-  const waterMesh = createMeshFromArrays(gl, tube.water.vertices, tube.water.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
+  const rings: { ring: Hinged; mesh: Mesh }[] = maw.rings.map(ring => ({ ring, mesh: createMesh(gl, ring.builder) }))
+  const lureMesh                              = createMesh(gl, maw.lure.builder)
+  const strandMesh                            = createMesh(gl, maw.strands)
+  const tube                                  = buildTube(route)
+  const tubeFront                             = createMeshFromArrays(gl, tube.front.vertices, tube.front.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
+  const tubeBack                              = createMeshFromArrays(gl, tube.back.vertices, tube.back.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
+  const waterMesh                             = createMeshFromArrays(gl, tube.water.vertices, tube.water.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0)
 
   // --- the props ---------------------------------------------------------------
   const props: { set: PropSet; mesh: Mesh }[] = buildProps(route, spine).map(set => {
@@ -124,5 +127,5 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
     gl, railArrays.vertices, railArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
   )
 
-  return { profile, roadMesh, chunks, far, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh }
+  return { profile, roadMesh, chunks, far, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh }
 }

@@ -100,14 +100,14 @@ export function createScenicRouteScene (
   if (!programs)
     return null
 
-  const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP } = programs
+  const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, strandP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP } = programs
 
   const route     = getRoute()
   const materials = createMaterialArrays(gl)
 
   const { bankTex, skyTarget, skyTex, shadowTex, shadowFbo } = createTargets(gl, route)
 
-  const { roadMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
+  const { roadMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
 
   const rig                                                              = createCockpitRig(gl)
   const { cabinMesh, wheelMesh, speedoMesh, tachoMesh, mirror, dialTex } = rig
@@ -273,9 +273,19 @@ export function createScenicRouteScene (
       const bankGain = bankGainAt(ride[1])
       const bendGain = bendGainAt(ride[1])
       // Shut until the car is off the edge, then open by lap; the whole head
-      // sits under the sea until the car comes along the headland.
-      const jawAngle = jawAngleAt(ride[1]) * fall[2] - JAW_SHUT * (1 - fall[2])
-      const headDrop = -HEAD_DROP * (1 - fall[1])
+      // sits under the sea until the car comes along the headland. It is not
+      // patient about it: once risen it snaps at the air while it waits, the
+      // jaw trembles all the time, and in the last of the fall it lunges wider.
+      const waiting  = fall[1] * (1 - fall[2])
+      const snap     = Math.pow(Math.max(0, Math.sin(time * 2.6)), 6) * 0.32 * waiting
+      const tremor   = Math.sin(time * 11.3) * 0.012 + Math.sin(time * 2.1) * 0.025
+      const lunge    = 0.16 * fall[2] * fall[2]
+      const jawAngle = jawAngleAt(ride[1]) * fall[2] - JAW_SHUT * (1 - fall[2]) + snap + tremor + lunge
+      // Through the fall the head heaves up out of the sea to meet the car and
+      // settles back as the car reaches it, so the throat is where the arc
+      // lands when it matters: zero at both ends of the fall, metres between.
+      const surge    = 9 * Math.sin(Math.PI * fall[2]) * (1 - fall[2])
+      const headDrop = -HEAD_DROP * (1 - fall[1]) + surge
       const seaRise  = Math.min(ride[1], 3) * 0.45
       const exposure = EXPOSURE_BASE * Math.pow(2, env[0])
       const shadowOn = env[1] > 0.05 && sun[1] > 0.005 ? 1 : 0
@@ -415,6 +425,30 @@ export function createScenicRouteScene (
           jawP.uniform1f('uJaw', jawAngle * jaw.share)
           mesh.draw(gl)
         }
+        // The throat's rings of teeth grind round, alternate rings against each other.
+        rings.forEach(({ ring, mesh }, i) => {
+          jawP.uniform3f('uHinge', ring.hinge.x, ring.hinge.y, ring.hinge.z)
+          jawP.uniform3f('uAxis', ring.axis.x, ring.axis.y, ring.axis.z)
+          jawP.uniform1f('uJaw', (i % 2 === 0 ? 1 : -1) * (time * 0.35 + Math.sin(time * 1.9 + i) * 0.08))
+          mesh.draw(gl)
+        })
+        // The lure sways on its stalk.
+        jawP.uniform3f('uHinge', maw.lure.hinge.x, maw.lure.hinge.y, maw.lure.hinge.z)
+        jawP.uniform3f('uAxis', maw.lure.axis.x, maw.lure.axis.y, maw.lure.axis.z)
+        jawP.uniform1f('uJaw', Math.sin(time * 0.8) * 0.2 + Math.sin(time * 2.1) * 0.05)
+        lureMesh.draw(gl)
+
+        // Slime strung between the jaws, stretching as they part.
+        strandP.use()
+        strandP.uniformMatrix4fv('uViewProj', vp)
+        strandP.uniform3f('uOffset', 0, headDrop, 0)
+        bindLit(strandP, cp, sun, env, fogCol, time, shadowOn)
+        strandP.uniform3f('uHingeU', maw.upper.hinge.x, maw.upper.hinge.y, maw.upper.hinge.z)
+        strandP.uniform3f('uHingeL', maw.lower.hinge.x, maw.lower.hinge.y, maw.lower.hinge.z)
+        strandP.uniform3f('uAxis', maw.upper.axis.x, maw.upper.axis.y, maw.upper.axis.z)
+        strandP.uniform1f('uJawU', jawAngle * maw.upper.share)
+        strandP.uniform1f('uJawL', jawAngle * maw.lower.share)
+        strandMesh.draw(gl)
 
         // The tube and its water.
         tubeP.use()
@@ -566,13 +600,17 @@ export function createScenicRouteScene (
       waterMesh.dispose(gl)
       for (const { mesh } of jaws)
         mesh.dispose(gl)
+      for (const { mesh } of rings)
+        mesh.dispose(gl)
+      lureMesh.dispose(gl)
+      strandMesh.dispose(gl)
       for (const { mesh } of props)
         mesh.dispose(gl)
       towerMesh.dispose(gl)
       for (const p of [
         skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP,
         propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP,
-        mawP, jawP, jawDepthP, tubeP, waterP, cockpitP,
+        mawP, jawP, jawDepthP, strandP, tubeP, waterP, cockpitP,
       ])
         p.dispose()
     },

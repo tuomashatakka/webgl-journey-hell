@@ -2,7 +2,7 @@ import { createGlProgram } from '@wjh/gl/program'
 import { blurFrag, brightFrag, compositeFrag } from '../shader/post'
 import { cockpitFrag, cockpitVert } from '../shader/cockpit'
 import { depthFrag, meshVert, propDepthFrag, propFrag, propVert, seaFrag, seaVert, sweepVert, terrainFrag, towerFrag, towerVert } from '../shader/world'
-import { jawFrag, jawVert, mawFrag, railFrag, roadFrag, tubeFrag, waterFrag } from '../shader/maw'
+import { jawFrag, jawVert, mawFrag, railFrag, roadFrag, strandVert, tubeFrag, waterFrag } from '../shader/maw'
 import { postVert, skyDomeFrag, skyLutFrag, skyVert } from '../shader/sky'
 
 /** Every program the scene draws with, or null if any failed to build. */
@@ -17,6 +17,7 @@ export function createPrograms (gl: WebGL2RenderingContext) {
   const mawP        = createGlProgram(gl, sweepVert, mawFrag)
   const jawP        = createGlProgram(gl, jawVert, jawFrag)
   const jawDepthP   = createGlProgram(gl, jawVert, depthFrag)
+  const strandP     = createGlProgram(gl, strandVert, jawFrag)
   const tubeP       = createGlProgram(gl, sweepVert, tubeFrag)
   const waterP      = createGlProgram(gl, sweepVert, waterFrag)
   const cockpitP    = createGlProgram(gl, cockpitVert, cockpitFrag)
@@ -30,8 +31,8 @@ export function createPrograms (gl: WebGL2RenderingContext) {
   const compP       = createGlProgram(gl, postVert, compositeFrag)
   if (!skyLutP || !skyDomeP || !roadP || !roadDepthP || !terrainP || !meshDepthP || !seaP ||
     !propP || !propDepthP || !railP || !towerP || !towerDepthP || !brightP || !blurP || !compP ||
-    !mawP || !jawP || !jawDepthP || !tubeP || !waterP || !cockpitP)
+    !mawP || !jawP || !jawDepthP || !strandP || !tubeP || !waterP || !cockpitP)
     return null
 
-  return { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP }
+  return { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, strandP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP }
 }

@@ -361,6 +361,17 @@ export function buildCockpit (): Cockpit {
     bar(cabin, [ sgn * 0.93, 0.83, -0.18 ], [ sgn * 0.93, 0.83, -0.02 ], 0.012, TAG.PLASTIC)
   }
 
+  // The footwell: a carpeted floor and the toe board up to the underside of
+  // the dash. Without them the car had no bottom, and in the fall, looking
+  // down past the wheel, the sea showed through where the pedals should be.
+  for (const [ a, b, c, d ] of [
+    [[ -0.95, 0.22, -0.6 ], [ 0.95, 0.22, -0.6 ], [ 0.95, 0.22, 0.98 ], [ -0.95, 0.22, 0.98 ]],
+    [[ -0.95, 0.22, 0.98 ], [ 0.95, 0.22, 0.98 ], [ 0.95, 0.53, 0.72 ], [ -0.95, 0.53, 0.72 ]],
+  ] as P[][]) {
+    quad(cabin, a, b, c, d, TAG.PLASTIC)
+    quad(cabin, d, c, b, a, TAG.PLASTIC)
+  }
+
   // The pillars, the header, the visors, the headliner.
   bar(cabin, [ -0.92, 0.9, 1.05 ], [ -0.7, 1.52, 0.2 ], 0.05, TAG.PLASTIC)
   bar(cabin, [ 0.92, 0.9, 1.05 ], [ 0.7, 1.52, 0.2 ], 0.05, TAG.PLASTIC)
