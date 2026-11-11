@@ -563,3 +563,64 @@ was the hills' own edge, and the coast road never showed the sea. What changed:
   coast's two tree clusters moved inland.
 - **The key light is unchanged**; nothing in the lighting, sky, sea, city,
   gullet or cave moved, and nothing in the route.
+
+## Revision 5 — the cinematic pass
+
+The ride had the shape of a film and the look of a test scene. What changed,
+section by section; nothing in the route, the speeds, the bank or the lap
+rules moved.
+
+- **The maw** (`maw.ts`, `shader/maw.ts`). Three rows of fangs per jaw (13, 22
+  and 32, from 9–17 m down to 2.5–4.5 m), each a curved cone bending back down
+  the throat, a tenth missing and a tenth snapped short, on lips lumped and
+  ridged instead of turned. Three rings of teeth down the throat at 12, 27 and
+  44 m past the mouth, pointing in and down, kept short over the floor so they
+  clear the car's line, grinding round in alternate directions. An anglerfish
+  lure: a knuckled stalk from the crown arched out over the mouth, off the
+  fall's line, with a bulb of living light that pulses and sways on the stalk.
+  Sixteen strands of slime strung between the inner lips (`strandVert`), each
+  anchor carried by its own jaw so the strands stretch and thin as the mouth
+  gapes. The hide is plated, scarred and crusted, near black and wet, with
+  photophores pulsing in a wave toward the mouth, and seven eyes a side, three
+  of them on the crown where the falling car looks, burning, slit-pupilled,
+  twitching and blinking out of step. Flesh is veined and breathes.
+- **It moves.** Once risen it snaps at the air while it waits (a sixth power of
+  a sine at 2.6 rad/s, 0.32 rad, only while the jaw is shut); the jaw always
+  trembles; in the last of the fall it lunges 0.16 rad wider; and through the
+  fall the head heaves up out of the sea to meet the car, `9 · sin(π·open) ·
+  (1 − open)` metres, which is zero at both ends of the fall, so the throat is
+  where the arc lands when the car reaches it. Lips quiver in the vertex shader.
+- **The water lies level.** The river strip used to start sixty metres past the
+  mouth, where the throat is still diving, and was a ramp of water down the
+  gullet. It now starts where the spine's grade has fallen under 0.05.
+- **Inside.** The headlamps' knee is 0.09·2^−EV (was 0.2) and is a knee, not a
+  ceiling: past it the light climbs on a log, so a near wall stands about 3×
+  over one twenty metres down the tunnel and the tunnel has depth; as a ceiling
+  it lit the whole cave to one level. The fog-coloured ambient floor is 0.12
+  (was 0.35). The cave is wet basalt (albedo about 0.045 — the 1.3 EV exposure
+  turned mid-grey stone cream) with seams and runs; algae glow along the
+  waterline and in colonies up the vault; the lamps throw caustics up the
+  lowest 3.5 m of wall off the river, in the cave only. The gullet's ribs are
+  ridges in the normal, its veins pulse red toward the gut. The river is black
+  water: Fresnel on the dark of the cave, sharp lamp glints on the ripples, foam
+  where the current folds; reflecting the algae glow at low angles painted the
+  whole river teal, since nearly every ray off it is low.
+- **The lens** (`shader/post.ts`). Sun shafts dragged out of the bloom toward the
+  sun's place on screen (so anything in front of the sky cuts them), flare
+  ghosts and a halo gated by how much sun the bloom shows at the sun itself, an
+  anamorphic streak, a chromatic fringe toward the corners, a grade with teal
+  in the shadows and warmth in the highlights and a soft S, a deeper vignette,
+  and grain. Lap 1's sun at 12° sits just above the windscreen, so the shafts
+  belong to lap 2's sunset.
+- **Downtown.** The speckle on every tower was the instance seed, interpolated
+  across the face: perspective interpolation of a constant is not exact, and
+  every hash of it (glass or masonry, cell size, lights) flickered per pixel.
+  It is `flat` now. The window grid is filtered by its own footprint
+  (`fwidth`) to the facade's average; curtain-wall panes are each bowed their
+  own way; masonry has spandrels and ledges; blinds, until the panes are too
+  small to carry them; lit shopfronts at street level (metres from
+  `vFacade.y` — `vH` is a fraction of the tower); window lights only from dusk
+  (the old 15 % floor lit windows at noon). The Δ scan on the masonry gives way
+  between 10 and 35 m, where it would alias.
+- **The car has a floor**: carpet and a toe board under the dash. Looking down
+  in the fall showed the sea through the footwell.
