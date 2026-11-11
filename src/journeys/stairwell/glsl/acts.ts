@@ -76,26 +76,55 @@ vec2 spillway (vec3 p) {
 }
 
 // II · PROTEAN WEATHER BRIDGE — nothing but structure and weather.
+// An open suspension deck: tall portal pylons every 22 units on piers that go
+// down into the cloud, main cables sagging between their saddles with a
+// hanger every 2.75 down to the deck edge, a grating deck either side of the
+// flight on a Warren truss, and wind fencing kept to a low rail of slats so
+// the view out over the cloud sea stays open.
 vec2 stormBridge (vec3 p) {
   float px = pathX(1.0, p.z);
   float py = pathY(1.0, p.z);
-  float zCell = mod(p.z + 11.0, 22.0) - 11.0;
-  float zTruss = mod(p.z + 2.75, 5.5) - 2.75;
   float dx = p.x - px;
-  float pylons = sdBox(vec3(abs(dx) - 4.2, p.y - py - 4.0, zCell), vec3(0.28, 4.3, 0.28));
-  float crosshead = sdBox(vec3(dx, p.y - py - 7.8, zCell), vec3(4.4, 0.22, 0.25));
-  float sag = cos(zCell * 0.16) * 1.15;
-  float cable = abs(length(vec2(abs(dx) - 4.2, p.y - py - 8.6 + sag)) - 0.06);
-  float hanger = sdBox(vec3(abs(dx) - 4.2, p.y - py - 5.4, zTruss), vec3(0.04, 3.2 - sag * 0.5, 0.04));
-  float chord = sdBox(vec3(abs(dx) - 3.4, p.y - py + 0.9, zCell), vec3(0.14, 0.14, 11.0));
-  vec3 braceP = vec3(abs(dx) - 3.4, p.y - py + 0.35, zTruss);
-  float braces = min(brace(braceP.zyx, 0.62, vec3(3.1, 0.09, 0.09)), brace(braceP.zyx, -0.62, vec3(3.1, 0.09, 0.09)));
-  float slat = sdBox(vec3(abs(dx) - 3.9, mod(p.y - py - 0.4, 0.42) - 0.21, zCell), vec3(0.05, 0.06, 11.0));
-  slat = max(slat, abs(p.y - py - 1.4) - 1.5);
-  float pier = sdBox(vec3(dx, p.y - py + 30.0, mod(p.z + 22.0, 44.0) - 22.0), vec3(2.2, 28.0, 1.6));
-  float beaconPulse = 0.14 + 0.05 * sin(animTime() * 2.1 + floor(p.z / 22.0));
-  float beacon = sdBox(vec3(abs(dx) - 4.2, p.y - py - 8.4, zCell), vec3(beaconPulse));
-  float steel = min(min(pylons, crosshead), min(min(cable, hanger), min(chord, min(braces, slat))));
+  float ax = abs(dx);
+  float y = p.y - py;
+  // Everything stands within 5.3 of the line and under 13.3 over it: past
+  // that, the bound is the distance, and rays out over the cloud cost nothing.
+  float bound = max(ax - 5.4, y - 13.3);
+  if (bound > 1.0) return vec2(bound, M_STEEL);
+  float zCell = mod(p.z + 11.0, 22.0) - 11.0;
+  float zHang = mod(p.z + 1.375, 2.75) - 1.375;
+  float zTruss = mod(p.z + 2.75, 5.5) - 2.75;
+
+  // Pylons: legs from the pier cap to above the saddle, a portal beam at the
+  // top and a strut under the cables.
+  float legs = sdBox(vec3(ax - 4.6, y - 5.0, zCell), vec3(0.32, 7.6, 0.34));
+  float portal = sdBox(vec3(dx, y - 11.7, zCell), vec3(4.95, 0.34, 0.3));
+  portal = min(portal, sdBox(vec3(dx, y - 7.6, zCell), vec3(4.6, 0.18, 0.22)));
+  // The main cables: a parabola from the saddle (12.3) to mid-span (5.2),
+  // its vertical distance scaled down by its slope to stay a bound.
+  float u = 1.0 - abs(zCell) / 11.0;
+  float cy = 5.2 + 7.1 * u * u;
+  float slope = 14.2 * u / 11.0;
+  float cable = (length(vec2(ax - 4.6, y - cy)) - 0.13) * inversesqrt(1.0 + slope * slope);
+  float hh = (cy + 0.4) * 0.5;
+  float hanger = sdBox(vec3(ax - 4.6, y - cy + hh, zHang), vec3(0.03, hh, 0.03));
+
+  // The deck either side of the flight, its edge girder and the truss under it.
+  float deck = sdBox(vec3(ax - 3.45, y + 0.44, 0.0), vec3(1.5, 0.05, 1e4));
+  float chord = min(sdBox(vec3(ax - 4.8, y + 0.62, 0.0), vec3(0.12, 0.2, 1e4)),
+                    sdBox(vec3(ax - 4.8, y + 2.35, 0.0), vec3(0.14, 0.14, 1e4)));
+  vec3 braceP = vec3(ax - 4.8, y + 1.45, zTruss);
+  float braces = min(brace(braceP.zyx, 0.3, vec3(2.9, 0.07, 0.07)), brace(braceP.zyx, -0.3, vec3(2.9, 0.07, 0.07)));
+  float floorBeam = sdBox(vec3(dx, y + 0.62, zTruss), vec3(4.8, 0.12, 0.1));
+  // Low wind fencing at the deck edge: three slats, knee high.
+  float slat = sdBox(vec3(ax - 4.9, mod(y + 0.05, 0.34) - 0.17, 0.0), vec3(0.025, 0.05, 1e4));
+  slat = max(slat, abs(y - 0.45) - 0.5);
+
+  float pier = sdBox(vec3(dx, y + 30.0, zCell), vec3(5.1, 27.4, 1.2));
+  float beaconPulse = 0.13 + 0.04 * sin(animTime() * 2.1 + floor(p.z / 22.0));
+  float beacon = sdBox(vec3(ax - 4.6, y - 12.75, zCell), vec3(beaconPulse));
+  float steel = min(min(min(legs, portal), min(cable, hanger)),
+                    min(min(deck, chord), min(min(braces, floorBeam), slat)));
   if (beacon < min(steel, pier)) return vec2(beacon, M_EMISSIVE);
   return pier < steel ? vec2(pier, M_CONCRETE) : vec2(steel, M_STEEL);
 }

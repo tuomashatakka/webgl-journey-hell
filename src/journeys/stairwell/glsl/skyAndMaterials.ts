@@ -14,6 +14,8 @@ vec3 skyOf (float owner, vec3 rd) {
   // The rift: a horizontal slit of light along the floor of the world.
   float rift = exp(-abs(rd.y + 0.05 + sin(rd.x * 8.0) * 0.05) * 55.0);
   c += vec3(0.20, 0.55, 1.0) * rift * uRupture * (0.25 + uFinale * 2.0);
+  float oAct = owner < 0.5 ? gA : owner < 1.5 ? gB : gC;
+  if (oAct > 0.5 && oAct < 1.5) c = bridgeSky(c, rd, owner < 0.5 ? uSunA : owner < 1.5 ? uSunB : uSunC);
   return c;
 }
 
@@ -29,17 +31,71 @@ vec3 hazeOf (float owner, vec3 rd) {
   vec3 sun = owner < 0.5 ? uSunA : owner < 1.5 ? uSunB : uSunC;
   float si = owner < 0.5 ? uSkyInfoA.z : owner < 1.5 ? uSkyInfoB.z : uSkyInfoC.z;
   c += vec3(1.0, 0.82, 0.62) * pow(max(dot(rd, sun), 0.0), 9.0) * si * 0.12;
+  // On the weather bridge the low sun ahead is behind the far wall, so it
+  // shows as the air lit warm toward it: a broad forward scatter.
+  float oAct = owner < 0.5 ? gA : owner < 1.5 ? gB : gC;
+  if (oAct > 0.5 && oAct < 1.5) {
+    vec2 rh = rd.xz / max(length(rd.xz), 1e-4);
+    vec2 sh = sun.xz / max(length(sun.xz), 1e-4);
+    float f = max(dot(rh, sh), 0.0);
+    c *= mix(vec3(0.92, 0.95, 1.04), vec3(1.25, 1.02, 0.8), f * f * f);
+  }
   return c;
 }
 
 float hazeDensity (float a) {
   if (a > 5.5) return 0.022;
   if (a < 0.5) return 0.0055;
-  if (a < 1.5) return 0.011;
+  if (a < 1.5) return 0.009;
   if (a < 2.5) return 0.004;
   if (a < 3.5) return 0.0045;
   if (a < 4.5) return 0.0055;
   return 0.005;
+}
+
+// Which of the three built acts' frames is act II, and where the cloud sea
+// is met in it. The sea is the weather bridge's cloud deck carried out to the
+// walls as a surface: a plane under the flight that descends with it, in act
+// II's own coordinates, so it is the same sea in the same place from either
+// side of every seam, and like the scenery it stops at the walls' faces.
+float seaHit (vec3 ro, vec3 rd, out vec3 q, out float frame) {
+  float best = -1.0;
+  float sl = slopeOf(1.0);
+  float len = actLen(1.0);
+  float den = rd.y + sl * rd.z;
+  q = vec3(0.0);
+  frame = 0.0;
+  if (den > -1e-4) return best;
+  for (int i = 0; i < 3; i++) {
+    float a = i == 0 ? gA : i == 1 ? gB : gC;
+    if (a < 0.5 || a > 1.5) continue;
+    vec3 o = ro - (i == 0 ? vec3(0.0) : i == 1 ? gOffB : gOffC);
+    float tt = (-SEA_DEPTH - sl * o.z - o.y) / den;
+    vec3 qq = o + rd * tt;
+    if (tt > 0.0 && qq.z > SEAM && qq.z < len - SEAM && (best < 0.0 || tt < best)) {
+      best = tt;
+      q = qq;
+      frame = float(i);
+    }
+  }
+  return best;
+}
+
+// The sea's face: billows on two scales, tops pale and the hollows a cold
+// lilac, all keyed to the sky's own horizon colour, and lit warm where it
+// lies toward the sun.
+vec3 seaColor (vec3 q, vec3 rd, float frame) {
+  vec3 haze = hazeOf(frame, rd);
+  vec3 sun = frame < 0.5 ? uSunA : frame < 1.5 ? uSunB : uSunC;
+  vec2 w = q.xz * 0.07 + vec2(animTime() * 0.03, 0.0);
+  float c = fbm2(w) * 0.7 + fbm2(w * 3.1 + 2.0) * 0.3;
+  float tops = smoothstep(0.38, 0.68, c);
+  vec2 rh = rd.xz / max(length(rd.xz), 1e-4);
+  vec2 sh = sun.xz / max(length(sun.xz), 1e-4);
+  float fwd = max(dot(rh, sh), 0.0);
+  vec3 col = haze * mix(vec3(0.5, 0.5, 0.62), vec3(1.15, 1.08, 1.0), tops);
+  col += haze * vec3(0.55, 0.32, 0.12) * fwd * fwd * fwd * fwd * (0.3 + tops * 0.7);
+  return col;
 }
 
 float cloudField (vec3 p) {
@@ -228,7 +284,11 @@ void main () {
       // Emissive: tunnel strips warm, everything else the rift's cold light.
       bool tunnel = abs(p.z - gLenA) < SEAM + 1.0 || abs(p.z) < SEAM + 1.0 ||
                     abs(p.z - gLenA - gLenB) < SEAM + 1.0;
+      // The weather bridge's beacons, high on the pylons, burn red.
+      vec3 bq = p - zoneOffset(zone);
+      bool beacon = act > 0.5 && act < 1.5 && bq.y - pathY(1.0, bq.z) > 12.0;
       col = tunnel ? vec3(3.2, 2.6, 1.9)
+          : beacon ? vec3(4.0, 0.6, 0.2) * (0.6 + 0.4 * sin(animTime() * 2.1 + floor(bq.z / 22.0)))
                    : vec3(0.06, 0.42, 0.9) * (1.0 + sin(gTime * 4.0 + p.z + gZ0) * 0.25);
     } else {
       Surface s;
@@ -271,6 +331,8 @@ void main () {
         s.rough = clamp(s.rough * rmul, 0.04, 1.0);
         // Weathering, joints, fixings and wear, by material (glsl/detail).
         emit = surfaceDetail(s, m, act, p, tp, n, max(length(dpx), length(dpy)));
+        if (act > 0.5 && act < 1.5 && m > 1.5 && m < 6.5)
+          emit += bridgeFaults(s, tp, n, max(length(dpx), length(dpy)));
         s.rough = clamp(s.rough, 0.04, 1.0);
       }
       if (uPurgatory > 0.8) s.albedo = vec3(dot(s.albedo, vec3(0.3, 0.59, 0.11)));
@@ -325,6 +387,17 @@ void main () {
     col = skyCol;
   }
 
+  // The cloud sea, wherever it is met before anything else.
+  vec3 seaQ;
+  float seaFrame;
+  float tSea = seaHit(ro, rd, seaQ, seaFrame);
+  bool sea = tSea > 0.0 && tSea < t;
+  if (sea) {
+    col = seaColor(seaQ, rd, seaFrame);
+    t = tSea;
+    owner = seaFrame;
+  }
+
   // The air, in two pieces: this act's up to the far seam, the next act's past it.
   float dA = owner < 0.5 ? t : min(t, tSeam);
   float dB = owner < 0.5 ? 0.0 : max((owner < 1.5 ? t : min(t, tSeamB)) - tSeam, 0.0);
@@ -338,9 +411,12 @@ void main () {
   float trA = exp(-denA * dA * lift);
   float trB = exp(-denB * dB * lift);
   float trC = exp(-denC * dC * lift);
-  if (!found) { trA = mix(1.0, trA, 0.25); trB = mix(1.0, trB, 0.25); trC = mix(1.0, trC, 0.25); }
+  if (!found && !sea) { trA = mix(1.0, trA, 0.25); trB = mix(1.0, trB, 0.25); trC = mix(1.0, trC, 0.25); }
   col = ((col * trC + hazeOf(2.0, rd) * (1.0 - trC)) * trB + hazeOf(1.0, rd) * (1.0 - trB)) * trA +
         hazeOf(0.0, rd) * (1.0 - trA);
+
+  float tearAct = owner < 0.5 ? gA : owner < 1.5 ? gB : gC;
+  if (tearAct > 0.5 && tearAct < 1.5) col = bridgeTear(col, rd, t);
 
   vec4 plume = coolingPlumes(ro, rd, t, hazeOf(owner, rd));
   col = col * (1.0 - plume.a) + plume.rgb;
