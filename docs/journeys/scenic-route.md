@@ -409,6 +409,7 @@ plan above. The plan is kept as written; this is the record.
 | `geometry.ts` | height field, coastline, spine index with per-section lift, corridor pull, near/far terrain with a per-vertex carve value for the tube, sea quad and fine sea patch |
 | `props.ts` | instanced units and world-space strips: fence rails post to post, telegraph poles and wires, hay bales, the house on its plinth, lobed trees, turbines with rotors about the hub, piers, stalactites |
 | `city.ts` | downtown: unit-box towers with bend parameters per instance, `bendGainAt` |
+| `fields.ts` | the valley's field layout and farmland mask, once for the CPU (hedgerow borders) and once as GLSL (`fieldsChunk`) from the same constants |
 | `maw.ts` | the head (closed-profile sweep along the gullet), hinged jaws with baked teeth, the tube (throat into cave) and its water strip |
 | `cockpit.ts` | the cabin in the car's frame: moulded dash, binnacle, centre stack, door cards, wheel with spokes; dial faces on a Canvas2D, needle meshes |
 | `audio.ts` | synthesised engine, tyres, wind, radio, gullet, cave; follows the uniform map |
@@ -515,3 +516,50 @@ the fix taken; the order is the order of the commits.
   bloom threshold — and the composite drags that glow up the frame as shafts
   (`uRedRays`: nothing on the first lap, 1 by the middle of the second, up to
   3 by the fourth).
+
+## Revision 4 — the landscape facelift
+
+The outdoor sections read as smooth lime slopes with a few trees, the horizon
+was the hills' own edge, and the coast road never showed the sea. What changed:
+
+- **The fields** (`fields.ts`). The valley is a patchwork on a rotated grid:
+  columns 88 m wide (`FIELD_W`) cut into rows of 55–130 m, every border wobbled
+  (6 m on the columns, 9 m on the rows) so it reads as a hedge that grew. Each
+  field is one crop by hash: pasture, mown hay in 2.6 m stripes, wheat with
+  tramlines every 18 m and the wind going over it in waves, ploughed furrows,
+  drilled rows, and the odd rapeseed field. A grass margin runs inside every
+  border. Farmland is `farmWeight`: gentle ground (n.y 0.9–0.965) below
+  `FARM_TOP` (62) and west of `FARM_EAST` (320). The layout and the mask are
+  written once in TypeScript and emitted as GLSL from the same constants, and
+  the hash is the same arithmetic in both on small integers, so the painted
+  borders and the hedge geometry agree.
+- **Stripes fade by `fwidth`**, not only by distance: furrows a metre apart
+  aliased into corduroy on a slope long before the distance fade reached them.
+- **The hedgerows** are one world-space strip mesh along every field border in
+  the near field (`hedgeStrip` in `props.ts`, about 33k vertices): a rounded
+  1.9 m bank whose height and girth wander, tapered into the ground at its
+  ends, broken by roads (`spineHits`) and by a gate in roughly one stretch in
+  sixteen, with a tree grown out of it about every thirty metres. Prop material
+  13 (`HEDGE`) is a solid leaf bank with a clump-scale normal and the canopy's
+  wrapped sun term. One draw call; instancing bushes would have been a million
+  triangles.
+- **Above the farms**, heath (olive grass and heather in patches) from 25 m up;
+  coastal turf on the cliff-top; woods as dark crown clumps on the far slopes,
+  only past 220–420 m, where painted crowns read as forest.
+- **The range** (`mountains` in `geometry.ts`): west, north and south of the
+  near field, ridged and up to about 600 m, kept at least 150 m inland of the
+  coast wherever it runs. The near field is untouched. Rock from 200–340 m up,
+  snow from 400–470 m where the ground is flat enough to hold it, and, because
+  the far mesh's 60 m cells cannot carry relief, gullies down the fall line and
+  strata across it in the terrain shader past 400 m.
+- **The coast** (`COAST` knots). The coastline came in from forty metres off the
+  coast road to about twenty between z 280 and 470 (the knots from the lip south
+  and from downtown north are unchanged, so the fall and the plaza are not
+  touched), and the cliff-top falls away over its last 45 m to a brow 30 m
+  down. The corridor pull eases off over the brow (`0.8 · smoothstep(cx − 24,
+  cx − 4, x)`), or it holds the brow up level with the road. Before, the level
+  shelf stood a metre or two above the road, walled the sea off up to the
+  horizon, and the sea was only ever 90° to the side, behind the door. The
+  coast's two tree clusters moved inland.
+- **The key light is unchanged**; nothing in the lighting, sky, sea, city,
+  gullet or cave moved, and nothing in the route.
