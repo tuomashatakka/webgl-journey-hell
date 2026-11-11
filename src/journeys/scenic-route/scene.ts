@@ -568,7 +568,18 @@ export function createScenicRouteScene (
 
       drawWorld(viewProj, camPos, [ fx, fy, fz ], invViewProj)
 
-      postPass(gl, { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time })
+      // Where the sun is on the screen, for the shafts and the flare: zero
+      // visibility behind the camera, under the horizon, or with no sky.
+      const sunX   = camPos[0] + sun[0] * 1000
+      const sunY   = camPos[1] + sun[1] * 1000
+      const sunZ   = camPos[2] + sun[2] * 1000
+      const sunW   = viewProj[3] * sunX + viewProj[7] * sunY + viewProj[11] * sunZ + viewProj[15]
+      const sunCx  = viewProj[0] * sunX + viewProj[4] * sunY + viewProj[8] * sunZ + viewProj[12]
+      const sunCy  = viewProj[1] * sunX + viewProj[5] * sunY + viewProj[9] * sunZ + viewProj[13]
+      const sunVis = sunW > 0 ? env[1] * Math.max(0, Math.min(1, (sun[1] + 0.03) / 0.08)) : 0
+      const sunUv  = sunW > 0 ? [ sunCx / sunW * 0.5 + 0.5, sunCy / sunW * 0.5 + 0.5, sunVis ] : [ 0, 0, 0 ]
+
+      postPass(gl, { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time, sunUv })
       cockpitPass(gl, rig, { viewProj, camPos, sun, env, fogCol, time, shadowOn, exposure, ride, loop, car, fall, carPos, carFwd, carRight, carUp, cockpitP, bindLit })
     },
 

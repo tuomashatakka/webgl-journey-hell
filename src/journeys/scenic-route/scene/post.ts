@@ -21,6 +21,9 @@ interface PostArgs {
   exposure: number;
   ride:     number[];
   time:     number;
+
+  /** The sun on screen: uv, and how visible (0 behind, below, or underground). */
+  sunUv: number[];
 }
 
 interface CockpitArgs {
@@ -46,7 +49,7 @@ interface CockpitArgs {
 
 /** Resolve the MSAA scene, bright-pass and blur it, composite to the screen. */
 export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
-  const { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time } = a
+  const { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time, sunUv } = a
 
   chain.resolve()
 
@@ -91,6 +94,8 @@ export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
   // The speed blur bites only past what the road ever reaches.
   compP.uniform1f('uSpeedBlur', Math.max(0, Math.min(1, (ride[0] - 36) / 24)))
   compP.uniform1f('uTime', time)
+  compP.uniform3f('uSun', sunUv[0], sunUv[1], sunUv[2])
+  compP.uniform1f('uAspect', w / Math.max(1, h))
 
   // The road's red, as shafts in the air: nothing on the first lap, then more every lap.
   const lapF = ride[1]

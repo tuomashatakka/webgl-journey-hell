@@ -41,6 +41,12 @@ void main () {
  * Composite: bloom, exposure, the ACES fit (Narkowicz 2016), a speed blur that
  * only bites in the fall, a light vignette, sRGB. lib/gl/crtPass adds the tube and
  * the signal loss on top of whatever comes out of here.
+ *
+ * And the lens it was shot through: shafts of sun dragged out of the bloom
+ * toward the sun's place on screen (so a tower, a tree or a pillar cuts them),
+ * flare ghosts strung through the centre and an anamorphic streak through
+ * every bright thing, a little chromatic fringe toward the edges, a grade with
+ * teal in the shadows and warmth in the highlights, and grain.
  */
 export const compositeFrag = /* glsl */`#version 300 es
 precision highp float;
@@ -51,8 +57,15 @@ uniform float uExposure;   // linear multiplier
 uniform float uSpeedBlur;  // 0..1
 uniform float uTime;
 uniform float uRedRays;    // 0 until the second lap, then more every lap
+uniform vec3  uSun;        // the sun on screen: uv, visibility
+uniform float uAspect;
 out vec4 fragColor;
 ${ACES}
+float grainHash (vec2 p) {
+  p = fract(p * vec2(443.897, 441.423));
+  p += dot(p, p.yx + 19.19);
+  return fract((p.x + p.y) * p.x);
+}
 void main () {
   vec2 uv = vUv;
   vec2 c = uv - 0.5;
@@ -69,10 +82,65 @@ void main () {
     }
     col /= total;
   }
-  else
-    col = texture(uScene, uv).rgb;
+  else {
+    // A little chromatic fringe, growing toward the corners.
+    vec2 ca = c * dot(c, c) * 0.012;
+    col = vec3(texture(uScene, uv + ca).r, texture(uScene, uv).g, texture(uScene, uv - ca).b);
+  }
 
   col += texture(uBloom, uv).rgb * 0.55;
+
+  if (uSun.z > 0.001) {
+    // How much sun gets through: the bloom at the sun's own place on screen,
+    // so a tower, a crown or the A-pillar in front of it shuts it all off.
+    vec2 su = clamp(uSun.xy, 0.0, 1.0);
+    float open = dot(texture(uBloom, su).rgb, vec3(0.3333));
+    float onScreen = 1.0 - smoothstep(0.0, 0.35, max(max(-uSun.x, uSun.x - 1.0), max(-uSun.y, uSun.y - 1.0)));
+    float sunAmt = uSun.z * onScreen;
+
+    // Shafts: the bloom dragged toward the sun, so only what is bright and
+    // unblocked streams; everything in front of the sky cuts a shadow in it.
+    vec2 d = uv - uSun.xy;
+    vec3 shafts = vec3(0.0);
+    float jit = grainHash(uv * 731.0 + uTime) * 0.04;
+    for (int i = 0; i < 24; i++) {
+      float t = (float(i) + jit * 24.0) / 24.0;
+      shafts += texture(uBloom, uv - d * t * 0.85).rgb * (1.0 - t);
+    }
+    shafts /= 24.0;
+    float near = exp(-length(d * vec2(uAspect, 1.0)) * 1.6);
+    col += shafts * vec3(1.0, 0.82, 0.58) * 1.6 * sunAmt * near;
+
+    // Ghosts: discs strung from the sun through the centre, each its own tint.
+    float flare = clamp(open * 1.5, 0.0, 1.0) * sunAmt;
+    if (flare > 0.002) {
+      vec2 axis = vec2(0.5) - uSun.xy;
+      for (int k = 0; k < 5; k++) {
+        float fk = float(k);
+        float at = fk == 0.0 ? 0.55 : fk == 1.0 ? 0.9 : fk == 2.0 ? 1.25 : fk == 3.0 ? 1.6 : 2.1;
+        float rad = fk == 0.0 ? 0.03 : fk == 1.0 ? 0.07 : fk == 2.0 ? 0.045 : fk == 3.0 ? 0.11 : 0.06;
+        vec3 tint = fk == 0.0 ? vec3(1.0, 0.6, 0.3) : fk == 1.0 ? vec3(0.3, 0.8, 0.6) : fk == 2.0 ? vec3(0.8, 0.4, 0.9) : fk == 3.0 ? vec3(0.3, 0.5, 1.0) : vec3(1.0, 0.8, 0.4);
+        vec2 g = uSun.xy + axis * at;
+        float r = length((uv - g) * vec2(uAspect, 1.0));
+        float disc = smoothstep(rad, rad * 0.7, r) * (0.6 + 0.4 * smoothstep(rad * 0.4, rad, r));
+        col += tint * disc * 0.05 * flare;
+      }
+      // The sun's own starburst and halo ring.
+      vec2 sd = (uv - uSun.xy) * vec2(uAspect, 1.0);
+      float rr = (length(sd) - 0.22) * 30.0;
+      float ring = exp(-rr * rr);
+      col += vec3(0.6, 0.7, 1.0) * ring * 0.04 * flare;
+    }
+  }
+
+  // Anamorphic streak: every bright thing smeared sideways, cold blue.
+  vec3 streak = vec3(0.0);
+  for (int i = -8; i <= 8; i++) {
+    float fi = float(i);
+    streak += texture(uBloom, uv + vec2(fi * 0.018, 0.0)).rgb * (1.0 - abs(fi) / 9.0);
+  }
+  float sl = dot(streak / 9.0, vec3(0.3333));
+  col += vec3(0.35, 0.55, 1.0) * max(sl - 0.25, 0.0) * 0.5;
 
   // Red light shafts: the glow the road's cracks leak, dragged up the frame
   // from a point under it, keeping only what is red. From the second lap.
@@ -89,8 +157,19 @@ void main () {
   }
   col *= uExposure;
   col = aces(col);
-  col *= 1.0 - smoothstep(0.45, 1.15, length(c * vec2(1.0, 1.1))) * 0.30;
-  col = pow(col, vec3(1.0 / 2.2));
+  // The grade: teal pushed into the shadows, warmth into the highlights, a
+  // gentle S for contrast and a touch more colour. Then the vignette.
+  float luma = dot(col, vec3(0.2126, 0.7152, 0.0722));
+  col += vec3(-0.012, 0.004, 0.018) * (1.0 - luma) * (1.0 - luma);
+  col *= mix(vec3(1.0), vec3(1.05, 1.0, 0.92), smoothstep(0.35, 0.9, luma));
+  col = clamp(col, 0.0, 1.0);
+  col = mix(col, col * col * (3.0 - 2.0 * col), 0.22);
+  col = mix(vec3(dot(col, vec3(0.2126, 0.7152, 0.0722))), col, 1.08);
+  col *= 1.0 - smoothstep(0.4, 1.1, length(c * vec2(1.0, 1.1))) * 0.38;
+  col = pow(max(col, 0.0), vec3(1.0 / 2.2));
+  // Grain, finer in the light than in the dark, as on film.
+  float gr = grainHash(uv * 1031.0 + fract(uTime * 7.13) * 91.0) - 0.5;
+  col += gr * mix(0.045, 0.02, luma);
   fragColor = vec4(col, 1.0);
 }
 `
