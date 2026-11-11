@@ -184,10 +184,12 @@ export const atmosphereGlsl = /* glsl */`
     col = mix(col, cl.rgb, cl.a);
     col = skyline(d, col);
     if (d.y < 0.0) col = mix(col, cloudSea(d, camY), smoothstep(0.0, -0.004, d.y));
+    #ifndef PROBE_NO_VIEW
     if (direct > 0.5) {
       col = mix(col, gViewCloud.rgb, gViewCloud.a);
       return mix(col, gViewWall.rgb, gViewWall.a);
     }
+    #endif
     vec4 mc = mushroomLite(d);
     return mix(col, mc.rgb, mc.a);
   }

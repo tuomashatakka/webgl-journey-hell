@@ -317,7 +317,9 @@ Things to keep true:
   no info log, down to 12 march steps: not size. `?diag=1` links the probe
   builds instead (`skybridgesProbe`: the 12-step build with the sky, the
   shading or the scene map stubbed out, `STUB_SKY` / `STUB_SHADE` /
-  `STUB_MAP`, and a trivial control) and lists which link.
+  `STUB_MAP`, and a trivial control; then the same with the view's event
+  globals, the crack noise or the dust storm left out, `PROBE_NO_VIEW` /
+  `PROBE_NO_CRACK` / `PROBE_NO_STORM`) and lists which link.
 - Heavy effects (`uHeavy`) add the see-through continuation march; everything
   else is the same at every tier.
 - Set pieces sit behind band tests; towers are two cells on one side per sample,

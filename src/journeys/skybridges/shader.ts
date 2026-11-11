@@ -107,4 +107,8 @@ export const skybridgesProbe = [
   [ '-map', probe('\n#define STUB_MAP') ],
   [ '-shade-sky', probe('\n#define STUB_SHADE\n#define STUB_SKY') ],
   [ '-all', probe('\n#define STUB_SHADE\n#define STUB_SKY\n#define STUB_MAP') ],
+  [ '-view', probe('\n#define PROBE_NO_VIEW') ],
+  [ '-crack', probe('\n#define PROBE_NO_CRACK') ],
+  [ '-storm', probe('\n#define PROBE_NO_STORM') ],
+  [ '-three', probe('\n#define PROBE_NO_VIEW\n#define PROBE_NO_CRACK\n#define PROBE_NO_STORM') ],
 ] as const

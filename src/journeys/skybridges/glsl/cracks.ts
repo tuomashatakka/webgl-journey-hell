@@ -32,7 +32,9 @@ export const cracksGlsl = /* glsl */`
     float radial = (1.0 - smoothstep(lw * 0.5, lw, min(fu, 1.0 - fu) * w * r)) * step(r, rlen);
     // A radial is a crack, not a ray of light: it catches the light in places
     // and thins out towards its tip.
+    #ifndef PROBE_NO_CRACK
     radial *= (1.0 - 0.75 * smoothstep(0.25, 1.0, r / max(rlen, 1e-3))) * (0.45 + 0.55 * vnoise(vec2(r * 31.0, k + seed * 17.0)));
+    #endif
 
     // Chords between neighbouring radials, appearing for seconds as the load creeps.
     float creep = clamp(age / 3.0, 0.0, 1.0);

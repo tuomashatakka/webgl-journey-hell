@@ -74,7 +74,11 @@ export const cameraGlsl = /* glsl */`
     vec3 upv = u0 * cos(roll) + r0 * sin(roll);
     vec3 rd = normalize(uv.x * rgt + uv.y * upv + 1.25 * fwd);
     vec3 rdW = toWorld(rd);
-    #ifdef PLAIN_BLAST
+    #if defined(PROBE_NO_VIEW)
+    gViewCloud = vec4(0.0);
+    gViewWall = vec4(0.0);
+    gWallT = 1e9;
+    #elif defined(PLAIN_BLAST)
     gViewCloud = mushroomLite(rdW);
     gViewWall = vec4(0.0);
     gWallT = 1e9;
@@ -109,6 +113,7 @@ export const cameraGlsl = /* glsl */`
 
     // Behind the wave: the air is the city, ground up. Near things stay
     // legible; anything past a few tens of metres goes into the dust.
+    #ifndef PROBE_NO_STORM
     if (hitE > 0.0) {
       float storm = smoothstep(0.0, 0.35, hitE) * (0.35 + 0.65 * exp(-hitE / 10.0));
       vec3 dust = vec3(0.40, 0.32, 0.25) * (mix(gHorizon, gZenith, 0.4) + 0.08)
@@ -116,6 +121,7 @@ export const cameraGlsl = /* glsl */`
       float churn = 0.7 + 0.6 * fbm(uv * 2.4 + vec2(-hitE * 0.9, hitE * 0.2));
       col = mix(col, dust * churn, storm * (1.0 - exp(-t * 0.025)));
     }
+    #endif
 
     // --- the air ---
     vec3 amb = mix(gHorizon, gZenith, 0.5);
