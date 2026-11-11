@@ -45,6 +45,12 @@ export const foundationGlsl = `
   const float PIT_Y = -3.0;
   const float CAGE_R = 1.5;
   const float CAGE_H = 2.6;
+  // The hoistway's frame (I-beam rings, X bracing, counterweight ropes) runs on
+  // a bay that divides OB_PERIOD, so the 64 m oblivion wrap lands on the same
+  // frame it left. Below FRAME_Y0 the shaft keeps its old 2.4 m ribs: that is
+  // the stretch the loading bay can see into, and the halls do not change.
+  const float SHAFT_BAY = 3.2;
+  const float FRAME_Y0 = 6.25;
 
   // --- the stepping stones (mirrors physics.ts) -----------------------------
   const float SPAN_Z0 = 219.0;

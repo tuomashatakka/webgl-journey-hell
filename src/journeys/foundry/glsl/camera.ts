@@ -66,10 +66,13 @@ export const cameraGlsl = /* glsl */`
     // The camera is whatever the simulation is doing to you. Riding the cage it
     // is carried by the car, with the shake read off its jerk and the offcuts
     // hammering its floor; on foot it is the gait. None of it is a function of
-    // iTime. Falling, the head goes down: you watch the shaft come up through
-    // the mesh floor, and the faster it comes the further down you look.
+    // iTime. Riding the shaft, the head comes up past what the simulation's
+    // brace puts it at: you look out through the gate's bars and up the
+    // hoistway, the rings and the lamps streaming away overhead, and the faster
+    // they go the further up you look. Only the last fall looks down, into it.
     vec3 ro = vec3(uGait.y + uSim.x * 0.018, uGait.x + uSim.y * 0.018, walkZ());
-    float fallLook = riding() * (0.45 * weightless() + 0.30 * smoothstep(3.0, 18.0, -uCage.y)) + oblivion() * 0.35;
+    float shaftLook = riding() * (1.0 - oblivion()) * (0.22 + 0.12 * weightless() + 0.38 * smoothstep(3.0, 18.0, -uCage.y));
+    float fallLook = oblivion() * 0.35 - shaftLook;
     float yaw = uGait.z + uPointer.x * 0.75 + uSim.x * 0.008;
     float pitch = max(uGait.w + uPointer.y * 0.50 - fallLook, -1.25);
     float roll = uWalk.w + uSim.x * 0.02;
@@ -128,7 +131,9 @@ export const cameraGlsl = /* glsl */`
     if (hit > 0.0) {
       vec3 n = calcNormal(p);
       if (oblivion() > 0.5) {
-        col = mix(shadeOblivion(p, n, rd, dzl, dpx, dpy), vec3(0.0003, 0.00005, 0.00005), 1.0 - exp(-dist * 0.085));
+        // The far frame fades into the red the pit gives off, not into black, or
+        // the rings close the fall in like a tunnel and shut the glow out.
+        col = mix(shadeOblivion(p, n, rd, dzl, dpx, dpy), col + vec3(0.0003, 0.00005, 0.00005), 1.0 - exp(-dist * 0.085));
       } else {
         // Two taps of the field out along the normal: how shut in the point is.
         // The decay shortens the field's step inside the halls, so undo that or
@@ -155,6 +160,19 @@ export const cameraGlsl = /* glsl */`
       float sp = secLampSpacing(a0);
       vec3 glow = hallGlow(ro, rd, dist, a0, ro.z - sp) + hallGlow(ro, rd, dist, mod(a0 + 1.0, SEC_COUNT), start + SEC_LEN);
       col += glow * 0.005 * (1.0 + dec * 0.6);
+      // The shaft's lamps in the air, once the eye is up the shaft.
+      float dz0 = cycd(zc0 - LIFT_Z);
+      if (abs(dz0) < SHAFT_R && ro.y > 4.0) {
+        float b0 = floor(ro.y / 9.0);
+        float g = 0.0;
+        for (int k = 0; k < 5; k++) {
+          float bi = b0 - 3.0 + float(k);
+          vec3 lp = shaftLampAt(bi);
+          if (bi < 0.0 || lp.y > uFall.z) continue;
+          g += glowOf(ro, rd, vec3(lp.x, lp.y, ro.z - dz0 + lp.z), dist);
+        }
+        col += lin(vec3(1.00, 0.80, 0.58)) * g * 0.02;
+      }
       vec3 steamCol = hallAmbient(a0) * 3.0 + lampRadiance(a0) * 0.04;
       col = mix(col, steamCol, 1.0 - exp(-steam * 1.4));
       // Saturating: by the fourth lap the air is red, never a red wall.

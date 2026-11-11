@@ -8,8 +8,41 @@ export const shaftGlsl = `  // ========================== THE HOIST SHAFT ======
                min(p.y - PIT_Y, uFall.z - p.y));
   }
 
+  /**
+   * The hoistway's frame, one bay of SHAFT_BAY repeated: I-beam rings standing
+   * 0.24 m off the plate (both flanges full depth, the web set back), X bracing
+   * in angle iron across every bay of the two rail walls, and, while there is
+   * still a shaft to hang them in, four counterweight ropes in the gap in front
+   * of and behind the cage. mat 14 is the structure, 15 the ropes.
+   */
+  float mapHoistFrame(vec3 p, float dz, bool ropes, out float mat) {
+    mat = 14.0;
+    // Distance in from the plate. Everything here lives within 0.7 m of it, so
+    // the middle of the shaft costs one box.
+    float w = -sdBox2(vec2(p.x, dz), vec2(SHAFT_R));
+    if (w > 0.8) return w - 0.7;
+
+    float ry = p.y - SHAFT_BAY * floor(p.y / SHAFT_BAY + 0.5);
+    float ring = max(w - 0.24, abs(ry) - 0.15);
+    ring = max(ring, -max(0.07 - w, abs(ry) - 0.10));
+
+    // Corner to corner of a 6 m by 3.2 m bay: the diagonals' unit normals.
+    float yl = p.y - SHAFT_BAY * (floor(p.y / SHAFT_BAY) + 0.5);
+    float diag = min(abs(dz * 0.4706 - yl * 0.8824), abs(dz * 0.4706 + yl * 0.8824));
+    float brace = max(max(diag - 0.035, w - 0.08), (abs(dz) - abs(p.x)) * 0.7071);
+    float d = min(ring, brace);
+
+    if (ropes) {
+      vec2 rq = vec2(p.x, abs(dz) - 2.35);
+      float rope = min(length(rq - vec2(-0.80, 0.0)), length(rq - vec2(1.05, 0.0))) - 0.022;
+      if (rope < d) { d = rope; mat = 15.0; }
+    }
+    return d;
+  }
+
   // Everything solid in the shaft that is not the cage: guide rails the shoes
-  // clamp, ring ribs, and landing doors flashing past on the way down.
+  // clamp, the frame (or, low down, the old ring ribs), and landing doors
+  // flashing past on the way down.
   float mapShaftFittings(vec3 p, float dz, out float mat) {
     mat = 5.0;
     // Guide rails, running the shaft's full height. They stand off the wall on
@@ -24,8 +57,10 @@ export const shaftGlsl = `  // ========================== THE HOIST SHAFT ======
     float ry = abs(mod(p.y + 1.2, 2.4) - 1.2);
     // Negating the box SDF selects its *complement* — the wall side — which is
     // the half the rib lives on. Intersecting the box itself would put a solid
-    // disc straight across the shaft every 2.4 m.
-    float rib = max(-sdBox2(vec2(p.x, dz), vec2(SHAFT_R - 0.16, SHAFT_R - 0.16)), ry - 0.11);
+    // disc straight across the shaft every 2.4 m. Above FRAME_Y0 the frame
+    // takes over.
+    float rib = max(max(-sdBox2(vec2(p.x, dz), vec2(SHAFT_R - 0.16, SHAFT_R - 0.16)), ry - 0.11),
+                    p.y - FRAME_Y0);
 
     // Landing doors every 24 m, alternating walls, opening as they come level.
     float st = floor(p.y / 24.0);
@@ -40,6 +75,14 @@ export const shaftGlsl = `  // ========================== THE HOIST SHAFT ======
 
     float d = min(rail, min(rib, min(door, leaf)));
     if (rib < rail && rib < door) mat = 0.0;
+
+    // Only up the shaft: the frame is clipped to FRAME_Y0, so below it the bound
+    // alone answers and the bay never pays for it.
+    if (p.y > FRAME_Y0 - 0.8 && p.y < uFall.z) {
+      float fm;
+      float fr = max(mapHoistFrame(p, dz, true, fm), FRAME_Y0 - p.y);
+      if (fr < d) { d = fr; mat = fm; }
+    }
     return d;
   }
 
@@ -57,6 +100,8 @@ export const shaftGlsl = `  // ========================== THE HOIST SHAFT ======
     float fbarX = abs(mod(c.x + 0.11, 0.22) - 0.11) - 0.012;
     float fbarZ = abs(mod(c.z + 0.11, 0.22) - 0.11) - 0.012;
     float floorSlab = max(floorPlate, min(fbarX, fbarZ));
+    // A solid sill plate across each open face, in hazard paint.
+    float sill = max(floorPlate, (CAGE_R - 0.16) - abs(c.z));
     float roof = sdBox(c - vec3(0.0, CAGE_H + 0.22, 0.0), vec3(CAGE_R + 0.06, 0.28, CAGE_R + 0.06));
 
     // Woven grating on the two side panels only — a fully enclosed cage puts a
@@ -69,18 +114,19 @@ export const shaftGlsl = `  // ========================== THE HOIST SHAFT ======
 
     // The posts are in hazard paint; the floor bars, the roof and the side
     // grating are bare oily steel, or the drop is watched through a yellow grid.
-    float d = posts;
+    float d = min(posts, sill);
     float steel = min(min(floorSlab, roof), grate);
     if (steel < d) { d = steel; mat = 5.0; }
 
-    // The gate: a barred grille across both open faces, riding up as it opens.
+    // The gate: flat bars on 0.17 m centres across both open faces, over a
+    // kick plate, with a mid rail and a head rail, riding up as it opens.
     if (gateOpen() < 0.985) {
       float gy = c.y - gateOpen() * (CAGE_H - 0.06);
       vec3 gp = vec3(c.x, gy, abs(c.z) - CAGE_R);
       float panel = sdBox(gp - vec3(0.0, CAGE_H * 0.5, 0.0), vec3(CAGE_R, CAGE_H * 0.5, 0.035));
-      float bars = abs(mod(gp.x + 0.17, 0.34) - 0.17) - 0.016;
-      float rails = abs(abs(gy - CAGE_H * 0.5) - CAGE_H * 0.45) - 0.05;
-      float gate = max(panel, min(bars, rails));
+      float bars = abs(mod(gp.x + 0.085, 0.17) - 0.085) - 0.011;
+      float rails = min(abs(abs(gy - CAGE_H * 0.5) - CAGE_H * 0.45) - 0.05, abs(gy - 1.05) - 0.03);
+      float gate = max(panel, min(min(bars, rails), gy - 0.24));
       if (gate < d) { d = gate; mat = 5.0; }
     }
 

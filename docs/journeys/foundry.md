@@ -224,10 +224,49 @@ pipes run under the ceiling on brackets, and about a third of the flanges leak:
 a jet of steam that slows, spreads and rises, gathered by the march like the
 leaks and lit by the hall.
 
-## the drop, looking down
+## the drop, looking out
 
-while the cage falls the head goes down — further the faster it falls — so the
-shaft comes up through the mesh floor; in oblivion it stays down.
+the simulation braces the head down while the cage rides (about −0.2, and
+−0.42 more at speed); the shader brings it back up past that — 0.22, 0.12 ×
+weightlessness, 0.38 with speed — so the fall is watched level, out through
+the gate's bars at the riveted hoistway, its rings and lamps streaming past,
+the way the index preview frames it. in oblivion it does not come up: the head
+goes down another 0.35, into the red.
+
+## the hoistway
+
+the drops are the preview's scape, built into the map and gated so the halls
+pay nothing for it:
+
+- **the frame** (`mapHoistFrame`), one `SHAFT_BAY` = 3.2 m bay repeated:
+  I-beam rings standing 0.24 m off the plate (both flanges full depth, the web
+  set back to 0.07), X bracing in angle iron corner to corner across every bay
+  of the two rail walls, and four counterweight ropes in the gap in front of and
+  behind the cage (|dz| = 2.35). 3.2 divides `OB_PERIOD`, so the 64 m oblivion
+  wrap lands on the same frame it left. one box answers for the whole middle of
+  the shaft (everything lives within 0.7 m of the plate), and the frame is
+  clipped to `FRAME_Y0` = 6.25 m and only evaluated above it: below that the
+  shaft keeps its old 2.4 m ribs, because that is the stretch the loading bay
+  can see into.
+- **the rails** are polished on the running face the shoes ride, black with
+  grease elsewhere (above the bay ceiling only).
+- **landings** have their sill in hazard paint and a red lamp over the frame;
+  the **shaft lamps** streak along the fall with the cage's speed and glow in
+  the air (closed form, the five nearest, only once the eye is up the shaft).
+- **the cage**: the gate is flat bars on 0.17 m centres over a 0.24 m kick
+  plate with a mid rail; a solid hazard-painted sill plate runs across each open
+  face of the mesh floor; the posts stay in hazard paint.
+- **oblivion** keeps its machine and its rule of no plate, no landings and no
+  lamps, but the hoistway's bare frame runs on past the pit — rings, bracing,
+  and the rails the shoes cannot hold (brackets every 1.6 m) — with the cage's
+  hazard paint. the frame keeps the machine's bare steel there (only the rails
+  are dressed), and everything far off fades into the red the pit gives off
+  rather than into black, or the rings close the fall in like a tunnel and shut
+  the glow out. every pattern dressed onto it is local to its bay or walks a
+  circle in y, so nothing pops when y wraps; that includes the rust and the
+  flicker of the red from below, which were plain functions of y before.
+- there is no melt under the shaft on runs 1 to 3 (the pit has a floor); the
+  red from below is oblivion's.
 
 ## gates
 

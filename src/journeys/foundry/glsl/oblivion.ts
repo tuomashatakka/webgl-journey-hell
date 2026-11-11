@@ -54,6 +54,17 @@ export const oblivionGlsl = `  // ============================= OBLIVION =======
       d = min(d, sdBox(vec3(rp.x - 2.4, rp.y, rp.z), vec3(0.34, 0.46, 0.46)));
     }
 
+    // The hoistway's bare frame runs on past the pit: no plate, no landings,
+    // no lamps, only the rings, the bracing and the rails the shoes cannot hold,
+    // on a bay that divides OB_PERIOD so the wrap lands on the same steel.
+    float fm;
+    float fr = mapHoistFrame(p, dz, false, fm);
+    if (fr < d) { d = fr; gMat = fm; gWear = 0.6; }
+    float rail = sdBox2(vec2(abs(p.x) - 1.90, dz), vec2(0.16, 0.13));
+    rail = min(rail, max(sdBox2(vec2(abs(p.x) - (SHAFT_R - 0.5), dz), vec2(0.5, 0.07)),
+                         abs(mod(p.y + 0.8, 1.6) - 0.8) - 0.09));
+    if (rail < d) { d = rail; gMat = 5.0; gWear = 0.3; }
+
     // Cage and contents. Nothing else: there is no wall to fall past.
     float cm;
     float cage = mapCage(p, dz, cm);

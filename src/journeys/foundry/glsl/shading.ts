@@ -283,6 +283,38 @@ export const shadingGlsl = /* glsl */`
     }
   }
 
+  /**
+   * The hoistway's steel, dressed: the frame (14) in oxide paint with a rivet
+   * row along the web of each ring, the ropes (15) laid in strands that blur
+   * with the speed, the guide rails (5) polished bright on the running face the
+   * shoes ride and black with grease everywhere else. Every pattern is local to
+   * its bay, so it repeats on OB_PERIOD with the geometry.
+   */
+  void dressHoist(inout Surface s, vec3 p, vec3 n, float dz, float mat, float fw) {
+    float bay = mod(floor(p.y / SHAFT_BAY), OB_PERIOD / SHAFT_BAY);
+    float ry = p.y - SHAFT_BAY * floor(p.y / SHAFT_BAY + 0.5);
+    float along = abs(p.x) > abs(dz) ? dz : p.x;
+    if (mat > 13.5 && mat < 14.5) {
+      float rust = smoothstep(0.45, 0.85, vnoise(vec2(along * 2.3 + bay * 7.1, ry * 3.0 + bay * 3.3)));
+      s.albedo = mix(lin(vec3(0.20, 0.13, 0.09)), lin(vec3(0.34, 0.14, 0.05)), rust) * (0.75 + 0.5 * s.ao);
+      s.metal = 0.3 * (1.0 - rust);
+      s.rough = mix(0.55, 0.9, rust);
+      float rv = length(vec2(ry, along - 0.15 * floor(along / 0.15 + 0.5)));
+      s.albedo *= 1.0 + (1.0 - smoothstep(0.016, 0.022 + fw, rv)) * (1.0 - smoothstep(0.02, 0.06, fw)) * 1.5;
+    } else if (mat > 14.5) {
+      float lay = lineCov(p.y + (p.x + dz) * 3.0, 0.05, 0.016, fw + abs(uCage.y) * 0.016);
+      s.albedo = lin(vec3(0.16, 0.15, 0.14)) * (0.5 + 1.0 * lay);
+      s.metal = 1.0;
+      s.rough = 0.38;
+    } else if (abs(abs(p.x) - 1.90) < 0.20 && abs(dz) < 0.15) {
+      bool face = n.x * sign(p.x) < -0.5;
+      float streak = vnoise(vec2(dz * 60.0, ry * 0.5 + bay * 5.0));
+      s.albedo = face ? lin(vec3(0.62, 0.60, 0.57)) * (0.8 + 0.3 * streak) : s.albedo * 0.35;
+      s.metal = 1.0;
+      s.rough = face ? 0.10 + 0.12 * streak : 0.7;
+    }
+  }
+
   /** The material, as sampled at the hit, and dressed: paint, rubber, machining, rust. */
   Surface surfaceAt(vec3 p, vec3 nGeo, float zc, float dzl, float sec, float W, float H, vec3 dpx, vec3 dpy) {
     float mat = gMat;
@@ -295,8 +327,9 @@ export const shadingGlsl = /* glsl */`
       bool xw = abs(nGeo.x) > abs(nGeo.z);
       rivetedPlate(s, vec2(xw ? dzl : p.x, p.y), xw ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0), fw);
       // The ring ribs every 2.4 m are angle iron: dark web, a bright edge on top.
+      // Above FRAME_Y0 the rings are the frame's own geometry.
       float ry = p.y - 2.4 * floor(p.y / 2.4 + 0.5);
-      float rib = 1.0 - smoothstep(0.11, 0.13 + fw, abs(ry));
+      float rib = (1.0 - smoothstep(0.11, 0.13 + fw, abs(ry))) * step(p.y, FRAME_Y0);
       s.albedo = mix(s.albedo, s.albedo * 0.55, rib);
       s.albedo *= 1.0 + (1.0 - smoothstep(0.0, 0.025 + fw, abs(ry - 0.10))) * 1.5;
       // Oil weeping down the plate from under the rail brackets.
@@ -314,7 +347,19 @@ export const shadingGlsl = /* glsl */`
       s.metal *= chip;
       s.rough = mix(0.45, s.rough, chip);
     }
-    if (mat > 12.5) { s.albedo *= 0.12; s.metal = 0.0; s.rough = 0.55; }
+    if (mat > 12.5 && mat < 13.5) { s.albedo *= 0.12; s.metal = 0.0; s.rough = 0.55; }
+    if (mat > 13.5 || mat > 4.5 && mat < 5.5 && abs(dzl) < SHAFT_R + 0.3 && p.y > 3.7)
+      dressHoist(s, p, nGeo, dzl, mat, max(length(dpx), length(dpy)));
+    // Every landing's sill, in hazard paint, where the cage floor meets it.
+    if (abs(dzl) < SHAFT_R + 0.3 && p.y > 0.5 && (mat < 0.5 || mat > 4.5 && mat < 5.5)) {
+      float st = floor(p.y / 24.0);
+      float ly = p.y - (st + 0.5) * 24.0;
+      float side = mod(st, 2.0) * 2.0 - 1.0;
+      float k = step(abs(p.x), 1.05) * step(abs(dzl - side * SHAFT_R), 0.45) * step(-1.42, ly) * step(ly, -1.12);
+      s.albedo = mix(s.albedo, hazardPaint(vec2(p.x, ly)), k);
+      s.metal *= 1.0 - k;
+      s.rough = mix(s.rough, 0.55, k);
+    }
     if (mat > 2.5 && mat < 3.5) { s.metal = 1.0; s.rough *= 0.45; s.albedo = mix(s.albedo, vec3(0.56, 0.57, 0.58), 0.6); }
     if (mat > 4.5 && mat < 5.5) { s.metal = 1.0; s.rough *= 0.7; }
     if (mat > 1.5 && mat < 2.5) s.metal = 0.6;
@@ -366,13 +411,23 @@ export const shadingGlsl = /* glsl */`
     if (gMat < 0.5 && onShaftWall(p, nGeo, dzl, H)) {
       vec3 lp = shaftLampAt(floor(p.y / 9.0));
       if (abs(nGeo.x) > 0.5 && lp.x * p.x > 0.0) {
-        vec2 lq = vec2(dzl - lp.z, p.y - lp.y);
+        // Streaked along the fall by the exposure: the cage's own speed.
+        float sv = abs(uCage.y) * 0.016;
+        vec2 lq = vec2(dzl - lp.z, sign(p.y - lp.y) * max(abs(p.y - lp.y) - sv, 0.0));
         float fw = max(length(dpx), length(dpy));
         float housing = 1.0 - smoothstep(0.15, 0.17 + fw, max(abs(lq.x), abs(lq.y) * 0.72));
         float bulb = 1.0 - smoothstep(0.05, 0.08 + fw, length(lq * vec2(1.0, 0.8)));
         float guard = lineCov(lq.y, 0.06, 0.012, fw);
         col = mix(col, vec3(0.004), housing * 0.85);
-        col += lin(vec3(1.00, 0.80, 0.58)) * (bulb * 14.0 * (1.0 - guard * 0.6) + exp(-length(lq) * 7.0) * 0.6);
+        col += lin(vec3(1.00, 0.80, 0.58)) * (bulb * 14.0 * (1.0 - guard * 0.6) + exp(-length(lq) * 7.0) * 0.6)
+          / (1.0 + sv * 2.0);
+      }
+      // A red lamp over every landing.
+      float st = floor(p.y / 24.0);
+      float side = mod(st, 2.0) * 2.0 - 1.0;
+      if (abs(nGeo.z) > 0.5 && dzl * side > 0.0) {
+        float dr = length(vec2(p.x, p.y - (st + 0.5) * 24.0 - 1.62));
+        col += vec3(2.2, 0.10, 0.03) * (1.0 - smoothstep(0.05, 0.07, dr)) + vec3(0.35, 0.02, 0.005) * exp(-dr * 6.0);
       }
     }
 
@@ -402,15 +457,26 @@ export const shadingGlsl = /* glsl */`
   vec3 shadeOblivion(vec3 p, vec3 nGeo, vec3 rd, float dzl, vec3 dpx, vec3 dpy) {
     if (gMat > 3.5 && gMat < 4.5)
       return mix(vec3(0.004), lin(vec3(1.0, 0.76, 0.42)) * 7.0, gGlow);
-    Surface s = sampleTriplanarGrad(MAT_STEEL, vec3(p.x, p.y, cyc(p.z)), nGeo, 4.0, dpx, dpy);
-    s.metal = 1.0;
-    s.rough *= 0.6;
-    s.albedo = mix(s.albedo, vec3(0.30, 0.10, 0.03), smoothstep(0.45, 0.9, fbm(p.xy * 0.3)) * 0.5);
+    // Every pattern here has to repeat on OB_PERIOD, or the wrap would show:
+    // the rust walks round a circle in y instead of along it.
+    float layer = gMat > 0.5 && gMat < 1.5 ? MAT_HAZARD : MAT_STEEL;
+    Surface s = sampleTriplanarGrad(layer, vec3(p.x, p.y, cyc(p.z)), nGeo, 4.0, dpx, dpy);
+    float ang = p.y * PI * 2.0 / OB_PERIOD;
+    vec2 yc = vec2(cos(ang), sin(ang)) * 3.0;
+    if (gMat > 1.5) {
+      s.metal = 1.0;
+      s.rough *= 0.6;
+      s.albedo = mix(s.albedo, vec3(0.30, 0.10, 0.03), smoothstep(0.45, 0.9, fbm(vec2(p.x * 0.3, dzl * 0.3) + yc)) * 0.5);
+    }
+    // The frame keeps the machine's bare steel down here (the red from below has
+    // to have something to catch on); only the rails are dressed.
+    if (gMat > 4.5 && gMat < 5.5)
+      dressHoist(s, p, nGeo, dzl, gMat, max(length(dpx), length(dpy)));
     vec3 V = -rd;
     vec3 col = shadeAmbient(s, V, vec3(0.004, 0.003, 0.004), vec3(0.01, 0.004, 0.003), 1.0);
     col += domeLight(p, s, V, dzl) + sparkLight(p, s, V, dzl);
     float up = max(dot(s.normal, vec3(0.0, -1.0, 0.0)), 0.0) * 0.85 + 0.15;
-    float flick = 0.80 + 0.20 * fbm(vec2(p.y * 0.5, iTime * 2.1));
+    float flick = 0.80 + 0.20 * fbm(vec2(yc.x, iTime * 2.1 + yc.y));
     return col + s.albedo * up * flick * vec3(1.6, 0.22, 0.03);
   }
 `
