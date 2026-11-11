@@ -178,32 +178,64 @@ void main () {
   float ragged = fbm3(p * 0.045) - 0.5;
   float flesh  = smoothstep(0.35, 0.65, fleshW + ragged * 0.9);
 
-  // Rock: the terrain's rock, plus relief from its own noise.
-  vec3 rock = vec3(0.26, 0.24, 0.22) * (0.55 + 0.7 * fbm3(p * 0.09));
-  rock = mix(rock, vec3(0.32, 0.27, 0.2), smoothstep(0.4, 0.7, fbm3(p * 0.02 + 3.0)));
+  vec3 v = normalize(uCamPos - p);
+  float above = vAux.z;   // height over the waterline, metres
+
+  // Rock: dark as wet basalt (the cave is exposed up 1.3 EV for the lamps, so
+  // a mid-grey stone came out cream), thin seams of strata, streaked where
+  // water runs down it.
+  float strata = smoothstep(0.8, 0.95, 0.5 + 0.5 * sin(p.y * 2.3 + fbm3(p * 0.08) * 6.0));
+  vec3 rock = vec3(0.045, 0.043, 0.04) * (0.55 + 0.9 * fbm3(p * 0.09));
+  rock = mix(rock, vec3(0.085, 0.07, 0.05), strata * 0.7);
+  rock = mix(rock, vec3(0.07, 0.055, 0.04), smoothstep(0.45, 0.7, fbm3(p * 0.02 + 3.0)));
+  float runs = smoothstep(0.6, 0.85, vnoise(vec2(dot(p.xz, vec2(0.7, 0.7)) * 1.3, p.y * 0.08)));
+  rock *= 1.0 - 0.35 * runs;
   float e = 0.5;
   float h0 = fbm3(p * 0.3);
   vec3 g = vec3(fbm3((p + vec3(e, 0, 0)) * 0.3) - h0, fbm3((p + vec3(0, e, 0)) * 0.3) - h0, fbm3((p + vec3(0, 0, e)) * 0.3) - h0) / e;
   g -= n * dot(g, n);
-  vec3 nRock = normalize(n - g * 0.7);
+  vec3 nRock = normalize(n - g * 0.9);
 
-  // Flesh: ribs every few metres, glistening.
-  float rib = 0.5 + 0.5 * sin(vAux.x * 1.6 + fbm3(p * 0.2) * 3.0);
-  vec3 fleshCol = fleshAlbedo(p) * (0.55 + 0.4 * rib);
-  vec3 nFlesh = normalize(n + vec3(0.0, 0.0, 0.0) + (fbm3(p * 0.6) - 0.5) * 0.3);
+  // Flesh: ribs as ridges in the surface, not stripes in its colour, wet as
+  // an eye, its veins lit from inside and pulsing toward the gut.
+  float ribPh = vAux.x * 1.6 + fbm3(p * 0.2) * 3.0;
+  float rib = 0.5 + 0.5 * sin(ribPh);
+  vec3 fleshCol = fleshAlbedo(p) * (0.7 + 0.3 * rib);
+  vec3 ribN = normalize(cross(n, vec3(0.0, 1.0, 0.0)) + vec3(0.001));
+  vec3 nFlesh = normalize(n + (fbm3(p * 0.6) - 0.5) * 0.35 + ribN * cos(ribPh) * 0.35);
+  float vein = smoothstep(0.04, 0.0, abs(fbm3(p * 0.15 + 2.0) - 0.5));
+  float pulse = 0.5 + 0.5 * sin(vAux.x * 0.25 - uTime * 3.2);
 
   vec3 albedo = mix(rock, fleshCol, flesh);
   vec3 nn = normalize(mix(nRock, nFlesh, flesh));
-  float rough = mix(0.85, 0.42, flesh);
-  // Wet below and near the waterline (u near zero and below).
-  float wet = smoothstep(2.5, -1.0, vAux.z);
-  rough = mix(rough, 0.18, wet * (1.0 - flesh));
-  albedo *= 1.0 - 0.35 * wet * (1.0 - flesh);
+  float rough = mix(0.7, 0.12, flesh);
+  // Wet below and near the waterline.
+  float wet = smoothstep(2.5, -1.0, above);
+  rough = mix(rough, 0.2, max(wet, runs * 0.3) * (1.0 - flesh));
+  albedo *= 1.0 - 0.4 * wet * (1.0 - flesh);
 
   float sh = shadowAt(p, nn, uSunDir);
   vec3 col = lightSurface(p, nn, albedo, rough, 0.0, 0.8, sh);
-  // A faint living glow in the flesh, brighter along the ribs.
-  col += fleshCol * vec3(0.9, 0.3, 0.25) * 0.12 * flesh * rib;
+  col += fleshCol * vec3(0.9, 0.3, 0.25) * 0.1 * flesh * rib;
+  col += vec3(1.0, 0.12, 0.08) * vein * pulse * pulse * flesh * 0.3;
+
+  // Light off the river: where the lamps hit the water it throws a moving net
+  // of caustics up the walls above it.
+  vec2 cq = vec2(p.x + p.y * 0.6, p.z - p.y * 0.4) * 0.55 + vec2(uTime * 0.6, -uTime * 0.35);
+  float cau = pow(1.0 - abs(vnoise(cq) * 2.0 - 1.0), 6.0) + pow(1.0 - abs(vnoise(cq * 1.7 + 4.0) * 2.0 - 1.0), 6.0);
+  // Only in the cave, where there is a river to throw it: the gullet is dry.
+  float cave = smoothstep(uFleshRock.y - 30.0, uFleshRock.y + 10.0, t);
+  float band = smoothstep(-0.2, 0.5, above) * (1.0 - smoothstep(0.8, 3.5, above)) * (1.0 - flesh) * cave;
+  col += headlights(p, nn, v, albedo, 0.6, 0.0) * cau * band * 0.6;
+
+  // Algae: cold blue-green specks crowding the waterline, a few colonies up
+  // the vault, twinkling on their own clocks.
+  vec3 ac = floor(p * 2.2);
+  float ah = hash13(ac);
+  float speck = smoothstep(0.32, 0.0, length(fract(p * 2.2) - 0.5)) * step(0.82, ah);
+  float line = ((1.0 - smoothstep(0.0, 2.2, abs(above - 0.4))) * cave + smoothstep(0.7, 0.85, fbm3(p * 0.05 + 7.0)) * 0.6);
+  float tw = 0.4 + 0.6 * pow(0.5 + 0.5 * sin(uTime * (1.0 + ah * 2.0) + ah * 40.0), 3.0);
+  col += vec3(0.1, 0.85, 0.7) * speck * line * tw * 2.2 * (1.0 - flesh);
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
 }
@@ -226,20 +258,35 @@ void main () {
   vec3 p = vWorld;
   vec3 n0 = normalize(vNormal);
   if (n0.y < 0.0) n0 = -n0;
-  // Flow along the spine: ripples travelling in s, wobbling across.
+  float dist = length(p - uCamPos);
+  // Flow along the spine: two scales of ripple carried downstream, chop on
+  // top, all faded to a calm sheet far off so the distance mirrors cleanly.
   vec2 q = vec2(vAux.x * 0.35 - uTime * 1.4, vAux.y * 0.5);
-  float e = 0.3;
-  float h0 = fbm(q) + 0.5 * vnoise(q * 3.1 + uTime * 0.7);
-  float hs = fbm(q + vec2(e, 0.0)) + 0.5 * vnoise((q + vec2(e, 0.0)) * 3.1 + uTime * 0.7) - h0;
-  float hr = fbm(q + vec2(0.0, e)) + 0.5 * vnoise((q + vec2(0.0, e)) * 3.1 + uTime * 0.7) - h0;
-  vec3 n = normalize(n0 + vec3(hr, 0.0, hs) * 0.3);
+  float e = 0.25;
+  float h0 = fbm(q) + 0.5 * vnoise(q * 3.1 + uTime * 0.7) + 0.25 * vnoise(q * 7.3 - uTime * 1.3);
+  float hs = fbm(q + vec2(e, 0.0)) + 0.5 * vnoise((q + vec2(e, 0.0)) * 3.1 + uTime * 0.7) + 0.25 * vnoise((q + vec2(e, 0.0)) * 7.3 - uTime * 1.3) - h0;
+  float hr = fbm(q + vec2(0.0, e)) + 0.5 * vnoise((q + vec2(0.0, e)) * 3.1 + uTime * 0.7) + 0.25 * vnoise((q + vec2(0.0, e)) * 7.3 - uTime * 1.3) - h0;
+  float calm = 1.0 - smoothstep(10.0, 60.0, dist) * 0.7;
+  vec3 n = normalize(n0 + vec3(hr, 0.0, hs) * 0.3 * calm);
   vec3 v = normalize(uCamPos - p);
   float NoV = max(dot(n, v), 0.0);
-  vec3 F = F_Schlick(NoV, vec3(0.02));
-  vec3 body = vec3(0.02, 0.035, 0.03);
-  vec3 col = lightSurface(p, n, body, 0.08, 0.0, 1.0, 1.0);
-  // The walls' glow, mirrored: the fog colour stands in for the reflected cave.
-  col += uFogCol * F * 0.8;
+  float F = 0.02 + 0.98 * pow(1.0 - NoV, 5.0);
+
+  // Black water: almost nothing comes up out of it.
+  vec3 body = vec3(0.004, 0.01, 0.011);
+  vec3 col = body * (uFogCol * 2.0 + 0.02);
+  // What it mirrors: the dark of the cave and the lamps' light on the walls
+  // ahead, by Fresnel. Seen at a glance, almost every ray off it is low, so
+  // anything bright reflected at low angles paints the whole river: keep it dark.
+  vec3 r = reflect(-v, n);
+  vec3 refl = uFogCol * 0.35;
+  refl += vec3(1.0, 0.86, 0.66) * 0.05 * uLights * smoothstep(0.7, 1.0, dot(normalize(r.xz + 1e-4), normalize(uCarFwd.xz + 1e-4))) * smoothstep(0.0, 0.3, r.y);
+  col += refl * F;
+  // The lamps on the ripples: sharp glints that crawl with the flow.
+  col += headlights(p, n, v, vec3(0.0), 0.05, 0.0) * 2.5;
+  // Foam where the current folds over itself, carried along with it.
+  float foam = smoothstep(0.72, 0.9, fbm(q * vec2(1.0, 2.6) + 3.0)) * calm;
+  col += vec3(0.5, 0.55, 0.52) * foam * (uFogCol * 1.5 + headlights(p, n0, v, vec3(0.6), 0.9, 0.0) * 2.0);
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
 }

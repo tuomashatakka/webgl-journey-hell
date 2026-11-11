@@ -523,7 +523,7 @@ void main () {
   else if (uMaterial == 8) { albedo = vec3(0.55, 0.56, 0.58); rough = 0.35; metal = 0.9; det = 0.9 + 0.2 * fbm3(p * 2.0); } // steel
   else if (uMaterial == 9) { albedo = vec3(0.5, 0.49, 0.46); rough = 0.85; det = 0.85 + 0.3 * fbm3(p * 0.7); }               // concrete
   else if (uMaterial == 10) { albedo = vec3(0.04, 0.05, 0.06); rough = 0.12; metal = 0.5; det = 1.0; }                        // glass
-  else if (uMaterial == 11) { albedo = vec3(0.27, 0.25, 0.23); rough = 0.95; det = 0.6 + 0.8 * fbm3(p * 0.9); }              // rock
+  else if (uMaterial == 11) { albedo = vec3(0.045, 0.043, 0.04); rough = 0.35; det = 0.6 + 0.8 * fbm3(p * 0.9); }             // rock: wet stalactites
   else if (uMaterial == 13) {                                                                    // hedge
     // A bank of small leaves: clumped colour, and a normal broken up at leaf
     // scale so the sun picks out clumps instead of lighting a smooth tube.

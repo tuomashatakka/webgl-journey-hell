@@ -157,12 +157,15 @@ vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) 
   // The knee sits under the exposure: the lamps light what they light at
   // the same brightness on the film whether the room is a dusk road or a
   // red throat that the exposure has opened up for.
-  // On film the cap is 0.2 linear, a lit wall that reads as lit and not as a
+  // On film the knee is 0.09 linear, a lit wall that reads as lit and not as a
   // sheet of paper: the ACES fit puts 0.5 at 0.8 sRGB, which is where the
-  // gullet went cream with the old 0.55.
+  // gullet went cream with the old 0.55. It is a knee, not a ceiling: past it
+  // the light climbs on a log, so a wall near the lamps stands out from one
+  // twenty metres down the tunnel (about 3x, where the old ceiling made them
+  // equal and the tunnel had no depth) without the near wall burning out.
   float lum = dot(sum, vec3(0.2126, 0.7152, 0.0722));
-  float cap = 0.2 * exp2(-uEnv.x);
-  return sum / (1.0 + lum / cap);
+  float cap = 0.09 * exp2(-uEnv.x);
+  return sum * (1.0 + 0.6 * log(1.0 + lum / cap)) / (1.0 + lum / cap);
 }
 
 vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float ao, float shadow) {
@@ -180,8 +183,9 @@ vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float 
   vec3 f0 = mix(vec3(0.04), albedo, metal);
   vec3 F = F_Schlick(max(dot(n, v), 0.0), f0);
   col += skyLookup(rdir) * F * (1.0 - rough) * ao * sky;
-  // A floor of fog-coloured ambient so the cave is never fully black.
-  col += albedo * uFogCol * (1.0 - sky) * 0.35 * ao;
+  // A floor of fog-coloured ambient so the cave is never fully black, and
+  // only that: the lamps and what glows in the dark are the light down here.
+  col += albedo * uFogCol * (1.0 - sky) * 0.12 * ao;
   col += headlights(p, n, v, albedo, rough, metal);
   return col;
 }
