@@ -105,9 +105,11 @@ void main () {
 
   vec3 lp = aPos * sc;
 
-  // ADVANCE: the racks walk in toward the aisle, a fraction of a metre a lap.
+  // ADVANCE: the racks walk in toward the aisle, a fraction of a metre a lap,
+  // and stop a hand's width off the car. Only what is tinted 1 walks: the
+  // rails, the battens and the beams of the same bay stay where they are.
   if (uRupture.z > 5.5 && uRupture.z < 6.5)
-    lp.x += uRupture.y * (0.6 + fract(iD.z * 13.7) * 0.8);
+    lp.x += min(uRupture.y * (0.6 + fract(iD.z * 13.7) * 0.8), 3.0) * iD.w;
 
   vec3 world = iA.xyz + Lf * lp.x + U * lp.y + F * lp.z;
   vec3 ln = aNormal / sc;
@@ -442,19 +444,71 @@ void main () {
     }
   }
   else if (mode > 3.5 && mode < 4.5) {
-    // RACK: a server's face, rows of status LEDs blinking on their own clocks.
+    // RACK: a cabinet. Its face is a door over 45 U of equipment in 4 U
+    // blocks, each block one of blanking plate, four servers, two drive
+    // shelves or a switch, picked by the instance seed. A cabinet shares the
+    // lamps' failure roll: when its turn comes it goes dark and its beacon
+    // turns red.
+    s.rough = clamp(s.rough * 0.7, 0.2, 1.0);
+    s.metal = 0.75;
     if (vLocalN.x > 0.5) {
-      vec2 g = vec2(vLocal.z / 0.6 * 8.0, vLocal.y / 0.0445);
+      float w = vLocal.z / 0.6 + 0.5;
+      float u = (vLocal.y - 0.14) / 0.0445;
+      // A pixel's footprint on the face, metres.
+      float px = max(fwidth(vLocal.z), fwidth(vLocal.y));
+      float far = smoothstep(0.012, 0.04, px);
+      float bay = step(0.08, w) * step(w, 0.86) * step(0.0, u) * step(u, 45.0);
+
+      float blk = floor(u * 0.25);
+      float hb = hash12(vec2(blk, 7.0) + seed * 311.0);
+      float blank = step(hb, 0.2);
+      float server = step(0.2, hb) * step(hb, 0.6);
+      float shelf = step(0.6, hb) * step(hb, 0.86);
+      float nx = hb < 0.6 ? 20.0 : hb < 0.86 ? 12.0 : 24.0;
+      float density = blank > 0.5 ? 0.0 : server > 0.5 ? 0.025 : shelf > 0.5 ? 0.3 : 0.2;
+
+      vec2 g = vec2((w - 0.08) / 0.78 * nx, u);
       vec2 id = floor(g);
       vec2 q = fract(g);
       float h = hash12(id + seed * 113.0);
-      float led = smoothstep(0.32, 0.12, length((q - vec2(0.5, 0.5)) * vec2(1.0, 1.6)));
-      float rate = 0.7 + h * 5.0;
-      float on = step(0.45, fract(uTime * rate + h * 9.0)) * step(0.35, h);
-      vec3 lc = h < 0.6 ? vec3(0.2, 1.0, 0.35) : h < 0.85 ? vec3(1.0, 0.55, 0.05) : vec3(0.25, 0.5, 1.0);
-      emissive += lc * led * on * 3.5 * (1.0 - uDecay.y * 0.6);
-      float seam = smoothstep(0.06, 0.0, abs(fract(vLocal.y / 0.0445 * 0.25) - 0.5) - 0.44);
-      s.albedo *= 1.0 - seam * 0.5;
+      float h2 = hash11(h * 57.0);
+      float h3 = hash11(h * 91.0);
+      // A server keeps its status lights at the left end of its bezel.
+      float lit = step(h2, density + server * step(id.x, 1.5) * 0.6);
+
+      // A lamp is 4 mm of light. Further off than that resolves, it is drawn
+      // at the pixel's size and proportionally dimmer; further still, as the
+      // block's mean. Either way it does not shimmer.
+      vec2 cell = vec2(0.468 / nx, 0.0445);
+      float r = length((q - 0.5) * cell);
+      float rad = clamp(px * 0.8, 0.004, 0.011);
+      float led = smoothstep(rad, rad * 0.35, r) * (0.004 * 0.004) / (rad * rad);
+      float on = h3 < 0.55 ? 1.0 : step(0.4, fract(uTime * (0.5 + h * 6.0) + h2 * 9.0));
+      vec3 lc = h < 0.7 ? vec3(0.12, 1.0, 0.3) : h < 0.88 ? vec3(1.0, 0.5, 0.05) : vec3(0.2, 0.45, 1.0);
+      vec3 mean = vec3(0.4, 0.8, 0.42) * (density + server * 0.06) * 0.006;
+      emissive += mix(lc * led * on * lit, mean, far) * 12.0 * bay * alive;
+
+      // Bezels: a seam under every unit a block is made of, drive carriers
+      // across a shelf, a paler plate where nothing is fitted.
+      float uh = blank > 0.5 ? 4.0 : shelf > 0.5 ? 2.0 : 1.0;
+      float fu = fract(u / uh);
+      float seam = 1.0 - smoothstep(0.02, 0.05 + fwidth(u), min(fu, 1.0 - fu) * uh);
+      float carrier = shelf * (1.0 - smoothstep(0.04, 0.1 + fwidth(g.x), min(q.x, 1.0 - q.x)));
+      float shade = 0.55 + hash11(hb * 41.0 + floor(u / uh)) * 0.9 + blank * 0.7;
+      vec3 face = s.albedo * shade * (1.0 - max(seam, carrier * 0.7) * 0.75 * (1.0 - far));
+      // The frame round the bay, the plinth, the header, and a pull handle.
+      vec3 frame = s.albedo * 1.7;
+      float handle = step(0.885, w) * step(w, 0.915) * step(1.0, vLocal.y) * step(vLocal.y, 1.22);
+      s.albedo = mix(frame, face, bay);
+      s.albedo = mix(s.albedo, vec3(0.42), handle);
+      s.rough = mix(s.rough, 0.22, handle);
+
+      // The beacon in the header: blue while the cabinet runs, red once it
+      // has stopped, and slow about it.
+      vec2 bq = abs(vec2(w - 0.5, (vLocal.y - 2.17) / 0.6)) - vec2(0.09, 0.012);
+      float beacon = 1.0 - smoothstep(0.0, 0.004 + px, max(bq.x, bq.y) * 0.6);
+      float pulse = 0.35 + 0.65 * step(0.5, fract(uTime * 0.7 + seed * 5.0));
+      emissive += mix(vec3(1.0, 0.04, 0.02) * pulse, vec3(0.16, 0.42, 1.0), alive) * beacon * 5.0;
     }
   }
   else if (mode > 4.5 && mode < 5.5) {

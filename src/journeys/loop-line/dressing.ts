@@ -35,6 +35,9 @@ const GREENISH: [ number, number, number ]   = [ 0.7, 1, 0.84 ]
 const COLD: [ number, number, number ]       = [ 0.52, 0.74, 1 ]
 const RED: [ number, number, number ]        = [ 1, 0.1, 0.06 ]
 
+/** Where a row of cabinets stands off the track's centre line, metres. */
+const RACK_ROW = 5.3
+
 export interface Lamp {
   x: number;
   y: number;
@@ -316,16 +319,24 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
     }
 
     case Theme.STACKS: {
-      for (let s = s0 + 1.5; s < s1 - 1; s += 0.62) {
+      // Cabinets in runs of eleven with a slot left out between runs: the gap
+      // shows the service corridor behind the row. Tint 1 marks what walks.
+      let slot = 0
+      for (let s = s0 + 1.5; s < s1 - 1; s += 0.62, slot++) {
+        if (slot % 12 === 11)
+          continue
         // A rack's face is local +x, which is left: so the right-hand row
         // faces the aisle as placed and the left-hand row turns round.
-        d.put('rack', s, -6.55, -0.38, { yaw: Math.PI, seed: R() })
-        d.put('rack', s, 6.55, -0.38, { seed: R() })
+        d.put('rack', s, -RACK_ROW, -0.38, { yaw: Math.PI, seed: R(), tint: 1 })
+        d.put('rack', s, RACK_ROW, -0.38, { seed: R(), tint: 1 })
       }
       for (let s = s0 + 2; s < s1; s += 4) {
-        const lamp = d.lamp(s, 0, 4.3, COLD, 1.8, 9)
+        const lamp = d.lamp(s, 0, 4.2, COLD, 2.6, 11)
         d.put('coldStrip', s, 0, 0, { seed: lamp.roll })
+        d.put('coldBody', s, 0, 0)
       }
+      for (let s = s0 + 4; s < s1; s += 8)
+        d.put('stackBeam', s, 0, 0)
       break
     }
 

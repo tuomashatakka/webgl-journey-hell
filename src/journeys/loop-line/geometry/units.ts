@@ -142,8 +142,29 @@ export const UNITS: Record<string, UnitSpec> = {
   buildingBrick: { surface: 'windowsBrick', cell: 0, build: b => b.box(0, 0.5, 0, 0.5, 0.5, 0.5) },
   streetLamp:    { surface: 'sodium', cell: 0, build: b => sphere(b, 0, 0, 0, 0.35, 4) },
 
-  rack:      { surface: 'rack', cell: 0.6, build: b => b.box(0, 1.05, 0, 0.5, 1.05, 0.3) },
-  coldStrip: { surface: 'cold', cell: 0, build: b => b.box(0, 4.52, 0, 0.18, 0.03, 1.6) },
+  // A 45 U cabinet, 600 by 1100 by 2200: the shader draws its face from these
+  // dimensions, so they change together.
+  rack:      { surface: 'rack', cell: 0.6, build: b => b.box(0, 1.1, 0, 0.55, 1.1, 0.3) },
+  // A batten on drop rods: a tube under a reflector, with a gap to the next.
+  coldStrip: { surface: 'cold', cell: 0, build: b => b.box(0, 4.3, 0, 0.06, 0.035, 0.75) },
+  coldBody:  {
+    surface: 'darkGrey',
+    cell:    0,
+    build:   b => {
+      b.box(0, 4.36, 0, 0.14, 0.025, 0.82)
+      for (const z of [ -0.6, 0.6 ])
+        b.box(0, 4.49, z, 0.012, 0.11, 0.012)
+    },
+  },
+  // A roof beam across the hall, with the flange the battens hang beside.
+  stackBeam: {
+    surface: 'steel',
+    cell:    0,
+    build:   b => {
+      b.box(0, 4.47, 0, 7.2, 0.13, 0.035)
+      b.box(0, 4.33, 0, 7.2, 0.012, 0.09)
+    },
+  },
 
   carriage: {
     surface: 'carriage',

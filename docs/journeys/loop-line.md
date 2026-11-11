@@ -31,7 +31,7 @@ floor, no coordinate drift, and a track that could cross itself.
 | 4 | THE CUT | a ten-metre cutting under the day, overbridges, fences on the crest | the noon sky (Δ `DAY`) and its sun | the sky comes down |
 | 5 | THE ANNEX | a low flooded interchange, rows of columns, beams | flickering green tubes | the water rises a step per lap |
 | 6 | THE VIADUCT | a brick viaduct on arches over a city at dusk | sodium lamps on the parapets, a thousand windows | the city goes dark |
-| 7 | THE STACKS | a machine hall through a corrugated building | cold strips and server LEDs | the racks advance |
+| 7 | THE STACKS | a machine hall through a corrugated building, rows of 45 U cabinets under cable trays and roof beams | cold battens on drop rods, server LEDs, a beacon on every cabinet | the racks advance, and go dark |
 | 8 | THE DEPOT | a night yard: sidings, parked sets with lit windows, a shed | floodlight masts (Δ `NIGHT`) | the yard empties |
 | 9 | THE TURNBACK | a plate-girder trestle over nothing, ending in a cliff | red signal lamps, a deep-field sky | the structure leaves one member at a time |
 
@@ -122,6 +122,19 @@ camera passes through a mouth and the walls sweep past — motion, not a pop.
   instance seed (fading to their mean with distance), server LEDs blinking on
   their own clocks, carriage window bands, posters and shop signs, a polished
   running surface on the rails.
+* **A cabinet is one box and a face drawn in the shader** (`MODE_RACK`): a door
+  frame, a plinth, a header and 45 U of equipment in 4 U blocks — blanking
+  plate, four servers, two drive shelves or a switch, by instance seed — with
+  bezel seams and 4 mm lamps. A lamp smaller than a pixel is drawn at the
+  pixel's size and proportionally dimmer, and past a 4 cm footprint the block
+  shows its mean, so the rows do not shimmer. Cabinets stand 5.3 m off the
+  centre line in runs of eleven. A cabinet's seed is its failure roll, the
+  same as a lamp's: past `lightFail` it goes dark and its blue beacon turns
+  red.
+* **Only the cabinets advance.** `ADVANCE` moves an instance by its tint, and
+  only racks are tinted; before that the rails, the strips and everything else
+  in the bay walked sideways with them. The walk is capped at 3 m, which
+  leaves a face 1.75 m off the centre line.
 * The flood is a level plane, not a track-following one: the annex is the bottom
   of a dip, so the water lies only where the floor is below it.
 * A slim cab — a dashboard band and two pillars at the frame's edges — rides
