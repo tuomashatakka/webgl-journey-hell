@@ -29,14 +29,15 @@
 //   uLook    (pitch, roll, above, depth)
 //   uWave    (waterY-local, lap, dist, curType)
 
-import { HASH21 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { routeGlsl } from './glsl/route'
 import { fittingsGlsl } from './glsl/fittings'
 import { waterSurfacesGlsl } from './glsl/waterSurfaces'
+import { dressingGlsl } from './glsl/dressing'
+import { previewGlsl } from './glsl/preview'
 
 
-const COMMON = foundationGlsl + routeGlsl + fittingsGlsl + waterSurfacesGlsl
+const COMMON = foundationGlsl + routeGlsl + fittingsGlsl + waterSurfacesGlsl + dressingGlsl
 
 // Camera, march, water split and the inline post chain.
 const SCENE = `
@@ -64,6 +65,7 @@ const SCENE = `
 
     vec3 alb, nn; float rough;
     tileSurface(qs, ns, wy, C.z, alb, nn, rough);
+    dressSurface(qs, ns, wy, B, C, alb, nn, rough);
 
     // Was it the building, or something standing in it? One extra evaluation of
     // the fittings, at the hit point only. The march never reads gMat, so the
@@ -282,9 +284,17 @@ const SCENE = `
         vec3 wp = ro + rd * tW;
         vec3 wn = waterNormal(wp.xz, iTime);
 
-        // Everything beyond the surface is seen through the water.
-        vec3 under = hit ? col : deepCol;
-        under = mix(deepCol, under, exp(-max(t - tW, 0.0) * 0.40));
+        // Everything beyond the surface is seen through the water, and water
+        // is not grey: Beer-Lambert per channel, red dying over a metre or two
+        // and blue carrying, with a floor on the absorption so that even the
+        // ankle-deep shallow end reads as chlorinated rather than as glass.
+        // The ripple bends the floor's light about too, brighter where the
+        // surface is lensing it down and darker in the troughs.
+        float wpath = hit ? max(t - tW, 0.0) : 40.0;
+        vec3  wtr   = exp(-(wpath + 0.18) * vec3(0.62, 0.17, 0.12));
+        vec3 under  = hit ? col : deepCol;
+        under *= 1.0 + (wn.x * 0.9 - wn.z * 0.7) * 6.0 * exp(-wpath * 0.6);
+        under  = under * wtr + vec3(0.020, 0.085, 0.100) * (1.0 - wtr);
         under += vec3(0.35, 0.62, 0.68) * causticAt(wp) * 0.25;
         under += shoal(rd, max(t - tW, 0.0), 0.55);
 
@@ -305,6 +315,14 @@ const SCENE = `
 
         col = mix(under, refl, fres);
         col = mix(col, vec3(0.19, 0.22, 0.17) * (0.55 + causticAt(wp) * 0.55), film * 0.45);
+
+        // Where the water meets anything -- a wall, a column, a rope float --
+        // the meniscus climbs it and catches a thin line of light, and a hand's
+        // width of shadow and scum collects against it. One map evaluation per
+        // water pixel, which is what the contact line is worth.
+        float wc = mapScene(wp);
+        col *= 0.55 + 0.45 * smoothstep(0.0, 0.22, wc);
+        col += vec3(0.30, 0.34, 0.32) * (1.0 - smoothstep(0.0, 0.035, wc)) * exp(-tW * 0.05);
         col = mix(hazeCol, col, exp(-tW * 0.030));
       }
     }
@@ -357,9 +375,20 @@ const SCENE = `
     // compresses instead, so the highlights stay highlights and keep their
     // detail. White point at 2.6: anything beyond that is a lamp, and lamps are
     // allowed to be white.
-    col = max(col, 0.0);
+    col = max(col, 0.0) * 1.14;
     col = col * (1.0 + col / (2.6 * 2.6)) / (1.0 + col);
     col = pow(col, vec3(0.92));
+
+    // The grade. The Reinhard shoulder alone leaves the mid-tones flat, which
+    // is the grey haze this used to read as: a soft S puts the contrast back
+    // in the middle without touching the ends, a little saturation brings the
+    // mosaic and the water up out of the grey, and the shadows lean teal the
+    // way every fluorescent-lit pool hall photographs.
+    col = clamp(col, 0.0, 1.0);
+    col = mix(col, col * col * (3.0 - 2.0 * col), 0.38);
+    float gl = dot(col, vec3(0.299, 0.587, 0.114));
+    col = mix(vec3(gl), col, 1.18);
+    col = max(col, 0.0) * mix(vec3(0.90, 1.02, 1.05), vec3(1.0), smoothstep(0.0, 0.55, gl));
     col += (hash21(gl_FragCoord.xy + fract(iTime) * 71.3) - 0.5) * 0.028;
 
     gl_FragColor = vec4(col, 1.0);
@@ -368,70 +397,5 @@ const SCENE = `
 
 export const natatoriumFrag = COMMON + SCENE
 
-// Hover preview. Self-driving from iTime alone: the index's CRT attaches no
-// simulation, so uSec/uCam would all read zero and the real shader would render
-// a black frame. No raymarch either — every card in the grid shares one GL
-// context. The job is to read as a swimming pool at 300px, which is what the
-// rippled fluorescent strips smearing down across the waterline do.
-export const natatoriumPreviewFrag = `
-  precision highp float;
-  uniform vec2 iResolution;
-  uniform float iTime;
-  uniform vec2 uPointer;
-
-  ${HASH21}
-
-  // Ridged sum-of-sines sharpened into filaments. The pow() is the whole trick:
-  // without it this is noise, with it it is caustics.
-  float caustic(vec2 p, float t) {
-    float k = 0.0;
-    vec2  q = p;
-    for (int i = 0; i < 3; i++) {
-      vec2  w = q * (1.0 + float(i) * 0.9);
-      float a = sin(w.x + t * (1.0 + float(i) * 0.31)) + sin(w.y * 1.13 - t * 0.87);
-      float b = sin((w.x + w.y) * 0.71 + t * 1.21);
-      k += 1.0 - abs(a * 0.5 + b * 0.35);
-      q  = mat2(0.80, 0.60, -0.60, 0.80) * q;
-    }
-    return pow(max(k / 3.0, 0.0), 6.0);
-  }
-
-  void main() {
-    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
-    uv += uPointer * 0.06;
-
-    float horizon = 0.06 + 0.05 * sin(iTime * 0.25);
-
-    // Ground-plane trick: perspective floor out of a divide, scrolling toward us.
-    float fy = max(horizon - uv.y, 1e-3);
-    vec2  fp = vec2(uv.x / fy, 1.0 / fy + iTime * 0.35);
-
-    vec2  g     = fract(fp * 3.0) - 0.5;
-    float grout = 1.0 - smoothstep(0.0, 0.06, 0.5 - max(abs(g.x), abs(g.y)));
-    float c     = caustic(fp * 1.6, iTime);
-
-    vec3 below = mix(vec3(0.16, 0.34, 0.38), vec3(0.52, 0.74, 0.76), 1.0 - grout * 0.55);
-    below += vec3(0.60, 0.90, 0.95) * c * 0.85;
-    // Depth fade over the range the floor actually spans: 1/fy is already ~2.4
-    // at the bottom edge of the card, so a fade ending at 2.5 blacks out the
-    // entire floor and the tiles never read.
-    below = mix(below, vec3(0.05, 0.13, 0.19), smoothstep(2.5, 15.0, 1.0 / fy));
-
-    // Above the line: pale tile and the fluorescent strips.
-    float strip = 0.0;
-    for (int i = 0; i < 4; i++) {
-      float sy = horizon + 0.09 + float(i) * 0.10;
-      strip += 0.018 / (abs(uv.y - sy) + 0.020);
-    }
-    vec3 above = vec3(0.74, 0.78, 0.77) + vec3(1.0, 0.97, 0.88) * strip * 0.32;
-
-    // The strips smear down across the water, rippled. This is the tell.
-    float ripple = sin(uv.x * 18.0 + iTime * 1.7) * 0.012;
-    below += vec3(1.0, 0.97, 0.88) * (0.030 / (abs(uv.y - horizon + ripple) + 0.06)) * 0.9;
-
-    vec3 col = mix(below, above, smoothstep(-0.004, 0.004, uv.y - horizon + ripple * 0.5));
-    col *= 1.0 - 0.5 * length(uv * vec2(0.8, 1.0));
-    col += (hash21(gl_FragCoord.xy + fract(iTime) * 51.7) - 0.5) * 0.035;
-    gl_FragColor = vec4(col, 1.0);
-  }
-`
+// Hover preview: a closed-form pool hall, no march (see glsl/preview.ts).
+export const natatoriumPreviewFrag = previewGlsl
