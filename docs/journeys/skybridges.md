@@ -303,8 +303,8 @@ Things to keep true:
 ## 7. Performance
 
 - The full build (route page, env map bound), then lighter builds tried in
-  order until one links (`skybridgesLighter` in `shader.ts`): lite (64 steps,
-  two octaves, no blast crazing), min (the index channel's budgets), glass (no
+  order until one links (`skybridgesLighter` in `shader.ts`): lite (48 steps to
+  130 m, two octaves, no blast crazing), min (the index channel's budgets), glass (no
   crazing or burning floors: `PLAIN_GLASS`), plain (no pressure-wave wall,
   glare or afterimage, the cloud as reflections see it: `PLAIN_BLAST`), and as
   a last resort the preview — the index's channel, no ending, `NO_BLAST`
