@@ -30,7 +30,7 @@ bun run check               # tsc, eslint, knip, bun test: the gate for every co
 | `stairwell` | six acts joined through walls, lit by the asset library |
 | `skybridges` | glass bridges between glass towers over a cloud sea, breaking under you; a detonation at the end |
 | `foundry` | seven halls, rigid-body physics, a terminal fall |
-| `hollow-orchard` | a fungal descent |
+| `hollow-orchard` | a fungal descent lit by its own lanterns, four times, with the red under it breaking through |
 | `natatorium` | flooded poolrooms along a turning route |
 | `switchback` | a mine railway that tips over, then falls |
 | `loop-line` | a rasterized closed circuit, nine bays, lit by the asset library |

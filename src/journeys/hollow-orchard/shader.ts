@@ -25,10 +25,12 @@
 import { HASH21 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { stagesGlsl } from './glsl/stages'
+import { lanternsGlsl } from './glsl/lanterns'
+import { riftGlsl } from './glsl/rift'
 import { dispatchGlsl } from './glsl/dispatch'
 
 
-const COMMON = foundationGlsl + stagesGlsl + dispatchGlsl
+const COMMON = foundationGlsl + riftGlsl + stagesGlsl + lanternsGlsl + dispatchGlsl
 
 // Shading, camera and the folded-in post chain. Split from COMMON only so the
 // preview below can pull in the noise helpers without any of the raymarch.
@@ -85,13 +87,24 @@ const SCENE = `
 
     float ndl = clamp(dot(n, keyDir), 0.0, 1.0);
     float ao  = calcAO(p, n);
-    vec3  col = base * uKey * (0.12 + 0.9 * ndl) * ao;
+    // The key is dimmed to leave the lanterns room to be what lights a stage.
+    vec3  col = base * uKey * (0.08 + 0.55 * ndl) * ao;
 
     // THE ROOT LABYRINTH is a dug passage with no sky, so the key alone lights
     // only the floor. Light it from the eye instead, falling off with distance,
     // the way a passage lit by what you carry looks.
     if (lamp > 0.0)
       col += base * uKey * clamp(dot(n, -rd), 0.0, 1.0) * ao * lamp * 2.2 / (1.0 + 0.18 * t * t);
+
+    // The lanterns of both stages in the crossfade, and the glow of a lantern's
+    // own body.
+    vec3 ps = vec3(p.x - pathX(p.z), p.y, p.z);
+    vec3 ll = lanternLight(ps, n, uStage.x);
+    if (uStage.z >= 0.002)
+      ll = mix(ll, lanternLight(ps, n, uStage.y), uStage.z);
+    col += base * ll * ao * 3.2;
+    col += uLantern * max(glow - 1.0, 0.0) * 1.15;
+    glow = min(glow, 1.0);
 
     // Hemisphere ambient — the ground is dead, the air above it glows a little.
     col += base * mix(uBg * 0.5, uKey * 0.18, 0.5 + 0.5 * n.y) * ao;
@@ -114,6 +127,17 @@ const SCENE = `
     if (uHeavy > 0.5)
       col += uTint * pow(ridge(p * 3.2 + vec3(0.0, 0.0, iTime * 0.06)), 6.0) * glow * 0.7;
 
+    // The breach: scorched lips, red heat in the fissures, and the red light from
+    // below catching whatever faces down toward it.
+    if (uRift.x > 0.001) {
+      vec2  rc   = riftCrack(p);
+      float beat = 0.55 + 0.45 * uRift.w;
+      col *= 1.0 - 0.7 * rc.y;
+      col += RIFT_RED * rc.x * (1.2 + 1.8 * uRift.w) * (0.4 + uRift.x);
+      col += RIFT_RED * rc.y * 0.12 * beat * uRift.x;
+      col += base * RIFT_RED * clamp(0.4 - 0.6 * n.y, 0.0, 1.0) * 0.4 * uRift.x * beat * ao;
+    }
+
     return col;
   }
 
@@ -124,7 +148,7 @@ const SCENE = `
     // read as a CRT post pass, but there is no second pass here to sample from.
     // Scanlines and the RGB column split come free from #crt-overlay in CSS.
     float r2 = dot(uv, uv);
-    uv *= 1.0 + r2 * (0.09 + 0.16 * uWalk.w);
+    uv *= 1.0 + r2 * (0.09 + 0.16 * uWalk.w + 0.22 * uRift.x);
 
     float fall  = uCam.z;
     float yaw   = uLook.x - uPointer.x * 0.42; // right = cross(fwd, Y) is -x facing +z: negative yaw turns right
@@ -162,8 +186,9 @@ const SCENE = `
       if (t > 120.0) break;
       // Undershoot: fbm displacement breaks the Lipschitz bound, and the route's
       // shear inflates the estimate by up to ~1.8x on top of that (see the note
-      // on PATH_A1 in kinematics.ts). 0.48 stays under the reciprocal of both.
-      t += d * 0.48;
+      // on PATH_A1 in kinematics.ts). 0.48 stays under the reciprocal of both,
+      // and the breach's writhing (riftWarp) inflates it again by its amplitude.
+      t += d * 0.48 / (1.0 + 0.9 * uRift.y);
     }
 
     vec3 col = uBg;
@@ -186,6 +211,16 @@ const SCENE = `
     // single pass can afford, since it needs no resampling of the scene.
     float haze = 1.0 - exp(-t * den);
     col += vec3(0.030, 0.0, -0.022) * haze * uWalk.w;
+
+    // The lanterns' glow in the spore-laden air, thicker where the spores are.
+    float T    = hit ? t : 120.0;
+    vec3  halo = lanternHalo(ro, rd, T, uStage.x, den);
+    if (uStage.z >= 0.002)
+      halo = mix(halo, lanternHalo(ro, rd, T, uStage.y, den), uStage.z);
+    col += halo * (0.12 + 0.14 * uPulse.y);
+
+    if (uRift.z > 0.001)
+      col += riftShafts(ro, rd, T, den) * 0.85;
 
     col += spores(uv, iTime) * (0.6 + 0.8 * xfade);
     col += uTint * uPulse.w * 0.10 * (0.5 + 0.5 * sin(uPulse.x * TAU));   // glow pulse

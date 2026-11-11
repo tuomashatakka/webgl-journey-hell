@@ -52,6 +52,26 @@ const PIECE_W        = 0.3
 const STALL_LOOP     = 3
 // loop at which COMPOST stops letting you leave
 
+// ---- the breach ------------------------------------------------------------
+//
+// Under the orchard is the thing it feeds. The first loop never sees it: that
+// lap is the authored orchard, untouched, the reference the rest are measured
+// against. From the seam into the second loop the ground starts to crack, red
+// light comes up through the cracks and rises through the air as shafts, the
+// geometry writhes, and the lanterns turn red. `breach` is that one ramp, 0..1,
+// a function of distance walked so it cannot jump: it starts in the last
+// stretch of the first COMPOST, eases out, and is all but full by the time the
+// fourth COMPOST stalls.
+const BREACH_FROM = 0.9
+// in laps: where the first crack opens
+const BREACH_LAPS = 3
+// laps from there to a full breach
+const BREACH_WARP = 0.75
+// domain-warp amplitude at a full breach, world units
+const BEAT_HZ     = 0.62
+// the heartbeat under the floor, quickening with the breach
+const BREACH_RED: RGB = [ 1, 0.16, 0.08 ]
+
 // ---- the route ------------------------------------------------------------
 //
 // The twelve stages are all authored around a straight +Z axis, and for a long
@@ -99,150 +119,162 @@ const AISLE_HY = 0.45
 // Index = id - 1. The six scape lengths sum to ABYSS_START_Z (530).
 const ORCHARD_STAGES: OrchardStage[] = [
   {
-    id:    STAGE_NURSERY,
-    name:  'SECTOR 1: THE NURSERY',
-    len:   90,
-    eye:   1.7,
-    speed: 7.5,
-    fall:  0,
-    sway:  0.5,
-    bg:    [ 0.09, 0.075, 0.045 ],
-    key:   [ 1, 0.86, 0.58 ],
-    tint:  [ 0.92, 0.78, 0.5 ],
+    id:      STAGE_NURSERY,
+    name:    'SECTOR 1: THE NURSERY',
+    len:     90,
+    eye:     1.7,
+    speed:   7.5,
+    fall:    0,
+    sway:    0.5,
+    bg:      [ 0.09, 0.075, 0.045 ],
+    key:     [ 1, 0.86, 0.58 ],
+    tint:    [ 0.92, 0.78, 0.5 ],
+    lantern: [ 0.55, 1, 0.42 ],
   },
   {
-    id:    STAGE_CATHEDRAL,
-    name:  'SECTOR 2: SPORE CATHEDRAL',
-    len:   100,
-    eye:   1.8,
-    speed: 5.5,
-    fall:  0,
-    sway:  0.8,
-    bg:    [ 0.075, 0.055, 0.07 ],
-    key:   [ 1, 0.78, 0.42 ],
-    tint:  [ 0.95, 0.62, 0.38 ],
+    id:      STAGE_CATHEDRAL,
+    name:    'SECTOR 2: SPORE CATHEDRAL',
+    len:     100,
+    eye:     1.8,
+    speed:   5.5,
+    fall:    0,
+    sway:    0.8,
+    bg:      [ 0.075, 0.055, 0.07 ],
+    key:     [ 1, 0.78, 0.42 ],
+    tint:    [ 0.95, 0.62, 0.38 ],
+    lantern: [ 0.82, 1, 0.38 ],
   },
   {
-    id:    STAGE_MARROW,
-    name:  'SECTOR 3: MARROW GROVE',
-    len:   90,
-    eye:   1.65,
-    speed: 7,
-    fall:  0,
-    sway:  0.6,
-    bg:    [ 0.06, 0.058, 0.075 ],
-    key:   [ 0.92, 0.92, 0.86 ],
-    tint:  [ 0.88, 0.8, 0.72 ],
+    id:      STAGE_MARROW,
+    name:    'SECTOR 3: MARROW GROVE',
+    len:     90,
+    eye:     1.65,
+    speed:   7,
+    fall:    0,
+    sway:    0.6,
+    bg:      [ 0.06, 0.058, 0.075 ],
+    key:     [ 0.92, 0.92, 0.86 ],
+    tint:    [ 0.88, 0.8, 0.72 ],
+    lantern: [ 0.42, 0.86, 1 ],
   },
   {
-    id:    STAGE_ROOTS,
-    name:  'SECTOR 4: THE ROOT LABYRINTH',
-    len:   100,
-    eye:   1.15,
-    speed: 4,
-    fall:  0,
-    sway:  1.1,
-    bg:    [ 0.03, 0.022, 0.03 ],
-    key:   [ 0.72, 0.52, 0.3 ],
-    tint:  [ 0.6, 0.34, 0.22 ],
+    id:      STAGE_ROOTS,
+    name:    'SECTOR 4: THE ROOT LABYRINTH',
+    len:     100,
+    eye:     1.15,
+    speed:   4,
+    fall:    0,
+    sway:    1.1,
+    bg:      [ 0.03, 0.022, 0.03 ],
+    key:     [ 0.72, 0.52, 0.3 ],
+    tint:    [ 0.6, 0.34, 0.22 ],
+    lantern: [ 0.5, 1, 0.5 ],
   },
   {
-    id:    STAGE_FRUITING,
-    name:  'SECTOR 5: FRUITING BODY',
-    len:   90,
-    eye:   1.4,
-    speed: 3.2,
-    fall:  0,
-    sway:  0.7,
-    bg:    [ 0.075, 0.028, 0.038 ],
-    key:   [ 1, 0.55, 0.48 ],
-    tint:  [ 1, 0.38, 0.34 ],
+    id:      STAGE_FRUITING,
+    name:    'SECTOR 5: FRUITING BODY',
+    len:     90,
+    eye:     1.4,
+    speed:   3.2,
+    fall:    0,
+    sway:    0.7,
+    bg:      [ 0.075, 0.028, 0.038 ],
+    key:     [ 1, 0.55, 0.48 ],
+    tint:    [ 1, 0.38, 0.34 ],
+    lantern: [ 0.66, 0.94, 1 ],
   },
   {
-    id:    STAGE_TRANSIT,
-    name:  'SECTOR 6: TRANSITION',
-    len:   60,
-    eye:   1.6,
-    speed: 6,
-    fall:  0.15,
-    sway:  1.4,
-    bg:    [ 0.04, 0.028, 0.05 ],
-    key:   [ 0.85, 0.62, 0.55 ],
-    tint:  [ 0.72, 0.42, 0.6 ],
+    id:      STAGE_TRANSIT,
+    name:    'SECTOR 6: TRANSITION',
+    len:     60,
+    eye:     1.6,
+    speed:   6,
+    fall:    0.15,
+    sway:    1.4,
+    bg:      [ 0.04, 0.028, 0.05 ],
+    key:     [ 0.85, 0.62, 0.55 ],
+    tint:    [ 0.72, 0.42, 0.6 ],
+    lantern: [ 0.5, 0.86, 0.42 ],
   },
 
   // ---- The abyss. Six evenly-split slots across ABYSS_LEN. ----
   {
-    id:    STAGE_BLOOM,
-    name:  'THE ABYSS — THE BLOOM',
-    len:   0,
-    eye:   1.2,
-    speed: 5,
-    fall:  0.9,
-    sway:  1.8,
-    bg:    [ 0.09, 0.04, 0.02 ],
-    key:   [ 1, 0.66, 0.3 ],
-    tint:  [ 1, 0.46, 0.22 ],
+    id:      STAGE_BLOOM,
+    name:    'THE ABYSS — THE BLOOM',
+    len:     0,
+    eye:     1.2,
+    speed:   5,
+    fall:    0.9,
+    sway:    1.8,
+    bg:      [ 0.09, 0.04, 0.02 ],
+    key:     [ 1, 0.66, 0.3 ],
+    tint:    [ 1, 0.46, 0.22 ],
+    lantern: [ 1, 0.8, 0.36 ],
   },
   {
-    id:    STAGE_HOST,
-    name:  'THE ABYSS — HOST',
-    len:   0,
-    eye:   1.75,
-    speed: 4,
-    fall:  0.3,
-    sway:  0.9,
-    bg:    [ 0.045, 0.03, 0.055 ],
-    key:   [ 0.88, 0.7, 0.62 ],
-    tint:  [ 0.95, 0.4, 0.42 ],
+    id:      STAGE_HOST,
+    name:    'THE ABYSS — HOST',
+    len:     0,
+    eye:     1.75,
+    speed:   4,
+    fall:    0.3,
+    sway:    0.9,
+    bg:      [ 0.045, 0.03, 0.055 ],
+    key:     [ 0.88, 0.7, 0.62 ],
+    tint:    [ 0.95, 0.4, 0.42 ],
+    lantern: [ 0.52, 1, 0.72 ],
   },
   {
-    id:    STAGE_HARVEST,
-    name:  'THE ABYSS — THE HARVEST',
-    len:   0,
-    eye:   1.6,
-    speed: 4.5,
-    fall:  0.1,
-    sway:  1.2,
-    bg:    [ 0.055, 0.038, 0.022 ],
-    key:   [ 0.96, 0.74, 0.4 ],
-    tint:  [ 0.9, 0.5, 0.28 ],
+    id:      STAGE_HARVEST,
+    name:    'THE ABYSS — THE HARVEST',
+    len:     0,
+    eye:     1.6,
+    speed:   4.5,
+    fall:    0.1,
+    sway:    1.2,
+    bg:      [ 0.055, 0.038, 0.022 ],
+    key:     [ 0.96, 0.74, 0.4 ],
+    tint:    [ 0.9, 0.5, 0.28 ],
+    lantern: [ 0.86, 1, 0.42 ],
   },
   {
-    id:    STAGE_MYCELIAL,
-    name:  'THE ABYSS — MYCELIAL FALL',
-    len:   0,
-    eye:   0.9,
-    speed: 12,
-    fall:  1,
-    sway:  2.4,
-    bg:    [ 0.02, 0.016, 0.032 ],
-    key:   [ 0.8, 0.84, 1 ],
-    tint:  [ 0.66, 0.72, 1 ],
+    id:      STAGE_MYCELIAL,
+    name:    'THE ABYSS — MYCELIAL FALL',
+    len:     0,
+    eye:     0.9,
+    speed:   12,
+    fall:    1,
+    sway:    2.4,
+    bg:      [ 0.02, 0.016, 0.032 ],
+    key:     [ 0.8, 0.84, 1 ],
+    tint:    [ 0.66, 0.72, 1 ],
+    lantern: [ 0.42, 0.62, 1 ],
   },
   {
-    id:    STAGE_SEEDVAULT,
-    name:  'THE ABYSS — SEED VAULT',
-    len:   0,
-    eye:   1.5,
-    speed: 5,
-    fall:  0.2,
-    sway:  0.6,
-    bg:    [ 0.038, 0.026, 0.048 ],
-    key:   [ 0.86, 0.72, 0.52 ],
-    tint:  [ 0.78, 0.48, 0.66 ],
+    id:      STAGE_SEEDVAULT,
+    name:    'THE ABYSS — SEED VAULT',
+    len:     0,
+    eye:     1.5,
+    speed:   5,
+    fall:    0.2,
+    sway:    0.6,
+    bg:      [ 0.038, 0.026, 0.048 ],
+    key:     [ 0.86, 0.72, 0.52 ],
+    tint:    [ 0.78, 0.48, 0.66 ],
+    lantern: [ 0.82, 0.58, 1 ],
   },
   {
-    id:    STAGE_COMPOST,
-    name:  'THE ABYSS — COMPOST',
-    len:   0,
-    eye:   1.3,
-    speed: 2.5,
-    fall:  0.6,
-    sway:  1,
-    bg:    [ 0.014, 0.011, 0.016 ],
-    key:   [ 0.44, 0.36, 0.3 ],
-    tint:  [ 0.4, 0.24, 0.28 ],
+    id:      STAGE_COMPOST,
+    name:    'THE ABYSS — COMPOST',
+    len:     0,
+    eye:     1.3,
+    speed:   2.5,
+    fall:    0.6,
+    sway:    1,
+    bg:      [ 0.014, 0.011, 0.016 ],
+    key:     [ 0.44, 0.36, 0.3 ],
+    tint:    [ 0.4, 0.24, 0.28 ],
+    lantern: [ 0.46, 0.84, 0.32 ],
   },
 ]
 
@@ -289,6 +321,9 @@ interface OrchardStage {
 
   /** Subsurface tint — what light looks like coming *through* the flesh. */
   tint: RGB;
+
+  /** Colour of the stage's bioluminescent lanterns (glsl/lanterns.ts). */
+  lantern: RGB;
 }
 
 interface OrchardState {
@@ -311,6 +346,9 @@ interface OrchardState {
   /** 0..1 decay escalation; grows with loop count and abyss progress. */
   rot: number;
 
+  /** 0..1 how far the red under the orchard has broken through. 0 for the whole first loop. */
+  breach: number;
+
   /** Integrated walk speed for this frame. */
   speed: number;
 
@@ -331,9 +369,10 @@ interface OrchardState {
   wet:    number;
   glow:   number;
 
-  bg:   RGB;
-  key:  RGB;
-  tint: RGB;
+  bg:      RGB;
+  key:     RGB;
+  tint:    RGB;
+  lantern: RGB;
 
   name: string;
 }
@@ -429,6 +468,10 @@ function getOrchardState (z: number): OrchardState {
   // Decay escalation. Loops stack it; the abyss adds the rest within a loop.
   const rot = Math.min(1, loop * 0.33 + descent * 0.22)
 
+  // Eased out, so the second loop already shows it and the fourth is drowning.
+  const breachX = clamp01((z / ORCHARD_LOOP_Z - BREACH_FROM) / BREACH_LAPS)
+  const breach  = 1 - (1 - breachX) * (1 - breachX)
+
   const eyeY = mix(a.eye, b.eye, blend)
   const fall = mix(a.fall, b.fall, blend)
   const sway = mix(a.sway, b.sway, blend)
@@ -460,6 +503,7 @@ function getOrchardState (z: number): OrchardState {
     stageLen,
     descent,
     rot,
+    breach,
     speed,
     // Lateral position *within* the bent frame — the shader adds pathX(z) to it
     // to get world x, and centres the aisle on the same track.
@@ -475,18 +519,22 @@ function getOrchardState (z: number): OrchardState {
     // would roll the camera to one side for a third of the loop at a time.
     roll:  Math.sin(loopZ * 0.013) * 0.06 +
           fall * 0.1 * Math.sin(loopZ * 0.09) +
-          Math.max(-0.11, Math.min(0.11, pathDDX(loopZ) * 7)),
-    bob:    Math.abs(Math.sin(loopZ * 0.55)) * 0.09 * (1 - fall) - 0.04,
-    breath: breath * breathAmp,
-    spore:  clamp01(0.15 + fleshy * 0.25 + rot * 0.55 + (stageA === STAGE_CATHEDRAL ? 0.5 : 0)),
-    wet:    clamp01(fleshy * 0.8 + rot * 0.5 + (stageA === STAGE_ROOTS ? 0.25 : 0)),
-    glow:   clamp01(descent * 0.6 + rot * 0.4),
+          Math.max(-0.11, Math.min(0.11, pathDDX(loopZ) * 7)) +
+          breach * 0.1 * Math.sin(loopZ * 0.071) * Math.sin(loopZ * 0.023 + 1),
+    bob:     Math.abs(Math.sin(loopZ * 0.55)) * 0.09 * (1 - fall) - 0.04,
+    breath:  breath * breathAmp,
+    spore:   clamp01(0.15 + fleshy * 0.25 + rot * 0.55 + (stageA === STAGE_CATHEDRAL ? 0.5 : 0)),
+    wet:     clamp01(fleshy * 0.8 + rot * 0.5 + (stageA === STAGE_ROOTS ? 0.25 : 0)),
+    glow:    clamp01(descent * 0.6 + rot * 0.4),
     // Palette lerps on the CPU so the shader carries no colour table at all,
     // then slides toward bruised violet as the rot escalates.
-    bg:     mix3(mix3(a.bg, b.bg, blend), [ 0.055, 0.02, 0.075 ], rot * 0.55),
-    key:    mix3(a.key, b.key, blend),
-    tint:   mix3(mix3(a.tint, b.tint, blend), [ 0.72, 0.28, 0.85 ], rot * 0.4),
-    name:   stalled && speed < 0.05 ? 'THE ABYSS — COMPOST (STOPPED)' : blend < 0.5 ? a.name : b.name,
+    bg:      mix3(mix3(mix3(a.bg, b.bg, blend), [ 0.055, 0.02, 0.075 ], rot * 0.55), [ 0.07, 0.012, 0.01 ], breach * 0.6),
+    key:     mix3(a.key, b.key, blend),
+    tint:    mix3(mix3(a.tint, b.tint, blend), [ 0.72, 0.28, 0.85 ], rot * 0.4),
+    // The lanterns sicken with the rest of it, but stay the brightest thing
+    // there, until the breach takes them and the lure is the red under it.
+    lantern: mix3(mix3(mix3(a.lantern, b.lantern, blend), [ 0.8, 0.5, 1 ], rot * 0.3), BREACH_RED, breach * 0.8),
+    name:    stalled && speed < 0.05 ? 'THE ABYSS — COMPOST (STOPPED)' : blend < 0.5 ? a.name : b.name,
   }
 }
 
@@ -507,6 +555,9 @@ export function createHollowOrchardSimulation (): JourneySimulation {
   // Inside the simulation, so a ?t= seek rebuilds it. See lib/signalLoss.
   let signalAge = 0
 
+  // The heartbeat's phase, integrated so it can quicken without jumping.
+  let beat = 0
+
   // Packed in place every frame, never reallocated.
   const uStage = [ 0, 0, 0, 0 ]
   const uWalk  = [ 0, 0, 0, 0 ]
@@ -514,6 +565,7 @@ export function createHollowOrchardSimulation (): JourneySimulation {
   const uLook  = [ 0, 0, 0, 0 ]
   const uPulse = [ 0, 0, 0, 0 ]
   const uAisle = [ 0, 0, 0, 0 ]
+  const uRift  = [ 0, 0, 0, 0 ]
 
   // The route's shape, uploaded rather than duplicated in GLSL. The shader needs
   // pathX at every *marched* z, not just the camera's, so it cannot be a scalar
@@ -525,6 +577,7 @@ export function createHollowOrchardSimulation (): JourneySimulation {
       // Integrate before sampling: speed is a property of where you already are.
       z    += state.speed * Math.min(dt, 0.1)
       state = getOrchardState(z)
+      beat += dt * BEAT_HZ * (1 + state.breach * 0.7)
 
       // The stall, not merely the last stage: COMPOST on the stalling loop takes
       // a while to actually stop, and the signal should start going as the world
@@ -566,6 +619,14 @@ export function createHollowOrchardSimulation (): JourneySimulation {
       uAisle[2] = state.eyeY - AISLE_DY
       uAisle[3] = AISLE_HY
 
+      // breach · warp amplitude · shaft strength · heartbeat. The double thump
+      // sits inside the cycle, clear of the wrap, or the beat would step at it.
+      const ph = beat % 1
+      uRift[0] = state.breach
+      uRift[1] = BREACH_WARP * state.breach ** 1.4
+      uRift[2] = state.breach ** 1.5
+      uRift[3] = Math.exp(-(((ph - 0.25) * 9) ** 2)) + 0.6 * Math.exp(-(((ph - 0.45) * 9) ** 2))
+
       return {
         uStage,
         uWalk,
@@ -574,9 +635,11 @@ export function createHollowOrchardSimulation (): JourneySimulation {
         uPulse,
         uPath,
         uAisle,
-        uBg:   state.bg,
-        uKey:  state.key,
-        uTint: state.tint,
+        uRift,
+        uBg:      state.bg,
+        uKey:     state.key,
+        uTint:    state.tint,
+        uLantern: state.lantern,
       }
     },
 

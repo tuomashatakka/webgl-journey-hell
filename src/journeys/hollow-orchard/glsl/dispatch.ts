@@ -14,6 +14,18 @@ export const dispatchGlsl = `  // --- dispatch ---------------------------------
     return sdCompost(p);
   }
 
+  // A stage with its lanterns grown into it. A lantern's emitting body carries
+  // gGlow above 1 (1 + its power), which shading reads as emission.
+  float stageWithLanterns(vec3 p, float id) {
+    float d = stageSDF(p, id);
+    vec2  l = sdLantern(p, id);
+    if (l.x < d) {
+      if (l.y > 0.5) { gMat = 0.0; gWet = 0.8; gGlow = 1.0 + gLanternPower; }
+      else           { gMat = 1.0; gWet = 0.2; gGlow = 0.0; }
+    }
+    return smin(d, l.x, 0.05);
+  }
+
   // Crossfading two SDFs is a *morph*, not a union — which for fungus is the
   // correct artifact rather than a bug. Where it does misbehave it is buried
   // under the spore surge that peaks at exactly the same moment (see main).
@@ -34,12 +46,16 @@ export const dispatchGlsl = `  // --- dispatch ---------------------------------
     // Bend first: every SDF below sees the straight world it was authored in.
     p.x -= pathX(p.z);
 
-    float dA = stageSDF(p, uStage.x);
+    // The breach writhes the world, but not the aisle carved through it.
+    vec3 pa = p;
+    if (uRift.y > 0.001) p = riftWarp(p);
+
+    float dA = stageWithLanterns(p, uStage.x);
     float d  = dA;
 
     if (uStage.z >= 0.002) {                  // uniform branch: coherent across the frame
       float mA = gMat, wA = gWet, gA = gGlow;
-      float dB = stageSDF(p, uStage.y);
+      float dB = stageWithLanterns(p, uStage.y);
       gMat  = mix(mA, gMat,  uStage.z);
       gWet  = mix(wA, gWet,  uStage.z);
       gGlow = mix(gA, gGlow, uStage.z);
@@ -48,7 +64,7 @@ export const dispatchGlsl = `  // --- dispatch ---------------------------------
 
     // Then carve. smax rather than max so the aisle blends into what it cut
     // instead of leaving a machined lip along its whole length.
-    return smax(d, -aisleSD(p), 0.35);
+    return smax(d, -aisleSD(pa), 0.35);
   }
 
   vec3 calcNormal(vec3 p, float t) {

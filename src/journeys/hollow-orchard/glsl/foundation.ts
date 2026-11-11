@@ -20,6 +20,7 @@ export const foundationGlsl = `
   uniform vec3 uBg;
   uniform vec3 uKey;
   uniform vec3 uTint;
+  uniform vec3 uLantern;    // the lanterns' colour and brightness, CPU-lerped
 
   const float PI  = 3.14159265;
   const float TAU = 6.28318531;
@@ -28,7 +29,7 @@ export const foundationGlsl = `
   // extra map() taps (normals, AO, SSS) clobber them.
   float gMat;   // 0 flesh · 1 bark/bone · 2 soil (2.4 root) · 3 wet fruit · 4 spore crust
   float gWet;
-  float gGlow;
+  float gGlow;  // above 1: a lantern's body, emitting 1 + power
 
   // Ray origin, published by main() so the SDFs can cheapen themselves with
   // distance. Every fbm tap costs ~32 hashes and the far field is where the
