@@ -46,6 +46,10 @@ export const dispatchGlsl = `  // --- dispatch ---------------------------------
     // Bend first: every SDF below sees the straight world it was authored in.
     p.x -= pathX(p.z);
 
+    // The breach writhes the world, but not the aisle carved through it.
+    vec3 pa = p;
+    if (uRift.y > 0.001) p = riftWarp(p);
+
     float dA = stageWithLanterns(p, uStage.x);
     float d  = dA;
 
@@ -60,7 +64,7 @@ export const dispatchGlsl = `  // --- dispatch ---------------------------------
 
     // Then carve. smax rather than max so the aisle blends into what it cut
     // instead of leaving a machined lip along its whole length.
-    return smax(d, -aisleSD(p), 0.35);
+    return smax(d, -aisleSD(pa), 0.35);
   }
 
   vec3 calcNormal(vec3 p, float t) {
