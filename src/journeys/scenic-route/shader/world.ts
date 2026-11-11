@@ -1,4 +1,5 @@
 import { brdfChunk, deltaChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
+import { fieldsChunk } from '../fields'
 
 // ---------------------------------------------------------------------------
 // the swept road
@@ -111,6 +112,7 @@ ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
 ${deltaChunk}
+${fieldsChunk}
 void main () {
   // The heightfield cannot tunnel: inside the tube it is simply not there.
   if (vCarve < 0.0) discard;
@@ -119,18 +121,77 @@ void main () {
   float dist = length(p - uCamPos);
   float lod = clamp(dist / 260.0, 0.0, 1.0);
 
-  // Fields: patches of different greens and a few harvested to gold, on a
-  // large-scale noise quantised into parcels.
-  float parcel = fbm(p.xz * 0.0024 + 11.0);
-  float par2 = fbm(p.xz * 0.0071 + 4.0);
-  vec3 g1 = vec3(0.09, 0.17, 0.045);
-  vec3 g2 = vec3(0.16, 0.22, 0.06);
-  vec3 g3 = vec3(0.34, 0.27, 0.10);
-  vec3 grass = mix(g1, g2, smoothstep(0.42, 0.58, parcel));
-  grass = mix(grass, g3, smoothstep(0.62, 0.7, par2) * smoothstep(0.52, 0.58, parcel));
-  // Blade-scale detail, fading to its mean.
+  // Grass: a large-scale wash of greens, blade detail fading to its mean.
+  float macro = fbm(p.xz * 0.0024 + 11.0);
+  vec3 grass = mix(vec3(0.075, 0.15, 0.04), vec3(0.15, 0.21, 0.06), smoothstep(0.35, 0.65, macro));
   float blades = vnoise(p.xz * 1.7) * 0.6 + vnoise(p.xz * 6.3) * 0.4;
   grass *= mix(0.72 + blades * 0.56, 1.0, lod);
+
+  // The farmland: a patchwork of fields (fields.ts), each worked one way and
+  // planted with one crop, a grass margin inside every border, a hedge on it.
+  float farm = farmWeight(p, n.y);
+  vec3 albedo = grass;
+  float hedge = 0.0;
+  if (farm > 0.001) {
+    vec4  fd   = fieldAt(p.xz);
+    float crop = fieldHash(fd.x * 7.3 + fd.y * 13.1 + 0.5);
+    float tone = 0.85 + 0.3 * fieldHash(fd.x * 3.1 + fd.y * 5.7 + 9.0);
+    // Stripes fade by their own screen-space frequency, not only with
+    // distance: furrows a metre apart alias into corduroy on a slope seen at
+    // a glance long before the distance fade gets to them.
+    float fw   = fwidth(fd.w);
+    float fine = (1.0 - lod) * (1.0 - smoothstep(0.08, 0.35, fw));
+    vec3  soil0 = vec3(0.16, 0.105, 0.065) * (0.85 + 0.3 * vnoise(p.xz * 0.6));
+    vec3  f;
+    if (crop < 0.34) {
+      // Pasture, grazed unevenly.
+      f = mix(vec3(0.07, 0.15, 0.04), vec3(0.13, 0.2, 0.055), vnoise(p.xz * 0.05 + fd.xy * 3.0));
+    } else if (crop < 0.5) {
+      // Hay, mown in stripes.
+      float stripe = step(0.5, fract(fd.w / 2.6));
+      f = vec3(0.2, 0.215, 0.085) * (1.0 + (stripe - 0.5) * 0.22 * (1.0 - smoothstep(0.8, 2.6, fw)));
+    } else if (crop < 0.7) {
+      // Wheat: tramlines, and the wind going over it in waves.
+      float tram  = 1.0 - smoothstep(0.25, 0.5, abs(fract(fd.w / 18.0) - 0.5) * 18.0 - 0.6);
+      float gust  = sin(dot(p.xz, vec2(0.06, 0.035)) - uTime * 1.7 + vnoise(p.xz * 0.04) * 4.0);
+      f = vec3(0.42, 0.32, 0.12) * (0.92 + 0.1 * gust);
+      f = mix(f, soil0 * 1.2, tram * 0.7 * (1.0 - smoothstep(0.3, 1.2, fw)));
+    } else if (crop < 0.86) {
+      // Ploughed: furrows, their contrast going to the field's mean far off.
+      float fur = 0.5 + 0.5 * sin(fd.w * 7.0);
+      f = soil0 * (1.0 + (fur - 0.5) * 0.55 * fine);
+    } else if (crop < 0.94) {
+      // Drilled: young green in rows on bare soil.
+      float rowv = smoothstep(0.3, 0.7, 0.5 + 0.5 * sin(fd.w * 10.5));
+      f = mix(soil0, vec3(0.1, 0.17, 0.04), mix(0.45, rowv, fine));
+    } else {
+      // Rapeseed, the one loud field.
+      f = vec3(0.6, 0.5, 0.03) * (0.9 + 0.2 * vnoise(p.xz * 0.3));
+    }
+    f *= tone;
+    // The margin and the hedge's foot along every border.
+    float margin = 1.0 - smoothstep(2.5, 4.5, fd.z);
+    f = mix(f, grass * 1.05, margin);
+    hedge = (1.0 - smoothstep(0.9, 1.9, fd.z)) * farm;
+    f = mix(f, vec3(0.04, 0.085, 0.028), hedge);
+    albedo = mix(albedo, f, farm);
+  }
+
+  // Above the farms, heath: olive grass and heather in patches.
+  float heathW = smoothstep(25.0, 80.0, p.y) * (1.0 - farm);
+  vec3 heath = mix(vec3(0.15, 0.14, 0.065), vec3(0.15, 0.09, 0.11), smoothstep(0.5, 0.7, fbm(p.xz * 0.011 + 2.0)));
+  albedo = mix(albedo, heath * (0.8 + 0.4 * vnoise(p.xz * 0.2)), heathW * 0.85);
+
+  // The cliff-top is coastal turf, paler and wind-cut.
+  float coastW = smoothstep(370.0, 420.0, p.x) * smoothstep(20.0, 45.0, p.y) * (1.0 - smoothstep(300.0, 360.0, p.y));
+  albedo = mix(albedo, vec3(0.17, 0.2, 0.08) * (0.85 + 0.3 * vnoise(p.xz * 0.9)), coastW * 0.8);
+
+  // Woods on the far slopes: dark crowns in clumps. Only past a few hundred
+  // metres, where painted crowns read as a forest rather than as a stain.
+  float woodW = smoothstep(0.56, 0.62, fbm(p.xz * 0.0019 + 3.7)) * (1.0 - farm)
+              * smoothstep(220.0, 420.0, dist) * (1.0 - smoothstep(330.0, 420.0, p.y));
+  float crowns = vnoise(p.xz * 0.28) * 0.6 + vnoise(p.xz * 0.9) * 0.4;
+  albedo = mix(albedo, vec3(0.03, 0.065, 0.025) * (0.55 + 0.9 * crowns), woodW);
 
   vec3 soil = vec3(0.21, 0.15, 0.095) * (0.8 + 0.4 * vnoise(p.xz * 0.9));
   vec3 rock = vec3(0.30, 0.285, 0.26) * (0.6 + 0.6 * fbm3(p * 0.11));
@@ -146,15 +207,20 @@ void main () {
   soil = mix(soil, sDirt.albedo, nearW * 0.8);
 
   float slope = 1.0 - n.y;
-  float rockW = smoothstep(0.22, 0.48, slope + (fbm3(p * 0.06) - 0.5) * 0.18);
-  float soilW = smoothstep(0.08, 0.2, slope) * (1.0 - rockW) * 0.7;
+  // The mountains are rock from their shoulders up, whatever the slope.
+  float high  = smoothstep(200.0, 340.0, p.y + (fbm(p.xz * 0.004) - 0.5) * 120.0);
+  float rockW = max(smoothstep(0.22, 0.48, slope + (fbm3(p * 0.06) - 0.5) * 0.18), high * 0.85);
+  float soilW = smoothstep(0.08, 0.2, slope) * (1.0 - rockW) * 0.7 * (1.0 - farm * 0.8);
   // Sand only where the land meets the sea; the valley floor is below sea
   // level and must not read as a beach.
   float sandW = smoothstep(4.0, 0.5, p.y) * smoothstep(330.0, 420.0, p.x) * (1.0 - rockW * 0.6);
-  vec3 albedo = mix(grass, soil, soilW);
+  albedo = mix(albedo, soil, soilW);
   albedo = mix(albedo, rock, rockW);
   albedo = mix(albedo, sand, sandW);
-  float rough = mix(0.92, 0.75, rockW) ;
+  // Snow on the peaks, lying where the ground is flat enough to hold it.
+  float snowW = smoothstep(400.0, 470.0, p.y + (fbm(p.xz * 0.006 + 1.0) - 0.5) * 110.0) * smoothstep(0.35, 0.7, n.y);
+  albedo = mix(albedo, vec3(0.82, 0.84, 0.88), snowW);
+  float rough = mix(mix(0.92, 0.75, rockW), 0.55, snowW);
 
   // Downtown's plaza is paved: concrete slabs with joints, over the flat disc.
   const vec3 PLAZA = vec3(385.0, 665.0, 130.0);
@@ -182,11 +248,28 @@ void main () {
     nn = normalize(n - g * 0.9 * rockW * (1.0 - lod));
   }
 
+  // The mountains are too far for the near relief and too coarse a mesh to
+  // carry their own, so they get it here: gullies cut down the fall line and
+  // strata across it, at a scale the far field can hold.
+  float mtn = smoothstep(90.0, 220.0, p.y) * smoothstep(400.0, 900.0, dist);
+  if (mtn > 0.001) {
+    vec2  q  = p.xz * 0.011;
+    float e  = 0.35;
+    float g0 = fbm(q);
+    vec2  gr = vec2(fbm(q + vec2(e, 0.0)) - g0, fbm(q + vec2(0.0, e)) - g0) / e;
+    float gully = abs(sin(dot(p.xz, normalize(n.xz + 1e-4)) * 0.035 + g0 * 9.0));
+    vec3  bump = vec3(gr.x, 0.0, gr.y) * 1.6 + vec3(n.z, 0.0, -n.x) * (gully - 0.5) * 0.9;
+    nn = normalize(nn - bump * mtn);
+    float strata = 0.85 + 0.3 * smoothstep(0.3, 0.7, vnoise(vec2(p.y * 0.06, g0 * 4.0)));
+    albedo *= mix(1.0, strata * (0.75 + 0.5 * gully), mtn * rockW * (1.0 - snowW));
+  }
+
   nn = normalize(mix(nn, sRock.normal, rockW * nearW * 0.8));
   nn = normalize(mix(nn, sDirt.normal, soilW * nearW * 0.6));
   float sh = shadowAt(p, nn, uSunDir);
-  // A little ambient occlusion from slope: ground under a steep face sees less sky.
-  float ao = 0.75 + 0.25 * n.y;
+  // A little ambient occlusion from slope: ground under a steep face sees less
+  // sky, and the foot of a hedge and the floor of a wood see less again.
+  float ao = (0.75 + 0.25 * n.y) * (1.0 - 0.35 * hedge) * (1.0 - 0.3 * woodW);
   vec3 col = lightSurface(p, nn, albedo, rough, 0.0, ao, sh);
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
@@ -441,6 +524,14 @@ void main () {
   else if (uMaterial == 9) { albedo = vec3(0.5, 0.49, 0.46); rough = 0.85; det = 0.85 + 0.3 * fbm3(p * 0.7); }               // concrete
   else if (uMaterial == 10) { albedo = vec3(0.04, 0.05, 0.06); rough = 0.12; metal = 0.5; det = 1.0; }                        // glass
   else if (uMaterial == 11) { albedo = vec3(0.27, 0.25, 0.23); rough = 0.95; det = 0.6 + 0.8 * fbm3(p * 0.9); }              // rock
+  else if (uMaterial == 13) {                                                                    // hedge
+    // A bank of small leaves: clumped colour, and a normal broken up at leaf
+    // scale so the sun picks out clumps instead of lighting a smooth tube.
+    float clump = fbm3(p * 1.6);
+    albedo = mix(vec3(0.035, 0.075, 0.025), vec3(0.11, 0.17, 0.045), smoothstep(0.35, 0.7, clump)) * (0.8 + 0.4 * vnoise3(p * 6.0));
+    n = normalize(n + (vec3(fbm3(p * 2.3), fbm3(p * 2.3 + 7.0), fbm3(p * 2.3 + 13.0)) - 0.5) * 1.4);
+    rough = 0.9; det = 1.0;
+  }
   else                     { albedo = vec3(0.84, 0.83, 0.78); rough = 0.55; det = 0.94 + 0.12 * fbm3(p * 4.0); }              // paint
   albedo *= det;
   // Timber, sheet, steel, concrete and rock are Δ's scans under the set's colour.
@@ -458,7 +549,7 @@ void main () {
   vec3 col = lightSurface(p, n, albedo, rough, metal, 1.0, sh);
   // Leaves are lit through: a wrapped sun term keeps the shade side of a crown
   // green rather than black, and the sky fills it from every side.
-  if (uMaterial == 5) {
+  if (uMaterial == 5 || uMaterial == 13) {
     float wrap = 0.5 + 0.5 * dot(n, uSunDir);
     col += albedo * (sunRadiance() * (0.16 * wrap * sh) + skyLookup(vec3(0.0, 1.0, 0.0)) * 0.35);
   }

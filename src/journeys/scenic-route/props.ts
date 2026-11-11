@@ -7,6 +7,7 @@ import type { LookParams, Route } from './course'
 import { buildSpineIndex, spineHits, terrainHeight } from './geometry'
 import type { SpineIndex } from './geometry'
 import { ROCK_START, tubeRadius } from './maw'
+import { farmWeight, fieldBorders } from './fields'
 import { hash } from './props/hash'
 import { V3, bar, boxOf, boxT, cylinderX, lobe, quadN, taperY } from './props/primitives'
 
@@ -28,6 +29,7 @@ const MAT = {
   GLASS:     10,
   ROCK:      11,
   PAINT:     12,
+  HEDGE:     13,
 } as const
 
 /** Road half width plus the verge: how close to a spine anything may stand. */
@@ -282,6 +284,90 @@ function fenceStrip (pl: Placer, all: SpineIndex, s0: number, s1: number, side: 
   return b
 }
 
+/** A hedge's cross-section, (across, up): a rounded bank of leaves. */
+const HEDGE_PROFILE: [ number, number ][] = [
+  [ -0.85, 0 ], [ -1, 0.75 ], [ -0.7, 1.55 ], [ 0, 1.95 ], [ 0.7, 1.55 ], [ 1, 0.75 ], [ 0.85, 0 ],
+]
+
+/**
+ * The hedgerows: one strip mesh along every field border in the valley
+ * (fields.ts), where the ground is farmland, broken where a road or a gate
+ * crosses. Height and girth wander along the hedge, the ends taper into the
+ * ground, and now and then a tree has grown up out of it.
+ */
+function hedgeStrip (idx: SpineIndex, all: SpineIndex, trees: Instances): MeshBuilder {
+  const b     = createMeshBuilder()
+  const lines = fieldBorders(-300, -320, 300, 980, 2)
+  type Pt = [ number, number, number ]
+
+  const emit = (run: Pt[]) => {
+    if (run.length < 3)
+      return
+
+    let prev: number[] | null = null
+    for (let k = 0; k < run.length; k++) {
+      const [ x, y, z ] = run[k]
+      const a           = run[Math.max(0, k - 1)]
+      const c           = run[Math.min(run.length - 1, k + 1)]
+      let tx = c[0] - a[0]
+      let tz = c[2] - a[2]
+      const tl          = Math.hypot(tx, tz) || 1
+      tx /= tl
+      tz /= tl
+
+      const sx             = -tz
+      const sz             = tx
+      const ends           = Math.min(k, run.length - 1 - k)
+      const taper          = Math.max(0.15, Math.min(1, ends / 2))
+      const hgt            = (0.95 + 0.25 * Math.sin(x * 0.31 + z * 0.17) + 0.15 * Math.sin(x * 0.07 - z * 0.11)) * taper
+      const wid            = (0.95 + 0.2 * Math.sin(x * 0.23 - z * 0.29)) * Math.max(0.5, taper)
+      const ring: number[] = []
+      for (let j = 0; j < HEDGE_PROFILE.length; j++) {
+        const [ ac, up ] = HEDGE_PROFILE[j]
+        const na         = ac
+        const nu         = up - 0.8
+        const nl         = Math.hypot(na, nu) || 1
+        ring.push(b.vertex(
+          x + sx * ac * wid, y - 0.15 + up * hgt, z + sz * ac * wid,
+          sx * na / nl, nu / nl, sz * na / nl, k * 0.5, j / (HEDGE_PROFILE.length - 1),
+        ))
+      }
+      if (prev)
+        for (let j = 0; j < HEDGE_PROFILE.length - 1; j++) {
+          b.face(prev[j], ring[j], ring[j + 1])
+          b.face(prev[j], ring[j + 1], prev[j + 1])
+        }
+      prev = ring
+    }
+  }
+
+  lines.forEach((line, li) => {
+    let run: Pt[] = []
+    for (let i = 0; i < line.length; i += 2) {
+      const x  = line[i]
+      const z  = line[i + 1]
+      const y  = terrainHeight(idx, x, z)
+      const hx = terrainHeight(idx, x + 3, z) - y
+      const hz = terrainHeight(idx, x, z + 3) - y
+      const ny = 3 / Math.hypot(hx, 3, hz)
+      // A gate in roughly one stretch of eighteen metres in sixteen.
+      const gate = hash(li * 131 + Math.floor(i / 18)) < 0.06
+      const ok   = !gate && farmWeight(x, y, ny) > 0.5 && !spineHits(all, x, z, ROAD_CLEAR + 4, y - 3, y + 4)
+      if (!ok) {
+        emit(run)
+        run = []
+        continue
+      }
+
+      run.push([ x, y, z ])
+      if (hash(x * 0.37 + z * 0.71) < 0.03)
+        trees.add(x, y - 0.2, z, hash(x + z) * Math.PI * 2, 0.8 + 0.5 * hash(x * 1.3 - z), hash(x * 0.9 + z * 1.1), 1)
+    }
+    emit(run)
+  })
+  return b
+}
+
 /**
  * Wires between consecutive poles: two per arm, sagging 0.7 m in the middle
  * in six straight pieces each. The arm ends are where the vertex shader puts
@@ -496,8 +582,10 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
   }
   cluster(incline.s0 + 120, 34, 26, 5000, 55, 12)
   cluster(incline.s0 + 300, -30, 18, 6000, 40, 12)
-  cluster(coast.s0 + 90, 26, 9, 7000, 30, 8)
-  cluster(coast.s0 + 230, 22, 7, 8000, 24, 8)
+  cluster(coast.s0 + 90, -26, 9, 7000, 30, 8)
+  cluster(coast.s0 + 230, -22, 7, 8000, 24, 8)
+
+  const hedges = hedgeStrip(idx, all, trees)
   trees = trees.clear(all, 3.2, 10)
 
   // The farmhouse, on the hill side, turned a little off the road.
@@ -590,6 +678,7 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
     set('house-glass', farm.glass, MAT.GLASS, Instances.world(), true),
     set('trunks', trunk(), MAT.TRUNK, trees, true),
     set('canopies', canopy(), MAT.CANOPY, trees, true),
+    set('hedges', hedges, MAT.HEDGE, Instances.world(), true),
     set('towers', turbineTower(), MAT.TURBINE, towers),
     set('rotors', turbineRotor(), MAT.TURBINE, rotors, true, 1.35),
     set('piers', pier(), MAT.CONCRETE, piers),

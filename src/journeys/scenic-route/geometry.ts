@@ -17,8 +17,19 @@
 // alternating hillsides — the nearest-spine pull that shapes every other
 // corridor cannot be trusted where the spine passes over itself.
 //
-// The coastline is a smoothed knot curve forty metres seaward of the coast
-// road, wobbled by noise so it reads as a coast and not as an offset.
+// The coastline is a smoothed knot curve about twenty metres seaward of the
+// coast road, wobbled by noise so it reads as a coast and not as an offset.
+// It was forty: far enough that the cliff-top strip filled the view to the
+// horizon and the sea was only ever off to the side, behind the door. The
+// strip now falls away over its last forty-five metres to a brow thirty
+// metres down, below the road, so the sea shows over it.
+// The knots from the lip south, and from downtown north, are where they were.
+//
+// Beyond the near field, west, north and south, a range of mountains stands
+// behind the hills, ridged and up to about six hundred metres, so the valley
+// has a horizon. It stays at least 150 m inland of the coast, wherever the
+// coast runs, so the sea side stays open. None of it reaches the near field,
+// so nothing the road touches moves.
 //
 // ---------------------------------------------------------------------------
 // The corridor pull
@@ -40,10 +51,10 @@ import { smoothstep } from '@wjh/math/scalar'
 
 // --- the coastline -------------------------------------------------------------
 
-/** (z, x) knots of the sea's edge, forty metres seaward of the coast road. */
+/** (z, x) knots of the sea's edge, about twenty metres seaward of the coast road. */
 const COAST: [ number, number ][] = [
   [ -400, 430 ], [ 0, 425 ], [ 100, 445 ], [ 150, 490 ], [ 190, 560 ], [ 215, 572 ],
-  [ 226, 552 ], [ 242, 524 ], [ 280, 492 ], [ 335, 468 ], [ 400, 454 ], [ 470, 448 ],
+  [ 226, 552 ], [ 242, 524 ], [ 280, 472 ], [ 335, 448 ], [ 400, 434 ], [ 470, 430 ],
   [ 540, 446 ], [ 700, 446 ], [ 1200, 440 ],
 ]
 
@@ -140,6 +151,29 @@ function cliffX (z: number): number {
   return x0 + (x1 - x0) * t + (fbm(z * 0.011, 3.3) - 0.5) * 22
 }
 
+/** Ridged noise, 0..1, sharp crests: the range's spine. */
+function ridged (x: number, z: number): number {
+  const r = 1 - Math.abs(fbm(x, z) * 2 - 1)
+  return r * r
+}
+
+/** The range behind the hills: zero inside the near field and over the sea. */
+function mountains (x: number, z: number): number {
+  const west  = smoothstep(-850, -1650, x)
+  const north = smoothstep(1500, 2300, z)
+  const south = smoothstep(-850, -1650, z)
+  // Kept well inland of the coast, wherever the coast runs: a range rising out
+  // of the sea south of the headland walled off the whole sea view.
+  const inland = 1 - smoothstep(-500, -150, x - cliffX(z))
+  const w      = Math.max(west, north, south) * inland
+  if (w <= 0)
+    return 0
+
+  const body  = fbm(x * 0.0009 + 5.3, z * 0.0009 - 2.1)
+  const spine = ridged(x * 0.0014 - 1.7, z * 0.0014 + 3.3)
+  return w * (60 + 330 * body + 300 * spine)
+}
+
 /** The land before anything is built on it. */
 function naturalHeight (x: number, z: number): number {
   // Valley to ridge to shelf.
@@ -155,9 +189,17 @@ function naturalHeight (x: number, z: number): number {
   const dPlaza = Math.hypot(x - PLAZA.x, z - PLAZA.z)
   h = h + (PLAZA_Y - h) * (1 - smoothstep(PLAZA.r0, PLAZA.r1, dPlaza))
 
-  // The cliff. Ten metres of horizontal for the whole drop.
-  const d   = x - cliffX(z)
-  const sea = smoothstep(-3, 7, d)
+  h += mountains(x, z)
+
+  // The cliff-top falls away toward its edge, so the land beside the coast road
+  // lies below the eye and the sea shows over it; a level shelf stood higher
+  // than the road and walled the sea off. Then the cliff: ten metres of
+  // horizontal for the whole drop.
+  const d    = x - cliffX(z)
+  const brow = smoothstep(-45, 0, d)
+  h         -= 30 * brow * brow
+
+  const sea  = smoothstep(-3, 7, d)
   h = h + (SEABED + (fbm(x * 0.03, z * 0.03) - 0.5) * 3 - h) * sea
   return h
 }
@@ -273,8 +315,10 @@ export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
 
   let w = 1 - smoothstep(10, 60, n.d)
   // The embankment stops at the cliff: the sea side keeps its drop and its
-  // seabed, or the corridor would lay a shelf over the water.
+  // seabed, or the corridor would lay a shelf over the water. It also eases
+  // off over the brow, or it would hold the brow up level with the road.
   w *= 1 - sea
+  w *= 1 - 0.8 * smoothstep(cx - 24, cx - 4, x)
   return h + (n.y - 0.28 - h) * w
 }
 
