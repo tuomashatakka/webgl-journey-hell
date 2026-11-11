@@ -110,9 +110,17 @@ export const structuresGlsl = /* glsl */`
     if (behind < 0.5) bound = max(bound, top - 1.0 - p.y);
     if (bound > 0.4) return bound;
 
-    // Ramps: the vertical distance overstates the real one by the slope.
-    float slope = (deckTop(p.z + 0.25) - deckTop(p.z - 0.25)) * 2.0;
-    float k = 1.0 / sqrt(1.0 + min(slope * slope, 64.0));
+    // Ramps: the vertical distance overstates the real one by the slope. Most
+    // of the lap is level, and there both samples land on the same constant
+    // (exactly: the difference is 0 and k is 1), so the two extra deckTop calls
+    // are spent only where the deck climbs or meets a gap.
+    float k = 1.0;
+    bool level = (zl > 0.25 && zl < 119.75) || (zl > 180.25 && zl < 224.75) || (zl > 236.25 && zl < 247.75)
+      || (zl > 356.25 && zl < 419.75) || (zl > 480.25 && zl < 525.75);
+    if (!level) {
+      float slope = (deckTop(p.z + 0.25) - deckTop(p.z - 0.25)) * 2.0;
+      k = 1.0 / sqrt(1.0 + min(slope * slope, 64.0));
+    }
 
     float segZ = (floor(p.z / SEG) + 0.5) * SEG;
     vec3 fall = segmentFall(segZ);

@@ -36,7 +36,7 @@ ${COMMON}`
 // will link. Phone compilers unroll every loop and inline every call, and an
 // Adreno that runs the index channel happily would not link the full build
 // with the detonation in it. Each step down drops one thing:
-//   lite   fewer steps and octaves, no blast crazing;
+//   lite   48 steps to 130 m, two octaves, no blast crazing;
 //   min    the index channel's budgets;
 //   glass  no crazing and no burning floors;
 //   plain  no pressure-wave wall, glare or afterimage, the cloud as reflections see it.
@@ -51,8 +51,8 @@ const SMALL = `
 #define LITE`
 
 const skybridgesLiteFrag = `
-#define RM_STEPS 64
-#define MAX_DIST 150.0
+#define RM_STEPS 48
+#define MAX_DIST 130.0
 #define STEP_K 0.85
 #define FBM_OCTAVES 2
 #define SEETHRU_STEPS 16
