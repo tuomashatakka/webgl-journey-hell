@@ -160,8 +160,58 @@ air in closed form (Macklin's single scattering) — this hall's five and the
 next hall's, so the halos never pop at a bulkhead. linear light throughout,
 ACES at the end.
 
-the webgl 2 build is the route's; the index's channel is still a GLSL ES 1.00
-sketch of the drop (`foundryPreviewFrag`).
+the hoist shaft is not brick any more: its walls sample the steel scan and are
+dressed as riveted plate (below), and its lamps hang either side of the guide
+rail (`shaftLampAt`) instead of behind it, so the fitting itself can be seen.
+the coolant tier's lamps are dialled down to 2.3 — white tile in a tight hall
+was the one place the frame washed out (mean luminance ~97 against ~40 for its
+neighbours; ~55 now).
+
+## the detailing
+
+everything here is in the shading. no new geometry, no extra march steps: the
+patterns are analytic, filtered by the hit's own footprint (`lineCov`) and
+faded to their average before they can alias.
+
+- **the shaft**: 1.2 × 1.5 m riveted sheets — dark seams, domed rivet heads in
+  a row either side of every seam (bent into the normal), a tint per sheet,
+  rust run down from the seam above, soot; the 2.4 m ring ribs as angle iron
+  with a lit top edge; oil weeping down the plate under the rail brackets; each
+  lamp a wire-guarded bulb in a housing on the plate.
+- **the halls** (`dressHall`): a painted dado to 1.25 m in the piston gallery,
+  the long run and the gearworks, peeling in flakes; a hazard kick band at the
+  wall foot in the loading bay, the brake run and the furnace floor; grime
+  splashed up the foot, soot down from the ceiling, rain runs; the coolant
+  tier's tile sweating tea-coloured runs and black mould at the foot, with
+  standing water on its floor; a polished walking line and oil stains on the
+  floors (not the furnace floor), worn yellow walkway lines in the bay, the
+  piston gallery and the gearworks; the ribs as riveted I-sections in oxide.
+- **the cage**: the floor bars, roof and side grating are bare steel (the posts
+  stay in hazard paint) — the drop used to be watched through a yellow grid.
+- **the melt**: a dark slag crust that splits into plates along bright seams,
+  hottest at deep orange rather than white, read up the face of a tap channel
+  as well as across the pool. the tap channels warm the brick around them.
+- **occlusion**: two taps of the field along the normal after the hit
+  (`occ`, floor 0.4), scaled back up by the decay's step factor so the lap does
+  not darken with it. it darkens the ambient and, as contact shadow, the lamps'
+  direct light down to 0.55. two `mapScene` calls per pixel.
+
+## the index channel
+
+`foundryPreviewFrag`, GLSL ES 1.00, self-driving from `iTime`: standing at the
+cage gate looking out and down the hoistway. nothing is marched — four walls,
+two guide rails, two counterweight ropes and the cage's own faces are all
+intersected in closed form, and the only loop is 20 sparks (only while the
+shoes bite). the drop runs a 10 s cycle: a cubic free-fall run-up to ~24 m/s,
+a quadratic brake matched to it in speed, a shudder at a landing, rest. one
+cycle travels exactly 72 m and everything in the shaft (plates 1.5, beams 3,
+lamps 6, landings 24) repeats on 72 m, so the clock wraps with no seam and no
+height ever grows. riveted plate with I-beam rings, X bracing on the side
+walls, landings with hazard sills and a red landing lamp, caged lamps that
+streak with the speed, a barred gate with hazard corner posts and a grating
+floor with a striped sill, brake sparks raining down the gap at g plus the
+deceleration, and the melt glowing at the bottom of the shaft and up through
+the floor.
 
 ## the clutter
 

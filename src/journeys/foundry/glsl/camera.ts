@@ -130,7 +130,18 @@ export const cameraGlsl = /* glsl */`
       if (oblivion() > 0.5) {
         col = mix(shadeOblivion(p, n, rd, dzl, dpx, dpy), vec3(0.0003, 0.00005, 0.00005), 1.0 - exp(-dist * 0.085));
       } else {
-        col = shadeSurface(p, n, rd, zc, dzl, pr.x * squeeze, pr.y * squeeze, sa, dpx, dpy);
+        // Two taps of the field out along the normal: how shut in the point is.
+        // The decay shortens the field's step inside the halls, so undo that or
+        // the whole lap darkens with it. The taps overwrite the hit's material,
+        // which the shading still needs.
+        float m0 = gMat, w0 = gWear, g0 = gGlow;
+        float dv = decayVis();
+        float k = dv > 0.05 && p.y < CEIL_MAX ? mix(1.0, 0.60, min(1.0, dv * 1.2)) : 1.0;
+        float o1 = mapScene(p + n * 0.10) / k;
+        float o2 = mapScene(p + n * 0.35) / k;
+        float occ = clamp(1.0 - 2.4 * (max(0.10 - o1, 0.0) + 0.5 * max(0.35 - o2, 0.0)), 0.4, 1.0);
+        gMat = m0; gWear = w0; gGlow = g0;
+        col = shadeSurface(p, n, rd, zc, dzl, pr.x * squeeze, pr.y * squeeze, sa, occ, dpx, dpy);
         float fogDen = mix(0.038, 0.022, riding()) + dec * 0.012;
         col = mix(col, lin(mix(vec3(0.030, 0.026, 0.030), vec3(0.045, 0.016, 0.012), dec)), 1.0 - exp(-dist * fogDen));
       }

@@ -67,7 +67,11 @@ export const shaftGlsl = `  // ========================== THE HOIST SHAFT ======
     float hbar = abs(mod(c.y + 0.1, 0.2) - 0.1) - 0.013;
     float grate = max(max(ring, min(vbar, hbar)), max(slab, abs(c.z) - CAGE_R));
 
-    float d = min(min(posts, floorSlab), min(roof, grate));
+    // The posts are in hazard paint; the floor bars, the roof and the side
+    // grating are bare oily steel, or the drop is watched through a yellow grid.
+    float d = posts;
+    float steel = min(min(floorSlab, roof), grate);
+    if (steel < d) { d = steel; mat = 5.0; }
 
     // The gate: a barred grille across both open faces, riding up as it opens.
     if (gateOpen() < 0.985) {
