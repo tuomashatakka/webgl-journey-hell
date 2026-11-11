@@ -78,3 +78,18 @@ export const skybridgesPreviewFrag = `
 #define SEETHRU_DIST 20.0
 #define NO_BLAST
 ${COMMON}`
+
+// Past the index channel: the same, on smaller and smaller budgets. Nothing
+// should ever get here; if a phone does, its screen still shows the run, and a
+// failure that reaches the end of these says the trouble is not size.
+const lastResort = (steps: number, octaves: number) => `
+#define RM_STEPS ${steps}
+#define MAX_DIST 90.0
+#define STEP_K 0.9
+#define FBM_OCTAVES ${octaves}
+#define SEETHRU_STEPS 1
+#define SEETHRU_DIST 1.0
+#define NO_BLAST
+${COMMON}`
+
+export const skybridgesLastResort = [ lastResort(28, 1), lastResort(12, 1) ] as const

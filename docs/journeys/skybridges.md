@@ -308,11 +308,13 @@ Things to keep true:
   crazing or burning floors: `PLAIN_GLASS`), plain (no pressure-wave wall,
   glare or afterimage, the cloud as reflections see it: `PLAIN_BLAST`), and as
   a last resort the preview — the index's channel, no ending, `NO_BLAST`
-  implying both plain switches so it carries none of the ending's code. A phone
+  implying both plain switches so it carries none of the ending's code — and
+  after it the same on 28 and then 12 march steps (`skybridgesLastResort`). A phone
   starts at min. A build that fails with the context lost stops the chain and
   is skipped from then on (remembered across reloads), and if nothing links the
   failure screen lists every build's error and the GPU's name. An Adreno 722
-  would not link even the preview while it still compiled the ending's code.
+  (Chrome, ANGLE over GLES 3.2) refused every build down to the preview, with
+  no info log; the last-resort builds exist to tell size from structure there.
 - Heavy effects (`uHeavy`) add the see-through continuation march; everything
   else is the same at every tier.
 - Set pieces sit behind band tests; towers are two cells on one side per sample,
