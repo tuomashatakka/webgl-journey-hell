@@ -232,13 +232,23 @@ void main () {
                    : vec3(0.06, 0.42, 0.9) * (1.0 + sin(gTime * 4.0 + p.z + gZ0) * 0.25);
     } else {
       Surface s;
+      vec3 emit = vec3(0.0);
       // Purgatory is one material and no colour.
       if (m > 6.5 && m < 7.5) {
         // Water: a dark, rippled mirror of its own sky.
         s.albedo = vec3(0.02, 0.03, 0.03);
+        // Two octaves of ripple and a wind-streaked third, faded by the
+        // footprint so the far basin is a calm mirror rather than noise.
         vec3 wp = p - zoneOffset(zone);
-        s.normal = normalize(n + vec3(sin(wp.x * 2.1 + gTime * 1.3), 0.0, cos(wp.z * 1.7 - gTime)) * 0.025);
-        s.rough = 0.06;
+        float wfp = max(length(dpx), length(dpy));
+        float far = 1.0 - smoothstep(0.02, 0.2, wfp);
+        vec3 ripple = vec3(sin(wp.x * 2.1 + gTime * 1.3), 0.0, cos(wp.z * 1.7 - gTime)) * 0.025;
+        ripple += vec3(sin(wp.x * 5.3 + wp.z * 3.1 + gTime * 2.2), 0.0, cos(wp.z * 6.1 - wp.x * 2.3 - gTime * 1.7)) * 0.018 * far;
+        float gust = vnoise(vec2(wp.x * 0.15 + gTime * 0.2, wp.z * 0.6));
+        ripple += vec3(vnoise(wp.xz * 3.0 + gTime) - 0.5, 0.0, vnoise(wp.zx * 3.0 - gTime) - 0.5) * 0.06 * gust * far;
+        s.normal = normalize(n + ripple);
+        s.albedo = mix(vec3(0.02, 0.03, 0.03), vec3(0.035, 0.05, 0.045), gust);
+        s.rough = 0.05 + gust * 0.08;
         s.metal = 0.0;
         s.ao = 1.0;
         s.height = 0.5;
@@ -259,6 +269,9 @@ void main () {
           s.albedo = mix(s.albedo, s.albedo * vec3(0.62, 0.54, 0.46), dirt);
         }
         s.rough = clamp(s.rough * rmul, 0.04, 1.0);
+        // Weathering, joints, fixings and wear, by material (glsl/detail).
+        emit = surfaceDetail(s, m, act, p, tp, n, max(length(dpx), length(dpy)));
+        s.rough = clamp(s.rough, 0.04, 1.0);
       }
       if (uPurgatory > 0.8) s.albedo = vec3(dot(s.albedo, vec3(0.3, 0.59, 0.11)));
 
@@ -275,6 +288,10 @@ void main () {
                               : skyIrradiance(uSkyC, s.normal, info.y, info.x)) * 0.8;
       // Bounce from the sunlit ground below.
       irr += vec3(0.32, 0.28, 0.22) * sunI * 0.08 * saturate(-s.normal.y * 0.5 + 0.5);
+      // Under the aurora the rift is the brightest thing in the world, and it
+      // lights from below: every underside takes its cold blue.
+      if (act > 4.5 && act < 5.5)
+        irr += vec3(0.05, 0.22, 0.55) * (0.25 + uRupture * 0.5 + uFinale) * saturate(-s.normal.y * 0.6 + 0.4);
       vec3 R = reflect(rd, s.normal);
       vec2 ruv = equirectUv(R, info.y);
       float rlod = 1.0 + s.rough * 7.0;
@@ -282,6 +299,7 @@ void main () {
                  : owner < 1.5 ? textureLod(uSkyB, ruv, rlod).rgb
                                : textureLod(uSkyC, ruv, rlod).rgb) * info.x;
       col += shadeAmbient(s, V, irr, refl, ao);
+      col += emit;
 
       // Inside a seam's tunnel, the strip lights are what you see by.
       float inTunnel = 1.0 - smoothstep(SEAM - 1.0, SEAM + 3.0,
@@ -323,6 +341,9 @@ void main () {
   if (!found) { trA = mix(1.0, trA, 0.25); trB = mix(1.0, trB, 0.25); trC = mix(1.0, trC, 0.25); }
   col = ((col * trC + hazeOf(2.0, rd) * (1.0 - trC)) * trB + hazeOf(1.0, rd) * (1.0 - trB)) * trA +
         hazeOf(0.0, rd) * (1.0 - trA);
+
+  vec4 plume = coolingPlumes(ro, rd, t, hazeOf(owner, rd));
+  col = col * (1.0 - plume.a) + plume.rgb;
 
   vec4 clouds = marchClouds(ro, rd, min(t, FAR_CLIP));
   col = col * (1.0 - clouds.a) + clouds.rgb;

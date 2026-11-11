@@ -172,7 +172,10 @@ vec2 stair (vec3 p) {
   vec3 postP = vec3(abs(dx) - width - 0.12, p.y - rail - 0.5, mod(p.z - z0, 1.6) - 0.8);
   float posts = sdBox(postP, vec3(0.025, 0.5, 0.025));
   float handrail = length(vec2(abs(dx) - width - 0.12, p.y - rail - 1.02)) - 0.035;
-  float steel = min(stringer, min(posts, handrail));
+  // A knee rail halfway up the posts, and a toe board along the stringer.
+  float kneeRail = length(vec2(abs(dx) - width - 0.12, p.y - rail - 0.52)) - 0.02;
+  float toe = sdBox(vec3(abs(dx) - width - 0.1, p.y - rail + 0.02, 0.0), vec3(0.012, 0.09, 1e4));
+  float steel = min(min(stringer, toe), min(posts, min(handrail, kneeRail)));
 
   return steel < flight ? vec2(steel, M_STEEL) : vec2(flight, M_TREAD);
 }

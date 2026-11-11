@@ -47,10 +47,11 @@ import { HASH12 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { shapeGlsl } from './glsl/shape'
 import { actsGlsl } from './glsl/acts'
+import { detailGlsl } from './glsl/detail'
 import { skyAndMaterialsGlsl } from './glsl/skyAndMaterials'
 
 
-export const fsScene = foundationGlsl + shapeGlsl + actsGlsl + skyAndMaterialsGlsl
+export const fsScene = foundationGlsl + shapeGlsl + actsGlsl + detailGlsl + skyAndMaterialsGlsl
 
 export const fsPost = /* glsl */`#version 300 es
 precision highp float;
@@ -143,3 +144,222 @@ void main () {
 
 // perf: one sdf march (120/80 steps by quality), a 40/20-step soft shadow and a
 // 4-tap AO at the hit, triplanar Δ sampling once per pixel; clouds only in act II.
+
+// The index preview: a lightweight stand-in for the scene, GLSL ES 1.00 and
+// self-driving from iTime. Act II seen down its own flight — nosed treads and a
+// balustrade descending onto the weather bridge, pylons and catenary over a
+// cloud sea, cooling towers breathing on the far haze under a low sun, and the
+// rupture as lit faults through the picture. Everything is in closed form per
+// pixel: one perspective divide per family of members, a six-pylon loop and a
+// few octaves of value noise, cheap enough for the shared index context.
+export const stairwellPreviewFrag = /* glsl */`
+  precision highp float;
+  uniform vec2 iResolution;
+  uniform float iTime;
+  uniform vec2 uPointer;
+
+  ${HASH12}
+
+  float vnoise (vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), f.x),
+               mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
+
+  float fbm (vec2 p) {
+    float s = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < 4; i++) {
+      s += vnoise(p) * a;
+      p = p * 2.03 + vec2(1.7, -0.6);
+      a *= 0.5;
+    }
+    return s;
+  }
+
+  // A line of half-width w around v = 0, antialiased by the pixel size px.
+  float line (float v, float w, float px) { return 1.0 - smoothstep(w, w + px, abs(v)); }
+
+  // Camera: eye 1.7 above the flight, focal length 1. The flight's vanishing
+  // point sits under the horizon, which is what makes it read as going down.
+  const float HOR = 0.06;
+  const float VP = -0.09;
+  const float EYE = 1.7;
+  const float W = 1.6;
+  const float SPEED = 0.9;
+
+  void main () {
+    vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
+    uv += uPointer * 0.06;
+    float px = 1.5 / iResolution.y;
+    float t = mod(iTime, 600.0);
+    float walk = t * SPEED;
+    vec2 sunP = vec2(0.46, 0.17);
+
+    // Sky: a cold zenith over a warm, low dawn band, streaked with cloud.
+    float h = uv.y - HOR;
+    vec3 zenith = vec3(0.16, 0.22, 0.32);
+    vec3 band = vec3(0.98, 0.70, 0.48);
+    vec3 col = mix(band, zenith, smoothstep(-0.02, 0.42, h));
+    float sd = length((uv - sunP) * vec2(1.0, 1.25));
+    col += vec3(1.0, 0.78, 0.5) * exp(-sd * 7.0) * 0.55;
+    float streak = fbm(vec2(uv.x * 2.2 - t * 0.012, uv.y * 9.0));
+    float cloudy = smoothstep(0.45, 0.8, streak) * smoothstep(0.0, 0.08, h) * (1.0 - smoothstep(0.25, 0.5, h));
+    vec3 cloudCol = mix(vec3(0.42, 0.36, 0.40), vec3(1.0, 0.74, 0.55), exp(-sd * 3.5));
+    col = mix(col, cloudCol, cloudy * 0.65);
+    col += vec3(1.0, 0.92, 0.8) * smoothstep(0.03, 0.024, length(uv - sunP)) * 1.5;
+    vec3 haze = mix(band, vec3(0.78, 0.66, 0.62), 0.4) + vec3(1.0, 0.75, 0.5) * exp(-sd * 4.0) * 0.25;
+
+    // The far bank: cooling towers in the haze, each with its plume leaning
+    // downwind.
+    for (int i = 0; i < 3; i++) {
+      float fi = float(i);
+      float cx = -0.78 + fi * 0.16 + (fi > 1.5 ? 0.9 : 0.0);
+      float th = 0.11 - fi * 0.015;
+      float y = (uv.y - HOR + 0.005) / th;
+      float r = 0.035 * (0.72 + 0.9 * (y - 0.68) * (y - 0.68)) * th / 0.11;
+      float body = step(abs(uv.x - cx), r) * step(0.0, y) * step(y, 1.0);
+      float lit = smoothstep(-r, r, uv.x - cx);
+      col = mix(col, mix(haze * 0.55, haze * 0.82, lit), body * 0.85);
+      float py = y - 1.0;
+      float pr = r * (1.0 + py * 0.9);
+      float px0 = (uv.x - cx - py * py * th * 0.35) / pr;
+      float puff = fbm(vec2(px0 * 1.5 + fi * 3.0, py * 2.2 - t * 0.3));
+      float plume = exp(-px0 * px0 * 1.6) * smoothstep(0.0, 0.25, py) * exp(-py * 0.45) * smoothstep(0.2, 0.65, puff);
+      col = mix(col, haze * 1.06 + 0.05, plume * 0.85);
+    }
+
+    // The cloud sea under the bridge: a plane of fbm, lit on its tops.
+    if (uv.y < HOR) {
+      float dc = 9.0 / max(HOR - uv.y, 1e-3);
+      vec2 cp = vec2(uv.x * dc, dc + walk) * 0.07;
+      float c = fbm(cp + vec2(t * 0.02, 0.0));
+      float tops = smoothstep(0.35, 0.75, c);
+      vec3 sea = mix(vec3(0.34, 0.33, 0.42), vec3(1.0, 0.86, 0.72), tops);
+      sea += vec3(1.0, 0.7, 0.45) * exp(-abs(uv.x - sunP.x) * 3.0) * tops * 0.25;
+      col = mix(sea, haze, 1.0 - exp(-dc * 0.012));
+    }
+
+    // Pylons, far to near: legs, a crosshead, and the beacon on each.
+    vec3 steel = vec3(0.10, 0.11, 0.13);
+    for (int k = 5; k >= 0; k--) {
+      float dk = 22.0 * float(k) + 22.0 - mod(walk, 22.0);
+      float fog = exp(-dk * 0.018);
+      float xl = 4.2 / dk;
+      float top = VP + 6.9 / dk;
+      float foot = VP - 6.0 / dk;
+      float legs = line(abs(uv.x) - xl, 0.12 / dk, px) * step(foot, uv.y) * step(uv.y, top);
+      float head = line(uv.y - VP - 6.2 / dk, 0.12 / dk, px) * step(abs(uv.x), xl);
+      float m = max(legs, head);
+      col = mix(col, mix(haze, steel, fog), m);
+      float beacon = exp(-length(vec2(abs(uv.x) - xl, uv.y - top)) * dk * 6.0);
+      col += vec3(1.0, 0.25, 0.1) * beacon * (0.6 + 0.4 * sin(t * 2.1 + float(k))) * fog;
+    }
+
+    // Catenary and hangers either side, closed form along the side's own depth.
+    float ax = max(abs(uv.x), 1e-3);
+    float dp = 4.2 / ax;
+    if (dp > 1.0) {
+      float fog = exp(-dp * 0.018);
+      float span = fract((dp + mod(walk, 22.0)) / 22.0);
+      float sag = 4.0 * span * (1.0 - span) * 3.2;
+      float cable = line(uv.y - VP - (6.9 - sag) / dp, 0.002 + 0.05 / dp, px);
+      float hg = fract((dp + mod(walk, 2.75)) / 2.75);
+      float hanger = line((hg - 0.5) * 2.75, 0.006 * dp, dp * dp / 4.2 * px) *
+                     step(VP - 1.7 / dp, uv.y) * step(uv.y, VP + (6.9 - sag) / dp);
+      col = mix(col, mix(haze, steel, fog), max(cable, hanger * 0.85));
+    }
+
+    // The deck: a truss chord either side, wind fencing, then the flight.
+    float dd = EYE / max(VP - uv.y, 1e-3);
+    float onDeck = step(uv.y, VP) * step(ax * dd, 3.5);
+    if (onDeck > 0.5) {
+      float fog = 1.0 - exp(-dd * 0.03);
+      float s = (dd + walk) / 0.48;
+      float f = fract(s);
+      float aa = clamp(dd * dd / EYE / 0.48 * px * 2.0, 0.0, 1.0);
+      vec3 deck = vec3(0.16, 0.16, 0.17);
+      if (ax * dd < W) {
+        // Treads: a pale nosing stripe, grime against the riser behind, and a
+        // worn path down the middle.
+        float xn = ax * dd / W;
+        vec3 tread = vec3(0.30, 0.29, 0.28) * (0.85 + 0.3 * vnoise(vec2(xn * 6.0, s * 2.0)));
+        tread *= 1.0 + (1.0 - smoothstep(0.1, 0.55, xn)) * 0.25;
+        float nose = smoothstep(0.9, 0.95, f);
+        tread = mix(tread, vec3(0.70, 0.54, 0.16), nose * (0.75 - 0.4 * vnoise(vec2(xn * 9.0, s))));
+        tread *= mix(1.0, 0.45, smoothstep(0.35, 0.0, f));
+        // Sun along the treads, from the low sun ahead.
+        tread += vec3(0.45, 0.3, 0.18) * nose * 0.5;
+        float avg = 0.6;
+        deck = mix(tread, vec3(0.30, 0.27, 0.24) * avg + vec3(0.07, 0.05, 0.02), aa);
+      } else {
+        float slot = step(0.5, fract(ax * dd * 6.0));
+        deck = mix(vec3(0.12, 0.13, 0.15), vec3(0.05), slot * (1.0 - aa));
+      }
+      col = mix(deck, haze, fog);
+    }
+
+    // The balustrade: top rail, knee rail, posts, and a toe board.
+    float dr = (W + 0.12) / ax;
+    if (dr > 0.9 && uv.y < VP + 1.0) {
+      float fog = 1.0 - exp(-dr * 0.03);
+      float railY = VP - (EYE - 1.04) / dr;
+      float kneeY = VP - (EYE - 0.52) / dr;
+      float deckY = VP - EYE / dr;
+      float rail = line(uv.y - railY, 0.035 / dr + 0.001, px);
+      float knee = line(uv.y - kneeY, 0.02 / dr + 0.0008, px);
+      float toe = step(deckY, uv.y) * step(uv.y, deckY + 0.12 / dr);
+      float g = fract((dr + walk) / 1.6);
+      float post = line((g - 0.5) * 1.6, 0.03 * dr, dr * dr / (W + 0.12) * px) * step(deckY, uv.y) * step(uv.y, railY);
+      vec3 yellow = vec3(0.72, 0.52, 0.10) * (0.7 + 0.5 * smoothstep(railY - 0.02 / dr, railY + 0.03 / dr, uv.y));
+      col = mix(col, mix(vec3(0.14, 0.15, 0.16), haze, fog), max(post, max(knee, toe)));
+      col = mix(col, mix(yellow, haze, fog), rail);
+    }
+
+    // The rupture: faults broken through the picture, not a bolt through
+    // the sky. Each is a polyline (hashes joined straight, so it turns at
+    // angles), broken into runs with gaps, lit white at the core and cold
+    // blue around it, with short spurs off every run. The one across the
+    // flight burns hot, the way the cracks do on the fourth traversal.
+    vec3 cold = vec3(0.25, 0.72, 1.0);
+    vec3 hot = vec3(1.6, 0.42, 0.08);
+    float pulse = 0.7 + 0.3 * sin(t * 1.7) * sin(t * 0.63 + 1.0);
+    for (int i = 0; i < 2; i++) {
+      float fi = float(i);
+      float fx = uv.x * (1.2 - fi * 0.3) + fi * 3.1;
+      float base = fi < 0.5 ? 0.3 - uv.x * 0.48 : VP - 0.2 + uv.x * 0.16;
+      float c1 = floor(fx * 7.0);
+      float jag = mix(hash12(vec2(c1, fi)), hash12(vec2(c1 + 1.0, fi)), fract(fx * 7.0)) - 0.5;
+      float c2 = floor(fx * 26.0);
+      jag = jag * 0.07 + (mix(hash12(vec2(c2, fi + 9.0)), hash12(vec2(c2 + 1.0, fi + 9.0)), fract(fx * 26.0)) - 0.5) * 0.018;
+      float df = abs(uv.y - base - jag);
+      float run = step(0.22, hash12(vec2(floor(fx * 3.0), fi + 4.0)));
+      // A spur from the fault, one per run of the coarse polyline.
+      float sc = floor(fx * 5.0);
+      float sx = (sc + 0.5) / 5.0;
+      float sl = (hash12(vec2(sc, fi + 2.0)) - 0.5) * 2.4;
+      float sy = uv.y - base - jag;
+      float along = fract(fx * 5.0) - 0.5;
+      float spur = abs(sy - along * sl * 0.2) * step(0.0, along * sign(sl + 1e-3) * sign(sy + 1e-3) + 0.5) *
+                   1.0 + step(0.12, abs(sy)) * 1.0;
+      float lit = run * (0.65 + 0.35 * hash12(vec2(c2, floor(t * 3.0) + fi)));
+      lit *= fi < 0.5 ? 1.0 : onDeck;
+      float core = 1.0 - smoothstep(0.0008, 0.0008 + px, df);
+      float halo = exp(-df * 140.0) * 0.6 + exp(-df * 30.0) * 0.12;
+      float spurCore = (1.0 - smoothstep(0.0006, 0.0006 + px, spur)) * 0.7;
+      vec3 c = fi < 0.5 ? cold : mix(hot, cold, 0.25);
+      col = mix(col, col * 0.25, exp(-df * (fi < 0.5 ? 300.0 : 110.0)) * lit * 0.8);
+      col += c * exp(-df * 18.0) * 0.06 * lit * fi;
+      col += (vec3(1.0, 0.95, 0.9) * core + c * (halo + spurCore)) * lit * pulse;
+    }
+
+    // Print and lens: a soft S, a warm-cool split, and a vignette.
+    col = col / (1.0 + col * 0.35);
+    col = mix(col, col * col * (3.0 - 2.0 * col), 0.3);
+    col *= smoothstep(1.15, 0.3, length(uv * vec2(0.9, 1.1)));
+    col += (hash12(gl_FragCoord.xy + fract(t) * 91.0) - 0.5) * 0.02;
+    gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+  }
+`

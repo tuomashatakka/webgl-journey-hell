@@ -103,7 +103,45 @@ horizon's far wall opens on the residue, not on the spillway.
   the silhouettes). the displacement map does two jobs: crevices hold dirt and
   shadow, and on rock it decides where the second material shows through.
 - water (the spillway basin, the cooling ponds) is a dark rippled mirror of its
-  own sky.
+  own sky: two octaves of ripple and a wind-gust pattern that roughens and
+  lightens it in patches, the fine octaves faded by the pixel's footprint so
+  the far basin is a calm mirror.
+
+### surface detail (`glsl/detail.ts`)
+
+the field and its march are untouched by detail: everything below is analytic,
+evaluated once per pixel at the hit, in the stretch's own coordinates (so it
+does not slide at a switch), and every pattern finer than a few pixels fades to
+its own average by the pixel's world footprint.
+
+- **concrete** (dams, piers, the cooling shells, the concrete walls): board-formed
+  lifts — 1.5 units, 1.0 on the cooling shells — with staggered panel joints at
+  2.4 and tie holes at 0.6, the boards printed faintly in each lift, run-off
+  streaks, efflorescence bleeding out under each lift line, dust and dark
+  puddle stains on tops; in the spillway basin and the cooling ponds, damp and
+  algae below a tide line.
+- **steel**: plate seams, bolt rows either side of each seam with domed heads,
+  rust run from every joint and patches where the coat has gone. the weather
+  bridge's members carry a dark grey coat; the conveyor's steel rusts least.
+- **the flight**: a signal-yellow anti-slip nosing stripe on every tread, worn
+  back to grey where feet land, a bright arris, grime against the riser behind,
+  a polished worn path down the middle and dirty margins; bar grating on the
+  steel flights (acts II and VI). the tread grid is recomputed exactly as
+  `stair()` lays it. the balustrade gained a knee rail and a toe board; its
+  top rail is worn signal yellow, its stringers dark oxide with bolts, its
+  posts galvanised.
+- **rock**: strata in the colour as well as the shape, desert varnish down the
+  faces, thin dark bedding partings every 2.3 units; in the shear horizon,
+  sparse lit faults running with the bedding, brighter with `uRupture` and
+  `uFinale`, and an up-light from the rift on every underside.
+- **machines**: the conveyor's and the turbines' plant takes the steel
+  treatment; the cooling field's pipes are clad in aluminium lagging with a
+  strap every 1.2 units.
+- **cooling plumes**: each tower breathes a vapour column, a Gaussian density
+  integrated across the ray in closed form at its closest approach, leaning
+  downwind and widening as it climbs — six evaluations, no march — in act V's
+  own coordinates wherever act V is in view, starting and stopping with the
+  act's scenery like the cloud deck.
 
 ## traversal rupture
 
@@ -158,6 +196,19 @@ retain this attribution when redistributing the journey.
 the web-audio graph shares the simulation uniforms. inside a seam's tunnel
 (`uSeam`) the weather drops away and the machines are muffled — the tunnel is the
 one quiet place on the route, and it is where the soundscape changes over.
+
+## index preview
+
+`stairwellPreviewFrag` (in `shaders.ts`, imported by the registry) is act II
+seen down its own flight: nosed treads with a worn path and a balustrade of
+posts, knee rail and signal-yellow top rail, descending onto the weather
+bridge — pylons with beacons and catenary with hangers over a cloud sea —
+under a cold zenith and a low warm sun, with cooling towers breathing on the
+far haze. the rupture is two broken polyline faults with spurs, white at the
+core: a cold one through the sky and a hot one across the flight. GLSL ES
+1.00, from `iTime` alone, everything in closed form per pixel (a six-pylon and
+a three-tower loop and a few octaves of value noise) for the shared index
+context.
 
 ## deterministic verification
 
