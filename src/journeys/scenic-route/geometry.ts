@@ -46,7 +46,7 @@ import { VERTEX_FLOATS, createMeshBuilder } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { hash2 } from '@wjh/math/rng'
 import type { Route } from './course'
-import { tubeRadius } from './maw'
+import { tubeRadius, tubeWidth } from './maw'
 import { smoothstep } from '@wjh/math/scalar'
 
 // --- the coastline -------------------------------------------------------------
@@ -285,7 +285,7 @@ export function spineHits (idx: SpineIndex, x: number, z: number, r: number, y0:
 /**
  * Signed distance-like value from (x, h, z) to the tube's wall: negative
  * inside the tube (the terrain fragment is discarded there), positive outside,
- * +1 far away. The tube's ring is 1.15 R wide and runs from 0.58 R below the
+ * +1 far away. The tube's ring is tubeWidth · R wide and runs from 0.58 R below the
  * spine to 1.42 R above it.
  */
 function carveAt (idx: SpineIndex, x: number, h: number, z: number): number {
@@ -297,7 +297,7 @@ function carveAt (idx: SpineIndex, x: number, h: number, z: number): number {
     return 1
 
   const R  = tubeRadius(n.s - idx.tube.s0, n.s)
-  const dr = n.d / (R * 1.15 + 1) - 1
+  const dr = n.d / (R * tubeWidth(n.s - idx.tube.s0) + 1) - 1
   const du = Math.abs(h - (n.y + 0.42 * R)) / (R + 1) - 1
   return Math.max(dr, du)
 }

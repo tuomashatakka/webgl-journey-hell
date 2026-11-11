@@ -136,6 +136,7 @@ uniform vec3  uCarPos;
 uniform vec3  uCarFwd;
 uniform vec3  uCarRight;
 uniform float uLights;     // headlights, 0..1
+uniform float uLapF;       // laps ridden, with the ramp across the cave
 
 /** Two headlamps: warm, a 24-degree cone with a soft edge, inverse-square. */
 vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) {
@@ -167,6 +168,14 @@ vec3 headlights (vec3 p, vec3 n, vec3 v, vec3 albedo, float rough, float metal) 
   float cap = 0.09 * exp2(-uEnv.x);
   return sum * (1.0 + 0.6 * log(1.0 + lum / cap)) / (1.0 + lum / cap);
 }
+
+// The seasons by lap: summer on the first, autumn on the second, and on the
+// third the land is dead, burnt to ash. Both ramp in the cave, where nothing
+// green is on screen to watch it turn.
+float autumnAt () { return clamp((uLapF - 0.7) * 1.6, 0.0, 1.0) * (1.0 - clamp((uLapF - 1.7) * 1.6, 0.0, 1.0)); }
+float deadAt () { return clamp((uLapF - 1.7) * 1.6, 0.0, 1.0); }
+// Weather by lap: rain from the second, a storm on the third.
+float rainAt () { return clamp((uLapF - 0.75) * 2.0, 0.0, 1.0); }
 
 vec3 lightSurface (vec3 p, vec3 n, vec3 albedo, float rough, float metal, float ao, float shadow) {
   vec3 v = normalize(uCamPos - p);
@@ -203,7 +212,10 @@ vec3 applyFog (vec3 col, vec3 p) {
   float cap = 3.0 * dot(zen, LUMA);
   sky *= min(1.0, cap / max(dot(sky, LUMA), 1e-4));
   vec3 fogCol = mix(uFogCol, sky, uEnv.y);
-  float f = 1.0 - exp(-dist * uEnv.z);
+  // Rain thickens the air and greys it, outdoors.
+  float wx = rainAt() * uEnv.y;
+  fogCol = mix(fogCol, vec3(dot(fogCol, LUMA)) * vec3(0.85, 0.9, 0.95), 0.5 * wx);
+  float f = 1.0 - exp(-dist * uEnv.z * (1.0 + 1.8 * wx));
   return mix(col, fogCol, f);
 }
 `

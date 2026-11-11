@@ -1,4 +1,5 @@
 import { brdfChunk, deltaChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
+import { CHAMBER } from '../maw'
 
 /** Skin, flesh, teeth and the lights the fish carries, shared by every part of it. */
 const mawMaterialChunk = /* glsl */`
@@ -177,6 +178,13 @@ void main () {
   float fleshW = 1.0 - smoothstep(uFleshRock.x, uFleshRock.y, t);
   float ragged = fbm3(p * 0.045) - 0.5;
   float flesh  = smoothstep(0.35, 0.65, fleshW + ragged * 0.9);
+  // Every lap the fish digests a little more of its cave: from the second,
+  // flesh grows back over the rock in patches, and by the third most of it.
+  float creep = clamp((uLapF - 0.9) * 0.55, 0.0, 0.8);
+  flesh = max(flesh, smoothstep(0.62 - creep * 0.5, 0.7 - creep * 0.5, fbm3(p * 0.025 + 11.0)) * step(0.001, creep));
+  // How far into the glow-worm cathedral this is.
+  float chb = clamp(1.0 - abs(t - ${CHAMBER.t.toFixed(1)}) / ${CHAMBER.half.toFixed(1)}, 0.0, 1.0);
+  float chamber = chb * chb * (3.0 - 2.0 * chb);
 
   vec3 v = normalize(uCamPos - p);
   float above = vAux.z;   // height over the waterline, metres
@@ -217,7 +225,8 @@ void main () {
   float sh = shadowAt(p, nn, uSunDir);
   vec3 col = lightSurface(p, nn, albedo, rough, 0.0, 0.8, sh);
   col += fleshCol * vec3(0.9, 0.3, 0.25) * 0.1 * flesh * rib;
-  col += vec3(1.0, 0.12, 0.08) * vein * pulse * pulse * flesh * 0.3;
+  // Brightest in the fish's own throat; dimmer where it has crept over the cave.
+  col += vec3(1.0, 0.12, 0.08) * vein * pulse * pulse * flesh * mix(0.3, 0.1, 1.0 - fleshW);
 
   // Light off the river: where the lamps hit the water it throws a moving net
   // of caustics up the walls above it.
@@ -236,6 +245,18 @@ void main () {
   float line = ((1.0 - smoothstep(0.0, 2.2, abs(above - 0.4))) * cave + smoothstep(0.7, 0.85, fbm3(p * 0.05 + 7.0)) * 0.6);
   float tw = 0.4 + 0.6 * pow(0.5 + 0.5 * sin(uTime * (1.0 + ah * 2.0) + ah * 40.0), 3.0);
   col += vec3(0.1, 0.85, 0.7) * speck * line * tw * 2.2 * (1.0 - flesh);
+
+  // The cathedral's vault: glow-worms by the thousand, a cold starfield
+  // overhead, each its own brightness, breathing slowly.
+  if (chamber > 0.001) {
+    vec3 gc = floor(p * 1.3);
+    float gh = hash13(gc + 3.0);
+    float star = smoothstep(0.22 * (0.4 + gh), 0.0, length(fract(p * 1.3) - 0.5)) * step(0.45, gh);
+    float hi = smoothstep(2.0, 7.0, above);
+    float br = 0.5 + 0.5 * sin(uTime * (0.3 + gh) + gh * 30.0);
+    col += vec3(0.25, 0.85, 1.0) * star * hi * chamber * (0.6 + 1.4 * br) * 2.5 * (1.0 - flesh);
+    col += vec3(0.01, 0.04, 0.05) * hi * chamber;
+  }
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
 }
@@ -248,6 +269,7 @@ in vec3 vWorld;
 in vec3 vNormal;
 in vec4 vAux;
 in float vSection;
+uniform float uFallsS;     // arc length of the waterfall
 out vec4 fragColor;
 ${brdfChunk}
 ${noiseChunk}
@@ -286,6 +308,9 @@ void main () {
   col += headlights(p, n, v, vec3(0.0), 0.05, 0.0) * 2.5;
   // Foam where the current folds over itself, carried along with it.
   float foam = smoothstep(0.72, 0.9, fbm(q * vec2(1.0, 2.6) + 3.0)) * calm;
+  // White water where the falls come down, churned and carried downstream.
+  float under = exp(-abs(vAux.x - uFallsS - 3.0) * 0.18) * (0.6 + 0.4 * vnoise(q * 4.0 + uTime * 2.0));
+  foam = max(foam, smoothstep(0.2, 0.7, under));
   col += vec3(0.5, 0.55, 0.52) * foam * (uFogCol * 1.5 + headlights(p, n0, v, vec3(0.6), 0.9, 0.0) * 2.0);
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
@@ -545,5 +570,44 @@ void main () {
   vNormal = normalize(cross(side, tan));
   vUv = vec2(5.0 + t, aUv.y);
   gl_Position = uViewProj * vec4(p, 1.0);
+}
+`
+
+/**
+ * The waterfall: a curtain poured from the vault, strands streaming down at
+ * their own speeds, thick at the top where it leaves the rock and torn into
+ * ropes lower down, white where the lamps catch it. Holes are discards, so it
+ * is a curtain of water and not a sheet of glass.
+ */
+export const fallsFrag = /* glsl */`#version 300 es
+precision highp float;
+in vec3 vWorld;
+in vec3 vNormal;
+in vec2 vUv;
+in float vCarve;
+out vec4 fragColor;
+${brdfChunk}
+${noiseChunk}
+${skyLookupChunk}
+${shadowChunk}
+${lightingChunk}
+void main () {
+  vec3 p = vWorld;
+  float x = vUv.x;
+  float u = vUv.y;
+  float speed = 3.0 + 1.5 * vnoise(vec2(x * 0.7, 3.0));
+  float a = vnoise(vec2(x * 2.4, u * 0.3 + uTime * speed)) * 0.65 + vnoise(vec2(x * 7.0, u * 0.8 + uTime * speed * 1.6)) * 0.35;
+  float body = smoothstep(0.0, 6.0, u) * 0.12 + 0.5 - 0.1 * vnoise(vec2(x * 0.3, uTime * 0.2));
+  if (a < body) discard;
+  vec3 n = normalize(vNormal);
+  vec3 v = normalize(uCamPos - p);
+  if (dot(n, v) < 0.0) n = -n;
+  n = normalize(n + vec3(0.0, 0.0, 0.0) + (vec3(vnoise(vec2(x * 3.0, u + uTime * 4.0)), 0.0, vnoise(vec2(u, x * 3.0))) - 0.5) * 0.8);
+  vec3 albedo = vec3(0.5, 0.58, 0.6) * (0.8 + 0.4 * a);
+  vec3 col = lightSurface(p, n, albedo, 0.15, 0.0, 1.0, 1.0);
+  // Light carried in it from the algae, cold and faint.
+  col += vec3(0.02, 0.1, 0.09) * (a - body) * 2.0;
+  col = applyFog(col, p);
+  fragColor = vec4(col, 1.0);
 }
 `

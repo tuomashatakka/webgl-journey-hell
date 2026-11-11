@@ -164,7 +164,7 @@ export const SECTIONS: Section[] = [
     id:         6,
     name:       'THE UNDERTOW',
     kind:       Kind.UNDERTOW,
-    vTarget:    13,
+    vTarget:    17,
     tau:        3,
     throttle:   1,
     gW:         0,

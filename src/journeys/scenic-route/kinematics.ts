@@ -368,7 +368,7 @@ export class ScenicRide implements JourneySimulation {
     // The driver, gravity, drag. In the cave the current is the driver: a
     // buoyant car eases to the water's speed and gravity along the tangent is
     // weighted out, because the water is doing the falling for it.
-    const surge = 1 + 0.12 * Math.sin(this.travelled * 0.021 + 1.3) * this.floatW
+    const surge = 1 + 0.2 * Math.sin(this.travelled * 0.021 + 1.3) * this.floatW
     let a       = p.throttle * (p.vTarget * surge - this.v) / p.tau
     a          -= p.gW * G * Math.sin(this.grade)
     a          -= p.cD * this.v * this.v

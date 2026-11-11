@@ -29,7 +29,7 @@ rail; the *world* is what makes it read as a road, a city, a sea and a stomach.
 | IV | THE COAST ROAD | 370 | +80 → +100 | out of the city onto the cliff-top. Guardrail, sea below, sun on the water, speed building. The guardrail is already bent open at the end. |
 | V | THE FALL | 145 | +100 → +25 | the asphalt ends in a broken edge. Ballistic arc off the lip at 30 m/s, 3.9 s of free fall, nose pitching down to 45°, the sea rushing up, and **the maw**: a breaching fish the size of a ferry, jaw open toward you. The camera goes straight down its throat. |
 | VI | THE GULLET | 285 | +25 → −40 | ribbed flesh, peristalsis moving *toward* you, wet specular, red subsurface, headlights the only light. A pull-out from the dive, then a 180° turn back under the headland. Flesh turns to rock along the way — in patches, never a line. |
-| VII | THE UNDERTOW | 775 | −40 → −55 | a rock cave with a river in it. The car floats: heave, roll, a slow yaw drift on the eddies, stalactites, bioluminescent algae at the water line, a waterfall. Daylight ahead; the passage becomes a concrete culvert; the wheels touch; you roll out onto the county road. |
+| VII | THE UNDERTOW | 775 | −40 → −55 | a rock cave with a river in it, opening into a glow-worm cathedral and pouring through a waterfall. The car floats: heave, roll, a slow yaw drift on the eddies, stalactites, bioluminescent algae at the water line, a waterfall. Daylight ahead; the passage becomes a concrete culvert; the wheels touch; you roll out onto the county road. |
 
 Lengths are what the built spline reports (`course.ts`), lap 3 103 m; the
 first lap takes about 215 s.
@@ -55,6 +55,9 @@ on screen to slide (loop-line's rule, same reasoning). Per lap:
 | speeds | authored | +8 % | +16 % | target speeds ·(1 + 0.08 lapF), drag ·(1 − 0.2 lapF) |
 | dashboard | — | CHECK ENGINE | + OIL, TEMP in the red | warning lamps, pure function of lapF |
 | radio | a station | static creeping in | mostly static | audio only |
+| season | summer | autumn: straw fields, rust and gold woods | dead: ash, scorched black, charred bare trees, embers | `autumnAt` / `deadAt` in the lighting chunk, ramped in the cave |
+| weather | clear | rain: streaks, drops on the glass, thicker grey air | storm: grey flat light and lightning | `rainAt`, `uRain`, `uStorm` |
+| the cave | rock | the fish's flesh creeps back over it in patches | most of it is flesh | `creep` in `tubeFrag` |
 
 `CONFIG.signal.lossLaps.scenicRoute = 3`: once the lap counter reaches three, `signalAge` accrues
 inside `step()` and `src/packages/journey/signalLoss.ts` does the rest — the fourth lap starts on the
@@ -116,7 +119,7 @@ v = clamp(v, vMin, vMax)
 | IV coast road | 28 | 2.5 | 1 | 0.30 | 0.0016 | 100 km/h, building to the edge |
 | V the fall | 28 | — | 0 | 1.00 | 0.0004 | free fall; ~50 m/s at the mouth. vTarget equals the coast's so the blend cannot brake at the lip |
 | VI gullet | 14 | 1.2 | 1 | 0.30 | 0.0090 | the throat takes the speed off |
-| VII undertow | 13 | 3.0 | 1 | 0.00 | 0.0060 | the current, with a surge on top |
+| VII undertow | 17 | 3.0 | 1 | 0.00 | 0.0060 | the current, with a ±20 % surge on top |
 
 The fall is the honest part: no throttle, no cap, gravity and thin air. The mouth
 is placed where a ballistic arc from the cliff lip at 30 m/s lands — 115 m out,
@@ -624,3 +627,31 @@ rules moved.
   between 10 and 35 m, where it would alias.
 - **The car has a floor**: carpet and a toe board under the dash. Looking down
   in the fall showed the sea through the footwell.
+
+## Revision 6 — the undertow, and laps that are not the same lap
+
+- **The undertow is shorter and has places in it.** The current runs at 17 m/s
+  (was 13) with a ±20 % surge (was ±12 %): lap 1 is about 185 s, thirteen
+  seconds off, all of them in the cave. Halfway along, the tunnel opens into
+  the **glow-worm cathedral** (`CHAMBER` in `maw.ts`: centred 470 m past the
+  mouth, 75 m each side, the ring 3.25× as wide and 1.3× as tall at its
+  middle), its vault a starfield of glow-worms over the black river. Wide, not
+  tall, because the cave is only a few metres under the seabed. `tubeWidth`
+  replaces the fixed 1.15 everywhere the ring's width is used: the sweep, the
+  water strip, the terrain carve and the stalactites. At 800 m the car goes
+  through a **waterfall** (`buildFalls`, `fallsFrag`): a curtain across the
+  tunnel poured in strands at their own speeds, white water churned on the
+  river under it, and the windscreen soaked with drops for the forty metres
+  either side.
+- **Every lap is its own place.** The seasons turn: summer, then autumn, then
+  the land is dead, ash and scorched black with embers breathing in it, the
+  hedges and woods burnt and the trees stripped to charred trunks (the shadow
+  pass strips them too). The weather turns: rain from the second lap (streaks
+  in the air, drops sliding down the glass and bending the view, the air
+  thicker and greyer), a storm on the third (flat grey light, lightning
+  whiting the frame out in a double flicker). And the fish digests its cave:
+  from the second lap its flesh grows back over the rock in patches, and by
+  the third most of the tunnel is meat. All of it is a function of `lapF` and
+  ramps across the undertow, where none of the outdoor change is on screen;
+  the lap seam scans clean (the worst step is the culvert's daylight, 2.4×).
+- The tower shaders moved to `shader/towers.ts`; `world.ts` was over the line limit.

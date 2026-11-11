@@ -24,6 +24,12 @@ interface PostArgs {
 
   /** The sun on screen: uv, and how visible (0 behind, below, or underground). */
   sunUv: number[];
+
+  /** The section's sky weight: 1 under the sky, 0 underground. */
+  outdoor: number;
+
+  /** 0..1, how soaked the windscreen is by the waterfall's spray. */
+  splash: number;
 }
 
 interface CockpitArgs {
@@ -49,7 +55,7 @@ interface CockpitArgs {
 
 /** Resolve the MSAA scene, bright-pass and blur it, composite to the screen. */
 export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
-  const { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time, sunUv } = a
+  const { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time, sunUv, outdoor, splash } = a
 
   chain.resolve()
 
@@ -96,6 +102,13 @@ export function postPass (gl: WebGL2RenderingContext, a: PostArgs): void {
   compP.uniform1f('uTime', time)
   compP.uniform3f('uSun', sunUv[0], sunUv[1], sunUv[2])
   compP.uniform1f('uAspect', w / Math.max(1, h))
+
+  // Weather by lap: rain from the second, a storm on the third; the screen
+  // also takes the waterfall's spray. Outdoors only, except the spray.
+  const lapW = ride[1]
+  compP.uniform1f('uRain', Math.max(0, Math.min(1, (lapW - 0.75) * 2)) * outdoor)
+  compP.uniform1f('uStorm', Math.max(0, Math.min(1, (lapW - 1.75) * 2)) * outdoor)
+  compP.uniform1f('uSplash', splash)
 
   // The road's red, as shafts in the air: nothing on the first lap, then more every lap.
   const lapF = ride[1]

@@ -66,7 +66,25 @@ export const ROCK_START = 210
 /** Metres past the mouth where the front part of the tube hands over to the fixed part. */
 const TUBE_SPLIT = 74
 
+/**
+ * The glow-worm cathedral: where the river runs under the sea, the tunnel
+ * opens sideways into a chamber three times its width, its vault a starfield
+ * of glow-worms over a black lake. Wide rather than tall, because the cave is
+ * only a few metres under the seabed; the opaque sea hides whatever of the
+ * vault comes up through it. t is metres past the mouth.
+ */
+export const CHAMBER = { t: 470, half: 75, widen: 2.1, swell: 0.3 }
+
+/**
+ * The waterfall: a curtain of water poured from the vault across the tunnel,
+ * which the car goes straight through. t is metres past the mouth.
+ */
+const FALLS_T = 800
+
 type P3 = [ number, number, number ]
+
+/** The waterfall's curtain, where it stands, and its arc length. */
+interface Falls { builder: MeshBuilder; centre: V3; s: number }
 
 interface V3 { x: number; y: number; z: number }
 
@@ -316,12 +334,23 @@ function jawShell (b: Basis, a0: number, a1: number, seed: number): MeshBuilder 
   return mb
 }
 
+/** 0..1, how far into the chamber t is: a smooth bell over its length. */
+function chamberAt (t: number): number {
+  const b = Math.max(0, 1 - Math.abs(t - CHAMBER.t) / CHAMBER.half)
+  return b * b * (3 - 2 * b)
+}
+
+/** The ring's half width as a multiple of its radius: 1.15, and more in the chamber. */
+export function tubeWidth (t: number): number {
+  return 1.15 + CHAMBER.widen * chamberAt(t)
+}
+
 /** Inner radius of the throat and cave by arc length. */
 export function tubeRadius (t: number, s: number): number {
   const throat = 30 + (11 - 30) * smooth01(t / 120)
   const cave   = 10.5 + 3.5 * Math.sin(s * 0.031) + 2.2 * Math.sin(s * 0.077 + 1) + 1.5 * Math.sin(s * 0.19 + 2)
   const w      = smooth01((t - 90) / 110)
-  return Math.max(6.5, throat * (1 - w) + cave * w)
+  return Math.max(6.5, throat * (1 - w) + cave * w) * (1 + CHAMBER.swell * chamberAt(t))
 }
 
 function smooth01 (x: number): number {
@@ -334,12 +363,12 @@ function smooth01 (x: number): number {
  * floor, the vault is overhead. Clockwise like the head, so the sweep's front
  * faces point inward at the rider.
  */
-function tubeRing (R: number): ProfilePoint[] {
+function tubeRing (R: number, W: number): ProfilePoint[] {
   const pts: ProfilePoint[] = []
   const u0                  = R * 0.42
   for (let i = 0; i < HEAD_SEGS; i++) {
     const a = -i / HEAD_SEGS * Math.PI * 2
-    pts.push([ Math.cos(a) * R * 1.15, Math.sin(a) * R + u0 ])
+    pts.push([ Math.cos(a) * R * W, Math.sin(a) * R + u0 ])
   }
   return pts
 }
@@ -349,7 +378,7 @@ export function buildTube (route: Route): Tube {
   const u       = route.spans[6]
   const s0      = g.s0
   const s1      = u.s1 - 18
-  const profile = (s: number) => tubeRing(tubeRadius(s - s0, s))
+  const profile = (s: number) => tubeRing(tubeRadius(s - s0, s), tubeWidth(s - s0))
   const front   = finishSweep(sweepProfile(route.curve, {
     s0:     s0 - 2,
     s1:     s0 + TUBE_SPLIT + 2.5,
@@ -377,7 +406,7 @@ export function buildTube (route: Route): Tube {
     s1,
     step:    2.5,
     profile: s => {
-      const r = tubeRadius(s - s0, s) * 1.2
+      const r = tubeRadius(s - s0, s) * (tubeWidth(s - s0) + 0.05)
       return [[ -r, 0 ], [ r, 0 ]]
     },
   }))
@@ -568,4 +597,45 @@ function strands (b: Basis): MeshBuilder {
     }
   }
   return mb
+}
+
+/**
+ * The waterfall's curtain: a grid across the tunnel's cross-section at
+ * FALLS_T, from the waterline up into the vault, trimmed to the ring. uv is
+ * (metres across, metres up from the water); the shader pours it.
+ */
+export function buildFalls (route: Route): Falls {
+  const s0              = route.spans[5].s0
+  const s               = s0 + FALLS_T
+  const fr              = levelFrame(route.curve, s, newFrame())
+  const R               = tubeRadius(FALLS_T, s)
+  const W               = tubeWidth(FALLS_T)
+  const u0              = R * 0.42
+  const mb              = createMeshBuilder()
+  const NX              = 40
+  const NY              = 24
+  const ids: number[][] = []
+  for (let j = 0; j <= NY; j++) {
+    ids.push([])
+    for (let i = 0; i <= NX; i++) {
+      const x = (i / NX * 2 - 1) * R * W
+      const u = -0.3 + (u0 + R) * (j / NY)
+      ids[j].push(mb.vertex(
+        fr.pos.x + fr.right.x * x + fr.up.x * u, fr.pos.y + fr.right.y * x + fr.up.y * u, fr.pos.z + fr.right.z * x + fr.up.z * u,
+        -fr.forward.x, -fr.forward.y, -fr.forward.z, x, u,
+      ))
+    }
+  }
+  const inside = (i: number, j: number) => {
+    const x = (i / NX * 2 - 1) * R * W
+    const u = -0.3 + (u0 + R) * (j / NY)
+    return (x / (R * W)) ** 2 + ((u - u0) / R) ** 2 < 1.08
+  }
+  for (let j = 0; j < NY; j++)
+    for (let i = 0; i < NX; i++)
+      if (inside(i, j) || inside(i + 1, j) || inside(i, j + 1) || inside(i + 1, j + 1)) {
+        mb.face(ids[j][i], ids[j][i + 1], ids[j + 1][i + 1])
+        mb.face(ids[j][i], ids[j + 1][i + 1], ids[j + 1][i])
+      }
+  return { builder: mb, centre: { x: fr.pos.x + fr.up.x * u0, y: fr.pos.y + fr.up.y * u0, z: fr.pos.z + fr.up.z * u0 }, s }
 }

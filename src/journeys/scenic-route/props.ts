@@ -6,7 +6,7 @@ import { lookAt, SECTION_COUNT } from './course'
 import type { LookParams, Route } from './course'
 import { buildSpineIndex, spineHits, terrainHeight } from './geometry'
 import type { SpineIndex } from './geometry'
-import { ROCK_START, tubeRadius } from './maw'
+import { ROCK_START, tubeRadius, tubeWidth } from './maw'
 import { farmWeight, fieldBorders } from './fields'
 import { hash } from './props/hash'
 import { V3, bar, boxOf, boxT, cylinderX, lobe, quadN, taperY } from './props/primitives'
@@ -640,7 +640,7 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
       for (let k = 0; k < n; k++) {
         const a  = Math.PI * (0.3 + 0.4 * hash(s * 3.1 + k * 17)) // top of the ring
         const R  = tubeRadius(s - g.s0, s)
-        const r  = Math.cos(a) * R * 1.15
+        const r  = Math.cos(a) * R * tubeWidth(s - g.s0)
         const uu = Math.sin(a) * R + 0.42 * R - 0.4
         const f  = levelFrame(route.curve, s, pl.frame)
         const sc = 1.2 + hash(s * 5.3 + k) * 4.5

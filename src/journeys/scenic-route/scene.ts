@@ -100,14 +100,14 @@ export function createScenicRouteScene (
   if (!programs)
     return null
 
-  const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, strandP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP } = programs
+  const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, strandP, fallsP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP } = programs
 
   const route     = getRoute()
   const materials = createMaterialArrays(gl)
 
   const { bankTex, skyTarget, skyTex, shadowTex, shadowFbo } = createTargets(gl, route)
 
-  const { roadMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
+  const { roadMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, falls, fallsMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
 
   const rig                                                              = createCockpitRig(gl)
   const { cabinMesh, wheelMesh, speedoMesh, tachoMesh, mirror, dialTex } = rig
@@ -167,6 +167,7 @@ export function createScenicRouteScene (
   let carFwd: number[]   = [ 0, 0, 1 ]
   let carRight: number[] = [ 1, 0, 0 ]
   let lights             = 0
+  let lapF               = 0
   const bindLit = (
     prog: GlProgram, camPos: number[], sun: number[], env: number[], fogCol: number[],
     time: number, shadowOn: number,
@@ -175,6 +176,7 @@ export function createScenicRouteScene (
     prog.uniform3f('uCarFwd', carFwd[0], carFwd[1], carFwd[2])
     prog.uniform3f('uCarRight', carRight[0], carRight[1], carRight[2])
     prog.uniform1f('uLights', lights)
+    prog.uniform1f('uLapF', lapF)
     gl.activeTexture(gl.TEXTURE1)
     gl.bindTexture(gl.TEXTURE_2D, skyTex)
     prog.uniform1i('uSky', 1)
@@ -220,6 +222,8 @@ export function createScenicRouteScene (
       const camFwd = vector(custom, 'uCamFwd', [ 0, 0, 1 ])
       const camUp  = vector(custom, 'uCamUp', [ 0, 1, 0 ])
       const ride   = vector(custom, 'uRide', [ 0, 0, 0, 0 ])
+      lapF         = ride[1]
+
       const sun    = vector(custom, 'uSun', [ 0, 0.2, 1, 0.2 ])
       const env    = vector(custom, 'uEnv', [ 0, 1, 0.001, -1e4 ])
       const fogCol = vector(custom, 'uFogCol', [ 0.6, 0.65, 0.7, 0 ])
@@ -353,6 +357,7 @@ export function createScenicRouteScene (
         propDepthP.use()
         propDepthP.uniformMatrix4fv('uViewProj', lightVP)
         propDepthP.uniform1f('uTime', time)
+        propDepthP.uniform1f('uLapF', lapF)
         for (const { set, mesh } of props) {
           propDepthP.uniform1i('uMaterial', set.material)
           propDepthP.uniform1f('uSpin', set.spin)
@@ -467,7 +472,15 @@ export function createScenicRouteScene (
         waterP.uniformMatrix4fv('uViewProj', vp)
         bindBank(waterP, 0)
         bindLit(waterP, cp, sun, env, fogCol, time, shadowOn)
+        waterP.uniform1f('uFallsS', falls.s)
         waterMesh.draw(gl)
+
+        // The waterfall, poured across the tunnel; seen from either side.
+        gl.disable(gl.CULL_FACE)
+        fallsP.use()
+        fallsP.uniformMatrix4fv('uViewProj', vp)
+        bindLit(fallsP, cp, sun, env, fogCol, time, shadowOn)
+        fallsMesh.draw(gl)
 
         // The sea: waves on the fine patch, flat beyond it; both rise by lap.
         seaP.use()
@@ -579,7 +592,12 @@ export function createScenicRouteScene (
       const sunVis = sunW > 0 ? env[1] * Math.max(0, Math.min(1, (sun[1] + 0.03) / 0.08)) : 0
       const sunUv  = sunW > 0 ? [ sunCx / sunW * 0.5 + 0.5, sunCy / sunW * 0.5 + 0.5, sunVis ] : [ 0, 0, 0 ]
 
-      postPass(gl, { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time, sunUv })
+      // Spray off the waterfall: the windscreen is soaked from a little before
+      // the curtain to well after it.
+      const fallsD = Math.hypot(camPos[0] - falls.centre.x, camPos[1] - falls.centre.y, camPos[2] - falls.centre.z)
+      const splash = 1 - Math.max(0, Math.min(1, (fallsD - 4) / 40))
+
+      postPass(gl, { chain, blur, brightP, blurP, compP, drawQuad, w, h, exposure, ride, time, sunUv, outdoor: env[1], splash })
       cockpitPass(gl, rig, { viewProj, camPos, sun, env, fogCol, time, shadowOn, exposure, ride, loop, car, fall, carPos, carFwd, carRight, carUp, cockpitP, bindLit })
     },
 
@@ -615,13 +633,14 @@ export function createScenicRouteScene (
         mesh.dispose(gl)
       lureMesh.dispose(gl)
       strandMesh.dispose(gl)
+      fallsMesh.dispose(gl)
       for (const { mesh } of props)
         mesh.dispose(gl)
       towerMesh.dispose(gl)
       for (const p of [
         skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP,
         propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP,
-        mawP, jawP, jawDepthP, strandP, tubeP, waterP, cockpitP,
+        mawP, jawP, jawDepthP, strandP, fallsP, tubeP, waterP, cockpitP,
       ])
         p.dispose()
     },

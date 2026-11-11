@@ -59,6 +59,9 @@ uniform float uTime;
 uniform float uRedRays;    // 0 until the second lap, then more every lap
 uniform vec3  uSun;        // the sun on screen: uv, visibility
 uniform float uAspect;
+uniform float uRain;       // 0..1 rain outdoors (from the second lap)
+uniform float uStorm;      // 0..1 the third lap's storm, outdoors
+uniform float uSplash;     // 0..1 the waterfall's spray on the glass
 out vec4 fragColor;
 ${ACES}
 float grainHash (vec2 p) {
@@ -66,8 +69,32 @@ float grainHash (vec2 p) {
   p += dot(p, p.yx + 19.19);
   return fract((p.x + p.y) * p.x);
 }
+// Drops on the windscreen: two layers of cells, some holding a drop, each
+// drop sliding down at its own pace and bending what is behind it.
+vec2 dropOffset (vec2 uv, float wet, float t) {
+  vec2 off = vec2(0.0);
+  for (int l = 0; l < 2; l++) {
+    float fl = float(l);
+    float size = fl == 0.0 ? 0.05 : 0.028;
+    vec2 g = uv * vec2(uAspect, 1.0) / size + vec2(fl * 17.0, 0.0);
+    vec2 id = floor(g);
+    float h = grainHash(id + fl * 31.0);
+    if (h > wet * 0.75) continue;
+    float slide = fract(t * (0.05 + 0.25 * h) + h * 7.0);
+    vec2 centre = vec2(0.3 + 0.4 * grainHash(id + 3.0), 0.85 - slide * 0.7);
+    vec2 d = (fract(g) - centre) * vec2(1.0, 0.8);
+    float r = 0.18 + 0.12 * h;
+    float m = smoothstep(r, r * 0.6, length(d));
+    off += d * m * size * 1.4;
+  }
+  return off;
+}
+
 void main () {
   vec2 uv = vUv;
+  float wet = max(uRain, uSplash);
+  if (wet > 0.001)
+    uv += dropOffset(vUv, wet, uTime);
   vec2 c = uv - 0.5;
   vec3 col;
   if (uSpeedBlur > 0.001) {
@@ -154,6 +181,24 @@ void main () {
     }
     float flick = 0.85 + 0.15 * sin(uTime * 2.3 + uv.x * 9.0);
     col += vec3(1.0, 0.07, 0.02) * acc / 16.0 * uRedRays * 18.0 * flick;
+  }
+  // Rain: thin slanting streaks in the air, catching what light there is.
+  if (uRain > 0.001) {
+    vec2 rq = vec2(vUv.x * uAspect * 90.0 + vUv.y * 14.0, vUv.y * 2.0 + uTime * 9.0);
+    float rh = grainHash(vec2(floor(rq.x), 3.0));
+    float line = 1.0 - smoothstep(0.0, 0.12, abs(fract(rq.x) - 0.5));
+    float seg = smoothstep(0.86, 1.0, fract(rq.y * (0.3 + rh * 0.4) + rh * 13.0));
+    col += vec3(0.5, 0.55, 0.6) * line * seg * step(0.45, rh) * uRain * 0.12;
+  }
+  // The storm: the light goes grey and flat, and lightning whites it out in
+  // a double flicker every few seconds.
+  if (uStorm > 0.001) {
+    float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+    col = mix(col, vec3(l) * vec3(0.85, 0.9, 1.0), 0.45 * uStorm) * (1.0 - 0.3 * uStorm);
+    float k = floor(uTime / 3.7);
+    float ph = uTime - k * 3.7;
+    float bolt = step(0.55, grainHash(vec2(k, 9.0))) * exp(-ph * 5.0) * (0.55 + 0.45 * sin(ph * 70.0));
+    col = col * (1.0 + bolt * 2.5 * uStorm) + vec3(0.6, 0.65, 0.8) * bolt * 0.35 * uStorm;
   }
   col *= uExposure;
   col = aces(col);
