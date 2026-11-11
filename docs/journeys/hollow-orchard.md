@@ -97,6 +97,18 @@ three ramps carry the arc, all continuous in distance walked, none table-driven.
   light's direction, every shaft comes out of a crack and goes into another one
   without tracing anything. shafts are 8 jittered samples (16 with heavy
   effects) and saturate rather than clip. at breach 0 none of it is evaluated.
+- **the fruiting body** is a gut, authored in the tube's own coordinates
+  (angle, depth under the wall, z) round an axis on the walked line, so the
+  aisle never bores a second pipe through its wall. `GUT_R` 3.1 relaxed;
+  a sphincter every `GUT_RING` (9) units, a gaussian 0.9 wide that closes the
+  lumen by 0.4 to 0.8 as a wave of clenching runs down the tube; nine rugae
+  (`abs(sin(4.5 a))`, so the atan seam is invisible) 0.22 deep, 0.34 in a ring;
+  fibre noise only within 1 unit of the wall, the bound elsewhere. polyps are
+  one per (sector, z) cell of 6 by 3 units, on 58 % of cells and never the
+  sector underfoot: a stalk, a bulb and a puckered mouth, kept inside the cell.
+  shading while the stage is on screen (`stageOn(5.)`): veins under the flesh,
+  the key at 55 %, the lanterns' specular on the wet wall (`lanternGloss`),
+  0.018 more fog so the bore closes into the dark where the march gives out.
 - the key light is dimmed (`0.08 + 0.55 * ndl`) to leave the lanterns room to be
   what lights a stage. the root labyrinth adds a falloff light from the eye.
 

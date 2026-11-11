@@ -42,6 +42,13 @@ export const foundationGlsl = `
     return 1.0 - smoothstep(16.0, 30.0, length(p - gRo));
   }
 
+  // How much of stage id is on screen, 0..1 through a crossfade. For what a
+  // stage owns outside its SDF: a lamp, a sheen, its own fog.
+  float stageOn(float id) {
+    return (abs(uStage.x - id) < 0.5 ? 1.0 - uStage.z : 0.0)
+         + (abs(uStage.y - id) < 0.5 ? uStage.z : 0.0);
+  }
+
   // --- the route -----------------------------------------------------------
   // Coefficients, not a table: kinematics.ts owns the shape and uploads it, and
   // this evaluates it at any marched z. Every stage below is authored around a

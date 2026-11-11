@@ -61,8 +61,9 @@ const SCENE = `
     // How much of THE ROOT LABYRINTH is on screen. Its root bark (mat 2.4) and
     // its lamp are keyed to this rather than to mat alone, because a crossfade
     // elsewhere (soil 2 into crust 4) sweeps mat through 2.4 as well.
-    float lamp = (abs(uStage.x - 4.0) < 0.5 ? 1.0 - uStage.z : 0.0)
-               + (abs(uStage.y - 4.0) < 0.5 ? uStage.z : 0.0);
+    float lamp = stageOn(4.0);
+    // And of FRUITING BODY, which is shaded as the inside of something alive.
+    float gut  = stageOn(5.0);
 
     vec3 base;
     if (mat < 0.5)      base = uTint * 0.55 + vec3(0.10, 0.06, 0.05);   // flesh / fungus
@@ -83,12 +84,19 @@ const SCENE = `
     if (mat < 0.5) {
       float gill = 0.5 + 0.5 * sin(atan(p.z, p.x) * 36.0);
       base *= mix(1.0, 0.72 + gill * 0.5, clamp(-n.y, 0.0, 1.0));
+      // Veins under the wall of the gut, dark and bruised, running with it.
+      if (gut > 0.0) {
+        float vein = ridge(p * vec3(0.6, 0.6, 0.3) + 7.0);
+        vein *= vein; vein *= vein; vein *= vein; vein *= vein;
+        base  = mix(base, base * vec3(0.38, 0.22, 0.46), vein * gut * 0.85);
+      }
     }
 
     float ndl = clamp(dot(n, keyDir), 0.0, 1.0);
     float ao  = calcAO(p, n);
     // The key is dimmed to leave the lanterns room to be what lights a stage.
-    vec3  col = base * uKey * (0.08 + 0.55 * ndl) * ao;
+    // And further inside the gut, where there is no sky at all.
+    vec3  col = base * uKey * (0.08 + 0.55 * ndl) * ao * (1.0 - 0.45 * gut);
 
     // THE ROOT LABYRINTH is a dug passage with no sky, so the key alone lights
     // only the floor. Light it from the eye instead, falling off with distance,
@@ -103,6 +111,8 @@ const SCENE = `
     if (uStage.z >= 0.002)
       ll = mix(ll, lanternLight(ps, n, uStage.y), uStage.z);
     col += base * ll * ao * 3.2;
+    if (gut > 0.0)
+      col += uLantern * lanternGloss(ps, n, rd, 5.0) * wet * ao * gut * 4.0;
     col += uLantern * max(glow - 1.0, 0.0) * 1.15;
     glow = min(glow, 1.0);
 
@@ -124,8 +134,9 @@ const SCENE = `
     col += uTint * pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0) * (0.18 + 0.5 * glow);
 
     // Mycelial filament tracery, heavy-effects only.
+    // Thinned in the gut: over a whole wall of flesh it was a net, not a wall.
     if (uHeavy > 0.5)
-      col += uTint * pow(ridge(p * 3.2 + vec3(0.0, 0.0, iTime * 0.06)), 6.0) * glow * 0.7;
+      col += uTint * pow(ridge(p * 3.2 + vec3(0.0, 0.0, iTime * 0.06)), 6.0) * glow * 0.7 * (1.0 - 0.7 * gut);
 
     // The breach: scorched lips, red heat in the fissures, and the red light from
     // below catching whatever faces down toward it.
@@ -204,7 +215,10 @@ const SCENE = `
     // also what hides the geometry morph underneath it.
     // (Named xfade, not cross -- cross() is a GLSL builtin called above in this scope.)
     float xfade = sin(uStage.z * PI);
-    float den   = 0.016 + 0.030 * uWalk.w + 0.05 * xfade + 0.02 * uPulse.z;
+    // FRUITING BODY is a closed tube, and the march runs out of steps down its
+    // bore before it runs out of tube: its air is thick enough that the wall is
+    // already the dark by then, so the far end closes instead of showing a hole.
+    float den   = 0.016 + 0.030 * uWalk.w + 0.05 * xfade + 0.02 * uPulse.z + 0.018 * stageOn(5.0);
     col = mix(uBg, col, exp(-t * den));
 
     // Cheap wavelength split in the haze only — the one chromatic effect a

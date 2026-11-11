@@ -48,10 +48,12 @@ export const lanternsGlsl = `  // --- the lanterns -----------------------------
     if (id < 3.5) return vec4(x + sd * mix(1.9, 2.6, h3), -0.08, z, 0.0);
     if (id < 4.5) return vec4(x + sd * 1.35, rootArch(z).y - 0.6, z, 1.0);
     if (id < 5.5) {
-      // On the wall of the tube, anywhere but its floor.
+      // On the wall of the tube, anywhere but its floor, riding in with the
+      // wall where a sphincter clenches.
       vec2  c = fruitingAxis(z);
-      float a = mix(-0.6, 3.74, h3);
-      return vec4(c.x + cos(a) * 2.2, c.y + sin(a) * 2.2, z, 2.0);
+      float a = mix(-0.3, 3.44, h3);
+      float r = fruitingBore(z).x - 0.35;
+      return vec4(c.x + cos(a) * r, c.y + sin(a) * r, z, 2.0);
     }
     if (id < 6.5) return vec4(x + sd * mix(2.0, 3.0, h3), -0.08, z, 0.0);
     if (id < 7.5) return vec4(x + sd * 2.6, mix(4.0, 5.5, h3), z, 1.0);
@@ -153,6 +155,24 @@ export const lanternsGlsl = `  // --- the lanterns -----------------------------
       acc += nl * w * lanternPower(id, k) / (1.0 + d2 * 0.35);
     }
     return uLantern * acc;
+  }
+
+  // The shine of the same three lanterns on a wet surface: FRUITING BODY is a
+  // gut, and a gut is read by its highlights before its colour.
+  float lanternGloss(vec3 ps, vec3 n, vec3 rd, float id) {
+    float S   = lanternSpacing(id);
+    float k0  = floor(ps.z / S);
+    float acc = 0.0;
+    for (int j = 0; j < 3; j++) {
+      float k  = k0 - 1.0 + float(j);
+      vec3  v  = lanternCentre(lanternAt(id, k)) - ps;
+      float d2 = dot(v, v);
+      float dd = sqrt(d2);
+      float w  = 1.0 - smoothstep(0.45 * S, 1.2 * S, dd);
+      vec3  h  = normalize(v / max(dd, 1e-3) - rd);
+      acc += pow(clamp(dot(n, h), 0.0, 1.0), 24.0) * w * lanternPower(id, k) / (1.0 + d2 * 0.12);
+    }
+    return acc;
   }
 
   // The halo: the light each lantern scatters off the spores between the eye

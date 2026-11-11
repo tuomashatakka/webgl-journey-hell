@@ -185,31 +185,80 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
   }
 
   // 5 · FRUITING BODY — a tube of wet muscle that breathes.
+  //
+  // A gut, and you are what is in it. The lumen is centred on the walked line,
+  // as THE ROOT LABYRINTH is: on its own sine the aisle bored a second, smooth
+  // pipe through the wall wherever the two disagreed. Everything is authored in
+  // the tube's own coordinates (angle, depth under the wall, z), so the folds,
+  // the sphincters and the polyps all ride the wall wherever it goes.
+  const float GUT_RING = 9.0;   // metres between sphincters
+  const float GUT_R    = 3.1;   // the relaxed lumen
+
   // Its axis at z, shared with the nodules that grow on its wall.
   vec2 fruitingAxis(float z) {
-    return vec2(sin(z * 0.05) * 1.2, 1.5 + sin(z * 0.037) * 0.5);
+    return vec2(trackX(z), 1.25 + sin(z * 0.037) * 0.2);
+  }
+
+  // x: the lumen's radius at z, folds aside. y: how far into a sphincter, 0..1.
+  // The rings clench one after the other, a wave that runs the way you are
+  // carried. The ring's index only changes where its profile has died to zero.
+  vec2 fruitingBore(float z) {
+    float k  = floor(z / GUT_RING);
+    float zr = (z - (k + 0.5) * GUT_RING) / 0.9;
+    float in_ = exp(-zr * zr);
+    float sq = 0.5 + 0.5 * sin(iTime * 0.9 - k * 1.1);
+    return vec2(GUT_R - in_ * (0.4 + 0.4 * sq), in_);
   }
 
   float sdFruitingBody(vec3 p) {
-    vec2 c    = fruitingAxis(p.z);
-    float rad = 2.5
-              + breathe(p)
-              + sin(p.z * 0.5) * 0.28                 // sphincter rings
-              - rotDisp(p * 1.3, 0.30);
-    float d = rad - length(p.xy - c);
+    vec2  o    = p.xy - fruitingAxis(p.z);
+    float r    = length(o);
+    float a    = atan(o.y, o.x);
+    vec2  bore = fruitingBore(p.z);
+
+    // Rugae: nine pillows of muscle round the lumen with a sharp crease between
+    // each pair, wandering as they run, drawn tighter where a ring clenches.
+    // Nine half-waves, so abs(sin) meets itself across the seam of the atan.
+    float fold = abs(sin(a * 4.5 + p.z * 0.11 + 0.7 * sin(p.z * 0.29)));
+    float w    = bore.x + breathe(p) - fold * (0.22 + 0.12 * bore.y) - r;   // depth under the wall
+
+    // The fibre of the muscle, stretched along the tube. Only near the wall: a
+    // ray down the middle of the lumen takes the bound instead, and that is
+    // where the march spends its steps.
+    float lod  = lodAt(p);
+    float disp = 0.16 * lod;
+    if (w < 1.0 && lod > 0.02)
+      disp = rotDisp(p * vec3(1.3, 1.3, 0.6), 0.16) * lod;
+    float d = w - disp;
     gMat = 0.0; gWet = 1.0; gGlow = 0.15 + 0.5 * uPulse.x;
 
-    // Polyps clinging to the wall.
-    vec3 q = p;
-    q.z    = repS(q.z, 6.0);
-    float a = atan(p.y - c.y, p.x - c.x);
-    float k = floor(a / TAU * 7.0);
-    float pr = 0.34 + 0.2 * hash11(k + floor(p.z / 6.0) * 13.0);
-    vec3 pc = vec3(c.x + cos(k / 7.0 * TAU) * rad * 0.9,
-                   c.y + sin(k / 7.0 * TAU) * rad * 0.9,
-                   0.0);
-    float polyp = sdSphere(q - pc, pr) - breathe(p) * 0.3;
-    if (polyp < d) { d = polyp; gMat = 3.0; gWet = 1.0; gGlow = 0.5; }
+    // Polyps: one to a cell of (sector, z), on most cells, never the sector
+    // underfoot. Each is a stalk and a bulb with a puckered mouth, built in the
+    // wall's frame (arc, height, z) and kept well inside its cell, so no cell
+    // edge can slice one: they used to sit on the sector boundary, and every
+    // one of them was half a sphere.
+    float af = (a + PI * 0.5) / TAU * 6.0 + 0.5;
+    float ka = floor(af);
+    float kz = floor(p.z / 3.0);
+    float h1 = hash21(vec2(ka, kz) + 41.0);
+    if (h1 > 0.42 && abs(ka) > 0.5 && w < 2.0) {
+      float h2  = hash21(vec2(kz, ka) + 17.0);
+      float sz  = mix(0.8, 1.5, fract(h2 * 7.3));
+      float ac  = (ka + (h2 - 0.5) * 0.45) / 6.0 * TAU - PI * 0.5;
+      float zc  = (kz + 0.5 + (h1 - 0.71) * 0.5) * 3.0;
+      vec3  l   = vec3((a - ac) * r, w, p.z - zc);
+      // They lean the way the tube swallows, and sway.
+      l.x      -= (h2 - 0.5) * 0.5 * w;
+      l.z      -= (0.2 + 0.15 * sin(iTime * 0.8 + h1 * 20.0)) * w;
+      float hg  = 0.55 * sz;
+      float rb  = 0.2 * sz * (1.0 + 0.12 * sin(iTime * 1.1 + h2 * 30.0));
+      float stalk = sdCapsule(l, vec3(0.0, -0.15, 0.0), vec3(0.0, hg, 0.0), 0.085 * sz);
+      float bulb  = length(l - vec3(0.0, hg, 0.0)) - rb;
+      float mouth = length(l - vec3(0.0, hg + rb, 0.0)) - rb * 0.6;
+      float polyp = smax(smin(stalk, bulb, 0.12 * sz), -mouth, 0.05);
+      if (polyp < d + 0.08) { gMat = 3.0; gGlow = 0.5; }
+      d = smin(d, polyp, 0.3);
+    }
     return d;
   }
 
