@@ -220,13 +220,23 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
 
     // The crack cuts the surface as well as marking it. Same form as the grout
     // perturbation above and about as cheap.
+    // ...and no two glazed tiles were ever set quite flat to each other. A few
+    // hundredths of tilt per tile is what breaks one long reflection of a tube
+    // into a stepped run of them, which is how a tiled wall gives itself away.
+    vec2 tilt = (vec2(hash21(cell + salt + 2.9), hash21(cell + salt + 6.1)) - 0.5)
+              * 0.07 * (1.0 - lodFade(size * 0.5));
     nOut = normalize(n - (tu * sign(f.x) + tv * sign(f.y)) * groove * 0.5
-                       - (tu * cg.x + tv * cg.y) * hair * 0.35);
+                       - (tu * cg.x + tv * cg.y) * hair * 0.35
+                       + tu * tilt.x + tv * tilt.y);
 
     // The per-tile shade variation is a lattice too, and the first thing to turn
     // into a shimmer. Half a tile per pixel is where it stops being detail.
     alb = vec3(0.86, 0.89, 0.87) * (0.93 + 0.13 * mix(id, 0.5, lodFade(size * 0.5)));
-    alb = mix(alb, vec3(0.30, 0.36, 0.34), band * 0.55);          // the mosaic course
+    // The mosaic course, in the three blues pool mosaic is always laid in. The
+    // split lines are a quarter of a tile apart, so each quarter takes its own.
+    float mq = hash21(floor(g * 2.0) + salt + 1.3);
+    vec3  mc = mq < 0.34 ? vec3(0.10, 0.20, 0.42) : (mq < 0.67 ? vec3(0.14, 0.32, 0.52) : vec3(0.22, 0.46, 0.58));
+    alb = mix(alb, mix(mc, vec3(0.16, 0.32, 0.50), lodFade(size * 0.25)), band * 0.85);
 
     // A tile standing proud of the wall. The relief itself is geometry; this is
     // only the dirt line that a tile with a lifted edge collects around it, and
@@ -338,7 +348,15 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
       rough = 0.80;
     }
     else {
-      alb   = vec3(0.40, 0.40, 0.38) * (0.85 + 0.30 * n1);
+      // Cast concrete: the lift joint every pour left, the grain of the
+      // shuttering boards it was poured against, and a dark wet foot where the
+      // silt has climbed it. Faded to its mean with distance like the grout.
+      float lf   = lodFade(0.03);
+      float lift = (1.0 - smoothstep(0.008, 0.022, abs(latt(qs.y, 1.2)))) * (1.0 - lf);
+      float grn  = vnoise(vec2((qs.x + qs.z) * 2.2, qs.y * 14.0));
+      alb   = vec3(0.40, 0.40, 0.38) * (0.85 + 0.30 * n1) * (0.90 + 0.18 * mix(grn, 0.5, lf));
+      alb  *= 1.0 - lift * 0.45;
+      alb   = mix(alb, vec3(0.20, 0.21, 0.17), smoothstep(0.9, 0.0, qs.y) * (0.35 + 0.4 * dec));
       rough = 0.74;
     }
   }
@@ -402,7 +420,16 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     float lz   = p.z - (band + 0.5) * sp;
     float inZ  = 1.0 - smoothstep(0.20, 0.27, abs(lz));
     float inX  = 1.0 - smoothstep(W * 0.50, W * 0.56, abs(p.x));
-    return inZ * inX * lampAlive(band, C);
+
+    // A prismatic diffuser is not a flat white card: its ribs run across the
+    // tube, the tube ends are darker than its middle where the cathodes are,
+    // and two tubes behind one diffuser show as two brighter bars. All of it
+    // goes to its mean by the time a rib is a pixel across.
+    float lf   = lodFade(0.02);
+    float rib  = mix(0.80 + 0.20 * abs(sin(p.x * 70.0)), 0.90, lf);
+    float tube = mix(0.78 + 0.32 * exp(-abs(abs(lz) - 0.09) * 40.0), 0.92, lf);
+    float ends = 0.70 + 0.30 * smoothstep(W * 0.56, W * 0.38, abs(p.x));
+    return inZ * inX * lampAlive(band, C) * rib * tube * ends;
   }
 
   // Suspended particulate. Nothing else says "this space is full of water"
