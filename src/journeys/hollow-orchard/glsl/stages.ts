@@ -70,8 +70,10 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
 
   // 3 · MARROW GROVE — bone-white trunks, knuckled, twisted.
   float sdMarrowGrove(vec3 p) {
+    // Dark loam under the bone, not more bone: a white floor under white trunks
+    // blew the whole grove out to one flat cream.
     float d = p.y + fbm3(vec3(p.x, 0.0, p.z) * 0.7) * 0.2;
-    gMat = 1.0; gWet = 0.05; gGlow = 0.0;
+    gMat = 2.0; gWet = 0.25; gGlow = 0.0;
 
     vec3 q    = p;
     vec2 cell = floor((p.xz + 2.25) / 4.5);
@@ -115,6 +117,12 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     return d / sqrt(1.0 + r * r * k * k);
   }
 
+  // Half-width and height of the passage at z. The lanterns hang from it too.
+  vec2 rootArch(float z) {
+    return vec2(1.75 + 0.35 * sin(z * 0.19) + 0.22 * sin(z * 0.071 + 1.3),
+                2.55 + 0.30 * sin(z * 0.13 + 0.4));
+  }
+
   float sdRootLabyrinth(vec3 p) {
     float lod = lodAt(p);
 
@@ -125,8 +133,9 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     vec3 q = vec3(p.x - trackX(p.z), p.y, p.z);
 
     // A low dug arch that pinches and swells, with a trodden floor at y = 0.
-    float w    = 1.75 + 0.35 * sin(p.z * 0.19) + 0.22 * sin(p.z * 0.071 + 1.3);
-    float h    = 2.55 + 0.30 * sin(p.z * 0.13 + 0.4);
+    vec2  wh   = rootArch(p.z);
+    float w    = wh.x;
+    float h    = wh.y;
     vec2  e    = abs(vec2(q.x, q.y - 0.5 * h + 0.4)) - vec2(w - 0.8, 0.5 * h + 0.4 - 0.8);
     float arch = 0.8 - length(max(e, 0.0)) - min(max(e.x, e.y), 0.0);
     if (lod > 0.02)
@@ -176,8 +185,13 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
   }
 
   // 5 · FRUITING BODY — a tube of wet muscle that breathes.
+  // Its axis at z, shared with the nodules that grow on its wall.
+  vec2 fruitingAxis(float z) {
+    return vec2(sin(z * 0.05) * 1.2, 1.5 + sin(z * 0.037) * 0.5);
+  }
+
   float sdFruitingBody(vec3 p) {
-    vec2 c    = vec2(sin(p.z * 0.05) * 1.2, 1.5 + sin(p.z * 0.037) * 0.5);
+    vec2 c    = fruitingAxis(p.z);
     float rad = 2.5
               + breathe(p)
               + sin(p.z * 0.5) * 0.28                 // sphincter rings
@@ -256,10 +270,22 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     // A sleeve *around* the throat, not a plug inside it: at open = 3 the old
     // radius of 2.85 sat entirely within the 3-unit bore, so the one opening the
     // camera is aimed at was filled with solid stalk and you fell through it.
+    // It is a collar hung under the cap, not a column: as a column it ran down
+    // forever, the aisle cut it open, and the fall became one flat orange wedge.
     float stalk = length(q.xz) - (open + 1.8);
     stalk = max(stalk, q.y - 7.0);
+    stalk = max(stalk, 2.8 - q.y);
     stalk = max(stalk, -bore);
     if (stalk < d) { d = stalk; gMat = 3.0; gWet = 0.9; gGlow = 0.35; }
+
+    // What you fall toward: the bloom's gill funnel, ribbed and narrowing to a
+    // throat below. Levelled off a little below the eye, so between throats it
+    // is the ground you cross; without it the pitched-down fall looked into fog.
+    float r      = length(q.xz);
+    float funnel = (q.y + 6.0 - 0.55 * min(r, 12.0)) * 0.85;
+    funnel      -= abs(sin(a * 26.0)) * 0.16 * smoothstep(1.0, 6.0, r);
+    funnel       = smax(funnel, -(r - open * 0.55), 0.6);
+    if (funnel < d) { d = funnel; gMat = 0.0; gWet = 0.75; gGlow = 0.5; }
     return d;
   }
 

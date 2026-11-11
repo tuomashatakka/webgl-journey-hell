@@ -25,10 +25,11 @@
 import { HASH21 } from '@wjh/glsl/hash'
 import { foundationGlsl } from './glsl/foundation'
 import { stagesGlsl } from './glsl/stages'
+import { lanternsGlsl } from './glsl/lanterns'
 import { dispatchGlsl } from './glsl/dispatch'
 
 
-const COMMON = foundationGlsl + stagesGlsl + dispatchGlsl
+const COMMON = foundationGlsl + stagesGlsl + lanternsGlsl + dispatchGlsl
 
 // Shading, camera and the folded-in post chain. Split from COMMON only so the
 // preview below can pull in the noise helpers without any of the raymarch.
@@ -85,13 +86,24 @@ const SCENE = `
 
     float ndl = clamp(dot(n, keyDir), 0.0, 1.0);
     float ao  = calcAO(p, n);
-    vec3  col = base * uKey * (0.12 + 0.9 * ndl) * ao;
+    // The key is dimmed to leave the lanterns room to be what lights a stage.
+    vec3  col = base * uKey * (0.08 + 0.55 * ndl) * ao;
 
     // THE ROOT LABYRINTH is a dug passage with no sky, so the key alone lights
     // only the floor. Light it from the eye instead, falling off with distance,
     // the way a passage lit by what you carry looks.
     if (lamp > 0.0)
       col += base * uKey * clamp(dot(n, -rd), 0.0, 1.0) * ao * lamp * 2.2 / (1.0 + 0.18 * t * t);
+
+    // The lanterns of both stages in the crossfade, and the glow of a lantern's
+    // own body.
+    vec3 ps = vec3(p.x - pathX(p.z), p.y, p.z);
+    vec3 ll = lanternLight(ps, n, uStage.x);
+    if (uStage.z >= 0.002)
+      ll = mix(ll, lanternLight(ps, n, uStage.y), uStage.z);
+    col += base * ll * ao * 3.2;
+    col += uLantern * max(glow - 1.0, 0.0) * 1.15;
+    glow = min(glow, 1.0);
 
     // Hemisphere ambient — the ground is dead, the air above it glows a little.
     col += base * mix(uBg * 0.5, uKey * 0.18, 0.5 + 0.5 * n.y) * ao;
@@ -186,6 +198,13 @@ const SCENE = `
     // single pass can afford, since it needs no resampling of the scene.
     float haze = 1.0 - exp(-t * den);
     col += vec3(0.030, 0.0, -0.022) * haze * uWalk.w;
+
+    // The lanterns' glow in the spore-laden air, thicker where the spores are.
+    float T    = hit ? t : 120.0;
+    vec3  halo = lanternHalo(ro, rd, T, uStage.x, den);
+    if (uStage.z >= 0.002)
+      halo = mix(halo, lanternHalo(ro, rd, T, uStage.y, den), uStage.z);
+    col += halo * (0.12 + 0.14 * uPulse.y);
 
     col += spores(uv, iTime) * (0.6 + 0.8 * xfade);
     col += uTint * uPulse.w * 0.10 * (0.5 + 0.5 * sin(uPulse.x * TAU));   // glow pulse
