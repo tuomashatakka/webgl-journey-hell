@@ -30,6 +30,8 @@ Pick the renderer by what the journey is (`src/packages/journey/definition.ts`):
   is an optional list of lighter builds, heaviest first: phones start at the
   first of them, anything else at the full build, and each is tried until one
   links. If none does, the failure screen names every build's error and the GPU.
+  `probe` is a list of named builds linked only on `?diag=1`, whose results the
+  failure screen lists: a way to bisect a driver that refuses a shader silently.
 * **`geometryRenderer(createScene)`** — triangles: WebGL 2 with `depth: true`; hand
   back your own scene object. Reach for `src/packages/math/mat4.ts`, `src/packages/geometry/curve.ts`, `src/packages/geometry/meshBuilder.ts` and `src/packages/gl/mesh.ts`, and
   `src/packages/gl`'s `createPostChain` for the MSAA → resolve → bloom frame. `loop-line` is

@@ -172,6 +172,9 @@ export const atmosphereGlsl = /* glsl */`
    * from the specular term instead of the disc.
    */
   vec3 sky(vec3 rd, float camY, float direct) {
+    #ifdef STUB_SKY
+    return skyBase(toWorld(rd));
+    #endif
     // direct is a constant at every call site, so each inlined copy keeps one
     // branch below: the view's (built once in main, flat glass bends nothing)
     // or a reflection's cheap cloud.

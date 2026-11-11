@@ -18,6 +18,10 @@ export const materialsGlsl = /* glsl */`
   }
 
   float map(vec3 w) {
+    #ifdef STUB_MAP
+    gMat = 0.0;
+    return w.y + 2.0;
+    #endif
     vec3 p = unbend(w);
     float best = 1e5;
     keep(mapDeck(p), best);
@@ -375,6 +379,9 @@ export const materialsGlsl = /* glsl */`
 
   /** Light the surface the march stopped at. The scene globals hold its material. */
   vec3 shade(vec3 w, vec3 rd, float t) {
+    #ifdef STUB_SHADE
+    return vec3(0.5);
+    #endif
     float mat = gMat;
     vec4 info = gInfo;
     vec3 bc = gBoxC, bh = gBoxH;

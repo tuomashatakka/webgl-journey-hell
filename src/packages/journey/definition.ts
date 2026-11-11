@@ -46,6 +46,13 @@ export interface ShaderRendererOptions {
    * it links either; so a phone starts where it is known to be safe.
    */
   mobileFrom?: number;
+
+  /**
+   * Named builds compiled only on `?diag=1`, to bisect a driver that rejects
+   * the shader with no log: each is linked and released, and the failure
+   * screen lists which linked and which did not. Nothing is drawn.
+   */
+  probe?: readonly (readonly [string, string])[];
 }
 
 export interface JourneyDefinition {
@@ -88,13 +95,33 @@ export function shaderRenderer (fragment: string, options: ShaderRendererOptions
   return {
     context: 'webgl',
     create:  gl => {
+      if (options.probe && diagnosing())
+        return probeBuilds(gl, options.probe)
+
       const lite = options.lite ?? []
       if (lite.length === 0)
         return createShaderQuad(gl, fragment, { envUrl: options.envMapUrl })
+
       const builds = detectDevice().mobile ? lite.slice(options.mobileFrom ?? 0) : [ fragment, ...lite ]
       return firstThatLinks(gl, builds, options.envMapUrl)
     },
   }
+}
+
+function diagnosing (): boolean {
+  return typeof location !== 'undefined' && new URLSearchParams(location.search).get('diag') === '1'
+}
+
+/** Link every probe build and report each; never a renderer. */
+function probeBuilds (gl: AnyGl, probe: readonly (readonly [string, string])[]): null {
+  const results = probe.map(([ name, source ]) => {
+    const quad = createShaderQuad(gl, source, { tag: name })
+    quad?.dispose()
+    takeGlFailure()
+    return `${name} ${quad ? 'OK' : gl.isContextLost() ? 'LOST' : 'FAIL'}`
+  })
+  noteGlFailure(`diag: ${results.join(' · ')} · ${gpuName(gl)}`)
+  return null
 }
 
 /**
@@ -106,7 +133,7 @@ export function shaderRenderer (fragment: string, options: ShaderRendererOptions
  * browser that loses a context to the same page twice may block WebGL on it.
  */
 function firstThatLinks (gl: AnyGl, builds: readonly string[], envUrl?: string): ShaderQuad | null {
-  const key      = `wjh.gl.from.${builds.map(b => b.length).join('.')}`
+  const key                = `wjh.gl.from.${builds.map(b => b.length).join('.')}`
   const failures: string[] = []
   for (let i = recall(key); i < builds.length; i++) {
     const quad = createShaderQuad(gl, builds[i], { envUrl, tag: `build ${i + 1}/${builds.length}` })

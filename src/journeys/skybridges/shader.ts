@@ -93,3 +93,18 @@ const lastResort = (steps: number, octaves: number) => `
 ${COMMON}`
 
 export const skybridgesLastResort = [ lastResort(28, 1), lastResort(12, 1) ] as const
+
+// For ?diag=1 only: the smallest build with whole stages stubbed out, to find
+// which one a driver rejects when it will link none of the above and says
+// nothing about why. "flat" is a trivial shader, to show the probe works.
+const probe = (stubs: string) => `${lastResort(12, 1)}`.replace('#define NO_BLAST', `#define NO_BLAST${stubs}`)
+
+export const skybridgesProbe = [
+  [ 'flat', 'precision mediump float;\nvoid main () { gl_FragColor = vec4(1.0); }' ],
+  [ 'base', probe('') ],
+  [ '-sky', probe('\n#define STUB_SKY') ],
+  [ '-shade', probe('\n#define STUB_SHADE') ],
+  [ '-map', probe('\n#define STUB_MAP') ],
+  [ '-shade-sky', probe('\n#define STUB_SHADE\n#define STUB_SKY') ],
+  [ '-all', probe('\n#define STUB_SHADE\n#define STUB_SKY\n#define STUB_MAP') ],
+] as const
