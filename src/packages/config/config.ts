@@ -492,14 +492,17 @@ export const CONFIG = {
       height: 150,
 
       /** A frame every this many seconds of journey time, thinned to at most maxFrames. */
-      everySeconds: 3,
-      maxFrames:    48,
+      everySeconds: 2,
+      maxFrames:    240,
+
+      /** The film runs through the signal's whole ramp, then this much longer on the dead channel. */
+      holdSeconds: 3,
 
       /** How long each frame is shown, and how many colours the film's palette has. */
-      frameMs: 140,
+      frameMs: 100,
       colours: 128,
 
-      /** A journey whose signal has not started to go by here is filmed to here. */
+      /** A journey whose signal has not started to go by here is taken to start losing it here. */
       maxSeconds: 1500,
     },
   },

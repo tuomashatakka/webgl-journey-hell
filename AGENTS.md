@@ -35,7 +35,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 A scheduled enhancement run ends by filming the site as it now is:
 
-1. `node tools/shoot-gifs.mjs` once the work is finished and the gates are green. It needs no dev server and writes one GIF per journey, from the first frame to the signal loss, to `assets/archive/<yyyymmdd><noon|eve>/` (`docs/tooling.md`).
+1. `node tools/shoot-gifs.mjs` once the work is finished and the gates are green. It needs no dev server and writes one GIF per journey, from the first frame until the signal is lost, to `assets/archive/<yyyymmdd><noon|eve>/` (`docs/tooling.md`).
 2. Commit that folder with the run: the films go in with the work they are a record of. Do not edit or prune earlier folders.
 
 ## Commits

@@ -1,4 +1,4 @@
-// Film every journey up to the moment its signal starts to go, and archive the
+// Film every journey until its signal is gone, and archive the
 // films: assets/archive/<yyyymmdd><noon|eve>/<slug>.gif.
 //
 //   node tools/shoot-gifs.mjs                      # every journey
@@ -7,10 +7,12 @@
 //
 // No dev server: the bare harness (tools/harness) holds one page per journey
 // and is asked for each instant in turn, so a film costs one bundle and one
-// shader compile, not one per frame. The harness also says where the film
-// ends: the instant the journey's signalAge runs past the grace it is given,
-// which is where the picture starts to fail. Each frame is the frame `?t=`
-// would show, so two films of the same code are the same film.
+// shader compile, not one per frame. The harness also says where the picture
+// starts to fail (the instant the journey's signalAge runs past the grace it
+// is given); the film runs on from there through the whole ramp and a held
+// moment of the dead channel, so no film stops short of the loss. Each frame
+// is the frame `?t=` would show, so two films of the same code are the same
+// film.
 //
 // The folder is named for the run: the date, and `noon` or `eve` by the hour on
 // the machine's own clock (CONFIG.tools.gifs.eveFromHour). A second run in the
@@ -112,7 +114,8 @@ async function film (slug) {
     await page.goto(`${harness.url}/journeys/${slug}?t=0&w=${gifs.width}&h=${gifs.height}&hud=0&debug=0`, { waitUntil: 'commit' })
     await page.waitForSelector('html[data-journey-ready="1"]', { state: 'attached', timeout: 300_000 })
 
-    const end   = await page.evaluate(limit => window.__harnessOnset(limit), gifs.maxSeconds)
+    const onset = await page.evaluate(limit => window.__harnessOnset(limit), gifs.maxSeconds)
+    const end   = onset + CONFIG.signal.rampSeconds + gifs.holdSeconds
     const count = Math.min(gifs.maxFrames, Math.max(2, Math.floor(end / gifs.everySeconds) + 1))
 
     const frames = []

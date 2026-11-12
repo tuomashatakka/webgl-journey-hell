@@ -143,20 +143,23 @@ node tools/shoot-gifs.mjs switchback foundry   # selected journeys only
 node tools/shoot-gifs.mjs --stamp=20261112eve  # name the folder yourself
 ```
 
-A film of every journey from its first frame to the instant its signal starts
-to go, written to `assets/archive/<yyyymmdd><noon|eve>/<slug>.gif`: a record of
+A film of every journey from its first frame until its signal is gone,
+written to `assets/archive/<yyyymmdd><noon|eve>/<slug>.gif`: a record of
 what the site looked like on that run. The folder is named for the date and for
 the half of the day on the machine's own clock (`eve` from
 `CONFIG.tools.gifs.eveFromHour`); a second run in the same half overwrites the
 first. Size, frame count and palette are in `CONFIG.tools.gifs`: 240x150, a
-frame every 3 s of journey time thinned to at most 48, 128 colours, which lands
-each film between a few hundred kilobytes and a megabyte.
+frame every 2 s of journey time thinned to at most 240, 128 colours, which
+lands each film between one and five megabytes.
 
 It runs on the bare harness. One page per journey is held and asked for each
 instant in turn (`window.__harnessFrame`), so a film costs one bundle and one
-shader compile rather than one per frame, and the harness says where it ends
-(`window.__harnessOnset`: the first step at which `signalAge` runs past
-`CONFIG.signal.graceSeconds`). Every frame is replayed from zero like any `?t=`,
+shader compile rather than one per frame. The harness says where the picture
+starts to fail (`window.__harnessOnset`: the first step at which `signalAge`
+runs past `CONFIG.signal.graceSeconds`), and the film runs on from there for
+`CONFIG.signal.rampSeconds`, until the loss is complete, and for
+`CONFIG.tools.gifs.holdSeconds` of the dead channel after it: no film ends
+before the signal has. Every frame is replayed from zero like any `?t=`,
 so two films of the same code are the same file. The encoder is `tools/gif.mjs`:
 one median-cut palette for the whole film, no dithering, LZW.
 
