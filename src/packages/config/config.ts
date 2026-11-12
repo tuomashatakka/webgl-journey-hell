@@ -477,5 +477,30 @@ export const CONFIG = {
       sectionTimeoutMs: 240_000,
       settleMs:         4000,
     },
+
+    /** tools/shoot-gifs.mjs: a film of every journey, archived once a run. */
+    gifs: {
+
+      /** One folder a run under here, named <yyyymmdd><noon|eve>. */
+      dir: 'assets/archive',
+
+      /** The hour, on the machine's own clock, from which a run is the evening's. */
+      eveFromHour: 15,
+
+      /** Small: a film records what a journey looked like that day, and it is committed. */
+      width:  240,
+      height: 150,
+
+      /** A frame every this many seconds of journey time, thinned to at most maxFrames. */
+      everySeconds: 3,
+      maxFrames:    48,
+
+      /** How long each frame is shown, and how many colours the film's palette has. */
+      frameMs: 140,
+      colours: 128,
+
+      /** A journey whose signal has not started to go by here is filmed to here. */
+      maxSeconds: 1500,
+    },
   },
 } as const

@@ -31,6 +31,13 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 3. For anything that touches a shader, a simulation or the engine: capture `node tools/journey.mjs probe <slug> --bare --from=0 --to=120 --step=8 --json` before and after; a refactor must be byte-identical. Run `node tools/journey.mjs glsl <slug>` after shader edits.
 4. For anything visible: load the page and look (`docs/tooling.md`).
 
+## Scheduled runs
+
+A scheduled enhancement run ends by filming the site as it now is:
+
+1. `node tools/shoot-gifs.mjs` once the work is finished and the gates are green. It needs no dev server and writes one GIF per journey, from the first frame to the signal loss, to `assets/archive/<yyyymmdd><noon|eve>/` (`docs/tooling.md`).
+2. Commit that folder with the run: the films go in with the work they are a record of. Do not edit or prune earlier folders.
+
 ## Commits
 
 Small, per phase, with plain messages. No co-author trailers. Commit early: an external sync can modify the working tree (`gotchas.md`).

@@ -102,6 +102,13 @@ tools/harness/serve.mjs` runs it standalone for a browser.
 * **fps** holds an instant and counts frames. The journey caps itself at 60, so
   pass `--w/--h` above the default resolution to measure what the shader
   actually costs; a locked 60 tells you it is affordable but not by how much.
+  Under `--bare` it asks the harness for `?loop=1`, which draws the held frame
+  again on every tick: without that the harness draws once and the count is the
+  display's rate, whatever the shader costs. On a container's software GL the
+  number is seconds per frame and drifts with the host, so compare two builds
+  back to back, and prefer a count to a clock: a `gEvals += 1.0` in the map,
+  written to the frame instead of the colour and read with `probe`, is the same
+  on every run.
 
 The honest way to use these is against a baseline. Check out the last known-good
 commit over the journey's own files, probe, restore, probe again, and compare —
@@ -127,6 +134,34 @@ node tools/shoot-ui.mjs                # assets/screenshots/app-*.png, the READM
 ```
 
 Both launch a fresh browser per shot and find it through `tools/chromium.mjs`, which prefers a full Playwright Chromium (`Google Chrome for Testing.app`) over the headless shell. The headless shell has no GPU process: a live journey in it never paints and the browser exits after ~30 s with code 0, so a missing full build looks like a silent hang, not an error. Install it with `bunx playwright install chromium`; `JOURNEY_CHROMIUM` overrides the lookup. Posters are shot with the CRT pass off (`CONFIG.tools.posters.settings`), seeded under the current settings key.
+
+## The archive
+
+```bash
+node tools/shoot-gifs.mjs                      # every journey, no dev server
+node tools/shoot-gifs.mjs switchback foundry   # selected journeys only
+node tools/shoot-gifs.mjs --stamp=20261112eve  # name the folder yourself
+```
+
+A film of every journey from its first frame to the instant its signal starts
+to go, written to `assets/archive/<yyyymmdd><noon|eve>/<slug>.gif`: a record of
+what the site looked like on that run. The folder is named for the date and for
+the half of the day on the machine's own clock (`eve` from
+`CONFIG.tools.gifs.eveFromHour`); a second run in the same half overwrites the
+first. Size, frame count and palette are in `CONFIG.tools.gifs`: 240x150, a
+frame every 3 s of journey time thinned to at most 48, 128 colours, which lands
+each film between a few hundred kilobytes and a megabyte.
+
+It runs on the bare harness. One page per journey is held and asked for each
+instant in turn (`window.__harnessFrame`), so a film costs one bundle and one
+shader compile rather than one per frame, and the harness says where it ends
+(`window.__harnessOnset`: the first step at which `signalAge` runs past
+`CONFIG.signal.graceSeconds`). Every frame is replayed from zero like any `?t=`,
+so two films of the same code are the same file. The encoder is `tools/gif.mjs`:
+one median-cut palette for the whole film, no dithering, LZW.
+
+The films are not imported by anything, so they are in the repository and not
+in the site. They are committed with each scheduled run (`AGENTS.md`).
 
 ## Verifying the geometry primitives
 
