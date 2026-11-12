@@ -99,6 +99,8 @@ export const foundationGlsl = `
     float grime;
     float sky;
     float lit;
+    float z0;      // the depths it starts and ends at, for what is authored
+    float z1;      // from its front or has to know where the next room's is
   };
 
   ${HASH21}

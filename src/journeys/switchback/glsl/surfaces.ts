@@ -54,20 +54,6 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
     else if (type < T_CONCOURSE - 0.5) {
       c = vec3(0.030, 0.028, 0.040);   // the void's far bound, never actually reached
     }
-    else if (type < T_CHAPEL - 0.5) {
-      // THE CARPET CONCOURSE. The floor is the point: a mall carpet, a repeating
-      // geometric print in colours nobody has chosen since.
-      float a = sin(uvz.x * 5.1) * sin(uvz.y * 5.1);
-      float b = sin((uvz.x + uvz.y) * 3.3 + 1.2);
-      float pat = smoothstep(-0.1, 0.35, a * 0.6 + b * 0.4);
-      vec3 carpet = mix(vec3(0.20, 0.12, 0.30), vec3(0.62, 0.18, 0.32), pat);
-      carpet = mix(carpet, vec3(0.10, 0.42, 0.44), smoothstep(0.72, 0.95, pat));
-
-      vec3 wall = mix(vec3(0.72, 0.64, 0.62), vec3(0.36, 0.30, 0.33), tiling(uvz, 1.2, t));
-      c = mix(wall, carpet, isFloor);
-      c = mix(c, vec3(0.86, 0.82, 0.80), isCeil * 0.7);
-      c *= 1.0 - grime * 0.30;
-    }
     else if (type < T_OVERLOOK - 0.5) {
       // THE CHAPEL OF FOLDS. Dressed stone, laid in courses with the joints
       // broken: a block is a thing with its own tone, quarried on a different
@@ -218,7 +204,11 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
     emit = vec3(0.0);
 
     if (mat < M_RAIL - 0.5) {
-      vec3 c = shellAlbedo(q, n, r.type, r.grime, t);
+      // THE CARPET CONCOURSE has a shell of its own, glass and lamps included:
+      // mallShell, in the concourse pass. Every other room is shellAlbedo.
+      vec3 c;
+      if (abs(r.type - T_CONCOURSE) < 0.5) c = mallShell(q, n, r, t, rough, emit);
+      else                                 c = shellAlbedo(q, n, r.type, r.grime, t);
 
       // The fissures are lit from *behind*, so they are emission and not a dark
       // line in the albedo. A crack you can see through is the whole point; one
@@ -314,10 +304,13 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
         return mix(vec3(0.36, 0.37, 0.40), vec3(0.40, 0.22, 0.13), rust * (0.4 + r.grime * 0.6));
       }
       if (r.type < T_CHAPEL - 0.5) {
-        // The clerestory. Where the sunset gets in, so it is a light, not a wall.
-        float mull = smoothstep(r.ceilH - 0.80, r.ceilH - 0.45, q.y);
-        emit = vec3(1.00, 0.66, 0.58) * mull * 4.2;
-        return mix(vec3(0.58, 0.54, 0.56), vec3(0.20, 0.20, 0.22), mull);
+        // The wall across the far end of the concourse is the chapel's gable,
+        // standing half in this room: it is the chapel's stone on both faces.
+        if (q.z > r.z1 - 0.47) {
+          rough = 0.78;
+          return shellAlbedo(q, n, T_CHAPEL, r.grime, t);
+        }
+        return mallProp(q, n, r, t, rough, emit);
       }
       if (r.type < T_OVERLOOK - 0.5) {
         // The votive: a brass bowl with a flame in it, on a chain.

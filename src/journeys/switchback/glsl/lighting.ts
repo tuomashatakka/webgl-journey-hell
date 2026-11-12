@@ -2,6 +2,7 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
 
   vec3 directLight(vec3 q, vec3 n, vec3 vdir, float rough, float ao) {
     Room r = roomAt(q.z);
+    bool mall = abs(r.type - T_CONCOURSE) < 0.5;
 
     vec3 tint = lampTint(r.type);
     vec3 col = vec3(0.0);
@@ -17,7 +18,12 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
       float flick = 1.0 - uAtm.x * 0.55 *
         step(0.90, hash21(vec2(floor(iTime * 12.0), floor(phaseAt(q.z) / max(r.lamp, 1.0)))));
 
-      float sh = shadowTo(q, l, min(ld, 16.0));
+      // The concourse's lamps are ten metres up in the crown, the sun does the
+      // modelling there, and the one thing they are ever really behind is a
+      // gallery. So no ray is marched for them (a reach of nothing ends the
+      // loop before its first step) and the gallery's shade is closed-form.
+      float sh = shadowTo(q, l, mall ? -1.0 : min(ld, 16.0));
+      if (mall) sh = mallLampShade(q, r.lampY);
       float k = atten * r.lit * flick * sh;
 
       col += tint * max(dot(n, l), 0.0) * k * 3.4;
@@ -40,16 +46,41 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
     }
 
     if (r.sky > 0.01) {
+      vec3  sl     = uSun.xyz;
+      float reach  = 30.0;
+      float gain   = r.sky;
+      vec3  sunCol = mix(vec3(1.00, 0.72, 0.58), vec3(0.78, 0.46, 0.52), uAtm.y * 0.6);
+
+      if (mall) {
+        // The concourse has a roof on, so its sun is the clerestory's: the pool
+        // on the carpet is the glazing carried down the light, mullion for
+        // mullion. The shadow ray stops two metres short of the glass, which
+        // keeps the vault it is about to meet out of its own penumbra.
+        // Outside the beam its reach is nothing, so it ends before its first
+        // step even where a compiler runs both sides of every branch.
+        float back;
+        gain   = mallSun(q, 0.14, back) * 1.25;
+        sl     = MALL_SUN;
+        reach  = gain > 0.003 ? min(back - 2.0, 12.0) : -1.0;
+        sunCol = mallSunTint();
+      }
+
       // The sun's shadow is the one term here worth switching off. uHeavy is a
       // uniform, so the branch is coherent across the whole draw and the fourteen
       // map evaluations behind it are genuinely skipped rather than masked.
-      float sh = uHeavy > 0.5 ? mix(1.0, shadowTo(q, uSun.xyz, 30.0), 0.85) : 1.0;
-      vec3 sunCol = mix(vec3(1.00, 0.72, 0.58), vec3(0.78, 0.46, 0.52), uAtm.y * 0.6);
-      col += sunCol * max(dot(n, uSun.xyz), 0.0) * r.sky * sh * 3.4;
+      float sh = uHeavy > 0.5 ? mix(1.0, shadowTo(q, sl, reach), 0.85) : 1.0;
+      col += sunCol * max(dot(n, sl), 0.0) * gain * sh * 3.4;
     }
 
     // Ambient: the room's own fog bounced back, plus whatever the weather gets in.
     vec3 amb = roomFog(r.type, r.grime) * 3.0 + skyAmbient(r.type, uAtm.y) * r.sky * 0.65;
+
+    if (mall) {
+      // ...except in the concourse, which has two clerestories, two arcades of
+      // downlights and a few shops with the lights still on, and says so itself.
+      vec3 fill = mallFill(q, n, r, amb);
+      col += fill * ao;
+    }
 
     if (r.type > T_CONCOURSE + 0.5 && r.type < T_OVERLOOK - 0.5) {
       // The chapel's daylight is the lancets' and nothing else's: the same field
@@ -106,8 +137,8 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
   }
 
   /**
-   * Shafts: the vent holes over the drift and the clerestory over the concourse.
-   * The chapel's are naveShafts, below.
+   * Shafts: the vent holes over the drift. The chapel's are naveShafts and the
+   * concourse's are mallShafts, both below.
    *
    * Built from lattAbs rather than latt, because a term accumulated along a ray
    * has to be continuous in space or it draws its own quantisation — adjacent
@@ -137,26 +168,32 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
   }
 
   /**
-   * The chapel's god-rays: the lancets' beams, seen side-on through the dust.
+   * The god-rays of the two rooms with windows in them: the chapel's lancets
+   * and the concourse's clerestory, seen side-on through the dust.
    *
    * Their own loop rather than a branch of 'shafts', because a beam a metre and
    * a half across needs samples closer together than the five metres the vents
-   * and the clerestory get by on. The step grows with range, so the bays near
-   * the cart are resolved and the far ones are averaged, which is also what the
-   * fog does to them. Nothing here touches the map: the beam is closed-form.
+   * get by on. The step grows with range, so the bays near the cart are
+   * resolved and the far ones are averaged, which is also what the fog does to
+   * them. Nothing here touches the map: both beams are closed-form.
+   *
+   * One loop for both rooms, because they are neighbours: from the concourse
+   * the chapel is always in the window, and a loop each was every sample's
+   * crossing into track space paid for twice.
    */
   vec3 naveShafts(vec3 rd, float tMax) {
-    // Not in the window at all: three compares, and every other room's frame is
-    // the frame it was.
+    // Neither is in the window at all: a handful of compares, and every other
+    // room's frame is the frame it was.
     bool any = false;
     for (int i = 0; i < 3; i++)
-      if (abs(uSecA[i].z - T_CHAPEL) < 0.5) any = true;
+      if (abs(uSecA[i].z - T_CHAPEL) < 0.5 || abs(uSecA[i].z - T_CONCOURSE) < 0.5) any = true;
     if (!any) return vec3(0.0);
 
     // Interleaved gradient noise for the jitter, not the white hash the other
     // volumetrics use: these beams are bright and hard-edged, and white noise on
     // them is a stipple where this is a weave too fine to see.
-    float acc = 0.0;
+    float acc  = 0.0;
+    float hall = 0.0;
     float j = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     float t = 0.0;
 
@@ -168,6 +205,18 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
 
       vec3 q = toTrack(rd * ts);
       Room r = roomAt(q.z);
+
+      if (abs(r.type - T_CONCOURSE) < 0.5) {
+        // The concourse's beam is a sheet five metres through rather than a
+        // row of pencils, so its edge is softer still and its transoms and
+        // mullions are below what a step can resolve: the band and the ribs'
+        // shadows are all that is in it, and its dust is one slow ripple.
+        float back;
+        float beam = mallSun(q, 0.30 + 0.24 * dt, back);
+        hall += beam * (0.78 + 0.22 * sin(q.y * 2.3 + phaseAt(q.z) * 0.9 - iTime * 0.2))
+              * exp(-back * 0.05 - ts * 0.020) * dt;
+        continue;
+      }
       if (abs(r.type - T_CHAPEL) > 0.5) continue;
 
       // Brightest where it comes in, thinning as the dust takes it. Only the
@@ -183,7 +232,10 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
 
       acc += beam * open * dust * exp(-back * 0.075) * exp(-ts * 0.022) * dt;
     }
-    return naveSunTint() * acc * 0.17;
+    // The concourse's is brightest looking up the light, which is where the
+    // cart is looking.
+    float into = max(dot(toTrackDir(rd, 20.0), MALL_SUN), 0.0);
+    return naveSunTint() * acc * 0.17 + mallSunTint() * hall * (0.045 + 0.11 * into * into);
   }
 
   vec3 shafts(vec3 rd, float tMax) {
@@ -215,11 +267,6 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
         float h = clamp((q.y + r.floorD) / (r.ceilH + r.floorD), 0.0, 1.0);
         m = smoothstep(2.1, 0.0, lattAbs(zp, 24.0) + abs(q.x - 0.6) * 0.8) * mix(0.12, 1.0, h);
         tone = vec3(0.88, 0.90, 0.94);
-      }
-      else if (r.type < T_CHAPEL - 0.5) {
-        // Between the mullions, raked across the concourse at sunset.
-        m = smoothstep(0.42, 0.86, lattAbs(q.x, 1.9)) * smoothstep(-0.5, r.ceilH, q.y) * 0.9;
-        tone = vec3(1.00, 0.68, 0.58);
       }
       else continue;
 

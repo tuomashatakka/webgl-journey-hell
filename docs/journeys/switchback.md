@@ -13,7 +13,7 @@ along with the pointwise and windowed curvature bounds the bend fit can carry.
 | I · the boarding platform | 72 | fluorescent boarding station, wet tile, the brake and the first chain |
 | II · the chalk drift | 78 | hand-cut adit, timber sets, dust, the crest |
 | III · the scaffold void | 96 | steel lattice suspended in nothing, the big drop |
-| IV · the carpet concourse | 84 | mall interior at sunset, clerestory light |
+| IV · the carpet concourse | 84 | mall interior at sunset, clerestory light: a galleria with a gallery over shopfront arcades down both sides, a glazed band round each haunch of the vault, and the carpet |
 | V · the chapel of folds | 72 | folded stone with a nave cut through it, god-rays from lancets in the east wall, the second chain |
 | VI · the overlook | 90 | open sky over a cloud sea, drifting ash — and the seam |
 
@@ -117,6 +117,85 @@ shaft of light cannot fail to have a window at the end of it.
   and skips the fold. that is most of every ray that looks down the track, and
   it is why the room costs no more than the bare fold did.
 
+## the concourse
+
+the room the route table carves is a mall's section already: a barrel vault over
+the middle (radius 7.875 m sprung from 2.625 m, which is what `roomProfile`
+makes of the table's 11 m bore and 10.5 m ceiling; `MALL_R`, `MALL_ARCH_Y`) and
+a low aisle down either side. what it lacked was a building, and the building is
+authored into that section rather than changing it. as in the chapel, the
+glazing is one set of numbers read by everything that needs it.
+
+- **a bay is 5 m** (`MALL_BAY`, divides `PHASE_WRAP`; the mullions stand on a
+  quarter of it). a rib crosses the vault on every bay line, 0.30 m deep, with a
+  column under it and a shopfront between two of them.
+- **the gallery**: a slab off both springing lines, edge 6.3 m off the track
+  (`MALL_GAL_X`), floor at 3.375 m (`MALL_GAL_Y`), a 1.08 m glass balustrade on
+  the edge with its rail drawn by the shading, columns of 0.25 m radius under
+  it. the aisles under it are the arcades.
+- **the clerestory**: a band of glazing round each haunch between 24 and 60
+  degrees (`MALL_WIN_Y0` 3.203 and `MALL_WIN_Y1` 6.820 above the vault's
+  centre), three lights high (transoms at 36 and 48 degrees), a mullion every
+  1.25 m. the east panes show the sky the sun is leaving, horizon at the sill and
+  zenith at the head; the west panes are the sun in dust, hotter the nearer the
+  line of sight runs to it.
+- `MALL_SUN` (0.773, 0.503, 0.387) is a constant in the track's frame, not
+  `uSun`, for the chapel's reason: ahead, off to the right, thirty degrees up,
+  so the light comes down across the hall toward the cart.
+- **`mallSun`** carries a point back along `MALL_SUN` to the vault (a circle in
+  section, so one square root) and tests the glazing there. one field is the
+  pool on the far carpet and up the far arcade (`directLight`, 1.25 x the sun
+  term, shadow ray only inside the beam and stopped 2 m short of the glass) and
+  the beam in the air. under the far gallery only what clears the slab's edge
+  gets in.
+- **the beam** is accumulated in `naveShafts`, the chapel's loop: the two rooms
+  are neighbours, the chapel is always in the window from the concourse, and a
+  loop each paid for every sample's crossing into track space twice. the
+  concourse's samples read the band and the ribs' shadows only (its transoms
+  and mullions are below a step) and are brightest looking up the light.
+- **the arcades**: a shopfront to a bay on the back wall, by a roll per bay: 40 %
+  a roller shutter with a notice on it, 28 % dark glass with one taped inside,
+  32 % lit (`mallShopLit`: fewer by the lap, one in four of those flickering) in
+  tungsten, mint or pink. a sign box on every fascia in lettering nobody can
+  read (`mallGlyphs`). lay-in ceiling tiles with a downlight every 2.5 m, 8.7 m
+  off the track; terrazzo underfoot with a brass strip where the carpet stops.
+- **the upper shops** are drawn on the vault between the gallery and the sill
+  of the glazing, under a teal stripe at 5.42 m and a crimson one at 5.60 m.
+- **the crown** is plaster panels with the room's lamps let into it as
+  luminous panels, at the pitch and height the route table gives.
+- **the carpet** (`mallCarpet`): a 1.25 m repeat on a plum ground, a crimson
+  lozenge with a teal eye on the even squares, a mustard squiggle on the odd
+  ones, a teal pip on every corner; a dark border with a mustard pinstripe
+  beside the ballast and along the foot of the columns. the print goes to its
+  mean between 12 and 44 m; the borders run with the view and carry on.
+- **the hall floor**: 4.2 m off the track on both sides, a palm in a tub on the
+  tens (two rings of blades, seven arching and six hanging) and a bench on the
+  fives. a pair of stopped escalators every 40 m, 5.7 m off the track at thirty
+  degrees, each between two palms, left out where an end of the room would cut
+  one in half.
+- **the front**: a glazed lunette across the vault at the room's own front,
+  standing on the gallery, with a fan of bars every 15 degrees over a transom
+  that carries the name of the place. from the void it glows with the hall; the
+  way in is everything under it. the far end is the chapel's gable, which stands
+  half in this room and is the chapel's stone on both faces.
+- **the light**: the sun through the clerestory, the crown lamps, and an
+  ambient that is the two clerestories (lilac from the east, the sun's colour
+  from the west, by which way a surface faces) over the room's haze, falling by
+  80 % under the galleries, where the downlights and the lit shop windows take
+  over (each windowed to nothing at the edge of its own cell). the crown lamps
+  march no shadow ray: the one thing they are ever behind is a gallery, and that
+  shade is closed-form (`mallLampShade`).
+- **what it costs**: the props are three groups behind bounds (the walls, the
+  hall floor, the escalators), so a ray down the middle of the hall pays for one
+  square root; the shading takes one four-octave field and one grain per hit and
+  hands them down. counted with a `gEvals += 1.0` in `mapTrack`, a pixel in the
+  room takes about 54 scene evaluations against 63 for the bare vault it
+  replaced: the march is longer (41 steps against 35) and the two shadow rays it
+  no longer marches more than pay for it. every frame with no concourse in it is
+  byte-identical. the shader itself is larger, which a GPU that branches does
+  not pay for outside the room and a rasteriser that runs both sides of every
+  branch pays for everywhere (`gotchas.md`); it has not been timed on a phone.
+
 ## the fissures
 
 `uFall.w` is one number, read twice — once by the surface, where the field's zero
@@ -179,6 +258,8 @@ bun test src/journeys/switchback/kinematics.test.mjs
 bun tools/journey.mjs probe switchback --from=0 --to=280 --step=20
 bun tools/journey.mjs scan switchback --from=200 --to=210 --step=0.25
 bun tools/journey.mjs hud switchback --from=0 --to=240 --step=60
+node tools/journey.mjs contact switchback --bare --from=40 --to=49.5 --step=0.5 --cols=5   # the concourse
+node tools/journey.mjs contact switchback --bare --at=98,126.4,141.3 --cols=3            # ...on laps 2 to 4
 ```
 
 acceptance gates:

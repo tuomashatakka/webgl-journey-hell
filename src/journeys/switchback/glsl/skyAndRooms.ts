@@ -11,7 +11,7 @@ export const skyAndRoomsGlsl = `
     if (z < uSecA[1].x)      { A = uSecA[0]; B = uSecB[0]; C = uSecC[0]; }
     else if (z < uSecA[2].x) { A = uSecA[1]; B = uSecB[1]; C = uSecC[1]; }
     else                     { A = uSecA[2]; B = uSecB[2]; C = uSecC[2]; }
-    return Room(A.z, A.w, B.x, B.y, B.z, C.w, B.w, C.x, C.z);
+    return Room(A.z, A.w, B.x, B.y, B.z, C.w, B.w, C.x, C.z, A.x, A.y);
   }
 
   /** The nearest lamp of the room a point is in, in track space. */
