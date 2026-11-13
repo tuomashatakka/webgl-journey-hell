@@ -33,14 +33,14 @@ speed is per stage and integrated, so z is a distance and not `time * SPEED`.
 | --- | ---: | ---: | ---: | --- | --- |
 | 1 · the nursery | 90 | 1.7 | 7.5 | rows of pale saplings under a low sagging ceiling, caps on a third of them | cap clusters on the floor, foxfire green |
 | 2 · spore cathedral | 100 | 1.8 | 5.5 | stems as columns, caps as vaulting, the spores thickest | pods on long cords, green-gold |
-| 3 · marrow grove | 90 | 1.65 | 7 | knuckled bone-white trunks on dark loam, fallen bones | cap clusters, cold cyan |
+| 3 · marrow grove | 90 | 1.65 | 7 | knuckled bone-white trunks on dark loam, fallen bones: long bones stood on end, some snapped and showing marrow, rib cages in the loam | cap clusters, cold cyan |
 | 4 · the root labyrinth | 100 | 1.15 | 4 | a low passage dug on the walked line, braided shut: braids along the shoulders and crown, roots across the vault, rootlets from the ceiling; lit from the eye | pods hung from the arch, green |
 | 5 · fruiting body | 90 | 1.4 | 3.2 | a breathing tube of wet muscle, sphincter rings, polyps | nodules on the wall, pale cyan |
 | 6 · transition | 60 | 1.6 | 6 | the nursery dying, the floor opening into the shaft | cap clusters, guttering |
 | the bloom | 21.7 | 1.2 | 5 | one enormous cap overhead, falling into its gilled funnel and throat | pods under the cap, amber |
 | host | 21.7 | 1.75 | 4 | bodies grown into the wall of a shaft | nodules on the wall, green |
 | the harvest | 21.7 | 1.6 | 4.5 | fruiting bodies hung on cords in a torn shaft | pods, yellow-green |
-| mycelial fall | 21.7 | 0.9 | 12 | no floor and no walls: three lattices of filament | wisps, blue |
+| mycelial fall | 21.7 | 0.9 | 12 | no floor and no walls: three lattices of filament, bent, fused where they meet, carrying light down themselves | wisps, blue |
 | seed vault | 21.7 | 1.5 | 5 | chambered pods, each with something curled inside | pods, violet |
 | compost | 21.7 | 1.3 | 2.5 | everything softened back into sludge; stalls on the fourth loop | will-o'-the-wisps, wavering |
 
@@ -109,6 +109,31 @@ three ramps carry the arc, all continuous in distance walked, none table-driven.
   shading while the stage is on screen (`stageOn(5.)`): veins under the flesh,
   the key at 55 %, the lanterns' specular on the wet wall (`lanternGloss`),
   0.018 more fog so the bore closes into the dark where the march gives out.
+- **the marrow grove** is a stack of bones per 4.5 unit cell. a bone is 2.3 to
+  3.3 long; the shaft (radius 0.17 to 0.24) swells by 0.09 into a pair of
+  condyles at each joint, with the joint line cut 0.035 deep between them. a
+  trunk is jittered off the grid (0.8 across, 1.3 along), leans its own way and
+  is moved to at least 1.75 from the walked line, so the aisle never carves one
+  into a stump hanging in the air. one in five is snapped off between 1.1 and
+  3.2 up, on a slant, and its end is marrow (`gMat` 1.3). the litter is a long
+  bone with two heads on 68 % of cells, turned whichever way it fell, and a
+  cage of five ribs on a spine on the rest. shading while the stage is on
+  screen (`stageOn(3.)`): grain with the shaft, pores, cracks, the loam's stain
+  up the first 1.6 of every trunk, bone meal in the loam.
+- **the mycelial fall** is three families of hyphae (`sdHypha`) on the lattices
+  it always had (2.6 square down z, 3.1 square down y turned 0.7, 2.2 by 4.4
+  down x turned -0.5). each lattice is bent before it is repeated (0.42 units
+  on a slow wave, 0.10 on a fast one), 30 % of it never grew, a strand's gauge
+  is 0.45 to 1.3 of its family's and 14 % are cords at 2.4, and the families
+  fuse (smin 0.12) where they meet. a packet of light runs down every strand,
+  one per 14.3 units at 3.5 to 8 units a second, swelling it by half; it is
+  `gGlow`, and shading emits it in the lanterns' colour. beads of exudate hang
+  on 45 % of a 2.6 by 2.2 by 4.4 lattice. a cell with no strand returns the
+  bound to its neighbours', so the march neither oversteps nor crawls. while
+  the stage is on screen (`stageOn(10.)`) the key is halved, the air is 0.034
+  thicker so the web thins into the dark, and a ray that hits nothing shows a
+  faint ridge-noise web beyond it. scene evaluations per pixel are what they
+  were (74 in the web, 57 in the grove against 61).
 - the key light is dimmed (`0.08 + 0.55 * ndl`) to leave the lanterns room to be
   what lights a stage. the root labyrinth adds a falloff light from the eye.
 
@@ -117,5 +142,7 @@ three ramps carry the arc, all continuous in distance walked, none table-driven.
 - `node tools/journey.mjs contact hollow-orchard --bare --from=4 --to=136 --step=6 --cols=5`: one loop.
 - `--from=150 --to=600 --step=30`: loops 2 to 4; the breach should be faint at
   150, plain by 300 and flooding by 480.
+- a change to one stage leaves the others alone: probe frames outside that
+  stage and its crossfades are byte-identical.
 - the first loop must be untouched by the breach: probe `--from=0 --to=120` is
   byte-identical with the breach code removed.

@@ -68,7 +68,13 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     return d;
   }
 
-  // 3 · MARROW GROVE — bone-white trunks, knuckled, twisted.
+  // 3 · MARROW GROVE — long bones stood on end, knuckled at every joint.
+  //
+  // A trunk is a stack of bones: a shaft that waists between joints and swells
+  // into a pair of condyles at each one, with the cartilage line cut between
+  // them. One per 4.5 unit cell, jittered off the grid and moved out of the
+  // walked line, so the aisle never carves one into a stump hanging in the air.
+  // One in five broke off low, on a slant, and shows its marrow (mat 1.3).
   float sdMarrowGrove(vec3 p) {
     // Dark loam under the bone, not more bone: a white floor under white trunks
     // blew the whole grove out to one flat cream.
@@ -80,22 +86,65 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     q.x       = repS(q.x, 4.5);
     q.z       = repS(q.z, 4.5);
     float rnd = hash21(cell + 3.1);
+    float rn2 = hash21(cell + 17.7);
+    float rn3 = fract(rnd * 41.3 + rn2 * 7.9);
 
-    q.xz *= rot2(q.y * (0.06 + rnd * 0.09));        // slow twist up the trunk
-    float r     = 0.30 + 0.07 * sin(q.y * 3.0 + rnd * 6.0);  // knuckles
+    // Off the grid, then clear of the aisle: 1.75 from the walked line.
+    float ox  = (rn2 - 0.5) * 0.8;
+    float dx0 = cell.x * 4.5 - trackX(cell.y * 4.5);
+    float dx  = dx0 + ox;
+    if (abs(dx) < 1.75) ox = (dx0 < 0.0 ? -1.75 : 1.75) - dx0;
+    q.x -= ox;
+    q.z -= (rn3 - 0.5) * 1.3;
+    q.xz -= vec2(rn2 - 0.5, rn3 - 0.5) * 0.09 * p.y;   // each one leans its own way
+
+    q.xz *= rot2(q.y * (0.06 + rnd * 0.09) + rnd * 6.0);   // slow twist up the trunk
+
+    float seg   = mix(2.3, 3.3, rnd);                // one bone of the stack
+    float jy    = repS(q.y - rn2 * seg, seg);        // height off the nearest joint
+    float aj    = abs(jy);
+    float r     = mix(0.17, 0.24, rn2) + 0.09 * smoothstep(0.75, 0.15, aj);
     float trunk = length(q.xz) - r;
-    trunk       = max(trunk, p.y - mix(7.0, 12.0, rnd));
+    float knob  = length(vec3(abs(q.x) - 0.15, jy * 1.25, q.z)) - (0.21 + 0.06 * rn2);
+    trunk       = smin(trunk, knob, 0.14);
+    trunk      += 0.035 * smoothstep(0.10, 0.0, aj);  // the joint itself
+
+    float top   = mix(7.0, 12.0, rnd);
+    float snap  = 0.0;
+    if (rn3 > 0.8) {                                  // broken off low, on a slant
+      top   = mix(1.1, 3.2, rn2) + q.x * 0.9 + 0.05 * sin(q.z * 9.0 + q.x * 7.0);
+      snap  = 1.0;
+    }
+    float cut   = p.y - top;
+    snap       *= step(trunk, cut);
+    trunk       = max(trunk, cut);
     trunk       = max(trunk, -p.y - 0.2);
     trunk       = smin(trunk, d + 0.5, 0.9);        // flare into the floor
 
-    if (trunk < d) { d = trunk; gMat = 1.0; gWet = 0.02; gGlow = 0.0; }
+    if (trunk < d) { d = trunk; gMat = 1.0 + 0.3 * snap; gWet = 0.02 + 0.5 * snap; gGlow = 0.0; }
 
-    // Fallen litter.
+    // Fallen litter: a long bone with its two heads on most cells, lying
+    // whichever way it fell, and on some a cage of ribs standing out of the loam.
     vec3 l    = p;
-    l.x       = repS(l.x, 4.5) + 1.4;
+    l.x       = repS(l.x, 4.5);
     l.z       = repS(l.z + 2.2, 4.5);
-    float bone = sdCapsule(l, vec3(-0.9, 0.13, 0.0), vec3(0.9, 0.13, 0.25), 0.11);
-    if (bone < d) { d = bone; gMat = 1.0; gWet = 0.05; gGlow = 0.0; }
+    vec2 lc   = floor(vec2(p.x + 2.25, p.z + 4.45) / 4.5);
+    float lr  = hash21(lc + 29.3);
+    l.x      += 1.15;
+    l.xz     *= rot2(lr * 6.28);
+    if (lr < 0.68) {
+      float len  = mix(0.55, 0.95, fract(lr * 13.7));
+      vec3  e    = vec3(len, 0.0, 0.0);
+      float bone = sdCapsule(l, vec3(0.0, 0.10, 0.0) - e, vec3(0.0, 0.12, 0.0) + e, 0.065);
+      vec3  hd   = vec3(abs(l.x) - len, l.y - 0.12, abs(l.z) - 0.06);
+      bone       = smin(bone, length(hd) - 0.105, 0.07);
+      if (bone < d) { d = bone; gMat = 1.0; gWet = 0.05; gGlow = 0.0; }
+    } else {
+      float cx  = l.x - 0.34 * clamp(floor(l.x / 0.34 + 0.5), -2.0, 2.0);
+      float rib = length(vec2(length(l.zy - vec2(0.0, -0.1)) - 0.62 + 0.05 * abs(l.x), cx)) - 0.04;
+      rib     = smin(rib, sdCapsule(l, vec3(-0.85, 0.5, 0.0), vec3(0.85, 0.5, 0.0), 0.06), 0.05);
+      if (rib < d) { d = rib; gMat = 1.0; gWet = 0.05; gGlow = 0.0; }
+    }
     return d;
   }
 
@@ -392,29 +441,60 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
   }
 
   // 10 · MYCELIAL FALL — no floor, no walls: filament space.
-  float sdMycelialFall(vec3 p) {
-    float d = 1e4;
-    gMat = 4.0; gWet = 0.15; gGlow = 0.85;
+  //
+  // One family of hyphae: strands running down the axis the caller left out, on
+  // a lattice of pitch s across it. The lattice is bent before it is repeated,
+  // so no strand is straight and no two bend alike; 30 % of it never grew; each
+  // strand has its own gauge, a few are cords, and all of them swell where a
+  // packet of what the orchard feeds on is passing down them. A cell with no
+  // strand returns the bound to its neighbours' strands, not a large number,
+  // so the march neither oversteps nor crawls.
+  float sdHypha(vec2 uv, float along, vec2 s, float r0, float seed, out float pulse) {
+    uv += vec2(sin(along * 0.31 + uv.y * 0.7 + seed), cos(along * 0.27 + uv.x * 0.6 + seed * 1.7)) * 0.42
+        + vec2(cos(along * 0.93 + seed * 3.1), sin(along * 1.07 + uv.x * 1.3)) * 0.10;
+    vec2  id = floor(uv / s + 0.5);
+    vec2  q  = uv - id * s;
+    float h  = hash21(id + seed);
+    pulse    = 0.0;
+    if (h < 0.3) return min(s.x - abs(q.x), s.y - abs(q.y)) - r0 * 4.2;
+    float g  = fract(h * 7.13);
+    float ph = fract(along * 0.07 - iTime * (0.25 + 0.3 * g) + g * 5.0);
+    pulse    = smoothstep(0.10, 0.0, abs(ph - 0.5));
+    float r  = r0 * (g > 0.86 ? 2.4 : mix(0.45, 1.3, g))
+             * (1.0 + 0.22 * sin(along * 1.7 + h * 31.0) + 0.5 * pulse);
+    return length(q) - r;
+  }
 
-    // Three axis-aligned hyphal families, each on its own lattice.
-    vec3 a = p;
-    a.x = repS(a.x, 2.6); a.y = repS(a.y - 1.0, 2.6);
-    d = min(d, length(a.xy) - 0.045);
+  float sdMycelialFall(vec3 p) {
+    gMat = 4.0; gWet = 0.15;
+
+    // Three hyphal families, each on its own lattice and its own heading.
+    float pa, pb, pc;
+    float da = sdHypha(vec2(p.x, p.y - 1.0), p.z, vec2(2.6), 0.050, 1.3, pa);
 
     vec3 b = p;
     b.xz *= rot2(0.7);
-    b.x = repS(b.x, 3.1); b.z = repS(b.z, 3.1);
-    d = min(d, length(b.xz) - 0.038);
+    float db = sdHypha(b.xz, b.y, vec2(3.1), 0.042, 4.7, pb);
 
     vec3 c = p;
     c.xy *= rot2(-0.5);
-    c.y = repS(c.y, 2.2); c.z = repS(c.z, 4.4);
-    d = min(d, length(c.yz) - 0.05);
+    float dc = sdHypha(c.yz, c.x, vec2(2.2, 4.4), 0.055, 8.9, pc);
 
-    // Nodes where the families cross.
-    vec3 n = vec3(repS(p.x, 2.6), repS(p.y - 1.0, 2.2), repS(p.z, 4.4));
-    d = smin(d, length(n) - 0.16, 0.2);
-    return d;
+    // Where two meet they fuse rather than cross.
+    float d  = smin(da, smin(db, dc, 0.12), 0.12);
+    float pl = da < min(db, dc) ? pa : (db < dc ? pb : pc);
+    gGlow    = 0.22 + 0.78 * pl;
+
+    // Beads of exudate hung in the web, on under half the lattice.
+    vec3  ni = floor(vec3(p.x, p.y - 1.0, p.z) / vec3(2.6, 2.2, 4.4) + 0.5);
+    vec3  n  = vec3(p.x, p.y - 1.0, p.z) - ni * vec3(2.6, 2.2, 4.4);
+    float nh = hash31(ni + 3.7);
+    float nr = nh < 0.45 ? mix(0.07, 0.2, fract(nh * 9.7)) : -0.4;
+    n       -= (vec3(fract(nh * 5.3), fract(nh * 11.1), fract(nh * 17.9)) - 0.5) * 0.7;
+    n.y     *= 0.85;
+    float bead = length(n) - nr;
+    if (bead < d) { gMat = 3.0; gWet = 1.0; gGlow = 0.75; }
+    return smin(d, bead, 0.16);
   }
 
   // 11 · SEED VAULT — chambered spheres, each with something curled inside.
