@@ -155,7 +155,9 @@ export const foundationGlsl = `
   const float SALT_FLR  = 3.7;
   const float SALT_CEIL = 8.1;
 
-  void tileBreak(vec3 qs, vec4 B, float dec, out float proud, out float hole) {
+  // tiled is 0 in the raw concrete rooms: there is no glaze there to lift, so
+  // nothing stands proud, but the walls still spall into the same pockets.
+  void tileBreak(vec3 qs, vec4 B, float dec, float tiled, out float proud, out float hole) {
     proud = 0.0;
     hole  = 1e5;
 
@@ -173,6 +175,10 @@ export const foundationGlsl = `
     else                      { m1 = dz; m2 = min(dx, dy); uv = vec2(qs.x, qs.z); salt = SALT_CEIL; ts = TILE_F; }
     if (m2 - m1 < 0.30) return;
 
+    // A slab or a soffit does not shed square pieces of itself; only the walls
+    // of the raw rooms spall, where the cover over the ties is thinnest.
+    if (tiled < 0.5 && salt != SALT_WALL) return;
+
     vec2  g    = floor(uv / ts);
     float id   = hash21(g + salt);
 
@@ -186,7 +192,7 @@ export const foundationGlsl = `
     }
     else {
       float pr = hash21(g + salt + 41.3);
-      proud = step(pr, 0.02 + dec * 0.18) * PROUD * (0.35 + 0.65 * fract(pr * 53.0));
+      proud = tiled * step(pr, 0.02 + dec * 0.18) * PROUD * (0.35 + 0.65 * fract(pr * 53.0));
     }
   }
 

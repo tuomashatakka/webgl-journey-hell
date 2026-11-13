@@ -159,12 +159,22 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
       PUT(sdTorus(vec3(pp.x, qs.y - 1.35, latt(qs.z, 7.0) - 0.95).zyx, 0.26, 0.045), MAT_METAL)
     }
     else {
-      // RAW — bare concrete. The big room gets pillars, the tight ones a rail.
+      // RAW — bare concrete. The big room gets piers, the tight ones a rail.
       if (W > 6.0) {
-        // Offset half a bay so no pillar stands on the walked line: the aisle
+        // Offset half a bay so no pier stands on the walked line: the aisle
         // would carve a tunnel clean through it and leave a floating stump.
-        PUT(sdCapsuleY(vec3(lattN(qs.x - 2.75, 5.5, 2.0), qs.y - H * 0.5, latt(qs.z, 6.5)),
-                       H * 0.5, 0.62), MAT_CONC)
+        // Square, the way a cistern is shuttered, on a plinth, and spreading
+        // into the soffit in two stepped courses of capital: a capsule here
+        // was a pipe standing in a room, and a pier that does not spread at
+        // the top is not carrying anything.
+        vec3 pp = vec3(lattN(qs.x - 2.75, 5.5, 2.0), qs.y, latt(qs.z, 6.5));
+        vec2 pa = abs(pp.xz);
+        float bp = max(pa.x, pa.y) - 1.05;
+        if (bp > BOUND_SLACK) return min(d, bp);
+        PUT(sdRoundBox(vec3(pp.x, pp.y - H * 0.5, pp.z), vec3(0.46, H * 0.5, 0.46), 0.04), MAT_CONC)
+        PUT(sdRoundBox(vec3(pp.x, pp.y - 0.20, pp.z), vec3(0.58, 0.20, 0.58), 0.03), MAT_CONC)
+        PUT(sdRoundBox(vec3(pp.x, pp.y - (H - 0.55), pp.z), vec3(0.64, 0.18, 0.64), 0.03), MAT_CONC)
+        PUT(sdRoundBox(vec3(pp.x, pp.y - (H - 0.19), pp.z), vec3(0.86, 0.19, 0.86), 0.03), MAT_CONC)
       }
       else {
         float bt = hx - 0.25;

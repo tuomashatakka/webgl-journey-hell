@@ -64,7 +64,9 @@ const SCENE = `
     float dec = decay();
 
     vec3 alb, nn; float rough;
-    tileSurface(qs, ns, wy, C.z, alb, nn, rough);
+    // The raw rooms are below the tile line: same outs, poured concrete.
+    if (C.y > 4.5) concreteSurface(qs, ns, wy, C.z, alb, nn, rough);
+    else           tileSurface(qs, ns, wy, C.z, alb, nn, rough);
     dressSurface(qs, ns, wy, B, C, alb, nn, rough);
 
     // Was it the building, or something standing in it? One extra evaluation of
@@ -123,7 +125,8 @@ const SCENE = `
     // ...and what it falls on. Suppressed inside the recess itself, where the
     // neighbours are on the other side of a wall and the surface is already the
     // source rather than something the source is lighting.
-    if (face > -0.02 && dec > 0.12) {
+    // The raw rooms only hole their side walls, so only those can spill.
+    if (face > -0.02 && dec > 0.12 && (C.y < 4.5 || abs(ns.x) > 0.7)) {
       vec2  suv; float ssz, ssl;
       if (abs(ns.y) > 0.7)      { suv = qs.xz; ssz = TILE_F; ssl = ns.y > 0.0 ? SALT_FLR : SALT_CEIL; }
       else if (abs(ns.x) > 0.7) { suv = qs.zy; ssz = TILE_W; ssl = SALT_WALL; }

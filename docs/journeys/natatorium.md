@@ -52,6 +52,17 @@ no derivatives in ES 1.00).
   two brighter tube bars and dimmer cathode ends.
 * **concrete fittings**: a lift joint every 1.2 m, shuttering grain, a dark
   wet foot to 0.9 m.
+* **the raw rooms** (THE STAIR DOWN, THE DRAIN, THE CISTERN, THE RISER) are
+  below the tile line and untiled: `concreteSurface` in place of
+  `tileSurface`. walls and soffit board-formed in 0.15 m boards (each its own
+  tone and grain, staggered butts, a leaked fin on every seam), pour lifts every
+  1.2 m with bleed under them, form ties on a 0.6 m grid with rust rings and
+  white weeps, efflorescence under the lifts above the water, noise cracks that
+  glow late like the tile's; the floor a trowelled slab saw-cut every 3 m.
+  concrete drinks water (0.78 wet, rough 0.82 dry). no cove, no frieze, no
+  proud tiles; only the side walls spall into tileBreak's pockets, and only
+  they spill red. THE CISTERN's piers are 0.92 m square on a plinth, with a
+  two-course capital spreading into the soffit.
 
 ## the water
 

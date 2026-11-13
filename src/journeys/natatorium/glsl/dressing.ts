@@ -79,18 +79,20 @@ export const dressingGlsl = `  // --- dressing ---------------------------------
       float y = qs.y;
       float u = abs(ns.x) > 0.7 ? qs.z : qs.x;
 
-      // A dark cove course at the skirting, the way pool walls are finished.
-      alb = mix(alb, alb * vec3(0.32, 0.38, 0.40), 1.0 - smoothstep(0.12, 0.16, y));
-
-      // The frieze: one course of colour at about head height, a different one
-      // for each kind of room, and a cream bead tile over it.
-      float fy  = min(2.10, H - 0.75);
-      vec3  frc = typ < 0.5 ? vec3(0.10, 0.42, 0.46)
-                : (typ < 2.5 ? vec3(0.16, 0.30, 0.55) : vec3(0.42, 0.40, 0.22));
-      float fr  = 1.0 - smoothstep(0.10, 0.11, abs(y - fy));
-      float bd  = 1.0 - smoothstep(0.022, 0.03, abs(y - fy - 0.14));
-      alb = mix(alb, alb * frc * 1.5, fr);
-      alb = mix(alb, alb * vec3(1.02, 0.96, 0.80), bd * (1.0 - far));
+      // A dark cove course at the skirting, the way pool walls are finished,
+      // and the frieze: one course of colour at about head height, a different
+      // one for each kind of room, and a cream bead tile over it. Tile courses
+      // both, so the raw concrete rooms have neither.
+      if (typ < 4.5) {
+        alb = mix(alb, alb * vec3(0.32, 0.38, 0.40), 1.0 - smoothstep(0.12, 0.16, y));
+        float fy  = min(2.10, H - 0.75);
+        vec3  frc = typ < 0.5 ? vec3(0.10, 0.42, 0.46)
+                  : (typ < 2.5 ? vec3(0.16, 0.30, 0.55) : vec3(0.42, 0.40, 0.22));
+        float fr  = 1.0 - smoothstep(0.10, 0.11, abs(y - fy));
+        float bd  = 1.0 - smoothstep(0.022, 0.03, abs(y - fy - 0.14));
+        alb = mix(alb, alb * frc * 1.5, fr);
+        alb = mix(alb, alb * vec3(1.02, 0.96, 0.80), bd * (1.0 - far));
+      }
 
       // Tide lines: every level the flood held before this one, brown and
       // ragged, fading the further above the present one they are.

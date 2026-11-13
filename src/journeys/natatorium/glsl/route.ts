@@ -47,7 +47,7 @@ export const routeGlsl = `  // --- the route -----------------------------------
     // long steps are and therefore where the frame is actually spent.
     if (room > -0.55) {
       float proud, hole;
-      tileBreak(qs, B, decay(), proud, hole);
+      tileBreak(qs, B, decay(), step(C.y, 4.5), proud, hole);
       room = min(room + proud, hole);
     }
 
