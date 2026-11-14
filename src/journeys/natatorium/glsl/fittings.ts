@@ -159,22 +159,51 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
       PUT(sdTorus(vec3(pp.x, qs.y - 1.35, latt(qs.z, 7.0) - 0.95).zyx, 0.26, 0.045), MAT_METAL)
     }
     else {
-      // RAW — bare concrete. The big room gets piers, the tight ones a rail.
+      // RAW — bare concrete. The big room gets columns, the tight ones a rail.
       if (W > 6.0) {
-        // Offset half a bay so no pier stands on the walked line: the aisle
-        // would carve a tunnel clean through it and leave a floating stump.
-        // Square, the way a cistern is shuttered, on a plinth, and spreading
-        // into the soffit in two stepped courses of capital: a capsule here
-        // was a pipe standing in a room, and a pier that does not spread at
-        // the top is not carrying anything.
-        vec3 pp = vec3(lattN(qs.x - 2.75, 5.5, 2.0), qs.y, latt(qs.z, 6.5));
-        vec2 pa = abs(pp.xz);
-        float bp = max(pa.x, pa.y) - 1.05;
-        if (bp > BOUND_SLACK) return min(d, bp);
-        PUT(sdRoundBox(vec3(pp.x, pp.y - H * 0.5, pp.z), vec3(0.46, H * 0.5, 0.46), 0.04), MAT_CONC)
-        PUT(sdRoundBox(vec3(pp.x, pp.y - 0.20, pp.z), vec3(0.58, 0.20, 0.58), 0.03), MAT_CONC)
-        PUT(sdRoundBox(vec3(pp.x, pp.y - (H - 0.55), pp.z), vec3(0.64, 0.18, 0.64), 0.03), MAT_CONC)
-        PUT(sdRoundBox(vec3(pp.x, pp.y - (H - 0.19), pp.z), vec3(0.86, 0.19, 0.86), 0.03), MAT_CONC)
+        // THE CISTERN: a hall of columns under groined brick vaults. The column
+        // lines are offset half a bay from the walked line (a column on it would
+        // be bored through by the aisle and left as a stump in the air) and the
+        // outermost line falls on the side walls, where it stands as a half
+        // column carrying the vault's last bay.
+        float vs = H - CIST_RX - 0.12;
+
+        // The vault: two barrels per bay, one each way, the air their union and
+        // the brick everything above both. Every bit of it is above the
+        // springing line, so below that line the springing line is the bound.
+        // The barrel across the 6 m bays is stilted (scaled along z) to crown at
+        // the same height; scaling by less than one only shortens the steps.
+        float vb = vs - qs.y;
+        if (vb > BOUND_SLACK) d = min(d, vb);
+        else {
+          float vx = latt(qs.x + CIST_PX * 0.5, CIST_PX);
+          float vz = latt(qs.z + CIST_PZ * 0.5, CIST_PZ);
+          float vy = max(qs.y - vs, 0.0);
+          float a1 = length(vec2(vx, vy)) - CIST_RX;
+          float a2 = length(vec2(vz * (CIST_RX / CIST_RZ), vy)) - CIST_RX;
+          PUT(-min(a1, a2), MAT_BRICK)
+        }
+
+        // The columns: a square plinth, a torus at the foot of the shaft, a
+        // shaft with a little taper, an astragal, a basket capital that
+        // widens to the impost block the groins land on.
+        vec3  c  = vec3(latt(qs.x, CIST_PX), qs.y, latt(qs.z, CIST_PZ));
+        float cb = max(abs(c.x), abs(c.z)) - 0.68;
+        if (cb > BOUND_SLACK) return min(d, cb);
+
+        float sr = 0.42 - 0.03 * clamp(qs.y / vs, 0.0, 1.0);
+        float cl = sdCylY(c - vec3(0.0, vs * 0.5, 0.0), vs * 0.5, sr);
+        cl = min(cl, sdRoundBox(c - vec3(0.0, 0.21, 0.0), vec3(0.62, 0.21, 0.62), 0.03));
+        cl = min(cl, sdTorus((c - vec3(0.0, 0.50, 0.0)).xzy, 0.44, 0.08));
+        cl = min(cl, sdTorus((c - vec3(0.0, vs - 0.80, 0.0)).xzy, 0.41, 0.045));
+
+        // The basket: half width 0.40 at its neck to 0.56 under the impost,
+        // a slope of 0.3, so the field is held down by its 1.05 Lipschitz.
+        float ky = clamp((qs.y - (vs - 0.76)) / 0.52, 0.0, 1.0);
+        float kw = 0.40 + 0.16 * ky;
+        cl = min(cl, sdRoundBox(c - vec3(0.0, vs - 0.48, 0.0), vec3(kw, 0.27, kw), 0.08) * 0.95);
+        cl = min(cl, sdRoundBox(c - vec3(0.0, vs - 0.11, 0.0), vec3(0.64, 0.11, 0.64), 0.02));
+        PUT(cl, MAT_STONE)
       }
       else {
         float bt = hx - 0.25;

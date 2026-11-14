@@ -58,6 +58,12 @@ export const foundationGlsl = `
   float sdCapsuleY(vec3 p, float h, float r) { p.y -= clamp(p.y, -h, h); return length(p) - r; }
   float sdCapsuleZ(vec3 p, float h, float r) { p.z -= clamp(p.z, -h, h); return length(p) - r; }
 
+  // Capped cylinder about y, half height h. Exact inside and out.
+  float sdCylY(vec3 p, float h, float r) {
+    vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+  }
+
   // Ring in the plane of p.xy, axis along p.z. Swizzle the argument to turn it.
   float sdTorus(vec3 p, float R, float r) {
     return length(vec2(length(p.xy) - R, p.z)) - r;
@@ -94,6 +100,17 @@ export const foundationGlsl = `
   const float MAT_PAINT = 3.0;   // lockers, benches, pump housings, the flume
   const float MAT_LEAF  = 4.0;   // everything green
   const float MAT_CONC  = 5.0;   // columns, pillars, the dive platform
+  const float MAT_STONE = 6.0;   // the cistern's columns
+  const float MAT_BRICK = 7.0;   // the cistern's vault
+
+  // THE CISTERN's bays: columns on a 5.2 m grid across (so the outermost line
+  // falls on the side walls as half columns) and 6 m along (so both end walls
+  // meet the crown of a transverse barrel, not a groin). The vault springs from
+  // the impost at H - CIST_RX - 0.12 and crowns 0.12 under the slab.
+  const float CIST_PX = 5.2;
+  const float CIST_PZ = 6.0;
+  const float CIST_RX = 2.6;
+  const float CIST_RZ = 3.0;
 
   float gMat;
 

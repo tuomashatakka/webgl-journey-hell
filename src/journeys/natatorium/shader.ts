@@ -75,7 +75,7 @@ const SCENE = `
     // from the geometry instead would mean writing every fitting out twice.
     float pd = sectionProps(qs, B, C, uSecD[1]);
     if (pd < 0.035 && gMat > 0.5) {
-      propSurface(qs, gMat, dec, alb, rough);
+      propSurface(qs, gMat, dec, B, alb, rough);
       nn = ns;
       crackGlow = 0.0;
     }

@@ -52,6 +52,24 @@ export const dressingGlsl = `  // --- dressing ---------------------------------
       // Silt banked into the cove, deeper as the building goes.
       float bank = smoothstep(1.1, 0.0, W - abs(qs.x));
       alb = mix(alb, vec3(0.20, 0.22, 0.15), bank * (0.20 + 0.45 * dec) * C.z * 1.4);
+
+      // THE CISTERN has had standing water in it for longer than the rest:
+      // its floor is under a blanket of silt, rippled across the current
+      // that set it, drifted against the column plinths and worn thin
+      // enough here and there to show the tile. Thicker every lap.
+      if (typ > 4.5 && W > 6.0) {
+        vec2  cc  = vec2(latt(qs.x, CIST_PX), latt(qs.z, CIST_PZ));
+        float lee = smoothstep(1.6, 0.6, length(cc));
+        float sn  = vnoise(qs.xz * 0.45) * 0.6 + vnoise(qs.xz * 1.7 + 9.1) * 0.4;
+        float cov = smoothstep(0.78 - dec * 0.30, 0.50 - dec * 0.30, sn);
+        cov = max(cov, lee);
+        float rip = sin(dot(qs.xz, vec2(0.80, 0.60)) * 9.0 + vnoise(qs.xz * 0.8) * 6.0);
+        rip = mix(rip, 0.0, lodFade(0.05));
+        vec3  mud = vec3(0.19, 0.18, 0.13) * (0.88 + 0.16 * rip + 0.18 * vnoise(qs.xz * 5.0));
+        alb   = mix(alb, mud, cov * 0.92);
+        nn    = normalize(nn + vec3(0.8, 0.0, 0.6) * rip * 0.06 * cov);
+        rough = mix(rough, 0.85, cov);
+      }
     }
     else if (ns.y < -0.7) {
       // THE SOFFIT. Damp has come through it in rings: a pale bloom with a

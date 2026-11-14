@@ -61,8 +61,32 @@ no derivatives in ES 1.00).
   glow late like the tile's; the floor a trowelled slab saw-cut every 3 m.
   concrete drinks water (0.78 wet, rough 0.82 dry). no cove, no frieze, no
   proud tiles; only the side walls spall into tileBreak's pockets, and only
-  they spill red. THE CISTERN's piers are 0.92 m square on a plinth, with a
-  two-course capital spreading into the soffit.
+  they spill red. THE CISTERN's columns and vault are below.
+
+## the cistern
+
+THE CISTERN (the one RAW section wider than 6 m) is a hall of columns under
+groined brick vaults, carried on the board-formed walls.
+
+* **bays**: columns on a 5.2 m grid across (`CIST_PX`; the outermost line
+  falls on the side walls at x = ±13 as half columns) and 6 m along
+  (`CIST_PZ`; columns at z = 3, 9 .. 27, so both end walls meet the crown of a
+  transverse barrel). No column within 1.98 m of the walked line.
+* **vault**: per bay, the union of a barrel across (radius `CIST_RX` 2.6) and
+  a barrel along, stilted to the same crown (`CIST_RZ` 3.0, scaled along z by
+  2.6/3, which only shortens steps); the brick is everything above both.
+  springing at H - 2.72 = 4.78, crown 0.12 under the slab. bounded by the
+  springing line, so it costs nothing below it.
+* **columns**: square plinth (0.62 half, 0.42 tall), a torus at the foot, a
+  shaft tapering 0.42 to 0.39, an astragal, a basket capital widening 0.40 to
+  0.56 (held by its 1.05 Lipschitz), an impost block 0.64 half; bounded on a
+  0.68 square.
+* **materials**: `MAT_STONE` limestone, a vein per column, drum joints every
+  1.1 m, a calcite crust at the water line, weed below it and a silt-dark foot;
+  `MAT_BRICK` 0.25 x 0.075 brick in courses round each barrel (running bond),
+  lime mortar, bloom down the groins thickening with decay.
+* **floor**: a blanket of silt over the tile, rippled, drifted against the
+  plinths, worn through to the tile in patches, thicker every lap.
 
 ## the water
 
