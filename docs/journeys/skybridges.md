@@ -180,8 +180,25 @@ the laps, and the blast's shockfront finishes the job.
   lower viaduct (−6.6 m) that runs *through* a glass tower's atrium station
   (z 262–284): a tall hall cut through the tower, floor slabs and lit balconies
   either side, then out the far facade to where the viaduct is sheared off.
-- **Light:** low side light from the right (sun 12°), hard and dramatic; sparks
-  under the cars.
+  - **The viaduct** is a U-girder: its webs' tops are the −6.6 deck level, the
+    track (sleepers every 0.65 m, rails at ±0.75) is down in the trough at
+    −7.7, pier caps under it, board joints and a rust stain on the concrete,
+    and the end at 288 is ragged.
+  - **The train** is five stainless cars, 3.1 m from skirt (−7.0) to crown
+    (−3.9, the roof the runner rides): rounded shoulders, a crowned and fluted
+    roof with two air-conditioning units and a hatch, rubber bellows between
+    the cars, a blue stripe, a ribbon of windows onto a lit saloon, two doors a
+    side, and a raked cab glazed dark with two lamps on the end cars.
+  - **The station:** a platform either side at the girder's level (x 1.6–9.0)
+    in terrazzo with a yellow edge, three balconies above it at 4.2 m
+    (x 6.2–9.0) with glass balustrades and a handrail on posts, a lamp line
+    under every slab, a coffered ceiling with a lamp in each coffer. Its walls
+    are inside: they take the hall's light (daylight from the open ends, warm
+    lamps) and mirror the hall, not the sky, except along it.
+- **Light:** low side light from the right (sun 12°), hard and dramatic; inside
+  the hall the sun comes in only through the open end it faces; sparks thrown
+  back from the wheels, streaking out from the vanishing point beside the cars
+  (never over the roof).
 - **Breaks:** the station's facade shatters outward as the train punches through.
 - **Out (fall):** the train rolls off the sheared end at z 288; free fall,
   pitch hard down, the stub receding.
