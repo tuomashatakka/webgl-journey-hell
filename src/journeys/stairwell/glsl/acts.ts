@@ -234,33 +234,126 @@ vec2 coolingField (vec3 p) {
 }
 
 // VI · THE SHEAR HORIZON — where the anthology stops being architecture.
+// The ground has torn open along the line of the stair. Either side, a cliff
+// of level strata broken into fault blocks 11 units long, each thrown up or
+// down and tipped on its own, so the bedding steps from block to block and
+// every join is a scarp. Thirty units down, the gorge floor is split by the
+// rift: a slit of light that lights the cliffs from below. In the air over
+// the gorge hang what the tear threw up: slabs of strata with ragged
+// undersides, short flights torn out of a stair like this one, and rings,
+// broken hoops of steel the stair passes through, with a light along their
+// inner face.
+const float RIFT_DEPTH = 30.0;
+const vec3 RIFT_LIGHT = vec3(0.12, 0.5, 1.1);
+// How bright the rift burns: low on the first traversal, up with every one
+// after it, and blazing through the finale.
+float riftPower () { return (1.0 + uRupture * 0.6 + uFinale * 1.2) * (1.0 - uPurgatory); }
+float riftX (float z) { return sin(z * 0.09) * 2.5 + sin(z * 0.23 + 1.3) * 0.8; }
+
+// One fault block of one side's cliff. Its face stands back 9.5 to 12 from
+// the line, each bed of the strata at its own depth, and the beds are counted
+// from the block's throw, so they step at every fault.
+float faultBlock (vec3 p, float ax, float side, float cell) {
+  float zc = (cell + 0.5) * 11.0;
+  float seed = cell * 3.1 + side * 17.0;
+  float throwY = (hash11(seed) - 0.6) * 14.0 + uRupture * (hash11(seed + 5.0) - 0.5) * 6.0;
+  float tilt = (hash11(seed + 1.7) - 0.5) * 0.22;
+  float dip = (hash11(seed + 2.9) - 0.4) * 0.25;
+  float top = pathY(5.0, zc) + 3.0 + throwY + (p.z - zc) * tilt - (ax - 10.0) * dip;
+  float s = (p.y - throwY) / 2.3;
+  float k = floor(s);
+  float bed = mix(hash11(k + side * 31.0), hash11(k + 1.0 + side * 31.0), smoothstep(0.78, 1.0, fract(s)));
+  float face = 9.5 + hash11(seed + 4.2) * 2.5 + bed * 1.1 +
+               sin(p.z * 0.35 + p.y * 0.21) * 0.45 + sin(p.y * 1.3 + p.z * 0.8) * 0.15;
+  float d = max((face - ax) * 0.6, (p.y - top) * 0.8);
+  return max(d, abs(p.z - zc) - 5.5);
+}
+
 vec2 shearHorizon (vec3 p) {
   float px = pathX(5.0, p.z);
   float py = pathY(5.0, p.z);
-  float cell = floor((p.z + 6.0) / 12.0);
-  float zCell = mod(p.z + 6.0, 12.0) - 6.0;
   float dx = p.x - px;
-  float angle = (hash11(cell * 4.7) - 0.5) * (0.4 + uRupture * 1.4);
-  vec3 shardP = vec3(abs(dx) - 7.0 - hash11(cell) * 7.0, p.y - py - 3.0, zCell);
-  shardP.xy *= rot(angle + uFinale * sin(cell) * 1.2);
-  float shard = sdBox(shardP, vec3(2.8 + hash11(cell + 2.0) * 3.0, 0.5, 5.0));
-  float sCell = floor((p.z + 19.0) / 38.0);
-  vec3 slabP = vec3(dx + (hash11(sCell) - 0.5) * 26.0, p.y - py + 6.0 - hash11(sCell + 4.0) * 16.0, mod(p.z + 19.0, 38.0) - 19.0);
-  slabP.xy *= rot((hash11(sCell + 7.0) - 0.5) * 2.2);
-  float slab = sdBox(slabP, vec3(7.0, 0.42, 9.0));
-  float fCell = floor((p.z + 8.0) / 16.0);
-  vec3 fragP = vec3(dx - (hash11(fCell + 2.0) - 0.5) * 30.0, p.y - py - 2.0 - hash11(fCell + 11.0) * 14.0, mod(p.z + 8.0, 16.0) - 8.0);
-  fragP.xy *= rot(hash11(fCell + 3.0) * 3.0 + uFinale);
-  float tread = sdBox(vec3(fragP.x, mod(fragP.y + 0.35, 0.7) - 0.35, fragP.z), vec3(1.6, 0.09, 0.42));
-  float frag = max(tread, sdBox(fragP, vec3(1.7, 2.2, 3.0)));
-  vec3 ringP = vec3(dx, p.y - py - 12.0, mod(p.z + 40.0, 80.0) - 40.0);
-  ringP.xy *= rot(0.7 + uFinale * 0.8);
-  float ring = sdTorusX(ringP, vec2(13.0, 0.6));
-  float monolith = sdBox(vec3(abs(dx) - 18.0, p.y - py - 7.0, zCell), vec3(2.0, 11.0, 3.5));
-  float rift = max(abs(p.y - py + 14.0) - 0.35, abs(dx) - 40.0);
-  float lit = min(ring, rift);
-  float solid = min(shard, min(slab, min(frag, monolith)));
-  return lit < solid ? vec2(lit, M_EMISSIVE) : vec2(solid, M_ROCK);
+  float ax = abs(dx);
+  float side = dx < 0.0 ? -1.0 : 1.0;
+
+  // The cliffs: this block and the nearer of its neighbours. Any other block
+  // is at least half a block away along the line, and no block of either
+  // side stands nearer the line than 9.5 or higher than 20 over the stair,
+  // so away from the cliffs a ray is not held to half a block a step.
+  float cell = floor(p.z / 11.0);
+  float nbr = cell + (fract(p.z / 11.0) < 0.5 ? -1.0 : 1.0);
+  float cap = max((9.5 - ax) * 0.6, (p.y - py - 20.0 - max(ax - 10.0, 0.0) * 0.15) * 0.7);
+  float cliff = min(min(faultBlock(p, ax, side, cell), faultBlock(p, ax, side, nbr)), max(5.5, cap));
+
+  // The gorge floor, rising toward the cliffs, split by the rift.
+  float rx = dx - riftX(p.z);
+  float floorY = py - RIFT_DEPTH + abs(rx) * 0.08 + sin(p.x * 0.4) * sin(p.z * 0.3) * 0.6;
+  float ground = max((p.y - floorY) * 0.8, 0.8 - abs(rx));
+  float rift = max(p.y - floorY + 1.2, abs(rx) - 1.0);
+
+  // Slabs of strata thrown up out of the gorge, clear over the stair or out
+  // beside it, with bedding in their sides and a torn underside.
+  float sCell = floor((p.z + 13.0) / 26.0);
+  float sz = mod(p.z + 13.0, 26.0) - 13.0;
+  float ss = hash11(sCell * 1.9 + 4.0) > 0.5 ? 1.0 : -1.0;
+  vec3 sq = vec3(dx - ss * (7.0 + hash11(sCell + 1.0) * 7.0),
+                 p.y - pathY(5.0, p.z - sz) - 7.0 - hash11(sCell + 4.0) * 9.0 - sin(animTime() * 0.3 + sCell) * 0.4,
+                 sz);
+  sq.xy *= rot((hash11(sCell + 7.0) - 0.5) * 1.2 + uFinale * ss);
+  sq.yz *= rot((hash11(sCell + 8.0) - 0.5) * 0.5);
+  vec3 sb = vec3(2.6 + hash11(sCell + 2.0) * 2.5, 0.9 + hash11(sCell + 9.0), 3.0 + hash11(sCell + 3.0) * 3.0);
+  float slab = sdBox(sq, sb) + sin(sq.y * 7.0 + sin(sq.x * 0.8) * 2.0) * 0.05;
+  slab -= sin(sq.x * 1.7 + sq.z * 1.1) * sin(sq.z * 1.3 + sCell) * 0.35 * smoothstep(0.3, -0.6, sq.y);
+  slab *= 0.75;
+
+  // Flights torn out of a stair: steel treads on a pair of stringers, a rail
+  // on one side, three to five treads either side of the middle.
+  float fCell = floor((p.z + 7.0) / 14.0);
+  float fz = mod(p.z + 7.0, 14.0) - 7.0;
+  float fs = hash11(fCell * 2.3) > 0.5 ? 1.0 : -1.0;
+  vec3 fq = vec3(dx - fs * (5.2 + hash11(fCell + 2.0) * 4.0),
+                 p.y - pathY(5.0, p.z - fz) - mix(-7.0, 7.0, hash11(fCell + 11.0)) - sin(animTime() * 0.4 + fCell) * 0.25,
+                 fz);
+  fq.xy *= rot((hash11(fCell + 3.0) - 0.5) * 0.9 + uFinale * fs * 0.8);
+  fq.yz *= rot((hash11(fCell + 5.0) - 0.5) * 0.6);
+  float flight = 1e4;
+  if (length(fq) < 6.0) {
+    const float FR = 0.2;
+    const float FG = 0.32;
+    float fn = 3.0 + floor(hash11(fCell + 7.0) * 3.0);
+    float k = clamp(floor(fq.z / FG + 0.5), -fn, fn);
+    float tread = sdBox(vec3(fq.x, fq.y + k * FR, fq.z - k * FG), vec3(0.95, 0.03, FG * 0.5 - 0.01));
+    float fl = length(vec2(FR, FG));
+    vec2 sc = vec2(fq.y * FG + fq.z * FR, fq.z * FG - fq.y * FR) / fl;
+    float stringer = sdBox(vec3(abs(fq.x) - 1.0, sc.x + 0.12, sc.y), vec3(0.05, 0.16, (fn + 0.5) * fl));
+    float rail = sdBox(vec3(fq.x - 1.0, sc.x - 0.95, sc.y), vec3(0.025, 0.03, fn * fl));
+    float kp = clamp(floor(fq.z / (2.0 * FG) + 0.5), -floor(fn * 0.5), floor(fn * 0.5));
+    float post = sdBox(vec3(fq.x - 1.0, fq.y + 2.0 * kp * FR - 0.5, fq.z - 2.0 * kp * FG), vec3(0.02, 0.48, 0.02));
+    flight = min(min(tread, stringer), min(rail, post));
+  } else flight = length(fq) - 5.0;
+
+  // Rings: broken hoops of steel round the line every 45 units, each tipped
+  // and turning slowly in its own plane, with a light along the inner face.
+  float rz = mod(p.z + 22.5, 45.0) - 22.5;
+  float rCell = floor((p.z + 22.5) / 45.0);
+  vec3 rq = vec3(dx, p.y - pathY(5.0, p.z - rz) - 3.0, rz);
+  rq.yz *= rot((hash11(rCell + 1.0) - 0.5) * 0.7);
+  rq.xz *= rot((hash11(rCell + 2.0) - 0.5) * 0.8);
+  rq.xy *= rot(animTime() * (hash11(rCell) - 0.5) * 0.1 + uFinale * 0.8 + rCell);
+  float rr = length(rq.xy);
+  float ang = atan(rq.y, rq.x);
+  float gap = min(abs(mod(ang + 2.74, 6.2832) - 3.1416), abs(mod(ang - 0.86, 6.2832) - 3.1416)) -
+              0.18 - hash11(rCell + 3.0) * 0.3;
+  gap *= rr;
+  float hoop = sdBox(vec3(rr - 11.5, rq.z, 0.0), vec3(0.32, 0.85, 1.0)) - 0.04;
+  hoop = max(hoop, -gap);
+  float glow = max(length(vec2(rr - 11.15, rq.z)) - 0.08, -gap - 0.3);
+
+  float lit = min(glow, rift);
+  float steel = min(hoop, flight);
+  float rock = min(min(cliff, ground), slab);
+  vec2 r = steel < rock ? vec2(steel, M_MACHINE) : vec2(rock, M_ROCK);
+  return lit < r.x ? vec2(lit, M_EMISSIVE) : r;
 }
 
 vec2 actEnvironment (vec3 p, float a) {

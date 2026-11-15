@@ -16,7 +16,7 @@ units the route enters purgatory and never leaves it.
 | 155–235 | turbine canyon | `DAY` | a stratified canyon wide enough for its machines: three-blade rotors on pedestals, penstocks, a gantry |
 | 235–325 | conveyor escarpment | `EVENING` | warm quarry benches, a roofed conveyor gallery on trestles, bucket wheel, transfer tower |
 | 325–410 | cooling field | `HAZE` | hyperboloid towers on raked column rings, pipe racks, banded chimneys, cooling ponds |
-| 410–500 | shear horizon | `AURORA` | torn strata, suspended stair fragments, rings, the rift |
+| 410–500 | shear horizon | `AURORA` | torn strata, suspended stair fragments, rings, the rift (a gorge under the stair, lit from below) |
 | 2000+ | **purgatory** | `OVERCAST`, drained | the six acts recurring as monochrome ghosts, endlessly |
 
 ## seams, not crossfades
@@ -180,6 +180,44 @@ down its own flight.
   the sky because from inside the act the far wall fills the view.
 - the preview's cooling towers on the horizon are not brought over: the walls
   hide the horizon over the whole forward view.
+
+## act VI, the shear horizon
+
+the ground has torn open along the line of the stair, and the act is lit by
+the tear. (the aurora is there, but the far wall covers it from anywhere in
+the act, and its sun is 0: the rift is the key light.)
+
+- **torn strata**: either side, a cliff of level beds broken into fault
+  blocks 11 units long (`faultBlock`). each block is thrown up or down on its
+  own (its top from 5.4 under the stair to 8.6 over it, the range wider with `uRupture`), tipped along the
+  line and dipped away from it; its face stands 9.5 to 12 off the line and
+  each 2.3-unit bed stands at its own depth, counted from the block's throw,
+  so the bedding steps at every fault and every join is a scarp. a sample
+  builds its own block and the nearer neighbour; no block stands nearer than
+  9.5 or higher than 20 over the stair, so rays away from the cliffs are not
+  held to half a block a step.
+- **the rift**: the gorge floor lies `RIFT_DEPTH` (30) under the stair,
+  rising toward the cliffs, split along a meander (`riftX`) by a slit 2 wide
+  whose light is white at the core and cold at the lips. it is a line light:
+  every surface in the act takes `RIFT_LIGHT` toward the nearest point of the
+  slit, falling off as 1/(d + 2), so the cliffs glow at their feet and
+  darken toward their tops; the air below the horizon takes its glow; a
+  faint cold underside fill remains. `riftPower()` is 1 on the first
+  traversal, up with `uRupture`, blazing through the finale, gone in the
+  residue.
+- **suspended fragments**: slabs of strata thrown up out of the gorge (every
+  26 units, 7 to 16 over the stair and 7 to 14 off the line, bedding in their
+  sides and a ragged underside), and short flights torn out of a stair like
+  this one (every 14 units: steel treads at 0.2 rise and 0.32 going on a
+  pair of stringers, a rail and posts on one side), drifting slowly and
+  tipping further with `uFinale`.
+- **rings**: a broken hoop of steel round the line every 45 units, radius
+  11.5 about a point 3 over the stair, tipped and turning slowly in its own
+  plane, two gaps cut in it, and a light along its inner face.
+- act VI's exposure is 2.8.
+- a ray that runs out of march steps less than a unit from a surface ends on
+  it (all acts): skimming the cliff tops edge on, such rays had been taken for
+  escapes and drew a seam of sky along every crest.
 
 ## traversal rupture
 

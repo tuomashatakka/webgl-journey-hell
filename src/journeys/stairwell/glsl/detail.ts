@@ -208,9 +208,9 @@ vec3 rockDetail (inout Surface s, vec3 tp, vec3 n, float act, float fp) {
   // Stretched along the strata, so a fault runs with the bedding.
   vec2 fu = vec2(uv.x * 0.16 + tp.z * 0.01, uv.y * 0.8 + vnoise(uv * 0.3) * 0.6);
   float f = abs(vnoise(fu) - 0.5);
-  float fissure = 1.0 - smoothstep(0.0, 0.012 + fp * 0.6, f);
-  fissure *= smoothstep(0.7, 0.85, vnoise(uv * 0.05 + 3.0));
-  float glow = fissure * (0.12 + uRupture * 0.7 + uFinale * 1.0);
+  float fissure = 1.0 - smoothstep(0.0, 0.006 + fp * 0.3, f);
+  fissure *= smoothstep(0.72, 0.9, vnoise(uv * 0.05 + 3.0));
+  float glow = fissure * (0.06 + uRupture * 0.6 + uFinale * 1.0);
   s.albedo *= 1.0 - fissure * 0.6;
   return vec3(0.12, 0.5, 1.0) * glow * (0.75 + 0.25 * sin(gTime * 1.7 + tp.z * 0.3)) * (1.0 - uPurgatory);
 }

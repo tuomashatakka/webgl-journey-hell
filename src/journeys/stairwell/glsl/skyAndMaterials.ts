@@ -34,6 +34,8 @@ vec3 hazeOf (float owner, vec3 rd) {
   // On the weather bridge the low sun ahead is behind the far wall, so it
   // shows as the air lit warm toward it: a broad forward scatter.
   float oAct = owner < 0.5 ? gA : owner < 1.5 ? gB : gC;
+  // Under the aurora, the air down in the gorge is lit by the rift.
+  if (oAct > 4.5 && oAct < 5.5) c += RIFT_LIGHT * riftPower() * 0.05 * smoothstep(-0.05, -0.6, rd.y);
   if (oAct > 0.5 && oAct < 1.5) {
     vec2 rh = rd.xz / max(length(rd.xz), 1e-4);
     vec2 sh = sun.xz / max(length(sun.xz), 1e-4);
@@ -172,7 +174,7 @@ void materialOf (float m, float a, out float layer, out vec3 tint, out float rou
     tint = a < 2.5 ? vec3(0.42, 0.58, 0.58) : a > 2.5 && a < 3.5 ? vec3(0.9) : vec3(0.85, 0.5, 0.26);
   } else if (m < 5.5) {                // rock
     layer = a > 2.5 && a < 3.5 ? MAT_DIRT : MAT_ROCK;
-    tint = a > 4.5 ? vec3(0.32, 0.30, 0.36) : a > 2.5 && a < 3.5 ? vec3(0.95, 0.78, 0.6) : vec3(0.85, 0.76, 0.68);
+    tint = a > 4.5 ? vec3(0.46, 0.44, 0.5) : a > 2.5 && a < 3.5 ? vec3(0.95, 0.78, 0.6) : vec3(0.85, 0.76, 0.68);
   } else if (m < 6.5) {                // treads
     layer = (a > 0.5 && a < 1.5) || a > 4.5 ? MAT_STEEL : MAT_CONCRETE;
     tint = vec3(0.72);
@@ -232,13 +234,19 @@ void main () {
   float t = 0.0;
   vec2 hit = vec2(0.0);
   bool found = false;
+  vec2 last = vec2(1e4, 0.0);
   for (int i = 0; i < MAX_STEPS; i++) {
     if (uHeavy < 0.5 && i >= 80) break;
     vec2 h = mapScene(ro + rd * t);
     if (h.x < HIT_EPSILON * (1.0 + t * 0.02)) { hit = h; found = true; break; }
+    last = h;
     t += h.x * 0.75;
     if (t > FAR_CLIP) break;
   }
+  // A ray that runs out of steps skimming a surface (the shear horizon's
+  // cliff tops, seen edge on) ends on it: taken for an escape, it drew a
+  // seam of sky along every crest.
+  if (!found && t < FAR_CLIP && last.x < 1.0) { hit = last; found = true; }
   if (!found) t = FAR_CLIP;
 
   // Which side of the far seam the ray ends on; for a ray that escapes, it is
@@ -287,7 +295,12 @@ void main () {
       // The weather bridge's beacons, high on the pylons, burn red.
       vec3 bq = p - zoneOffset(zone);
       bool beacon = act > 0.5 && act < 1.5 && bq.y - pathY(1.0, bq.z) > 12.0;
+      // The rift's slit is white at the core and cold toward its lips.
+      bool riftCore = act > 4.5 && act < 5.5 && bq.y - pathY(5.0, bq.z) < 4.0 - RIFT_DEPTH;
+      float lip = riftCore ? abs(bq.x - pathX(5.0, bq.z) - riftX(bq.z)) : 0.0;
       col = tunnel ? vec3(3.2, 2.6, 1.9)
+          : riftCore ? mix(vec3(2.4, 3.4, 4.0), vec3(0.15, 0.7, 2.2), smoothstep(0.0, 0.9, lip)) *
+                       riftPower() * (0.85 + 0.15 * sin(gTime * 3.1 + bq.z * 0.7))
           : beacon ? vec3(4.0, 0.6, 0.2) * (0.6 + 0.4 * sin(animTime() * 2.1 + floor(bq.z / 22.0)))
                    : vec3(0.06, 0.42, 0.9) * (1.0 + sin(gTime * 4.0 + p.z + gZ0) * 0.25);
     } else {
@@ -353,7 +366,7 @@ void main () {
       // Under the aurora the rift is the brightest thing in the world, and it
       // lights from below: every underside takes its cold blue.
       if (act > 4.5 && act < 5.5)
-        irr += vec3(0.05, 0.22, 0.55) * (0.25 + uRupture * 0.5 + uFinale) * saturate(-s.normal.y * 0.6 + 0.4);
+        irr += vec3(0.05, 0.22, 0.55) * (0.12 + uRupture * 0.25 + uFinale * 0.5) * saturate(-s.normal.y * 0.6 + 0.4);
       vec3 R = reflect(rd, s.normal);
       vec2 ruv = equirectUv(R, info.y);
       float rlod = 1.0 + s.rough * 7.0;
@@ -362,6 +375,16 @@ void main () {
                                : textureLod(uSkyC, ruv, rlod).rgb) * info.x;
       col += shadeAmbient(s, V, irr, refl, ao);
       col += emit;
+
+      // The rift is a line of light along the gorge floor: whatever faces it
+      // takes it, falling off with distance, so the cliffs glow at their feet
+      // and darken toward their tops.
+      if (act > 4.5 && act < 5.5) {
+        vec3 rp = p - zoneOffset(zone);
+        vec3 toRift = vec3(pathX(5.0, rp.z) + riftX(rp.z), pathY(5.0, rp.z) - RIFT_DEPTH - 0.6, rp.z) - rp;
+        float rd2 = dot(toRift, toRift);
+        col += shadeBrdf(s, V, toRift * inversesqrt(rd2)) * RIFT_LIGHT * riftPower() * 70.0 / (sqrt(rd2) + 2.0) * ao;
+      }
 
       // Inside a seam's tunnel, the strip lights are what you see by.
       float inTunnel = 1.0 - smoothstep(SEAM - 1.0, SEAM + 3.0,
