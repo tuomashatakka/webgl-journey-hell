@@ -81,15 +81,19 @@ export const shadingGlsl = /* glsl */`
     float sp = secLampSpacing(sec);
     vec3 rad = lampRadiance(sec);
     float band = floor(p.z / sp);
+    bool highBay = abs(sec - 2.0) < 0.5;
     for (int k = 0; k < 3; k++) {
       float bi = band - 1.0 + float(k);
       if (lampDead(bi)) continue;
-      float side = mod(bi, 2.0) * 2.0 - 1.0;
       float lz = (bi + 0.5) * sp;
-      vec3 ld = vec3(side * (W - 0.22), H - 0.62, lz) - p;
+      vec3 ld = lampAt(bi, sec, W, H) - p;
       float d2 = dot(ld, ld);
+      vec3 l = ld * inversesqrt(max(d2, 1e-4));
       float atten = smoothstep(0.15, 0.75, deployStation(lz)) / (1.0 + d2 * 0.030);
-      acc += shadeBrdf(s, V, ld * inversesqrt(max(d2, 1e-4))) * rad * atten * PI;
+      // A high-bay's reflector throws its light down: pools on the floor, a
+      // scallop down the wall under it, and the roof left to the bounce.
+      if (highBay) atten *= mix(0.30, 1.0, smoothstep(0.0, 0.55, l.y));
+      acc += shadeBrdf(s, V, l) * rad * atten * PI;
     }
     return acc;
   }

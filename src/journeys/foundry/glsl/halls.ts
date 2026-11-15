@@ -25,17 +25,25 @@ export const hallsGlsl = `  // ============================ GEOMETRY ===========
   float mapLamps(vec3 p, float W, float H, float sec, out float glow) {
     float sp = secLampSpacing(sec);
     float band = floor(p.z / sp);
-    float lz = p.z - (band + 0.5) * sp;
-    float side = mod(band, 2.0) * 2.0 - 1.0;
     float dead = step(hash11(band * 3.17 + 11.0), decayVis() * 0.38);
     float dep = deployStation((band + 0.5) * sp);
-    vec3 lp = vec3(p.x - side * (W - 0.22), p.y - (H - 0.62), lz);
-    float bulb = sdCylX(lp, 0.17, 0.14);
-    // Cage bars over the bulb, so the light throws a striped shadow pattern.
-    float bars = abs(mod(atan(lp.z, lp.y) * 3.0 / PI + 0.5, 1.0) - 0.5) - 0.16;
+    vec3 lp = p - lampAt(band, sec, W, H);
     // Striking: the filament comes up unevenly over the first metres of sight.
     float strike = smoothstep(0.15, 0.75, dep) *
       (0.75 + 0.25 * step(0.35, hash11(band * 7.7 + floor(iTime * 11.0)) + dep));
+    if (abs(sec - 2.0) < 0.5) {
+      // A high-bay: a spun reflector open underneath, its gear box on top and a
+      // drop rod up to the bridge. Only the lens under the bowl is lit.
+      vec2 rq = vec2(length(lp.xz), lp.y);
+      float bowl = max((rq.x + 0.73 * rq.y - 0.36) * 0.81, abs(rq.y - 0.15) - 0.15);
+      float gear = sdCylY(lp - vec3(0.0, 0.38, 0.0), 0.13, 0.09);
+      float rod = sdCylY(lp - vec3(0.0, 0.80, 0.0), 0.022, 0.36);
+      glow = (1.0 - dead) * strike * (1.0 - smoothstep(0.0, 0.02, lp.y)) * step(rq.x, 0.33);
+      return min(bowl, min(gear, rod));
+    }
+    float bulb = sdCylX(lp, 0.17, 0.14);
+    // Cage bars over the bulb, so the light throws a striped shadow pattern.
+    float bars = abs(mod(atan(lp.z, lp.y) * 3.0 / PI + 0.5, 1.0) - 0.5) - 0.16;
     glow = (1.0 - dead) * strike *
       (1.0 - smoothstep(0.0, 0.02, max(bulb, -bars - 0.4)));
     return bulb;
@@ -95,9 +103,11 @@ export const hallsGlsl = `  // ============================ GEOMETRY ===========
   }
 
   // --- hall 2: THE LONG RUN ------------------------------------------------
-  // Nearly empty and far too big. A hoist beam lowers itself across the void
-  // every 9 m with a chain hanging off it — swinging, because your own footfalls
-  // shake it.
+  // Nearly empty and far too big: a crane hall with nothing left to lift. A
+  // stanchion stands proud of each wall every 9 m, carrying a plate girder
+  // runway with the crane rail on top; at each pair a bridge lowers itself out
+  // of the roof onto the rails, with a chain hanging off it (swinging, because
+  // your own footfalls shake it) and a high-bay under it (mapLamps).
   float mapLongRun(vec3 p, float zc, float W, float H, out float mat) {
     mat = 1.0;
     float st = floor(zc / 9.0);
@@ -107,7 +117,6 @@ export const hallsGlsl = `  // ============================ GEOMETRY ===========
 
     float drop = (1.0 - dep) * 3.2;   // stowed up in the ceiling until called
     float beam = sdBox(vec3(p.x, p.y - (H - 0.9) - drop, lz), vec3(W, 0.20, 0.26));
-    float tie = sdCylY(vec3(abs(p.x) - W * 0.72, p.y - H * 0.5, lz), 0.09, H * 0.5 * dep);
 
     // The chain: a capsule from the beam to the hook, laid along the pendulum.
     float ca = uMech.w;
@@ -119,8 +128,29 @@ export const hallsGlsl = `  // ============================ GEOMETRY ===========
     float tt = clamp(dot(ap, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
     float chain = length(ap - ab * tt) - 0.035;
     float hook = sdTorusX(vec3(p.x, p.y, lz) - tip - vec3(0.0, -0.14, 0.0), 0.13, 0.04);
+    float d = min(chain, hook);
+    if (beam < d) d = beam;
+    else mat = 5.0;
 
-    return min(min(beam, tie), min(chain, hook));
+    // The steelwork along the walls, folded onto one wall: u is the depth out
+    // of it. It runs over the first three stations and ends on a stanchion: the
+    // fourth is in the funnel, where the walls lean in. All of it lies inside
+    // u < 0.79 and run < 0, so well clear of that one bound answers for the lot.
+    float u = W - abs(p.x);
+    float run = abs(zc - SEC_LEN * floor(zc / SEC_LEN) - 13.5) - 9.34;
+    float bound = max(u - 0.79, run);
+    if (bound > 0.3) return min(d, bound);
+    float yc = H - 1.66;   // the runway's centre line; the rail's head is at H - 1.10
+    vec2 g = vec2(u - 0.45, p.y - yc);
+    float girder = min(sdBox2(vec2(g.x, abs(g.y) - 0.40), vec2(0.22, 0.04)), sdBox2(g, vec2(0.03, 0.40)));
+    float rail = max(sdBox2(g - vec2(0.0, 0.50), vec2(0.04, 0.06)), run);
+    vec2 c = vec2(u - 0.45, lz);
+    float col = min(sdBox2(vec2(abs(c.x) - 0.23, c.y), vec2(0.025, 0.22)), sdBox2(c, vec2(0.23, 0.02)));
+    col = min(max(col, p.y - (yc - 0.44)), sdBox(vec3(c.x, p.y - 0.02, c.y), vec3(0.34, 0.02, 0.32)));
+    if (rail < d) { d = rail; mat = 5.0; }
+    float frame = min(max(girder, run), col);
+    if (frame < d) { d = frame; mat = 11.0; }
+    return d;
   }
 
   // --- hall 3: COOLANT TIER ------------------------------------------------

@@ -224,6 +224,34 @@ pipes run under the ceiling on brackets, and about a third of the flanges leak:
 a jet of steam that slows, spreads and rises, gathered by the march like the
 leaks and lit by the hall.
 
+## the long run
+
+nearly empty and far too big: a crane hall with nothing left to lift
+(`mapLongRun`). it used to be a cold blue box lit by two wall lamps 10 m up,
+with hazard poles standing in the floor under the hoist beams; it read as a
+void, not as a building.
+
+- **the steelwork**: a stanchion stands proud of each wall at every 9 m station
+  (an I-section with its flanges along the wall, on a base plate), carrying a
+  plate girder runway (centre line `H − 1.66`) with the crane rail on top, its
+  head at `H − 1.10`. both walls are folded into one evaluation, and everything
+  lies within 0.79 m of the plate, so further out one bound answers for it. it
+  stands on the first three stations only and ends on a stanchion: the fourth
+  is in the funnel to the coolant tier, where the walls lean in and a stanchion
+  leans with them. green paint chipped back to the steel (material 11), the
+  rail bare.
+- **the bridges** are the hoist beams, lowering out of the roof onto the rails
+  at each station as before, chain and hook in bare steel now rather than
+  hazard paint; the poles to the floor are gone.
+- **the high-bays**: the hall's lamps hang one under each bridge
+  (`secLampSpacing` 9, `lampAt`), on the side away from its chain, so they come
+  down out of the roof with the bridge and strike as it lands. a spun reflector
+  open underneath with its gear box and drop rod; only the lens is lit. the
+  reflector throws the light down (`lampLight` scales it by 0.30 sideways up to
+  1 straight down), so the floor gets pools and the walls a scallop under each
+  lamp. the long run's mean luminance on the probe went from 25–34 to 42–53,
+  level with its neighbours; every other hall is byte-identical.
+
 ## the drop, looking out
 
 the simulation braces the head down while the cage rides (about −0.2, and

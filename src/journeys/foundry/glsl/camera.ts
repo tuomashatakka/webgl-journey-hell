@@ -19,8 +19,7 @@ export const cameraGlsl = /* glsl */`
       float bi = band + float(k);
       float lz = (bi + 0.5) * sp;
       if (abs(secIndexAt(cyc(lz)) - sec) > 0.5 || lampDead(bi)) continue;
-      float side = mod(bi, 2.0) * 2.0 - 1.0;
-      g += glowOf(ro, rd, vec3(side * (pr.x - 0.22), pr.y - 0.62, lz), tmax) * smoothstep(0.15, 0.75, deployStation(lz));
+      g += glowOf(ro, rd, lampAt(bi, sec, pr.x, pr.y), tmax) * smoothstep(0.15, 0.75, deployStation(lz));
     }
     return lampRadiance(sec) * g;
   }

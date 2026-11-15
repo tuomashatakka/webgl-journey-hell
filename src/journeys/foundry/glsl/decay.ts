@@ -124,11 +124,25 @@ export const decayGlsl = `  // ========================== THE DECAY ============
   float secLampSpacing(float i) {
     if (i < 0.5) return 6.0;
     if (i < 1.5) return 6.0;
-    if (i < 2.5) return 18.0;
+    if (i < 2.5) return 9.0;   // long run: one high-bay under every crane bridge
     if (i < 3.5) return 6.0;
     if (i < 4.5) return 12.0;
     if (i < 5.5) return 4.0;
     return 12.0;
+  }
+
+  /**
+   * Where lamp band bi of hall sec hangs, in a W x H profile. Everywhere else a
+   * caged lamp high on alternate walls; the long run hangs a high-bay under
+   * each crane bridge instead, on the side away from its chain, so it comes
+   * down out of the roof with the bridge it hangs from.
+   */
+  vec3 lampAt(float bi, float sec, float W, float H) {
+    float side = mod(bi, 2.0) * 2.0 - 1.0;
+    float lz = (bi + 0.5) * secLampSpacing(sec);
+    if (abs(sec - 2.0) < 0.5)
+      return vec3(-side * W * 0.30, H - 2.25 - (1.0 - deployStation(lz)) * 3.2, lz);
+    return vec3(side * (W - 0.22), H - 0.62, lz);
   }
 
 `
