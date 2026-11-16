@@ -13,6 +13,7 @@ const enum Mode {
   SIGNAL = 6,
   POSTER = 7,
   RAIL = 8,
+  STAINED = 9,
 }
 
 export interface Surface {
@@ -73,6 +74,8 @@ export const SURF = {
   hazard:      tex(MAT.HAZARD, [ 1, 1, 1 ], { pom: false }),
   dirt:        tex(MAT.DIRT, [ 0.8, 0.78, 0.74 ]),
   coping:      tex(MAT.CONCRETE, [ 1.1, 1.08, 1.04 ], { pom: false }),
+  // The cutting's retaining walls: engineering brick with its weather drawn on.
+  brickCut:    { ...tex(MAT.BRICK, [ 0.66, 0.58, 0.55 ]), mode: Mode.STAINED },
 
   void:      paint([ 0, 0, 0 ], 1),
   yellow:    paint([ 0.8, 0.56, 0.04 ], 0.55),
@@ -84,6 +87,7 @@ export const SURF = {
   blue:      paint([ 0.02, 0.06, 0.32 ], 0.45),
   greyPaint: paint([ 0.3, 0.31, 0.32 ], 0.5, { metal: 0.3 }),
   cream:     paint([ 0.72, 0.68, 0.58 ], 0.7),
+  girder:    paint([ 0.07, 0.11, 0.09 ], 0.6, { metal: 0.25 }),
 
   rail:   { ...tex(MAT.STEEL, [ 0.55, 0.5, 0.46 ], { pom: false }), mode: Mode.RAIL },
   poster: { ...paint([ 1, 1, 1 ], 0.35), mode: Mode.POSTER },

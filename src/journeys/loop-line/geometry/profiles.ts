@@ -1,6 +1,29 @@
 import { Theme } from '../stations'
 import { SurfaceKey } from './surfaces'
 
+/**
+ * THE CUT's section, metres off the centre line and up from the track: the
+ * walls, their counterforts and the overbridges' bearings all stand on it.
+ */
+export const CUT = {
+  top:         10.4,
+  copingBack:  8.75,
+  copingFront: 7.55,
+  soffit:      10.08,
+  plinth:      1.05,
+  plinthFace:  5.25,
+  drain:       -0.55,
+  drainLip:    4.85,
+  cess:        -0.3,
+  shoulder:    2.75,
+  crib:        1.95,
+  bed:         -0.12,
+
+  /** The face's distance off the centre line at the plinth, and its batter. */
+  foot:   5.45,
+  batter: 0.25,
+} as const
+
 // --- profiles ----------------------------------------------------------------
 
 /** One section point: right, up (metres), the surface of the edge leaving it, and options. */
@@ -30,6 +53,9 @@ function arc (cr: number, cu: number, rr: number, ru: number, a0: number, a1: nu
   }
   return out
 }
+
+/** Where THE CUT's brick face stands at height `u`. */
+export const cutFace = (u: number): number => CUT.foot + (u - CUT.plinth) * CUT.batter
 
 /**
  * The cross-sections. +r is the curve's `right`, which on this circuit is the
@@ -110,23 +136,32 @@ export function profilesFor (theme: Theme): Profile[] {
         ],
       }]
     }
-    case Theme.CUT:
+    case Theme.CUT: {
       // An open trench under the day. Ten metres of retaining wall is what
       // makes it a cutting rather than a ditch: from a seat at two metres the
-      // world above is only ever a strip of sky.
-      return [{
-        closed: false,
-        points: [
-          pp(-60, 10.4, 'dirt'),
-          pp(-8.6, 10.4, 'coping'),
-          pp(-8, 10.1, 'panel', 0.9),
-          pp(-5, -0.38, 'ballast', 0.55),
-          pp(5, -0.38, 'panel', 0.55),
-          pp(8, 10.1, 'coping', 0.9),
-          pp(8.6, 10.4, 'dirt'),
-          pp(60, 10.4, 'dirt'),
-        ],
-      }]
+      // world above is only ever a strip of sky. Walked from the field on the
+      // left to the field on the right: a coping, a brick face battered back
+      // one in four, a concrete plinth, the drain at its foot, the cess, the
+      // ballast shoulder, and the bed filled to the top of the sleepers.
+      const left: PP[] = [
+        pp(-60, CUT.top, 'dirt'),
+        pp(-CUT.copingBack, CUT.top, 'coping'),
+        pp(-CUT.copingFront, CUT.top, 'coping', 0.95),
+        pp(-CUT.copingFront, CUT.soffit, 'coping', 0.9),
+        pp(-cutFace(CUT.soffit), CUT.soffit, 'brickCut', 0.85),
+        pp(-cutFace(CUT.plinth), CUT.plinth, 'concrete', 0.7),
+        pp(-CUT.plinthFace, CUT.plinth - 0.1, 'concrete', 0.65),
+        pp(-CUT.plinthFace, CUT.drain, 'concreteWet', 0.45),
+        pp(-CUT.drainLip, CUT.drain, 'concreteDim', 0.5),
+        pp(-CUT.drainLip, CUT.cess, 'ballastDark', 0.6),
+        pp(-CUT.shoulder, CUT.cess, 'ballast', 0.65),
+        pp(-CUT.crib, CUT.bed, 'ballast', 0.7),
+      ]
+      // The right is the left reflected, walked back to front.
+      const right = left.map((p, i) => pp(-p.r, p.u, left[Math.max(0, i - 1)].s, p.ao))
+      right.reverse()
+      return [{ closed: false, points: [ ...left, ...right ]}]
+    }
     case Theme.ANNEX:
       // A low, wide hall, the floor a single slab the water can lie on.
       return [{

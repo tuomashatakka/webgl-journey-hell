@@ -28,7 +28,7 @@ floor, no coordinate drift, and a track that could cross itself.
 | 1 | PLATFORM SIX | cream subway tile, a platform with a yellow line, columns, benches, roundels, posters | warm fluorescent strips | the edge crumbles |
 | 2 | THE RUNNING TUNNEL | a bored tube, cast-iron rings, cable runs | a bulkhead every 16 m | the rings crack and slip |
 | 3 | THE CONCOURSE | a vaulted hall, terrazzo walkways, mezzanine galleries, shuttered shops; **the points** | big pendant globes | the vault comes loose |
-| 4 | THE CUT | a ten-metre cutting under the day, overbridges, fences on the crest | the noon sky (Δ `DAY`) and its sun | the sky comes down |
+| 4 | THE CUT | a ten-metre cutting under the day: battered brick retaining walls with counterforts, a drain and cable troughs along the cess, plate-girder overbridges, fences on the crest | the noon sky (Δ `DAY`) and its sun | the sky comes down |
 | 5 | THE ANNEX | a low flooded interchange, rows of columns, beams | flickering green tubes | the water rises a step per lap |
 | 6 | THE VIADUCT | a brick viaduct on arches over a city at dusk | sodium lamps on the parapets, a thousand windows | the city goes dark |
 | 7 | THE STACKS | a machine hall through a corrugated building, rows of 45 U cabinets under cable trays and roof beams | cold battens on drop rods, server LEDs, a beacon on every cabinet | the racks advance, and go dark |
@@ -135,6 +135,24 @@ camera passes through a mouth and the walls sweep past — motion, not a pop.
   only racks are tinted; before that the rails, the strips and everything else
   in the bay walked sideways with them. The walk is capped at 3 m, which
   leaves a face 1.75 m off the centre line.
+* **THE CUT is a railway cutting** (`CUT` and `cutFace` in `geometry/profiles.ts`).
+  Walked across: a coping that overhangs the face, engineering brick battered
+  back one in four from 5.45 m off the centre line at the plinth to 7.7 m under
+  the coping (10.08 m up), a 1 m concrete plinth, a drain at its foot, the
+  cess at -0.3 with concrete cable troughing 4.25 m out, a ballast shoulder,
+  and the bed filled to the top of the sleepers (-0.12). Counterforts stand
+  0.35 m proud of the face every 6.5 m of arc length under a sloped stone cap;
+  a weep pipe 2.2 m up sits halfway between each pair. An overbridge replaces
+  the counterfort on every thirteenth place: two plate girders 7.8 m apart
+  (web, flanges, a stiffener every 1.2 m) on bed stones in the face, cross
+  girders under a deck slab, a railing on top. The end wall is the same brick,
+  the annex mouth framed by stone jambs and a lintel, its parapet coped.
+* **The brick carries its weather in the shader** (mode `STAINED`, surface
+  `brickCut`): streaks of run-off down from the coping, of a length per metre
+  of wall; a green-black fan under every weep hole, on the same 6.5 m grid as
+  the dressing; pale lime patches; a damp green foot. Past a few centimetres a
+  pixel the streaks show their mean. The other bays are pixel-identical on the
+  probe.
 * The flood is a level plane, not a track-following one: the annex is the bottom
   of a dip, so the water lies only where the floor is below it.
 * A slim cab — a dashboard band and two pillars at the frame's edges — rides

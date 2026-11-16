@@ -35,6 +35,9 @@ const GREENISH: [ number, number, number ]   = [ 0.7, 1, 0.84 ]
 const COLD: [ number, number, number ]       = [ 0.52, 0.74, 1 ]
 const RED: [ number, number, number ]        = [ 1, 0.1, 0.06 ]
 
+/** THE CUT's counterfort pitch, metres of arc length. The shader's weep stains keep to it. */
+const BUTTRESS_PITCH = 6.5
+
 /** Where a row of cabinets stands off the track's centre line, metres. */
 const RACK_ROW = 5.3
 
@@ -273,8 +276,35 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
     }
 
     case Theme.CUT: {
-      for (let s = s0 + 40; s < s1 - 30; s += 86)
-        d.put('overbridge', s, 0, 0)
+      // Everything on the walls keeps to one 6.5 m grid in arc length, which
+      // the shader's weathering shares: counterforts on it, weep holes halfway
+      // between, and an overbridge over a counterfort's place instead of one.
+      const grid              = Math.ceil((s0 + 6) / BUTTRESS_PITCH) * BUTTRESS_PITCH
+      const bridges: number[] = []
+      for (let s = grid + 6 * BUTTRESS_PITCH; s < s1 - 30; s += 13 * BUTTRESS_PITCH)
+        bridges.push(s)
+
+      const walls = [[ 0, 0 ], [ 0, Math.PI ]]
+      for (let s = grid; s < s1 - 3; s += BUTTRESS_PITCH)
+        for (const [ r, yaw ] of walls) {
+          d.put('weepPipe', s + BUTTRESS_PITCH / 2, r, 0, { yaw })
+          if (bridges.some(b => Math.abs(b - s) < 5))
+            continue
+          d.put('buttress', s, r, 0, { yaw })
+          d.put('buttressCap', s, r, 0, { yaw })
+        }
+      for (const s of bridges) {
+        d.put('overbridgeGirder', s, 0, 0)
+        d.put('overbridgeDeck', s, 0, 0)
+        d.put('overbridgeRailing', s, 0, 0)
+        d.put('overbridgeBearing', s, 0, 0)
+      }
+      for (let s = s0 + 1; s < s1; s += 2) {
+        d.put('trough', s, -4.25, 0)
+        d.put('trough', s, 4.25, 0)
+      }
+      for (let s = s0 + 24; s < s1 - 10; s += 70)
+        d.put('locCase', s, Math.round((s - s0) / 70) % 2 ? 3.45 : -3.45, 0)
       for (let s = s0 + 1; s < s1; s += 1.6) {
         d.put('fencePost', s, -9.3, 0)
         d.put('fencePost', s, 9.3, 0)
@@ -283,6 +313,7 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
         d.put('signalPost', s, -3.6, -0.38)
         d.put('signalLens', s, -3.6, -0.38, { tint: 2 })
       }
+      d.put('portalStone', s1, 0, 0)
       break
     }
 
@@ -479,7 +510,7 @@ export function buildHeadwalls (c: Circuits): Headwall[] {
   const chordHole = projectPortal(c, c.chordStartAltS, c.main.frameAtDistance(BAYS[3].u0 * L))
   wall(2, 3, [ -12, -0.38, 24, 16.1 ], 'plaster', [ chordHole ])
 
-  wall(3, 4, [ -8.7, -0.38, 8.7, 11.7 ], 'panel')
+  wall(3, 4, [ -8.7, -0.38, 8.7, 11.7 ], 'brickCut')
   wall(4, 5, [ -10, -0.38, 22, 4.9 ], 'plasterDamp')
   wall(5, 6, [ -26, -18, 26, 13 ], 'concreteDim')
 

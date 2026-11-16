@@ -2,9 +2,14 @@ import { createMeshBuilder, fracture } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { mulberry32 } from '@wjh/math/rng'
 import { SurfaceKey } from './surfaces'
+import { CUT, cutFace } from './profiles'
 
 /** Sleeper pitch, metres. */
 export const TIE_PITCH = 0.744
+
+/** An overbridge's girders: half their span across the cut, and their offset along the track. */
+const BRIDGE_SPAN   = 9.6
+const BRIDGE_GIRDER = 3.9
 
 export const UNITS: Record<string, UnitSpec> = {
   sleeperConcrete: { surface: 'concreteDim', cell: 0.9, build: b => b.box(0, -0.1, 0, 1.3, 0.09, 0.13) },
@@ -81,17 +86,99 @@ export const UNITS: Record<string, UnitSpec> = {
   railTop:      { surface: 'greyPaint', cell: 0, build: b => b.box(0, 1.1, 0, 0.04, 0.03, 1.05) },
   pointMachine: { surface: 'green', cell: 0.5, build: b => b.box(0, 0.25, 0, 0.35, 0.28, 0.7) },
 
-  overbridge: {
-    surface: 'concreteDim',
-    cell:    3.5,
+  // THE CUT. Each piece is built outward along local +x (left) from the
+  // centre line, so the left wall's is placed as it is and the right's turned
+  // round; heights are the section's, so they stand at u = 0.
+  //
+  // A counterfort every 6.5 m: brick standing proud of the face and battered
+  // with it, down into the drain, under a sloped stone cap.
+  buttress: {
+    surface: 'brickCut',
+    cell:    1.6,
     build:   b => {
-      b.box(0, 10, 0, 15.5, 0.55, 4.6) // deck
-      b.box(-14.6, 11.2, 0, 0.3, 0.7, 4.6)
-      b.box(14.6, 11.2, 0, 0.3, 0.7, 4.6)
-      b.box(0, 8.95, -3.6, 15.5, 0.5, 0.45) // edge beams
-      b.box(0, 8.95, 3.6, 15.5, 0.5, 0.45)
+      for (const poly of buttressSections())
+        prism(b, poly, -0.5, 0.5)
     },
   },
+  buttressCap: {
+    surface: 'coping',
+    cell:    0,
+    build:   b => {
+      const [ , , crown, knee ] = buttressSections()[1]
+      prism(b, [ knee, crown, [ crown[0], crown[1] + 0.12 ], [ knee[0] - 0.06, knee[1] + 0.12 ]], -0.56, 0.56)
+    },
+  },
+  // The pipe end of a weep hole, a little proud of the face, 2.2 m up.
+  weepPipe: { surface: 'black', cell: 0, build: b => b.box(cutFace(2.2) - 0.03, 2.2, 0, 0.07, 0.05, 0.05) },
+  // Concrete cable troughing along the cess, a lid every two metres.
+  trough:   { surface: 'concreteDim', cell: 0, build: b => b.box(0, CUT.cess + 0.12, 0, 0.22, 0.12, 0.97) },
+  // A location case: the grey cabinet the signalling lives in, on its plinth.
+  locCase:  {
+    surface: 'steel',
+    cell:    0,
+    build:   b => {
+      b.box(0, CUT.cess + 0.95, 0, 0.32, 0.7, 0.55)
+      b.box(0, CUT.cess + 1.7, 0, 0.36, 0.05, 0.6)
+      b.box(0, CUT.cess + 0.12, 0, 0.26, 0.12, 0.48)
+    },
+  },
+  // An overbridge: two plate girders across the cut, resting on bed stones
+  // on the face, with cross girders under the deck between them. From the
+  // train it is a deep steel fascia with its stiffeners, and from under it a
+  // ribbed soffit.
+  overbridgeGirder: {
+    surface: 'girder',
+    cell:    3,
+    build:   b => {
+      for (const z of [ -BRIDGE_GIRDER, BRIDGE_GIRDER ]) {
+        b.box(0, 10.1, z, BRIDGE_SPAN, 0.75, 0.03) // web
+        b.box(0, 9.38, z, BRIDGE_SPAN, 0.03, 0.22) // flanges
+        b.box(0, 10.82, z, BRIDGE_SPAN, 0.03, 0.22)
+        for (let x = -7.2; x <= 7.21; x += 1.2)
+          b.box(x, 10.1, z, 0.012, 0.72, 0.2) // stiffeners, both faces
+      }
+      for (let x = -6.4; x <= 6.41; x += 1.6) {
+        b.box(x, 9.62, 0, 0.012, 0.25, BRIDGE_GIRDER - 0.03)
+        b.box(x, 9.38, 0, 0.11, 0.02, BRIDGE_GIRDER - 0.03)
+      }
+    },
+  },
+  overbridgeDeck:    { surface: 'concreteDim', cell: 3.5, build: b => b.box(0, 9.95, 0, BRIDGE_SPAN, 0.08, BRIDGE_GIRDER - 0.03) },
+  overbridgeRailing: {
+    surface: 'darkGrey',
+    cell:    0,
+    build:   b => {
+      for (const z of [ -BRIDGE_GIRDER, BRIDGE_GIRDER ]) {
+        for (let x = -8.4; x <= 8.41; x += 1.2)
+          b.box(x, 11.3, z, 0.03, 0.45, 0.03)
+        b.box(0, 11.76, z, 8.45, 0.025, 0.04)
+        b.box(0, 11.3, z, 8.45, 0.015, 0.015)
+      }
+    },
+  },
+  overbridgeBearing: {
+    surface: 'coping',
+    cell:    0,
+    build:   b => {
+      for (const x of [ -7.45, 7.45 ])
+        for (const z of [ -BRIDGE_GIRDER, BRIDGE_GIRDER ])
+          b.box(x, 9.2, z, 0.3, 0.16, 0.42)
+    },
+  },
+  // The annex mouth in the cut's end wall: stone jambs, a lintel, and a
+  // coping along the parapet the wall carries above the fields. Built just in
+  // front of the wall's plane, which is local z = 0.
+  portalStone: {
+    surface: 'coping',
+    cell:    0,
+    build:   b => {
+      for (const x of [ -4.9, 4.9 ])
+        b.box(x, 2.11, -0.15, 0.3, 2.49, 0.15)
+      b.box(0, 5.05, -0.18, 5.4, 0.45, 0.18)
+      b.box(0, 11.82, -0.2, 8.9, 0.12, 0.3)
+    },
+  },
+
   fencePost: { surface: 'darkGrey',
     cell:    0,
     build:   b => {
@@ -254,6 +341,39 @@ function disc (b: MeshBuilder, r0: number, r1: number, z: number, seg: number): 
         b.face(a0, a1, a1 + 1)
       }
     }
+  }
+}
+
+/**
+ * A counterfort's section in (out, up), as two convex polygons wound
+ * anticlockwise: the block in the drain, and the battered pier above it, whose
+ * last two corners are the top of its slope (at the wall, then at the front).
+ */
+function buttressSections (): [ number, number ][][] {
+  const front = CUT.drainLip + 0.25
+  const back  = CUT.foot + 0.3
+  const knee  = cutFace(9.45) - 0.35
+  const crown = cutFace(9.9) + 0.2
+  return [
+    [[ front, CUT.drain ], [ back, CUT.drain ], [ back, CUT.plinth ], [ front, CUT.plinth ]],
+    [[ front, CUT.plinth ], [ back, CUT.plinth ], [ crown, 9.9 ], [ knee, 9.45 ]],
+  ]
+}
+
+/** A convex polygon in local (x, y), wound anticlockwise, extruded from z0 to z1 and capped. */
+function prism (b: MeshBuilder, poly: [ number, number ][], z0: number, z1: number): void {
+  const n = poly.length
+  for (let i = 0; i < n; i++) {
+    const [ px, py ] = poly[i]
+    const [ qx, qy ] = poly[(i + 1) % n]
+    b.quad([ px, py, z0 ], [ qx, qy, z0 ], [ qx, qy, z1 ], [ px, py, z1 ])
+  }
+  for (let i = 1; i < n - 1; i++) {
+    const [ ax, ay ] = poly[0]
+    const [ bx, by ] = poly[i]
+    const [ cx, cy ] = poly[i + 1]
+    b.tri(ax, ay, z1, bx, by, z1, cx, cy, z1)
+    b.tri(ax, ay, z0, cx, cy, z0, bx, by, z0)
   }
 }
 

@@ -356,6 +356,15 @@ vec3 paletteColour (float k) {
   return vec3(0.10, 0.10, 0.12);
 }
 
+// Smooth value noise, for the weather on a wall.
+float stainNoise (vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash12(i), hash12(i + vec2(1.0, 0.0)), f.x),
+             mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y);
+}
+
 void main () {
   float bakedAo = clamp(length(vNormal), 0.05, 1.0);
   vec3 Ng = normalize(vNormal);
@@ -546,6 +555,33 @@ void main () {
     s.rough = 0.35;
     // Shop signs are lit from inside.
     emissive += c * uGlow * alive * 0.8;
+  }
+  else if (mode > 8.5) {
+    // STAINED: a retaining wall twenty years out in the weather. uvm is
+    // (along, up) in metres on a shell, a headwall and a counterfort alike.
+    // Run-off from the coping leaves dark streaks of differing length down
+    // the face; every weep hole (2.2 m up, halfway along the 6.5 m grid) bleeds
+    // a green-black fan below it; lime leaches out in pale patches, and the
+    // foot is green and damp where the drain splashes it. Past a few
+    // centimetres a pixel the streak field is replaced by its mean.
+    float px = max(fwidth(uvm.x), fwidth(uvm.y));
+    float far = smoothstep(0.08, 0.5, px);
+    float y = uvm.y;
+    float runLen = 2.5 + 6.5 * stainNoise(vec2(uvm.x * 0.6, 7.3));
+    float streak = smoothstep(0.42, 0.78, stainNoise(vec2(uvm.x * 2.6, y * 0.12)));
+    streak = mix(streak, 0.3, far) * smoothstep(10.1 - runLen, 10.0, y);
+    float d = mod(uvm.x, 6.5) - 3.25;
+    float fan = 0.06 + (2.2 - y) * 0.11;
+    float weep = (1.0 - smoothstep(fan * 0.5, fan, abs(d))) * step(y, 2.17) *
+      smoothstep(0.3, 1.2, y) * (0.55 + 0.45 * stainNoise(vec2(uvm.x * 9.0, y * 3.0)));
+    float foot = 1.0 - smoothstep(0.2, 1.1 + 0.9 * stainNoise(vec2(uvm.x * 0.8, 2.0)), y);
+    float lime = smoothstep(0.7, 0.88, stainNoise(vec2(uvm.x * 0.9, y * 0.7) + 11.0)) *
+      smoothstep(1.5, 3.0, y) * (1.0 - streak);
+    s.albedo *= mix(vec3(1.0), vec3(0.42, 0.42, 0.4), streak * 0.75);
+    s.albedo = mix(s.albedo, vec3(0.32, 0.31, 0.27), lime * 0.3);
+    s.albedo = mix(s.albedo, vec3(0.05, 0.07, 0.035), weep * 0.85);
+    s.albedo = mix(s.albedo, s.albedo * vec3(0.5, 0.62, 0.38), foot * 0.8);
+    s.rough = mix(s.rough, 0.45, max(weep, foot) * 0.6);
   }
   else if (mode > 7.5) {
     // RAIL: the running surface is polished by the wheels; the rest is rust.
