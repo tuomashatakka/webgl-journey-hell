@@ -67,6 +67,13 @@ export const mainGlsl = `  // ---- main ----------------------------------------
     // chalk drift came to be lit — and skied — by the room two portals away.
     float zEnd = rd.z * tEnd;
 
+    // A ray that hit nothing went to infinity through open air, so it never
+    // entered a room with walls, whatever depth the march limit puts its end at.
+    // Reading its sky and its air off that depth put the overlook's far rays in
+    // the tunnel beyond the portal: the sky switched rooms along contours of
+    // depth, terraces down the sunset and rings round the vanishing point.
+    if (!hit) zEnd = openReach(zEnd);
+
     // The air near the cart, which is what the motes are floating in and what the
     // rush glow is picking up. Not the room at the far end of the ray.
     Room near = roomAt(rd.z * 2.0);
