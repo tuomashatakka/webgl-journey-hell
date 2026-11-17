@@ -95,12 +95,17 @@ export const mainGlsl = `  // ---- main ----------------------------------------
 
       Room r = roomAt(q.z);
 
-      float rough;
-      vec3 emit;
-      vec3 albedo = materialAlbedo(gMat, q, n, r, t, rough, emit);
+      if (onHeadland(q, r)) {
+        col = headlandAlbedo(q, n, t) * headlandLight(q, n, calcAO(q, n));
+      }
+      else {
+        float rough;
+        vec3 emit;
+        vec3 albedo = materialAlbedo(gMat, q, n, r, t, rough, emit);
 
-      vec3 vdir = -toTrackDir(rd, p.z);
-      col = albedo * directLight(q, n, vdir, rough, calcAO(q, n)) + emit;
+        vec3 vdir = -toTrackDir(rd, p.z);
+        col = albedo * directLight(q, n, vdir, rough, calcAO(q, n)) + emit;
+      }
     }
     else {
       col = skyC;

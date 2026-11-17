@@ -196,6 +196,60 @@ glazing is one set of numbers read by everything that needs it.
   not pay for outside the room and a rasteriser that runs both sides of every
   branch pays for everywhere (`gotchas.md`); it has not been timed on a phone.
 
+## the overlook
+
+open sky with nothing near in it, so the sky is the room, and the hill the
+line runs into at the end of it is the only solid thing in view.
+
+- **the weather** (`overlookWeather`, read only by rays that end in the
+  overlook, so every other room keeps the plain sunset and a doorway sees the
+  same cloud sea it always did). directions are measured round the sun's
+  azimuth, so the far cloud is fixed in the world while the railway turns, and
+  drift with the wind is `uCart.x`, the distance ridden, so it seeks exactly.
+  - a **high deck** of altocumulus in rolls on a plane at 1 / h, faded to haze
+    under 0.10 of elevation (its cells would be finer than a pixel) and thinned
+    toward the zenith. away from the sun a cell takes the light on its
+    underside and goes rose; toward it the cell is backlit, dark, with only its
+    thin edges letting the sun through.
+  - a **cumulus wall** on the horizon all the way round, its tops a fractal of
+    the azimuth read off the unit circle (no seam behind the cart), to 0.11 of
+    elevation over the sea's horizon at -0.012; backlit toward the sun with a
+    hot rim, lit on its face away from it, set back by haze.
+  - the **cloud sea** ninety metres down as before, but in relief: the field is
+    read a second time a step toward the sun and the difference is which way
+    each top faces. the far sea goes to the horizon haze, not to texture finer
+    than its pixels.
+- **the headland** (`headland`, `HEAD_TOP` 11 m, `HEAD_RISE` 0.45, `HEAD_FALL`
+  0.55, `HEAD_WALL` 9 m). a walled room is carved out of an unbounded solid,
+  which from the overlook was a tiled half-space filling the sky sixty metres
+  off, its courses let through the fog as terraces and rings. while the
+  overlook is in the window with a walled room after it, the rock past it is
+  cut down to a ridge on the line: a rounded crest 11 m over the portal,
+  climbing 0.45 m per metre into the hill and falling 0.55 per metre to both
+  sides into the cloud, with three octaves of relief between -3 and +4.9 m. it
+  is cut square across the track by an 18 x 9 m headwall of dressed stone
+  (0.55 m courses on a broken bond, a coping, rain streaks) round the collar;
+  outside that the face leans back. the hill is granite split along its
+  bedding with lichen and dry grass on the flats, lit by the overlook's sun
+  (with its shadow) and sky, never by the tunnel's lamps (`onHeadland`,
+  `headlandAlbedo`, `headlandLight`). it only ever takes solid away, outside the
+  bore and the collar, so it cannot reach the cart; every map call before the
+  overlook, in front of the headland or deep inside it skips the noise on a
+  bound.
+- **what it costs**: fewer scene evaluations, not more — about 46 a pixel on
+  the first lap's overlook against 58 before, because the march used to crawl
+  along false surfaces (below) that are gone. every other room is within a
+  couple of evaluations of what it was.
+- **a bound under the hit epsilon is a hit.** `roomProps` handed back its
+  z-slab, and `portalCollar` its end-plane distance, as a bound until they were
+  within 0.05 m; the march's cone epsilon reaches 0.15 m at `T_MAX`, more after
+  the bend's Lipschitz divisor, so every far ray stopped on the next room's end
+  plane, a wall across the whole sky. a solid half-space sat just behind it and
+  hid that until the headland took it away. both early-outs now wait until a
+  metre out.
+- on the fourth lap the fall follows the overlook and there is no headland:
+  the shaft's mouth stands in the weather as the seam.
+
 ## the fissures
 
 `uFall.w` is one number, read twice — once by the surface, where the field's zero

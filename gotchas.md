@@ -25,6 +25,7 @@ Traps that have already cost time, in the order you are likely to hit them. The 
 * **Hash on a wrapped clock.** `tickAt` in the CRT pass exists because `sin()` of an unwrapped hour-long clock stops varying and the noise freezes into a constant that subtracts the whole picture.
 * **Phone compilers inline and unroll everything.** The liminal `LITE` build exists because the full raymarcher did not compile on some phones. Anything with many `map()` call sites needs a light build.
 * **The CRT capture texture must be `RGB`**, not `RGBA`, because the contexts are created `alpha: false`; the wrong format is a silent `INVALID_OPERATION` and every journey goes black.
+* **An early-out bound smaller than the hit epsilon is a surface.** A cone epsilon grows with range (the switchback's is 0.15 m at its march limit, more after a Lipschitz divisor), so a bound handed back "while it is clear" at 0.05 m stops every far ray on the bounding plane. It stays hidden only while real solid sits behind it. Hand bounds back from a metre out (`docs/journeys/switchback.md`, the overlook).
 * Route-bending traps (min vs smin, bounds that reach zero, quantised fields through a pinhole, resolve-the-owner rules) are in `docs/routes.md`.
 
 ## Rasterized scenes

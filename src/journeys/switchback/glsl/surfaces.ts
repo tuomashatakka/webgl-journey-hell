@@ -16,6 +16,60 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
     return smoothstep(0.5 - w, 0.5, max(g.x, g.y)) * smoothstep(48.0, 12.0, t);
   }
 
+  // ---- the headland's stone -------------------------------------------------
+  //
+  // The outside of the hill the platform is cut into, which nothing but the
+  // overlook ever sees, so it is lit by the overlook's weather (headlandLight)
+  // and not by the tunnel's lamps. A shell hit is the headland's when the
+  // headland is in the window, the point is past the overlook and it is well
+  // outside the bore of the room it is in: the bore's own walls are tile.
+
+  bool onHeadland(vec3 q, Room r) {
+    if (gMat > M_SHELL + 0.5 || r.bore > 50.0) return false;
+    vec2 span = headlandSpan();
+    return span.x < 1e4 && q.z > span.y
+        && roomProfile(q, r.bore, r.ceilH, r.floorD) > 0.6;
+  }
+
+  /**
+   * Granite on the hill, split along its bedding, with lichen on the faces and
+   * dry grass where it is flat enough to hold soil; dressed stone on the
+   * headwall round the portal, in 0.55 m courses on a broken bond under a
+   * coping, streaked where the rain comes off the top.
+   */
+  vec3 headlandAlbedo(vec3 q, vec3 n, float t) {
+    float zp = phaseAt(q.z);
+    float far = smoothstep(14.0, 60.0, t);
+
+    if (n.z < -0.8 && abs(q.x) < HEAD_WALL + 0.3 && q.y < HEAD_WALL + 0.3) {
+      float row  = floor(q.y / 0.55);
+      float bx   = q.x / 1.1 + 0.5 * mod(row, 2.0) + 0.23 * hash21(vec2(row, 4.1));
+      float gx   = abs(fract(bx) - 0.5) * 1.1;
+      float gy   = abs(fract(q.y / 0.55) - 0.5) * 0.55;
+      float w    = 0.012 + t * 0.0012;
+      float joint = max(smoothstep(0.55 - w, 0.55, gx), smoothstep(0.275 - w, 0.275, gy)) * (1.0 - far);
+      float tone = hash21(vec2(floor(bx), row));
+      vec3 c = mix(vec3(0.44, 0.40, 0.36), vec3(0.58, 0.53, 0.46), tone);
+      c *= 0.86 + 0.28 * fbm(q.xy * 2.3);
+      c = mix(c, vec3(0.62, 0.58, 0.52), smoothstep(HEAD_WALL - 0.45, HEAD_WALL - 0.40, q.y));
+      float run = smoothstep(0.45, 0.80, fbm(vec2(q.x * 1.6, q.y * 0.12 + 3.0)));
+      c *= 1.0 - 0.38 * run * smoothstep(-2.0, HEAD_WALL, q.y);
+      return mix(c, vec3(0.17, 0.16, 0.15), joint * 0.8);
+    }
+
+    vec2 uv = abs(n.y) > 0.6 ? vec2(q.x, zp) : (abs(n.x) > 0.6 ? vec2(zp, q.y) : q.xy);
+    float tone = fbm(uv * 0.35);
+    vec3 c = mix(vec3(0.24, 0.22, 0.22), vec3(0.43, 0.39, 0.35), tone);
+    float bed = abs(fract(q.y * 0.42 + fbm(uv * 0.21) * 1.3) - 0.5);
+    c *= 1.0 - 0.45 * smoothstep(0.42, 0.49, bed) * (1.0 - far);
+    c *= 0.82 + 0.36 * fbm(uv * 3.1) * (1.0 - far * 0.7);
+    float lichen = smoothstep(0.58, 0.70, fbm(uv * 0.9 + 6.1));
+    c = mix(c, vec3(0.52, 0.53, 0.44), lichen * 0.55);
+    float level = smoothstep(0.55, 0.85, n.y);
+    vec3 grass = mix(vec3(0.33, 0.30, 0.17), vec3(0.22, 0.24, 0.13), fbm(uv * 1.7));
+    return mix(c, grass, level * smoothstep(0.35, 0.55, fbm(uv * 0.6 + 2.0)));
+  }
+
   vec3 shellAlbedo(vec3 q, vec3 n, float type, float grime, float t) {
     float isFloor = smoothstep(0.55, 0.85, n.y);
     float isCeil  = smoothstep(0.55, 0.85, -n.y);

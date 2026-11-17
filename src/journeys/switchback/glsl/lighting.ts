@@ -107,6 +107,18 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
     return col + amb * (0.45 + 0.55 * max(dot(n, uUp.xyz), 0.0)) * ao;
   }
 
+  /**
+   * The headland under the overlook's weather: the low sun, with its shadow,
+   * and the overlook's ambient, which is the sky the room has no roof against.
+   */
+  vec3 headlandLight(vec3 q, vec3 n, float ao) {
+    vec3  sunCol = mix(vec3(1.00, 0.72, 0.58), vec3(0.78, 0.46, 0.52), uAtm.y * 0.6);
+    float sh = uHeavy > 0.5 ? mix(1.0, shadowTo(q, uSun.xyz, 30.0), 0.85) : 1.0;
+    vec3  col = sunCol * max(dot(n, uSun.xyz), 0.0) * sh * 3.4;
+    vec3  amb = roomFog(T_OVERLOOK, 0.25) * 3.0 + skyAmbient(T_OVERLOOK, uAtm.y) * 0.65;
+    return col + amb * (0.45 + 0.55 * max(dot(n, uUp.xyz), 0.0)) * ao;
+  }
+
   // ---- volumetrics ---------------------------------------------------------
 
   /**

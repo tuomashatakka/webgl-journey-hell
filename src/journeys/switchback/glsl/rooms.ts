@@ -46,7 +46,7 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
 
     float end = abs(q.z - A.x) < abs(q.z - A.y) ? A.x : A.y;
     float dz  = abs(q.z - end) - 0.34;
-    if (dz > 0.05) return dz;                      // bound, handed back while it is clear
+    if (dz > 1.0) return dz;                       // bound, handed back while it is clear
 
     float prof = roomProfile(q, A.w, B.x, B.y);
     return max(max(prof - 0.70, -prof), dz);
@@ -559,9 +559,13 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
 
   float roomProps(vec3 q, vec4 A, vec4 B, vec4 C) {
     // The room's own z-slab is the outermost bound every prop shares. Handed back
-    // as a distance only while it is comfortably clear of the hit epsilon.
+    // as a distance only while it is comfortably clear of the hit epsilon, and
+    // that is the epsilon at the far end of the march (0.15 m at T_MAX) times
+    // the bend's Lipschitz divisor, not the epsilon at the near end: a bound
+    // under it is a hit, and with nothing behind the slab, as past the
+    // overlook's headland, that hit was a wall across the whole sky.
     float slab = max(A.x - OVERLAP - q.z, q.z - A.y - OVERLAP);
-    if (slab > 0.05) return slab;
+    if (slab > 1.0) return slab;
 
     float t = A.z;
     float d;
