@@ -655,3 +655,34 @@ rules moved.
   ramps across the undertow, where none of the outdoor change is on screen;
   the lap seam scans clean (the worst step is the culvert's daylight, 2.4×).
 - The tower shaders moved to `shader/towers.ts`; `world.ts` was over the line limit.
+
+## Revision 7 — downtown is massed
+
+The towers were unit boxes: a flat lid, the window grid up to the edge, the
+same silhouette two hundred times, and masonry that read as whitewash.
+
+- **One massing mesh** (`towerMesh` in `city.ts`). Its vertices are not
+  positions: each names a level (ground, podium top, setback, roof, parapet
+  top, plant top, mast top) and an inset (none, podium, crown, parapet, plant,
+  mast), and `towerVert` resolves both in metres from the instance, so a
+  1.1 m parapet is 1.1 m on a 14 m block and on the 128 m core. Instances are
+  16 floats: the fourth vec4 (`iMass`, location 7) is podium height, setback
+  height, crown inset, and mast + plant / 10. A part a tower does not have
+  collapses to zero height or width, or sinks under the roof.
+- **The massing** (`massFor`): a podium of 4.5–7.5 m on 55 % of towers over
+  25 m, the shaft inset up to 1.6 m above it; a setback at 60–85 % of the
+  height on 65 % of towers over 34 m, the crown inset up to 22 % of the
+  narrow side; a parapet with a coping on every roof; a plant room of
+  2.6–3.8 m on every roof; a steel mast of 6–20 m on 40 % of towers over
+  60 m, with a red obstruction lamp that blinks from dusk. Insets only, never
+  outsets, so every clearance against the road is unchanged. A tower held
+  down under an overhead road keeps a bare roof.
+- **The facades.** Street level is the podium where there is one (shopfronts
+  the podium's height). No windows above the roof line; half the towers have
+  a louvred plant floor in their top four metres. Masonry is limestone,
+  brick, grey concrete or granite by seed, with rain streaks under the sills
+  and a damp foot, instead of one cream-to-grey range. Blinds are darker
+  (0.12, was 0.2: they read as white tiles), and each lit window at dusk has
+  its own brightness and is lit brighter at the ceiling than at the sill.
+- The bend, the lean caps, placement and every other section are unchanged:
+  the probe moves only on frames with towers in them.

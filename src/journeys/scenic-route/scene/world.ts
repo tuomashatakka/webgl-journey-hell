@@ -12,6 +12,7 @@ import type { Hinged, Jaw } from '../maw'
 import { buildProps } from '../props'
 import type { PropSet } from '../props'
 import { buildCity } from '../city'
+import { STANDARD_LAYOUT, VERTEX_FLOATS } from '@wjh/geometry/meshBuilder'
 
 import { PORTAL_LIFT } from './shared'
 import type { Drawable } from './shared'
@@ -108,7 +109,7 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
 
   // --- downtown ------------------------------------------------------------------
   const city      = buildCity(route, spine)
-  const towerMesh = createMesh(gl, city.builder, 3)
+  const towerMesh = createMeshFromArrays(gl, city.vertices, city.indices, STANDARD_LAYOUT, VERTEX_FLOATS, 4)
   towerMesh.setInstances(gl, city.instances)
 
   // --- the coast guardrail -----------------------------------------------------
