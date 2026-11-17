@@ -30,7 +30,8 @@ export const marchGlsl = `    // Signed Distance Field Map
 
         float cX = getCamX(p.z);
         float cY = fY + getCamOffset(p.z);
-        float dCamSafety = length(p.xy - vec2(cX, cY)) - 2.0;
+        // (on the walked stair the clearance tightens so the treads stand under the eye)
+        float dCamSafety = length(p.xy - vec2(cX, cY)) - (2.0 - 0.9 * labTight(currentZ));
 
         vec2 res = vec2(1000.0, MAT_MATTE);
 
@@ -140,33 +141,12 @@ export const marchGlsl = `    // Signed Distance Field Map
         dBase = currentZ < 220.0 ? mix(dBase, dSec4, smoothstep_custom(200.0, 220.0, currentZ)) : dSec4;
         }
 
-        // --- SECTOR 5: VOID BASIS LABYRINTH (280 to 360; in from 270, gone by 370) ---
+        // --- SECTOR 5: THE STAIR LABYRINTH (280 to 360; in from 270, gone by 370) ---
         if (currentZ > 270.0 && currentZ < 370.0) {
-        vec3 q5 = p; q5.x -= cX;
-        float dMainStair = max(abs(q5.x) - 2.5 * cFactor, abs(q5.y - fY) - 0.45);
-        
-        vec3 lq = q5;
-        lq.yz = mat2(cos(sin(q5.x*0.015)*0.5), -sin(sin(q5.x*0.015)*0.5), sin(sin(q5.x*0.015)*0.5), cos(sin(q5.x*0.015)*0.5)) * lq.yz;
-        lq.zx = mat2(cos(cos(q5.y*0.015)*0.5), -sin(cos(q5.y*0.015)*0.5), sin(cos(q5.y*0.015)*0.5), cos(cos(q5.y*0.015)*0.5)) * lq.zx;
-        lq = mod(lq + 10.0, 20.0) - 10.0;
-        
-        float block = max(max(abs(lq.x)-10.0, abs(lq.y)-10.0), abs(lq.z)-10.0);
-        float inner = max(max(abs(lq.x)-9.0, abs(lq.y)-9.0), abs(lq.z)-9.0);
-        block = max(block, -inner);
-        float doorX = max(max(abs(lq.x)-11.0, abs(lq.y)-5.0), abs(lq.z)-5.0);
-        float doorY = max(max(abs(lq.x)-5.0, abs(lq.y)-11.0), abs(lq.z)-5.0);
-        float doorZ = max(max(abs(lq.x)-5.0, abs(lq.y)-5.0), abs(lq.z)-11.0);
-        block = max(block, -min(doorX, min(doorY, doorZ)));
-        
-        vec3 sq_ = lq; sq_.y -= floor(sq_.z / 0.5) * 0.5; sq_.z = mod(sq_.z, 0.5) - 0.25;
-        float stair_ = max(abs(lq.x)-2.5, max(abs(lq.y)-8.5, abs(lq.z)-8.5));
-        stair_ = max(stair_, max(abs(sq_.x)-2.5, max(abs(sq_.y)-0.125, abs(sq_.z)-0.125)));
-        
-        vec3 sq3_ = vec3(lq.y, lq.z, lq.x); sq3_.y -= floor(sq3_.z / 0.5) * 0.5; sq3_.z = mod(sq3_.z, 0.5) - 0.25;
-        float stair3_ = max(abs(sq3_.x)-2.5, max(abs(sq3_.y)-0.125, abs(sq3_.z)-0.125));
-        stair3_ = max(stair3_, max(abs(lq.y)-2.5, max(abs(lq.z)-8.5, abs(lq.x)-8.5)));
-        
-        float dSec5 = min(dMainStair, min(block, min(stair_, stair3_)) * 0.4);
+        float lPart;
+        vec3 lLocal;
+        vec4 lOrient;
+        float dSec5 = labField(p, currentZ - 280.0, cFactor, lPart, lLocal, lOrient) * 0.8;
         dBase = currentZ < 290.0 ? mix(dBase, dSec5, smoothstep_custom(270.0, 290.0, currentZ)) : dSec5;
         }
 

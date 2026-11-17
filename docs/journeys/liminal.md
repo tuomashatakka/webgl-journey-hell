@@ -20,7 +20,8 @@ GLSL ES 1.00, two passes (`renderer.ts`): the scene into an 8-bit target, then
 `fsPost` (fisheye, chromatic split, flares, the loop fades). the scene is
 built from `glsl/` pieces in this order: `core` (uniforms, the segment table,
 the camera's path), `palette` (biome colours, the abyss palette, helpers),
-`setpieces` (sector 666), `march` (the map), `shading` (normals, AO, the tiled
+`setpieces` (sector 666), `labyrinth` (sector 5: its solid, its lamps
+and its shading), `march` (the map), `shading` (normals, AO, the tiled
 halls, the camera and `main`).
 
 two builds: the full one (120 primary steps, 5 AO taps, two 40-step reflection
@@ -74,3 +75,45 @@ not change.
   up the walls and columns for 3.5 m above it, falling off as `exp(-0.8 h)`.
 * **decay.** the blood and the glowing cracks the laps bring are laid on the
   tile as on any matte surface (`decayDecals`).
+
+## the stair labyrinth
+
+sector 5 (loop-local z 280..360, `glsl/labyrinth.ts`) is the floor's own gait
+built in stone. the route, the camera and the speeds are as `kinematics.ts`
+has them: sixteen storeys of 3.44 m, each a 1.95 m landing and a 1.3 m rise,
+climbed at 1.6 m/s, then the drop to -180 at 18 m/s and the wade into
+sector 6.
+
+* **the walked stair.** limestone, 5 m wide (scaled by the squeeze), swaying
+  with the route. each landing is a 0.35 m slab; each flight twelve risers
+  of 0.287 m on 0.118 m treads with a soffit 0.3 m under the inner corners.
+  an iron rail 0.95 m over the landings and the pitch line both sides,
+  balusters every 0.36 m, a newel with a lamp globe at the head of every
+  landing, the sides alternating. the first landing reaches 12 m back into
+  the hydraulics; the seventeenth is broken off over the drop.
+* **the clearance.** the camera's carve tightens from 2.0 to 1.1 m over
+  280..292 (`labTight`) and opens again by 332, so the treads stand under
+  the eye.
+* **the lattice.** 20 m cells. a cell is empty when its hash is under 0.42,
+  when its centre is within 11 m of the walked line (the climb, the drop and
+  the floor it lands on), or below -170. otherwise it holds a module: two
+  landings and sixteen risers of 0.1875 m on 0.28 m treads, 2.4 m wide, a
+  solid parapet on one side, a newel and globe on the other, 70 % of them
+  lit, turned to one of three axis permutations with the across and up axes
+  flipped (40 % stand upright). the field is bounded by the cell wall plus
+  5 m, so a module never reaches into its neighbour.
+* **light.** each walked lamp is a point light, `4.5 / (d^2 + 0.5)`, the
+  three nearest a point; a module's lamp lights its own stone,
+  `1.6 / (d^2 + 0.8)`. a skylight far above at 0.9, ambient 0.08..0.26 from
+  below to above, halved by the laps' decay. lamps are 1.0/0.70/0.40,
+  redden with the laps and fail as the hall's panels do (dead under
+  `1.25 * decay`, stuttering above that). the globes glow in the haze
+  (`labHalo`, the eight lamps ahead).
+* **stone.** a tone per tread and per 1.25 x 0.975 m landing slab, grain that
+  fades with the footprint, the treads worn pale and glossy down the middle,
+  grime at the balustrade foot, a damp soffit, run-off down the risers;
+  modules in 0.6 m courses, dusty on their own up faces. the laps redden it
+  and lay the blood and cracks on it (`decayDecals`).
+* **haze.** density 0.02, near black looking down, 0.15 looking up, with a
+  glow toward the skylight. `labWeight` (in over 282..292, out over 352..362)
+  mixes all of it with the old shading, so neither join has an edge.

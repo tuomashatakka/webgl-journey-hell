@@ -401,6 +401,8 @@ export const shadingGlsl = `    // Standard Normal Calculation
 
         vec3 col = vec3(0.0);
         vec3 fogColor = getBiomeColor(ro.z + 30.0);
+        float lwc = is666 ? 0.0 : labWeight(camZ + 6.0);
+        if (lwc > 0.001) fogColor = mix(fogColor, labFog(rd, loop), lwc);
         vec3 sunDir = normalize(vec3(0.3, 0.8, 0.1));
 
         if (t < MAX_DIST) {
@@ -516,6 +518,11 @@ export const shadingGlsl = `    // Standard Normal Calculation
 
                 col = albedo * (dif * 0.6 + 0.4) * ao;
                 if (matID == MAT_MATTE && hw > 0.001) col = mix(col, shadeHall(p, n, rd, ao, t), hw);
+                float lw = (s_p == 666.0) ? 0.0 : labWeight(p.z);
+                if (matID == MAT_MATTE && lw > 0.001) {
+                    vec3 lab = shadeLab(p, n, rd, ao, t);
+                    col = mix(col, decayDecals(lab, p, lZ_p, loop, decayFactor * lw), lw);
+                }
 
                 if (matID == MAT_FLESH) {
                     vec3 refDir = reflect(rd, n);
@@ -578,7 +585,10 @@ export const shadingGlsl = `    // Standard Normal Calculation
             fogFactor = 1.0 - exp(-0.025 * t);
         }
 
+        if (lwc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.02 * t), lwc);
+
         col = mix(col, fogColor, fogFactor);
+        if (lwc > 0.001) col += labHalo(ro, rd, t < MAX_DIST ? t : 1000.0) * lwc;
         col += vec3(1.3, 0.05, 0.01) * godRayAccum;
 
         // Apply accumulated atmospheric volumetric glows

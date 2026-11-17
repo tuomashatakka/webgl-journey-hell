@@ -1,11 +1,12 @@
 import { coreGlsl } from './glsl/core'
 import { paletteGlsl } from './glsl/palette'
 import { setpiecesGlsl } from './glsl/setpieces'
+import { labyrinthGlsl } from './glsl/labyrinth'
 import { marchGlsl } from './glsl/march'
 import { shadingGlsl } from './glsl/shading'
 
 
-export const fsScene = coreGlsl + paletteGlsl + setpiecesGlsl + marchGlsl + shadingGlsl
+export const fsScene = coreGlsl + paletteGlsl + setpiecesGlsl + labyrinthGlsl + marchGlsl + shadingGlsl
 
 export const fsPost = `
     #ifdef GL_FRAGMENT_PRECISION_HIGH
