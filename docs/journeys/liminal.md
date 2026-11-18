@@ -4,7 +4,7 @@
 
 the first journey and the plainest: a walk down a corridor that keeps being
 somewhere else. poolrooms, a glass slide down into the dark, a crystal cave,
-iron hydraulics, a labyrinth of stairs, a hall back up to the pools; then the
+iron hydraulics, a labyrinth of stairs after Escher's *Relativity*, a hall back up to the pools; then the
 same again, lower in the water and redder, with sector 666 where the hall was.
 after the third traversal the fourth does not end: the abyss, and the signal
 goes.
@@ -78,42 +78,67 @@ not change.
 
 ## the stair labyrinth
 
-sector 5 (loop-local z 280..360, `glsl/labyrinth.ts`) is the floor's own gait
-built in stone. the route, the camera and the speeds are as `kinematics.ts`
-has them: sixteen storeys of 3.44 m, each a 1.95 m landing and a 1.3 m rise,
-climbed at 1.6 m/s, then the drop to -180 at 18 m/s and the wade into
-sector 6.
+sector 5 (loop-local z 280..360, `glsl/labyrinth.ts`) is a hall after M. C.
+Escher's *Relativity* (1953): one enclosed, daylit space under three
+gravities, its stairs, landings, doorways and balustrades each true to their
+own up, all of it white plaster and stone drawn as an engraving. the route,
+the camera and the speeds are as `kinematics.ts` has them: sixteen storeys
+of 3.44 m, each a 1.95 m landing and a 1.3 m rise, climbed at 1.6 m/s, then
+the drop to -180 at 18 m/s and the wade into sector 6.
 
 * **the walked stair.** limestone, 5 m wide (scaled by the squeeze), swaying
   with the route. each landing is a 0.35 m slab; each flight twelve risers
   of 0.287 m on 0.118 m treads with a soffit 0.3 m under the inner corners.
   an iron rail 0.95 m over the landings and the pitch line both sides,
-  balusters every 0.36 m, a newel with a lamp globe at the head of every
-  landing, the sides alternating. the first landing reaches 12 m back into
-  the hydraulics; the seventeenth is broken off over the drop.
+  balusters every 0.36 m, a newel with a ball at the head of every landing
+  on both sides. the first landing reaches 12 m back into the hydraulics;
+  the seventeenth is broken off over the drop.
 * **the clearance.** the camera's carve tightens from 2.0 to 1.1 m over
   280..292 (`labTight`) and opens again by 332, so the treads stand under
   the eye.
-* **the lattice.** 20 m cells. a cell is empty when its hash is under 0.42,
-  when its centre is within 11 m of the walked line (the climb, the drop and
-  the floor it lands on), or below -170. otherwise it holds a module: two
-  landings and sixteen risers of 0.1875 m on 0.28 m treads, 2.4 m wide, a
-  solid parapet on one side, a newel and globe on the other, 70 % of them
-  lit, turned to one of three axis permutations with the across and up axes
-  flipped (40 % stand upright). the field is bounded by the cell wall plus
-  5 m, so a module never reaches into its neighbour.
-* **light.** each walked lamp is a point light, `4.5 / (d^2 + 0.5)`, the
-  three nearest a point; a module's lamp lights its own stone,
-  `1.6 / (d^2 + 0.8)`. a skylight far above at 0.9, ambient 0.08..0.26 from
-  below to above, halved by the laps' decay. lamps are 1.0/0.70/0.40,
-  redden with the laps and fail as the hall's panels do (dead under
-  `1.25 * decay`, stuttering above that). the globes glow in the haze
-  (`labHalo`, the eight lamps ahead).
-* **stone.** a tone per tread and per 1.25 x 0.975 m landing slab, grain that
-  fades with the footprint, the treads worn pale and glossy down the middle,
-  grime at the balustrade foot, a damp soffit, run-off down the risers;
-  modules in 0.6 m courses, dusty on their own up faces. the laps redden it
-  and lay the blood and cracks on it (`decayDecals`).
-* **haze.** density 0.02, near black looking down, 0.15 looking up, with a
-  glow toward the skylight. `labWeight` (in over 282..292, out over 352..362)
+* **the courtyard.** two plastered walls at x = +-13 m (not squeezed), open
+  above and below. the walls are cut into bays 26 m along (centred on
+  z5 = 0, 26, 52) by 27.52 m up (eight storeys, centred on y = -122 + 27.52 n),
+  so the climb runs corner to corner through the middle of the bays on the
+  diagonal. each bay keeps one of five gravities by its hash: up the hall
+  (35 %), along it either way (15 % each), upside down (15 %) or out of the
+  wall (20 %), and is mirrored along the wall half the time.
+* **a bay in the wall's plane.** in its own frame (h along, v up, from the bay
+  centre): an arched doorway 2.4 m wide, 2.6 m to the springing, recessed
+  0.9 m at h = -5 on v = -6; a balcony 6 x 3 m before it with a balustrade
+  on its edge; a flight along the wall from h = -2, fourteen risers of
+  0.2 m on 0.28 m treads, 1.6 m wide, to a landing, a balustrade on its
+  outer side; an arched window 2 m wide at h = 4 over v = -1, 1.5 m deep,
+  onto a garden (a pale sky and the dark of trees, unlit and unshadowed).
+* **a bay whose floor is the wall.** a solid flight rising out of the wall,
+  thirteen risers of 0.2 m on 0.28 m treads, 2.4 m wide, with a balustrade
+  both sides, to a 2.8 m plinth, and an arched portal beyond it: piers to
+  3.4 m and a semicircle of 1.45 m. nothing reaches past 5 m from the wall,
+  so the climb (within 6 m of the axis) stays clear.
+* **the double stairs.** across the courtyard, wall to wall: a flight of 57
+  risers of 0.2 m on 0.281 m over 16 m, treads on top and treads on the
+  underside 0.7 m below, a balustrade over each, a 5 m landing on each wall,
+  2.4 m wide. two below and ahead of the climb (z5 = 8 and 34, 9 m under the
+  bay centre), two above and behind it (z5 = 18 and 44, 9 m over it), the
+  rise alternating in x. each is at least 11 m from the climb.
+* **the cross walls.** at z5 = 13 and 39, a wall 1.4 m thick from wall to
+  wall with a round-arched opening 18 m wide, its springing 1 m under the
+  climb's line there, so the walked stair passes under the arch.
+* **every bay's furniture stays 5 m inside its edges**, so the field takes
+  only the bay a point is in; the double stairs and the cross walls take
+  only the nearest.
+* **light.** daylight from high over the left wall and behind the climb
+  (`labSun`, (-0.45, 0.80, -0.40)), so the right wall and the risers ahead
+  are in the sun, with a 28-step soft shadow march (not in `LITE`); sky
+  0.20..0.42 from below to above, 0.10 thrown back off the sunlit wall onto
+  faces that look at it. the laps halve the sun and redden the stone.
+* **the engraving.** the colour is taken 60 % to grey, then hatched: lines
+  0.15 m apart, horizontal on walls and risers and diagonal on floors and
+  treads, as wide as the face is dark (none above 0.6 luminance), fading
+  to the face's tone where they would fall under a pixel.
+* **stone and plaster.** the walked stair toned per tread and per
+  1.25 x 0.975 m landing slab, worn pale down the middle; plaster faintly
+  stained; the laps lay the blood and cracks on it (`decayDecals`).
+* **haze.** density 0.011, from 0.40 looking down to 0.80 looking up,
+  reddened by the laps. `labWeight` (in over 282..292, out over 352..362)
   mixes all of it with the old shading, so neither join has an edge.

@@ -22,6 +22,21 @@ export const shadingGlsl = `    // Standard Normal Calculation
         return clamp(1.0 - 2.5 * occ * (5.0 / float(AO_STEPS)), 0.0, 1.0);
     }
 
+    #ifndef LITE
+    // How much of the labyrinth's sun reaches a point: a soft shadow march.
+    float labShadow(vec3 ro, vec3 rd) {
+        float res = 1.0;
+        float t = 0.08;
+        for (int i = 0; i < 28; i++) {
+            float h = map(ro + rd * t, 1.0).x;
+            res = min(res, 8.0 * h / t);
+            t += clamp(h, 0.08, 2.5);
+            if (res < 0.02 || t > 40.0) break;
+        }
+        return clamp(res, 0.0, 1.0);
+    }
+    #endif
+
     #ifdef LITE
     // What a reflection would have found, without marching for it: the room
     // itself, as dimly as the full build lights what its reflections hit —
@@ -520,7 +535,11 @@ export const shadingGlsl = `    // Standard Normal Calculation
                 if (matID == MAT_MATTE && hw > 0.001) col = mix(col, shadeHall(p, n, rd, ao, t), hw);
                 float lw = (s_p == 666.0) ? 0.0 : labWeight(p.z);
                 if (matID == MAT_MATTE && lw > 0.001) {
-                    vec3 lab = shadeLab(p, n, rd, ao, t);
+                    float sh = 1.0;
+                #ifndef LITE
+                    sh = labShadow(p + n * 0.03, labSun());
+                #endif
+                    vec3 lab = shadeLab(p, n, rd, ao, sh, t);
                     col = mix(col, decayDecals(lab, p, lZ_p, loop, decayFactor * lw), lw);
                 }
 
@@ -585,10 +604,9 @@ export const shadingGlsl = `    // Standard Normal Calculation
             fogFactor = 1.0 - exp(-0.025 * t);
         }
 
-        if (lwc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.02 * t), lwc);
+        if (lwc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.011 * t), lwc);
 
         col = mix(col, fogColor, fogFactor);
-        if (lwc > 0.001) col += labHalo(ro, rd, t < MAX_DIST ? t : 1000.0) * lwc;
         col += vec3(1.3, 0.05, 0.01) * godRayAccum;
 
         // Apply accumulated atmospheric volumetric glows

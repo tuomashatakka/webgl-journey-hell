@@ -144,9 +144,7 @@ export const marchGlsl = `    // Signed Distance Field Map
         // --- SECTOR 5: THE STAIR LABYRINTH (280 to 360; in from 270, gone by 370) ---
         if (currentZ > 270.0 && currentZ < 370.0) {
         float lPart;
-        vec3 lLocal;
-        vec4 lOrient;
-        float dSec5 = labField(p, currentZ - 280.0, cFactor, lPart, lLocal, lOrient) * 0.8;
+        float dSec5 = labField(p, currentZ - 280.0, cFactor, lPart) * 0.8;
         dBase = currentZ < 290.0 ? mix(dBase, dSec5, smoothstep_custom(270.0, 290.0, currentZ)) : dSec5;
         }
 
