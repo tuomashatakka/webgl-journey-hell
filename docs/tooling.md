@@ -138,14 +138,19 @@ Both launch a fresh browser per shot and find it through `tools/chromium.mjs`, w
 ## The archive
 
 ```bash
-node tools/shoot-gifs.mjs                      # every journey, no dev server
+node tools/shoot-gifs.mjs                      # the journeys changed since the last archive, no dev server
+node tools/shoot-gifs.mjs --all                # every journey
 node tools/shoot-gifs.mjs switchback foundry   # selected journeys only
 node tools/shoot-gifs.mjs --stamp=20261112eve  # name the folder yourself
 ```
 
-A film of every journey from its first frame until its signal is gone,
-written to `assets/archive/<yyyymmdd><noon|eve>/<slug>.gif`: a record of
-what the site looked like on that run. The folder is named for the date and for
+A film of each journey that changed, from its first frame until its signal
+is gone, written to `assets/archive/<yyyymmdd><noon|eve>/<slug>.gif`: a record of
+what the site looked like on that run. A journey has changed when a file
+under `src/journeys/<slug>/` differs from the last commit that added to the
+archive (committed since, staged, edited or untracked); shared code does not
+count, so name the journeys or pass `--all` when a change reaches them all.
+With nothing changed it films nothing and writes no folder. The folder is named for the date and for
 the half of the day on the machine's own clock (`eve` from
 `CONFIG.tools.gifs.eveFromHour`); a second run in the same half overwrites the
 first. Size, frame count and palette are in `CONFIG.tools.gifs`: 240x150, a

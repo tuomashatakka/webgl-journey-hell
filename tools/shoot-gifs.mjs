@@ -1,9 +1,15 @@
-// Film every journey until its signal is gone, and archive the
-// films: assets/archive/<yyyymmdd><noon|eve>/<slug>.gif.
+// Film the journeys that changed until their signal is gone, and archive
+// the films: assets/archive/<yyyymmdd><noon|eve>/<slug>.gif.
 //
-//   node tools/shoot-gifs.mjs                      # every journey
+//   node tools/shoot-gifs.mjs                      # the journeys changed since the last archive
+//   node tools/shoot-gifs.mjs --all                # every journey
 //   node tools/shoot-gifs.mjs switchback foundry   # selected journeys only
 //   node tools/shoot-gifs.mjs --stamp=20261112eve  # name the folder yourself
+//
+// A journey has changed when a file under src/journeys/<slug>/ differs from
+// the last commit that added to the archive: committed since, staged, edited
+// or untracked. Shared code (packages, the shell) does not count; name the
+// journeys or pass --all when a change reaches all of them.
 //
 // No dev server: the bare harness (tools/harness) holds one page per journey
 // and is asked for each instant in turn, so a film costs one bundle and one
@@ -21,6 +27,8 @@
 import { chromium } from 'playwright-core'
 
 import { mkdir, readdir, writeFile } from 'node:fs/promises'
+
+import { execFileSync } from 'node:child_process'
 
 import { existsSync } from 'node:fs'
 
@@ -59,6 +67,13 @@ const unknown = requested.filter(slug => !known.includes(slug))
 if (unknown.length)
   throw new Error(`unknown journey slug: ${unknown.join(', ')}`)
 
+const slugs = requested.length ? requested : args.includes('--all') ? known : changedJourneys()
+
+if (!slugs.length) {
+  console.log('no journey has changed since the last archive: nothing to film (--all films every journey)')
+  process.exit(0)
+}
+
 const out = path.join(ROOT, gifs.dir, stamp)
 
 await mkdir(out, { recursive: true })
@@ -70,7 +85,7 @@ const browser = await chromium.launch({ executablePath: await findChromium(), ar
 const failed  = []
 
 try {
-  for (const slug of requested.length ? requested : known)
+  for (const slug of slugs)
     try {
       await film(slug)
     }
@@ -90,6 +105,19 @@ if (failed.length) {
 }
 
 console.log(`-> ${path.relative(ROOT, out)}`)
+
+/** The journeys with a file changed since the last commit that added to the archive. */
+function changedJourneys () {
+  const git   = (...argv) => execFileSync('git', argv, { cwd: ROOT, encoding: 'utf8' }).trim()
+  const base  = git('log', '-1', '--format=%H', '--', gifs.dir)
+  const scope = [ '--', 'src/journeys' ]
+  const files = [
+    ...base ? git('diff', '--name-only', base, ...scope).split('\n') : known.map(slug => `src/journeys/${slug}/`),
+    ...git('ls-files', '--others', '--exclude-standard', ...scope).split('\n'),
+  ]
+  const slugs = new Set(files.map(file => file.split('/')[2]).filter(slug => known.includes(slug)))
+  return known.filter(slug => slugs.has(slug))
+}
 
 /** <yyyymmdd><noon|eve>, on the machine's own clock. */
 function stampOf (now) {
