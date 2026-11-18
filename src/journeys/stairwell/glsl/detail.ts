@@ -237,7 +237,7 @@ vec3 surfaceDetail (inout Surface s, float m, float act, vec3 p, vec3 tp, vec3 n
   if (m > 4.5 && m < 5.5 || rockWall) return rockDetail(s, tp, n, act, fp);
   if (m < 1.5 || m > 7.5) {
     // Height over the water or the ground the concrete stands in.
-    float wetY = act < 0.5 ? tp.y - (pathY(0.0, tp.z) - 2.55)
+    float wetY = act < 0.5 ? tp.y - spillWet(tp)
                : act > 3.5 && act < 4.5 ? tp.y - (pathY(4.0, tp.z) - 3.4) : -100.0;
     if (m > 7.5) wetY = -100.0;
     concreteDetail(s, tp, n, act, fp, wetY);

@@ -48,31 +48,94 @@ vec2 barrier (vec3 p, float zs, float closing) {
 // --- the six acts --------------------------------------------------------------
 
 // I · THE SPILLWAY THRESHOLD — mass concrete, water, a cold dawn.
+// The flight goes down a spine of mass concrete between two bodies of water.
+// To its right (-x) a baffled chute twelve wide between training walls: an
+// ogee crest where it leaves the wall, an apron of staggered baffle blocks at
+// the stair's own pitch, then a drop steeper than the stair into a stilling
+// basin whose still water the stair stays over to the end. A battered
+// concrete bank climbs away beyond it. To its left (+x) the dam: a face
+// standing level while the stair goes down it, buttressed every nine units,
+// and in each bay between buttresses a bottom outlet with a lift gate raised
+// in its guides by a hoist on the face, a white tongue of water from under
+// the leaf and a still pool, the pools stepping down bay by bay.
+float spillDrop (float z) { return 6.0 * smoothstep(26.0, 44.0, z); }
+// The chute's floor, its water and the basin's water, absolute heights.
+float spillFloor (float z) {
+  return pathY(0.0, z) - 1.7 + 1.0 * (1.0 - smoothstep(9.0, 16.0, z)) - spillDrop(z);
+}
+float spillBasin () { return pathY(0.0, 44.0) - 7.0; }
+float spillSheet (float z) { return max(spillFloor(z) + 0.3, spillBasin()); }
+// Each bay's pool lies level at its own height under the bay's middle.
+float spillPool (float z) { return pathY(0.0, z - (mod(z, 9.0) - 4.5)) - 2.0; }
+float spillDamTop () { return pathY(0.0, 9.0) + 13.0; }
+
 vec2 spillway (vec3 p) {
   float px = pathX(0.0, p.z);
   float py = pathY(0.0, p.z);
-  float zCell = mod(p.z + 9.0, 18.0) - 9.0;
-  float zBay = mod(p.z + 4.5, 9.0) - 4.5;
-  float dam = sdBox(p - vec3(-13.0, py + 7.0, p.z), vec3(5.5, 15.0, 130.0));
-  float chute = p.y - py + 2.0 + benchedGround(p.x + 22.0, 3.4, 0.85, 0.06) * 0.5;
-  chute = max(chute, -(p.x + 34.0));
-  chute = max(chute, p.x + 8.0);
-  float buttress = sdBox(vec3(abs(p.x + 7.0) - 3.0, p.y - py - 2.5, zCell), vec3(0.65, 5.0, 1.2));
-  float penstock = sdCylinderZ(vec3(p.x - 8.5, p.y - py + 4.0, zCell), 8.0, 1.8);
-  float gate = sdBox(vec3(p.x - 6.0, p.y - py - 2.0, zCell), vec3(3.6, 3.2, 0.34));
-  float screw = sdCylinderY(vec3(p.x - 6.0, p.y - py - 6.4, zCell), 3.0, 0.13);
-  float gantry = sdBox(vec3(p.x - 6.0, p.y - py - 9.2, zCell), vec3(4.0, 0.3, 0.55));
-  float sluice = min(gate, min(screw, gantry));
-  float baffle = sdBox(vec3(mod(p.x + 30.0, 4.2) - 2.1, p.y - py + 1.4, zBay), vec3(0.5, 0.9, 0.5));
-  baffle = max(baffle, p.x + 12.0);
-  float ground = p.y - py + 3.2;
-  float concrete = min(dam, min(chute, min(buttress, min(baffle, ground))));
-  float steel = min(sluice, penstock);
-  float water = p.y - py + 2.55;
-  water = max(water, -(p.x + 34.0));
-  water = max(water, p.x + 8.5);
+  float dx = p.x - px;
+
+  // The spine under the flight, the chute's training walls and the pools' curb.
+  float spine = max(abs(dx + 0.25) - 3.25, p.y - py + 1.4);
+  float wallNear = max(abs(dx + 3.9) - 0.4, p.y - py + 1.1);
+  float wallFar = max(abs(dx + 15.9) - 0.4, p.y - py - 0.6);
+  // The chute and the basin share one floor; the basin's is level.
+  float fl = max(spillFloor(p.z), pathY(0.0, 44.0) - 10.5);
+  float chute = max((p.y - fl) * 0.8, abs(dx + 9.9) - 5.6);
+  // Baffle blocks on the apron, staggered row by row.
+  float row = floor(p.z / 3.6);
+  vec3 bq = vec3(mod(dx + 9.9 + mod(row, 2.0) * 1.2, 2.4) - 1.2,
+                 p.y - spillFloor(row * 3.6 + 1.8) - 0.35, mod(p.z, 3.6) - 1.8);
+  float baffle = sdBox(bq, vec3(0.42, 0.42, 0.32));
+  baffle = max(baffle, max(abs(dx + 9.9) - 5.0, abs(p.z - 24.5) - 12.5));
+  // Beyond the far wall, a battered bank climbing away from the chute.
+  float bank = max(dx + 15.5, (p.y - py - 0.6 - (-16.3 - dx) * 1.2) * 0.64);
+
+  // The dam: its face stands level, its buttresses battered against it.
+  float top = spillDamTop();
+  float zB = mod(p.z + 4.5, 9.0) - 4.5;
+  float pyB = pathY(0.0, p.z - zB);
+  float zL = mod(p.z, 9.0) - 4.5;
+  float wl = spillPool(p.z);
+  float curb = max(abs(dx - 3.4) - 0.4, p.y - wl - 0.35);
+  float face = max(12.5 - dx, p.y - top);
+  face = min(face, sdBox(vec3(dx - 12.2, p.y - top - 0.6, 0.0), vec3(0.3, 0.6, 1e4)));
+  float outlet = sdBox(vec3(dx - 12.5, p.y - wl - 1.0, zL), vec3(0.9, 1.3, 1.6));
+  face = max(face, -outlet);
+  float xo = 7.5 + max(0.0, p.y - pyB + 1.0) * 0.3;
+  float buttress = max(max(abs(zB) - 0.6, (xo - dx) * 0.95), max(dx - 13.0, p.y - top));
+  // Inside the buttresses, a low wall between one bay's pool and the next.
+  buttress = min(buttress, max(abs(zB) - 0.4, max(3.0 - dx, p.y - pyB + 0.6)));
+  float concrete = min(min(min(spine, curb), min(wallNear, wallFar)), min(min(chute, baffle), min(bank, min(face, buttress))));
+
+  // The outlet's gate: a leaf raised in its guides, the stem, the hoist.
+  float leaf = sdBox(vec3(dx - 12.2, p.y - wl - 2.2, zL), vec3(0.08, 1.6, 1.75));
+  float guides = sdBox(vec3(dx - 12.3, p.y - wl - 4.5, abs(zL) - 1.85), vec3(0.2, 4.8, 0.1));
+  float stem = sdCylinderY(vec3(dx - 12.15, p.y - wl - 6.5, zL), 2.7, 0.08);
+  float hoist = sdBox(vec3(dx - 11.9, p.y - wl - 9.6, zL), vec3(0.6, 0.55, 2.1));
+  float steel = min(min(leaf, guides), min(stem, hoist));
+
+  float sheet = max((p.y - spillSheet(p.z)) * 0.8, abs(dx + 9.9) - 5.6);
+  float pool = max(p.y - wl, max(3.8 - dx, dx - 12.5));
+  // The tongue of water from under the leaf, falling into the pool.
+  float tongue = sdBox(vec3(dx - 10.7, p.y - wl - 0.2 - (dx - 10.7) * 0.18, zL), vec3(1.55, 0.12, 1.5)) * 0.95;
+  float water = min(sheet, min(pool, tongue));
+
   vec2 r = steel < concrete ? vec2(steel, M_MACHINE) : vec2(concrete, M_CONCRETE);
   return water < r.x ? vec2(water, M_WATER) : r;
+}
+
+// How white the spillway's water is at a point on it: the whole of the sheet
+// down the chute, the hydraulic jump fading out across the basin, and the pools
+// churned under each outlet.
+float spillFoam (vec3 p) {
+  float dx = p.x - pathX(0.0, p.z);
+  if (dx < 0.0) return exp(-max(spillBasin() - spillFloor(p.z) - 0.3, 0.0) * 1.2);
+  return max(exp(-(12.2 - dx) * 0.4), step(spillPool(p.z) + 0.04, p.y));
+}
+
+// The water a concrete face stands in, for its tide line.
+float spillWet (vec3 p) {
+  return p.x - pathX(0.0, p.z) < 0.0 ? spillSheet(p.z) : spillPool(p.z);
 }
 
 // II · PROTEAN WEATHER BRIDGE — nothing but structure and weather.

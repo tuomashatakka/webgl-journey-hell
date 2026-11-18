@@ -325,6 +325,20 @@ void main () {
         s.metal = 0.0;
         s.ao = 1.0;
         s.height = 0.5;
+        // The spillway's water is white where it runs: down the chute in
+        // streaks along the flow, banded where it skims each baffle row, and
+        // churned out from under each gate across its pool.
+        if (act < 0.5) {
+          float chute = step(wp.x, pathX(0.0, wp.z));
+          vec2 fq = mix(vec2(wp.z * 1.8, wp.x * 0.5 + animTime() * 1.6),
+                        vec2(wp.x * 2.6, wp.z * 0.35 - animTime() * 3.2), chute);
+          float flow = vnoise(fq) * 0.6 + vnoise(fq * vec2(2.7, 3.1) + vec2(3.1, -animTime() * 1.3)) * 0.4;
+          float band = smoothstep(0.65, 1.0, fract(wp.z / 3.6)) * chute;
+          float foam = spillFoam(wp) * smoothstep(0.3, 0.8, flow + band * 0.3) * (1.0 - uPurgatory);
+          s.albedo = mix(s.albedo, vec3(0.46, 0.5, 0.51) * (0.75 + 0.4 * flow), foam);
+          s.rough = mix(s.rough, 0.6, foam);
+          s.normal = normalize(n + ripple * (1.0 + foam * 4.0));
+        }
       } else {
         float layer; vec3 tint; float rmul;
         materialOf(m, act, layer, tint, rmul);

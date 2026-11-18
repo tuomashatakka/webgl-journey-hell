@@ -11,7 +11,7 @@ units the route enters purgatory and never leaves it.
 
 | distance | act | sky (Δ) | visual contract |
 | ---: | --- | --- | --- |
-| 0–70 | spillway threshold | `DAWN` | mass-concrete flood control: dam wall, ogee chute, sluice bays, baffle blocks, a basin of still water |
+| 0–70 | spillway threshold | `DAWN` | mass-concrete flood control: a buttressed dam face, a baffled ogee chute dropping into a stilling basin, sluice bays with lift gates over stepped pools |
 | 70–155 | protean weather bridge | `OVERCAST` | nothing but structure and weather — portal pylons, suspension catenary and hangers, an open grating deck on a truss, low wind fencing, a cloud deck and a cloud sea below |
 | 155–235 | turbine canyon | `DAY` | a stratified canyon wide enough for its machines: three-blade rotors on pedestals, penstocks, a gantry |
 | 235–325 | conveyor escarpment | `EVENING` | warm quarry benches, a roofed conveyor gallery on trestles, bucket wheel, transfer tower |
@@ -142,6 +142,37 @@ its own average by the pixel's world footprint.
   downwind and widening as it climbs — six evaluations, no march — in act V's
   own coordinates wherever act V is in view, starting and stopping with the
   act's scenery like the cloud deck.
+
+## act I, the spillway threshold
+
+the flight goes down a spine of mass concrete between two bodies of water
+(`spillway`, `spillFoam`, `spillWet` in `glsl/acts.ts`). all of it is placed
+against the act's own rail, so it pitches over with the stair.
+
+- **the chute** (to the right, -x): twelve wide between training walls, the
+  near one's top 1.1 under the treads so the water is in view over it. its
+  floor (`spillFloor`) leaves the wall at an ogee crest a unit high, runs at
+  the stair's pitch 1.7 under it, then drops a further 6 between 26 and 44
+  (`spillDrop`) into a stilling basin whose floor lies level 10.5 under the
+  rail at 44. the water is a sheet 0.3 over the floor until it meets the
+  basin's still level (7 under the rail at 44), which is where the jump is;
+  the stair stays above that water to the end of the act. staggered rows of
+  baffle blocks every 3.6 stand out of the sheet from 12 to 37.
+- **the far side**: a training wall 0.6 over the rail, then a battered
+  concrete bank climbing away at 1.2 in 1.
+- **the dam** (to the left, +x): a face at 12.5 off the line standing level,
+  13 over the rail at the wall, so it towers higher as the stair goes down
+  it, with a parapet. buttresses every 9 units, 1.2 thick, their feet 7.5 off
+  the line battered back to the face. in every bay a bottom outlet with a
+  lift gate raised in its guides, its stem and hoist on the face, and a
+  tongue of water from under the leaf into the bay's pool (`spillPool`,
+  level under the bay's middle, 2 under the rail there), so the pools step
+  down bay by bay behind a curb, a low wall between each and the next.
+- **the water's colour**: the act's water is the shared rippled mirror, made
+  white by `spillFoam` — all of the sheet, the jump fading over the basin,
+  the tongues and the churn under each outlet — streaked along the flow
+  (down the chute, out from the gates) and banded at every baffle row. the
+  concrete's tide line follows the water beside it (`spillWet`).
 
 ## act II, the weather bridge
 
