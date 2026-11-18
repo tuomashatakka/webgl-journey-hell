@@ -217,7 +217,29 @@ the laps, and the blast's shockfront finishes the job.
 - **Place:** an enclosed tube bridge (r 2.6 m, steel rings every 3 m), its glass
   frosted and rimed; snow outside; the world beyond only blurred shapes. The tube
   curves +120°.
-- **Light:** overcast, cold, diffuse; the sun a pale smear.
+  - **The frost** is hoarfrost grown inward from the rings (the cold steel): a
+    solid band at each ring falling off over about 0.4 m, thicker towards the
+    bottom where the cold air pools, broken by fbm and feathered into fern at
+    its front (three stretched noises, along the ring's normal and on both
+    diagonals); the fern's edges catch the light. It never thins below about
+    half, so nothing sharp is ever seen through it. Crystals glint here and
+    there (faded out below a pixel), and growing damage thickens it.
+  - **Through it** (`frostBeyond`): the overcast and the towers outside as soft
+    dark shapes, a ten-step march of the towers alone held as a cone of about
+    0.2 rad (the soft-shadow trick, six steps on the phone builds), faded by
+    the snow in the air within a few tens of metres, their floors smeared to
+    warm bands. Frost is not seen through with the see-through march: it
+    blurs, so it does not pay for one.
+  - **Snow** lies on the crown outside in a drift with a ragged edge and dims the
+    light through it; flakes slide over the outside, soft through the frost.
+    The screen's falling snow stops inside the sealed tube (on the tube and
+    within 6 m) and falls only past its open ends.
+  - **The rings** are rimed: the cold metal furred white in patches, thickest
+    underneath (steel `cInfo.x` 6).
+- **Light:** overcast, cold, diffuse; the sun a pale smear. The tube is lit
+  through its own glass: each point glows with the overcast outside it
+  (`ambient` of the outward normal), bright overhead and the cloud sea's paler
+  bounce below.
 - **Breaks:** white fracture lines run through the frost layer, crystalline, as
   the tube flexes in the wind.
 - **Out:** level, storm sway in and out.
@@ -338,7 +360,9 @@ Things to keep true:
   globals, the crack noise or the dust storm left out, `PROBE_NO_VIEW` /
   `PROBE_NO_CRACK` / `PROBE_NO_STORM`) and lists which link.
 - Heavy effects (`uHeavy`) add the see-through continuation march; everything
-  else is the same at every tier.
+  else is the same at every tier. Frost takes no see-through march (it
+  blurs what is behind it with `frostBeyond`, towers only), which more than
+  doubled the frost gallery's frame rate with heavy effects on.
 - Set pieces sit behind band tests; towers are two cells on one side per sample,
   with the far flank bounded by its distance.
 - Falling panes are a domain repetition clamped to their cell, so a march never
