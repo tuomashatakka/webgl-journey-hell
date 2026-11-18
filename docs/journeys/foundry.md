@@ -252,6 +252,38 @@ void, not as a building.
   lamp. the long run's mean luminance on the probe went from 25–34 to 42–53,
   level with its neighbours; every other hall is byte-identical.
 
+## the gearworks
+
+the gear pairs that gave the hall its name used to sit 0.32 m deep in the wall
+plate with 0.12 m standing proud, flush and the same grey as the sheeting:
+nothing in the hall read as a gear. it was an empty corrugated corridor.
+
+now each 12 m station has a **gear train** out of each wall
+(`mapGearworks`, both walls folded into one evaluation, mirrored along the hall
+every other station):
+
+- **two 18-tooth wheels** side by side (pitch radius 1.62, module 0.18, so their
+  centres stand 3.24 apart at 2.3 m up) and a **10-tooth pinion** on the first,
+  60 degrees above the line, turning 1.8 times as fast. they really mesh: the
+  second wheel is half a tooth behind the first and the pinion a sixth of a
+  tooth on, and that holds at every angle because the phases at each contact
+  sum to a constant (`spurGear`, a tapered tooth in a folded sector).
+- the wheels are **spoked**: a painted ring, six arms tapering out from a hub,
+  bare machined teeth on the rim; the pinion has a plain web. each turns on a
+  shaft with an end cap out of a pillow block, on a **cast iron bedplate**, a 0.06 m plate
+  with a 0.12 m border, on the wall behind the train.
+- the plane of the train is 0.4–0.7 m out of the wall. it drives out 1.3 m as
+  the station deploys and spins up with it, as before.
+- a **guard rail** stands 1.95 m out from each wall — top and mid rails on
+  posts every 2.45 m in hazard paint — from 1.5 m inside the bulkhead to 26 m,
+  where the funnel to the brake run starts closing the walls in.
+- everything but the rail lies within 0.9 m of the wall, so further out the
+  rail alone is evaluated, and each wheel answers only its tip cylinder until a
+  ray is within 0.25 m of it.
+
+every other hall is byte-identical on the probe; only frames that see into the
+gearworks change.
+
 ## the drop, looking out
 
 the simulation braces the head down while the cage rides (about −0.2, and
