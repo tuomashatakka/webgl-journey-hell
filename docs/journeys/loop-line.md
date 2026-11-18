@@ -135,6 +135,21 @@ camera passes through a mouth and the walls sweep past — motion, not a pop.
   only racks are tinted; before that the rails, the strips and everything else
   in the bay walked sideways with them. The walk is capped at 3 m, which
   leaves a face 1.75 m off the centre line.
+* **THE CONCOURSE is a tiled hall** (`HALL` in `geometry/profiles.ts`). An
+  elliptical vault in glazed cream tile, 36 m across and springing at 8.6 m
+  (crown 16 m), with a brick rib every 7.5 m carried down the wall on a
+  pilaster to the gallery deck; a cast-iron column under each gallery front on
+  the rib's line, the pendant globes on every other rib. The track runs in a
+  ballasted well 3.8 m wide between two terrazzo concourse floors at
+  platform height (1 m), balustraded along the well. The right floor is its
+  own section (`Profile.until`) and stops `JUNCTION_LEAD + 6` m before the
+  hall's end, short of the points, with a balustrade across its end: from there
+  the well opens out to the right wall, ballasted, for the chord to swing
+  across to its mouth. A headwall at the hall's start closes the floors'
+  section where it shows past the tube's mouth. Shuttered shops line both
+  walls under the galleries, a lit fascia over each shutter; the walls and the
+  end wall are the same tile. The hall's ambient is the tile's bounce,
+  0.085. The other bays are pixel-identical on the probe.
 * **THE CUT is a railway cutting** (`CUT` and `cutFace` in `geometry/profiles.ts`).
   Walked across: a coping that overhangs the face, engineering brick battered
   back one in four from 5.45 m off the centre line at the plinth to 7.7 m under
