@@ -26,6 +26,10 @@ export const routeGlsl = `  // --- the route -----------------------------------
     return (B.y * B.y + VAULT_RISE * VAULT_RISE) / (2.0 * VAULT_RISE);
   }
 
+  // How much of the width a row of strip lights spans: under the vault only
+  // the crown (the tube hung 0.5 under it, in the air), elsewhere all of it.
+  float lampRun(vec4 C) { return abs(C.y - 2.0) < 0.5 ? 0.545 : 1.0; }
+
   // The clerestory's profile on the side wall: a rectangle under a half round,
   // one in every bay between two ribs, none in the bays against the end walls.
   float clerestory(vec3 qs, vec4 B) {

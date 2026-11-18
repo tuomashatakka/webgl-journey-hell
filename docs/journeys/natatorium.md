@@ -88,6 +88,43 @@ groined brick vaults, carried on the board-formed walls.
 * **floor**: a blanket of silt over the tile, rippled, drifted against the
   plinths, worn through to the tile in patches, thicker every lap.
 
+## the grand hall
+
+THE GRAND HALL (the one `TYPE_VAULT` room, 32 m wide and 13 m to the crown)
+is a municipal bath hall under a tiled barrel vault. All of its shell is in
+`vaultShell` (`glsl/route.ts`), applied after the tile breaks and only when
+the section's type is the vault, so no other room pays more than a compare.
+
+* **vault**: a segmental barrel across the whole width, springing off the side
+  walls `VAULT_RISE` 4.5 under the crown: the outside of one cylinder of
+  radius `(W² + rise²) / 2 rise` (30.7 m) centred under the floor, so it is one
+  `length()` and exact. Tiled like a soffit.
+* **ribs**: a transverse rib `VAULT_RIB` 0.32 deep and 0.6 wide over every
+  column pair (`VAULT_BAY` 6 m, z = 3, 9 .. 39), glazed in the vaulted rooms'
+  frieze blue with a cream bead down both arrises (`dressSurface`).
+* **columns**: 1.7 m off each side wall on the rib lattice; a plinth (0.68
+  half, 0.6 tall), a torus at the foot, a 0.48 shaft, a necking and a capital
+  whose top is buried in the rib where the rib's soffit crosses the column line.
+  Bounded 2.5 off the walls.
+* **clerestory**: an arched window in every bay between two ribs on both side
+  walls (z = 6 .. 36; none in the bays against the end walls), 2.6 wide, sill
+  at 5.0, the half round springing at 6.9; the reveal 0.34 deep.
+* **lunettes**: each end wall is the lunette the vault leaves, and holds a
+  thermal window: the lunette taken in 1.0 under the vault over a sill 0.45
+  above the springing, split in three lights by two mullions at ±0.3 W.
+* **galleries**: across both end walls over the doorways, the floor at 4.35,
+  2.2 m deep, with a 0.96 m balustrade (balusters every 0.3 m) on its edge.
+* **glass** (`vaultGlass`, `glsl/dressing.ts`): frosted panes in iron bars
+  (0.87 x 0.48 in the clerestory, 0.8 x 0.6 in the lunettes), lit from light
+  wells behind: emission (0.62, 0.74, 0.82) x 3.0, each pane its own tone under
+  a grime smudge, the lower ones dirtier, `0.03 + 0.30 decay` of them boarded.
+  Reveals are not breaks: no darkening, no red.
+* **light**: a cool fill from the windows, `alb * (0.46, 0.56, 0.64)` from
+  0.05 at the floor to 0.11 at the crown. The fluorescent row is only the
+  middle 0.545 of the width (`lampRun`) and the tube hangs 0.5 under the crown,
+  so the whole tube is in the air; panels print only within a metre of the
+  crown, never on a gallery's soffit.
+
 ## the water
 
 above the surface the water absorbs per channel, Beer-Lambert,
