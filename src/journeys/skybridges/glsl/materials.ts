@@ -258,7 +258,7 @@ export const materialsGlsl = /* glsl */`
     float dz = abs(fract(uv.y / 3.0 + 0.5) - 0.5) * 3.0;           // to the nearest ring
 
     // How thick the frost is: from the rings, from below, and in fern at its front.
-    float grow = 0.85 * exp(-dz / 0.5) + 0.5 * smoothstep(1.4, 2.8, abs(ang)) + (fbm(uv * 1.3) - 0.5) * 0.7 + 0.12 * gDamage;
+    float grow = 1.2 * exp(-dz / 0.4) + 0.5 * smoothstep(1.4, 2.8, abs(ang)) + (fbm(uv * 1.3) - 0.5) * 0.7 + 0.12 * gDamage;
     float fa = vnoise(vec2(uv.x * 34.0 + vnoise(uv * 5.0) * 4.0, dz * 6.0));
     float fb = vnoise(vec2((uv.x + dz) * 26.0, (uv.x - dz) * 4.0) + 3.1);
     float fc = vnoise(vec2((uv.x - dz) * 26.0, (uv.x + dz) * 4.0) + 7.7);
@@ -270,16 +270,17 @@ export const materialsGlsl = /* glsl */`
     vec3 col;
     if (dot(rd, o) > 0.0) {
       // Inside, looking out: what comes through is the overcast, and what lies on the glass dims it.
-      vec3 through = ambient(o) * mix(vec3(1.0), vec3(0.42, 0.47, 0.55), drift);
+      vec3 through = ambient(o) * mix(vec3(1.0), vec3(0.55, 0.6, 0.68), drift);
       vec3 beyond = frostBeyond(w, rd);
       col = mix(beyond, through * 0.92, frost);
       col = mix(col, through * 0.8, drift * 0.85);
       // Flakes sliding over the outside, soft through the frost.
-      vec2 fg = uv * 5.0 + vec2(gTm * 0.7, -gTm * 1.1);
-      vec2 fcl = floor(fg);
-      float fh = hash21(fcl + 4.2);
-      float flake = step(0.6, fh) * smoothstep(0.32, 0.05, length(fract(fg) - 0.5 - (vec2(fh, fract(fh * 17.0)) - 0.5) * 0.4));
-      col *= 1.0 - 0.22 * flake * (1.0 - 0.6 * frost);
+      vec2 fg = uv * 2.2 + vec2(gTm * 0.35, -gTm * 0.6);
+      float fh = hash21(floor(fg) + 4.2);
+      float flake = step(0.86, fh) * smoothstep(0.22, 0.02, length(fract(fg) - 0.5 - (vec2(fh, fract(fh * 17.0)) - 0.5) * 0.55));
+      col *= 1.0 - 0.16 * flake * (1.0 - 0.6 * frost);
+      // The crystals' own edges catch the light: the fern reads white at the frost's front.
+      col += through * 0.12 * smoothstep(0.45, 0.7, frost) * (1.0 - smoothstep(0.75, 1.0, frost));
     } else {
       // Outside: snow on the crown, frosted glass round the rest.
       vec3 lit = ambient(o) + direct(o, 1.0);
@@ -289,7 +290,7 @@ export const materialsGlsl = /* glsl */`
     // Crystals catching the light: a point here and there, gone once smaller than a pixel.
     vec2 sg = uv * 130.0;
     float sh = hash21(floor(sg) + 0.7);
-    float spark = step(0.988, sh) * smoothstep(0.3, 0.0, length(fract(sg) - 0.5)) * frost * (1.0 - drift);
+    float spark = step(0.996, sh) * smoothstep(0.25, 0.0, length(fract(sg) - 0.5)) * frost * (1.0 - drift);
     spark *= clamp(0.004 / max(px, 1e-4), 0.0, 1.0) * (0.5 + 0.5 * sin(gTm * 2.0 + sh * 80.0 + dot(rd, vec3(30.0, 23.0, 41.0))));
     col += vec3(1.0, 0.98, 0.94) * spark * 0.8;
 

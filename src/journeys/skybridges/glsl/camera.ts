@@ -98,6 +98,7 @@ export const cameraGlsl = /* glsl */`
 
     vec3 col;
     float onTrain = hit * step(abs(gMat - M_TRAIN), 0.5);
+    float onTube = hit * max(step(abs(gMat - M_FROST), 0.5), step(5.5, gInfo.x) * step(abs(gMat - M_STEEL), 0.5));
     if (hit > 0.5) {
       vec3 p = ro + rd * t;
       col = shade(p, rd, t);
@@ -128,7 +129,7 @@ export const cameraGlsl = /* glsl */`
     vec3 amb = mix(gHorizon, gZenith, 0.5);
     float snow = specks(uv, 14.0, vec2(0.35, -0.9), 1.0, 0.12) + specks(uv, 26.0, vec2(0.5, -1.4), 2.0, 0.1) * 0.7;
     // The tube is sealed: no snow in it, only out of its open ends (the frost has its own, outside).
-    snow *= 1.0 - win(z, 361.0, 363.0, 417.0, 419.0) * hit * step(t, 6.0);
+    snow *= 1.0 - win(z, 361.0, 363.0, 417.0, 419.0) * max(onTube, hit * step(t, 6.0));
     col = mix(col, vec3(0.9, 0.93, 1.0) * (amb + 0.2), clamp(snow, 0.0, 1.0) * gFrost * 0.8);
     // Sparks from the wheels, thrown back past the cars: streaks out from the
     // vanishing point (polar cells are long along the radius), never over the roof.
