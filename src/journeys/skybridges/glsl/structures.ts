@@ -8,6 +8,7 @@
 //
 // cInfo.x on glass says what kind: 1 deck pane, 2 balustrade, 3 panelled glass
 // (hall, spokes, spans, canopy), 4 the hall's floor, 5 the snapped catwalk.
+// On steel it is 0, or 6 on the frost gallery's rings, which carry rime.
 // On facades it is the style: 0 generic, 1 the curtain wall, 2 the station,
 // 3 the canyon, 4 the helix tower. On concrete it is 1 in the station (y its
 // level, 0 the platform) and 0 on the viaduct; on the train xyz is the car's own
@@ -366,9 +367,8 @@ export const structuresGlsl = /* glsl */`
     float ends = max(362.0 - zl, zl - 418.0);
     float shell = max(abs(r - 2.6) - 0.03, ends);
     float rib = max(length(vec2(r - 2.63, (fract(zl / 3.0 + 0.5) - 0.5) * 3.0)) - 0.07, ends);
-    cInfo = vec4(0.0);
-    if (rib < shell) { cMat = M_STEEL; return rib; }
-    cMat = M_FROST;
+    if (rib < shell) { cMat = M_STEEL; cInfo = vec4(6.0, 0.0, 0.0, 0.0); return rib; }
+    cMat = M_FROST; cInfo = vec4(0.0);
     return shell;
   }
 

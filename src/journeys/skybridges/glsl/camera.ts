@@ -127,6 +127,8 @@ export const cameraGlsl = /* glsl */`
     // --- the air ---
     vec3 amb = mix(gHorizon, gZenith, 0.5);
     float snow = specks(uv, 14.0, vec2(0.35, -0.9), 1.0, 0.12) + specks(uv, 26.0, vec2(0.5, -1.4), 2.0, 0.1) * 0.7;
+    // The tube is sealed: no snow in it, only out of its open ends (the frost has its own, outside).
+    snow *= 1.0 - win(z, 361.0, 363.0, 417.0, 419.0) * hit * step(t, 6.0);
     col = mix(col, vec3(0.9, 0.93, 1.0) * (amb + 0.2), clamp(snow, 0.0, 1.0) * gFrost * 0.8);
     // Sparks from the wheels, thrown back past the cars: streaks out from the
     // vanishing point (polar cells are long along the radius), never over the roof.

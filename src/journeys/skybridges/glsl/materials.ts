@@ -8,6 +8,12 @@ export const materialsGlsl = /* glsl */`
     if (d < best) { best = d; gMat = cMat; gInfo = cInfo; gBoxC = cBoxC; gBoxH = cBoxH; }
   }
 
+  #ifdef LITE
+  #define FROST_STEPS 6
+  #else
+  #define FROST_STEPS 10
+  #endif
+
   float ssd(float a, float b, float z) { float u = clamp((z - a) / (b - a), 0.0, 1.0); return 6.0 * u * (1.0 - u) / (b - a); }
 
   /** How fast the route turns at z (rad/m): unbend stretches space by this times the distance from the runner. */
@@ -204,18 +210,98 @@ export const materialsGlsl = /* glsl */`
     return (0.5 + 0.5 * cos(vec3(0.0, 2.094, 4.188) + a * 2.0)) * smoothstep(1.2, 2.6, a);
   }
 
-  vec3 shadeFrost(vec3 w, vec3 n, vec3 rd, vec3 behind, float px) {
+  /**
+   * What frosted glass lets through along rd: the overcast, and the towers
+   * outside as soft dark shapes. A short march of the towers alone, kept as a
+   * cone (the soft-shadow trick): the frost scatters what crosses it by about a
+   * fifth of a radian, so nothing sharper than that survives, and the snow in
+   * the air takes what is left within a few tens of metres.
+   */
+  vec3 frostBeyond(vec3 w, vec3 rd) {
+    vec3 d = toWorld(rd);
+    vec3 air = skyBase(normalize(vec3(d.x, max(d.y, 0.0) + 0.04, d.z)));
+    vec3 col = mix(air, 0.9 * mix(gHorizon, gZenith, 0.35), smoothstep(0.02, -0.2, d.y));
+    vec3 p0 = unbend(w);
+    vec3 rc = canonDir(rd, p0.z);
+    float t = 0.6, cover = 1.0, tc = 60.0;
+    for (int i = 0; i < FROST_STEPS; i++) {
+      float dt = mapTowers(p0 + rc * t);
+      float k = dt / (0.2 * t);
+      if (k < cover) { cover = k; tc = t; }
+      if (dt < 0.05) break;
+      t += clamp(dt, 1.0, 12.0);
+      if (t > 80.0) break;
+    }
+    float shape = (1.0 - smoothstep(0.0, 1.0, cover)) * exp(-tc * 0.03);
+    // the floors, smeared to bands: lit rooms are a warmth, not windows
+    float fy = (p0.y + rc.y * tc) / 3.6;
+    vec3 tower = gHorizon * 0.32 + vec3(1.0, 0.8, 0.55) * 0.05 * (0.5 + 0.5 * sin(fy * 2.0 * PI)) * step(0.5, hash21(vec2(floor(fy), floor(tc))));
+    return mix(col, tower, shape);
+  }
+
+  /**
+   * The frost gallery's glass. Hoarfrost grows inward from every ring (the
+   * cold steel), lies thick where the cold air pools low and feathers into
+   * fern at its front; even where it is thinnest the glass is frosted, so
+   * the world is only ever blurred shapes. Snow lies on the crown outside and
+   * dims the light through it. Light arrives through the glass from outside,
+   * so the tube glows with the overcast: bright overhead, the cloud sea's
+   * paler bounce below. Crystals glint, flakes slide past outside, and the
+   * fractures are white and run through the frost.
+   */
+  vec3 shadeFrost(vec3 w, vec3 n, vec3 rd, float px) {
     vec3 pc = unbend(w);
-    vec2 uv = vec2(atan(pc.x, pc.y - deckTop(pc.z) - 1.25) * 2.6, pc.z);
-    float fr = fbm(uv * 3.0) * 0.6 + vnoise(uv * 41.0) * 0.4;
+    vec2 rc = vec2(pc.x, pc.y - deckTop(pc.z) - 1.25);
+    float ang = atan(rc.x, rc.y);                                 // 0 at the crown, +-pi under the deck
+    vec2 uv = vec2(ang * 2.6, pc.z);
+    vec3 o = renderDir(vec3(normalize(rc), 0.0), pc.z);          // outward
+    float dz = abs(fract(uv.y / 3.0 + 0.5) - 0.5) * 3.0;           // to the nearest ring
+
+    // How thick the frost is: from the rings, from below, and in fern at its front.
+    float grow = 0.85 * exp(-dz / 0.5) + 0.5 * smoothstep(1.4, 2.8, abs(ang)) + (fbm(uv * 1.3) - 0.5) * 0.7 + 0.12 * gDamage;
+    float fa = vnoise(vec2(uv.x * 34.0 + vnoise(uv * 5.0) * 4.0, dz * 6.0));
+    float fb = vnoise(vec2((uv.x + dz) * 26.0, (uv.x - dz) * 4.0) + 3.1);
+    float fc = vnoise(vec2((uv.x - dz) * 26.0, (uv.x + dz) * 4.0) + 7.7);
+    float fern = max(fa, max(fb, fc) * 0.9);
+    float frost = smoothstep(0.25, 0.8, grow + (fern - 0.5) * 0.9);
+    frost = max(frost, 0.45 + 0.1 * vnoise(uv * 9.0));
+    float drift = smoothstep(1.0, 0.65, abs(ang) + (vnoise(vec2(uv.y * 0.8, ang * 3.0)) - 0.5) * 0.4);
+
+    vec3 col;
+    if (dot(rd, o) > 0.0) {
+      // Inside, looking out: what comes through is the overcast, and what lies on the glass dims it.
+      vec3 through = ambient(o) * mix(vec3(1.0), vec3(0.42, 0.47, 0.55), drift);
+      vec3 beyond = frostBeyond(w, rd);
+      col = mix(beyond, through * 0.92, frost);
+      col = mix(col, through * 0.8, drift * 0.85);
+      // Flakes sliding over the outside, soft through the frost.
+      vec2 fg = uv * 5.0 + vec2(gTm * 0.7, -gTm * 1.1);
+      vec2 fcl = floor(fg);
+      float fh = hash21(fcl + 4.2);
+      float flake = step(0.6, fh) * smoothstep(0.32, 0.05, length(fract(fg) - 0.5 - (vec2(fh, fract(fh * 17.0)) - 0.5) * 0.4));
+      col *= 1.0 - 0.22 * flake * (1.0 - 0.6 * frost);
+    } else {
+      // Outside: snow on the crown, frosted glass round the rest.
+      vec3 lit = ambient(o) + direct(o, 1.0);
+      col = mix(lit * vec3(0.62, 0.66, 0.70), lit * vec3(0.95, 0.97, 1.0), max(drift, frost * 0.35));
+    }
+
+    // Crystals catching the light: a point here and there, gone once smaller than a pixel.
+    vec2 sg = uv * 130.0;
+    float sh = hash21(floor(sg) + 0.7);
+    float spark = step(0.988, sh) * smoothstep(0.3, 0.0, length(fract(sg) - 0.5)) * frost * (1.0 - drift);
+    spark *= clamp(0.004 / max(px, 1e-4), 0.0, 1.0) * (0.5 + 0.5 * sin(gTm * 2.0 + sh * 80.0 + dot(rd, vec3(30.0, 23.0, 41.0))));
+    col += vec3(1.0, 0.98, 0.94) * spark * 0.8;
+
+    // White fracture lines through the frost, crystalline, as the tube flexes.
     vec2 id = floor(vec2(uv.x / 1.6, uv.y / 3.0));
     float h = hash21(id + 2.2);
     vec4 cr = spiderweb((uv - (id + vec2(0.3 + 0.4 * h, 0.5)) * vec2(1.6, 3.0)), iTime - ((id.y + 0.5) * 3.0 / SPEED - 1.2 + h * 3.0), h, px, 1.2);
-    vec3 lit = ambient(n) + direct(n, 1.0);
-    vec3 col = mix(mix(behind, lit, 0.5) * 0.85, lit * 0.95, 0.55 + 0.35 * fr);
-    col = mix(col, lit * 1.25 + 0.05, cr.x * 0.9);
+    vec3 lit = ambient(o) + direct(o, 1.0);
+    col = mix(col, lit * 1.2 + 0.05, cr.x * 0.9);
+    col = mix(col, lit * 0.95, cr.y * 0.6);
     float F = fresnel(clamp(dot(n, -rd), 0.0, 1.0), 0.03);
-    return col + skyBase(toWorld(reflect(rd, n))) * F * 0.5;
+    return col + ambient(reflect(rd, n)) * F * 0.35;
   }
 
   // --- curtain walls -------------------------------------------------------------
@@ -374,12 +460,20 @@ export const materialsGlsl = /* glsl */`
   }
 
   // --- the rest ------------------------------------------------------------------
-  vec3 shadeSteel(vec3 w, vec3 n, vec3 rd) {
+  /** Steel. rime > 0 on the frost gallery's rings: the cold metal furred white, thickest underneath. */
+  vec3 shadeSteel(vec3 w, vec3 n, vec3 rd, float rime) {
     float sun = sunlight(w + n * 0.05);
     vec3 R = reflect(rd, n);
     float F = fresnel(clamp(dot(n, -rd), 0.0, 1.0), 0.45);
-    return vec3(0.22, 0.23, 0.25) * (ambient(n) + direct(n, sun)) * 0.8
+    vec3 col = vec3(0.22, 0.23, 0.25) * (ambient(n) + direct(n, sun)) * 0.8
       + skyBase(toWorld(R)) * F * 0.3 + glint(R, sun, 0.5) * F * 0.3;
+    if (rime > 0.5) {
+      vec3 pc = unbend(w);
+      float fur = vnoise(vec2(pc.x * 17.0 + pc.y * 11.0, pc.z * 23.0)) * 0.6 + vnoise(vec2(pc.x * 61.0 - pc.y * 47.0, pc.z * 71.0)) * 0.4;
+      float a = smoothstep(0.3, 0.7, fur + 0.25 - 0.2 * n.y);
+      col = mix(col, vec3(0.86, 0.9, 0.95) * (ambient(n) * 1.1 + direct(n, sun)), a);
+    }
+    return col;
   }
 
   /**
@@ -534,12 +628,13 @@ export const materialsGlsl = /* glsl */`
     float px = t / (iResolution.y * 1.25);
 
     if (abs(mat - M_FACADE) < 0.5) return shadeFacade(w, n, rd, t, px);
-    if (abs(mat - M_STEEL) < 0.5) return shadeSteel(w, n, rd);
+    if (abs(mat - M_STEEL) < 0.5) return shadeSteel(w, n, rd, step(5.5, info.x));
+    // Frost lets nothing sharp through, so it is not seen through: it blurs what is there (frostBeyond).
+    if (abs(mat - M_FROST) < 0.5) return shadeFrost(w, n, rd, px);
     if (abs(mat - M_CONCRETE) < 0.5) return shadeConcrete(w, n, info);
     if (abs(mat - M_TRAIN) < 0.5) return shadeTrain(w, n, rd, info);
 
     vec3 behind = uHeavy > 0.5 ? throughGlass(w, rd, n) : sky(rd, w.y, 1.0);
-    if (abs(mat - M_FROST) < 0.5) return shadeFrost(w, n, rd, behind, px);
 
     vec3 pc = unbend(w);
     float sun = sunlight(w + n * 0.05);
