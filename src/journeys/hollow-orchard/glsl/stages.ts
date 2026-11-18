@@ -388,30 +388,88 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
   }
 
   // 8 · HOST — bodies grown into the wall of the shaft.
+  //
+  // A shaft of flesh with people grown flat into it, lying in the wall the way
+  // a fossil lies in rock: face to the lumen, the legs going under first, the
+  // edges of every body taken back into the wall. Authored in the wall's own
+  // frame (arc, height off the wall, z), as FRUITING BODY is, so a body rides
+  // the wall wherever it breathes. One per cell of 8 sectors by HOST_CELL,
+  // staggered, on 72 % of cells, each turned its own way round the shaft and
+  // kept inside its cell, so no cell edge slices one.
+  const float HOST_R    = 5.5;    // the shaft's radius
+  const float HOST_CELL = 4.6;    // metres down z between bodies in a sector
+  const float HOST_BODY = 1.15;   // a body's scale: a little over life size
+
+  // One limb: two capsules, the joint between them.
+  float sdLimb(vec3 q, vec3 a, vec3 b, vec3 c, float ra, float rc) {
+    return min(sdCapsule(q, a, b, ra), sdCapsule(q, b, c, rc));
+  }
+
+  // A body lying on its back in the plane h = 0, head toward +u. Each arm
+  // takes its own pose (s: 0 at the side, 0.5 out, 1 reaching past the head).
+  float sdHostBody(vec3 q, float sL, float sR) {
+    float s  = q.y < 0.0 ? sL : sR;
+    vec3  m  = vec3(q.x, abs(q.y), q.z);
+    float hd = sdEllipsoid(q - vec3(1.08, 0.0, 0.0), vec3(0.125, 0.085, 0.105));
+    float nk = sdCapsule(q, vec3(0.84, 0.0, -0.03), vec3(0.98, 0.0, -0.01), 0.052);
+    float ch = sdEllipsoid(q - vec3(0.56, 0.0, -0.03), vec3(0.25, 0.18, 0.11));
+    float pv = sdEllipsoid(q - vec3(0.14, 0.0, -0.04), vec3(0.22, 0.155, 0.09));
+    float lg = sdLimb(m, vec3(-0.02, 0.09, -0.04), vec3(-0.68, 0.11, -0.03), vec3(-1.32, 0.12, -0.07), 0.078, 0.052);
+    vec3  el = s < 0.33 ? vec3(0.42, 0.27, -0.02) : (s < 0.66 ? vec3(0.66, 0.5, -0.02) : vec3(1.02, 0.31, -0.01));
+    vec3  hn = s < 0.33 ? vec3(0.13, 0.25, -0.03) : (s < 0.66 ? vec3(0.62, 0.8, -0.04)  : vec3(1.34, 0.28, -0.03));
+    float am = sdLimb(m, vec3(0.73, 0.19, -0.02), el, hn, 0.052, 0.042);
+    float d  = smin(ch, pv, 0.12);
+    d = smin(d, nk, 0.06);
+    d = smin(d, hd, 0.05);
+    d = smin(d, lg, 0.07);
+    return smin(d, am, 0.05);
+  }
+
   float sdHost(vec3 p) {
-    float rad = 5.5 + breathe(p) * 1.6;
-    float d   = rad - length(p.xy - vec2(0.0, 1.5));
+    vec2  o   = p.xy - vec2(0.0, 1.5);
+    float r   = length(o);
+    float a   = atan(o.y, o.x);
+    float rad = HOST_R + breathe(p) * 1.6;
+    float h   = rad - r;                                // height off the wall, into the lumen
+    float d   = h - rotDisp(p * 0.8, 0.22) * 0.7;
     gMat = 0.0; gWet = 0.7; gGlow = 0.2;
+    if (h > 1.0) return min(d, h - 0.45);               // the bodies stand under 0.45 proud
 
-    for (int i = 0; i < 5; i++) {
-      float fi = float(i);
-      float a  = fi / 5.0 * TAU + p.z * 0.02;
-      vec2  at = vec2(cos(a), sin(a)) * (rad - 0.7);
-      vec3  q  = p;
-      q.z      = repS(q.z - fi * 2.3, 11.5);
+    // The cell: a sector of the shaft, staggered down z sector by sector.
+    // Sector edges fall on the seam of the atan, so no body is cut by it.
+    float af  = a / TAU * 8.0;
+    float ka  = floor(af);
+    float zs  = p.z - ka * 1.7;
+    float kz  = floor(zs / HOST_CELL);
+    float h1  = hash21(vec2(ka, kz) + 61.0);
+    float edg = min((0.5 - abs(af - ka - 0.5)) * TAU / 8.0 * r, (0.5 - abs(zs / HOST_CELL - kz - 0.5)) * HOST_CELL);
+    // A neighbour's body is kept 0.15 inside its own cell and stands under
+    // 0.45 proud, so it is no nearer than either.
+    float nb  = max(edg + 0.12, h - 0.45);
+    if (h1 < 0.28) return min(d, nb);
 
-      vec3 base = vec3(at.x, at.y + 1.5, 0.0);
-      // torso · head · one reaching arm
-      float body = sdCapsule(q, base, base + vec3(-at.x, -at.y, 0.0) * 0.16 + vec3(0.0, 0.9, 0.0), 0.42);
-      float head = sdSphere(q - base - vec3(-at.x, -at.y, 0.0) * 0.2 - vec3(0.0, 1.35, 0.0), 0.30);
-      float arm  = sdCapsule(q, base + vec3(0.0, 0.7, 0.0),
-                             base + vec3(-at.x, -at.y, 0.0) * 0.75 + vec3(0.0, 0.4, 0.0), 0.13);
-      float fig  = smin(smin(body, head, 0.16), arm, 0.14);
-      d = smin(d, fig, 0.55);
-      if (fig < d + 0.4) { gMat = 3.0; gWet = 0.85; gGlow = 0.3 + 0.4 * uPulse.x; }
-    }
-    d -= rotDisp(p * 0.8, 0.22) * 0.7;
-    return d;
+    float h2  = hash21(vec2(kz, ka) + 13.0);
+    float h3  = fract(h1 * 37.7 + h2 * 11.3);
+    // Turned mostly round the shaft, either way about, and leaning down it.
+    float th  = (h2 < 0.5 ? 0.0 : PI) + (fract(h2 * 7.9) - 0.5) * 1.0;
+    vec2  c   = vec2(cos(th), sin(th));
+    vec2  l   = vec2((a - (ka + 0.5) * TAU / 8.0) * r - (h3 - 0.5) * 0.2,
+                     zs - (kz + 0.5) * HOST_CELL - (fract(h3 * 5.1) - 0.5) * 0.2);
+    vec3  q   = vec3(dot(l, c), dot(l, vec2(-c.y, c.x)), 0.0) / HOST_BODY;
+    // How far it has come out of the wall (measured off the wall's own
+    // swellings, or they bury it), and the legs going back in.
+    float em  = mix(0.3, 1.0, fract(h1 * 13.3));
+    q.z       = d / HOST_BODY - mix(-0.03, 0.12, em) + 0.16 * smoothstep(0.1, -1.3, q.x);
+    float bnd = length(q - vec3(-0.08, 0.0, 0.0)) - 1.6;
+    float fig = (bnd > 0.3 ? bnd : sdHostBody(q, fract(h3 * 3.7), fract(h3 * 9.1))) * HOST_BODY;
+    fig      -= rotDisp(p * 2.1, 0.22) * 0.05;          // the skin is not smooth either
+
+    // Under the wall's membrane where it meets the wall: gMat 1 is the body,
+    // up to 1.2 where the flesh has grown back over it.
+    float cover = smoothstep(0.1, -0.02, d - fig);
+    if (fig < d + 0.03) { gMat = 1.0 + 0.2 * cover; gWet = 0.5 + 0.4 * cover; gGlow = 0.12 + 0.25 * uPulse.x; }
+    d = smin(d, fig, 0.12);
+    return min(d, nb);
   }
 
   // 9 · THE HARVEST — fruiting bodies hung on cords.

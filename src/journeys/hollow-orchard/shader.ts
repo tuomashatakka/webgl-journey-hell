@@ -67,6 +67,8 @@ const SCENE = `
     // MARROW GROVE is bone, and MYCELIAL FALL is lit from inside its filaments.
     float bone = stageOn(3.0);
     float web  = stageOn(10.0);
+    // HOST is people grown into a wall of flesh.
+    float host = stageOn(8.0);
 
     vec3 base;
     if (mat < 0.5)      base = uTint * 0.55 + vec3(0.10, 0.06, 0.05);   // flesh / fungus
@@ -87,6 +89,14 @@ const SCENE = `
         vec3 marrow = vec3(0.34, 0.07, 0.05) * (0.45 + 1.1 * vnoise3(p * 34.0));
         aged        = mix(aged, marrow, smoothstep(1.05, 1.25, mat));
         base        = mix(base, aged, bone);
+      }
+      // Skin gone waxy and grey in the wall, bruised where it is pressed into
+      // it, and the wall's own flesh grown back over its edges (mat 1.2).
+      if (host > 0.0) {
+        vec3 skin = vec3(0.60, 0.53, 0.50) * (0.8 + 0.35 * vnoise3(p * 6.0));
+        skin      = mix(skin, vec3(0.42, 0.30, 0.40), smoothstep(0.55, 0.85, vnoise3(p * 2.3 + 5.0)) * 0.6);
+        skin      = mix(skin, uTint * 0.55 + vec3(0.10, 0.06, 0.05), smoothstep(1.0, 1.2, mat));
+        base      = mix(base, skin, host);
       }
     }
     else if (mat < 2.5) {                                               // soil, and root bark at 2.4
@@ -113,11 +123,11 @@ const SCENE = `
     if (mat < 0.5) {
       float gill = 0.5 + 0.5 * sin(atan(p.z, p.x) * 36.0);
       base *= mix(1.0, 0.72 + gill * 0.5, clamp(-n.y, 0.0, 1.0));
-      // Veins under the wall of the gut, dark and bruised, running with it.
-      if (gut > 0.0) {
+      // Veins under the wall of the gut and of the host, dark and bruised.
+      if (gut + host > 0.0) {
         float vein = ridge(p * vec3(0.6, 0.6, 0.3) + 7.0);
         vein *= vein; vein *= vein; vein *= vein; vein *= vein;
-        base  = mix(base, base * vec3(0.38, 0.22, 0.46), vein * gut * 0.85);
+        base  = mix(base, base * vec3(0.38, 0.22, 0.46), vein * (gut + host) * 0.85);
       }
     }
 
@@ -250,13 +260,14 @@ const SCENE = `
     // also what hides the geometry morph underneath it.
     // (Named xfade, not cross -- cross() is a GLSL builtin called above in this scope.)
     float xfade = sin(uStage.z * PI);
-    // FRUITING BODY is a closed tube, and the march runs out of steps down its
-    // bore before it runs out of tube: its air is thick enough that the wall is
-    // already the dark by then, so the far end closes instead of showing a hole.
+    // FRUITING BODY and HOST are closed tubes, and the march runs out of steps
+    // down the bore before it runs out of tube: their air is thick enough that
+    // the wall is already the dark by then, so the far end closes instead of
+    // showing a hole.
     // MYCELIAL FALL has no walls to stop the eye, so its air does: the web
     // thins into the dark instead of standing sharp to the far plane.
     float web   = stageOn(10.0);
-    float den   = 0.016 + 0.030 * uWalk.w + 0.05 * xfade + 0.02 * uPulse.z + 0.018 * stageOn(5.0) + 0.034 * web;
+    float den   = 0.016 + 0.030 * uWalk.w + 0.05 * xfade + 0.02 * uPulse.z + 0.018 * stageOn(5.0) + 0.034 * stageOn(8.0) + 0.034 * web;
     col = mix(uBg, col, exp(-t * den));
     // And past where the march gives out there is more web, too fine to resolve.
     if (web > 0.0 && !hit) {

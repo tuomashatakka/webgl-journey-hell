@@ -38,7 +38,7 @@ speed is per stage and integrated, so z is a distance and not `time * SPEED`.
 | 5 · fruiting body | 90 | 1.4 | 3.2 | a breathing tube of wet muscle, sphincter rings, polyps | nodules on the wall, pale cyan |
 | 6 · transition | 60 | 1.6 | 6 | the nursery dying, the floor opening into the shaft | cap clusters, guttering |
 | the bloom | 21.7 | 1.2 | 5 | one enormous cap overhead, falling into its gilled funnel and throat | pods under the cap, amber |
-| host | 21.7 | 1.75 | 4 | bodies grown into the wall of a shaft | nodules on the wall, green |
+| host | 21.7 | 1.75 | 4 | bodies grown flat into the wall of a shaft of flesh, face to the lumen, legs going under | nodules on the wall, green |
 | the harvest | 21.7 | 1.6 | 4.5 | fruiting bodies hung on cords in a torn shaft | pods, yellow-green |
 | mycelial fall | 21.7 | 0.9 | 12 | no floor and no walls: three lattices of filament, bent, fused where they meet, carrying light down themselves | wisps, blue |
 | seed vault | 21.7 | 1.5 | 5 | chambered pods, each with something curled inside | pods, violet |
@@ -134,6 +134,20 @@ three ramps carry the arc, all continuous in distance walked, none table-driven.
   thicker so the web thins into the dark, and a ray that hits nothing shows a
   faint ridge-noise web beyond it. scene evaluations per pixel are what they
   were (74 in the web, 57 in the grove against 61).
+- **the host** is a shaft of flesh (`HOST_R` 5.5, breathing) with people grown
+  flat into its wall, authored in the wall's own frame (arc, height off the
+  wall, z) as the gut is. one body per cell of 8 sectors (edges on the atan
+  seam) by `HOST_CELL` (4.6) units, staggered 1.7 a sector, on 72 % of cells:
+  a body on its back at `HOST_BODY` (1.15) times life size, head, neck, chest,
+  pelvis, legs and two arms each in its own pose (at the side, out, reaching
+  past the head), turned round the shaft either way with up to 0.5 rad down
+  it, kept 0.15 inside its cell. it stands 0.03 to 0.15 off the wall's own
+  swellings with the legs sinking 0.16 back in, and is taken into the wall by
+  a smin of 0.12. a neighbour's bound is the cell edge plus 0.12 or the height
+  less 0.45, whichever is larger. shading while the stage is on screen
+  (`stageOn(8.)`): waxy grey skin, bruised in patches, the wall's flesh grown
+  back over it where it meets the wall (`gMat` 1 to 1.2), the gut's veins in
+  the wall, and 0.034 more fog so the bore closes into the dark.
 - the key light is dimmed (`0.08 + 0.55 * ndl`) to leave the lanterns room to be
   what lights a stage. the root labyrinth adds a falloff light from the eye.
 
