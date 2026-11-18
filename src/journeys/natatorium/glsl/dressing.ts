@@ -23,6 +23,16 @@ export const dressingGlsl = `  // --- dressing ---------------------------------
 
     float far = lodFade(0.05);
 
+    // THE GRAND HALL's ribs, glazed in the frieze blue the vaulted room's
+    // walls carry, with a cream bead down both arrises.
+    if (abs(typ - 2.0) < 0.5 && qs.y > H - VAULT_RISE - 0.6) {
+      float rz = abs(latt(qs.z, VAULT_BAY));
+      float rb = 1.0 - smoothstep(0.300, 0.306, rz);
+      float ar = (1.0 - smoothstep(0.012, 0.03, abs(rz - 0.27))) * (1.0 - far);
+      alb = mix(alb, alb * vec3(0.16, 0.30, 0.55) * 1.5, rb);
+      alb = mix(alb, alb * vec3(1.02, 0.96, 0.80), ar * rb);
+    }
+
     if (ns.y > 0.7) {
       // THE BASIN. The swimming halls are glazed in a pale aqua; the service
       // rooms keep the plain grey-white.
@@ -84,7 +94,7 @@ export const dressingGlsl = `  // --- dressing ---------------------------------
       // the diffuser. The panel itself is the emissive term in shadeFace.
       float sp = max(C.w, 2.0);
       float lz = qs.z - (floor(qs.z / sp) + 0.5) * sp;
-      vec2  hb = abs(vec2(qs.x, lz)) - vec2(W * 0.56 + 0.07, 0.34);
+      vec2  hb = abs(vec2(qs.x, lz)) - vec2(W * lampRun(C) * 0.56 + 0.07, 0.34);
       float hs = 1.0 - smoothstep(0.0, 0.015 + gDist * 0.002, max(hb.x, hb.y));
       alb   = mix(alb, vec3(0.16, 0.17, 0.17), hs);
       rough = mix(rough, 0.35, hs);
@@ -153,4 +163,38 @@ export const dressingGlsl = `  // --- dressing ---------------------------------
     }
   }
 
+  // THE GRAND HALL's windows: -1 off them, 0 on a reveal, and on the glass
+  // one more than what it gives off. Frosted panes in iron glazing bars, lit
+  // from a light well behind: each pane its own tone under a smudge of grime,
+  // the lower ones dirtier, and more of them boarded over every lap. The bars go to their mean with distance.
+  float vaultGlass(vec3 qs, vec4 B, float dec) {
+    float W  = B.y;
+    float R  = vaultRadius(B);
+    float rr = length(vec2(qs.x, qs.y - (B.z - R)));
+    float ze = abs(qs.z - B.w * 0.5) - (B.w * 0.5 + OVERLAP);
+
+    vec2 uv; vec2 bar; float glass;
+    if (abs(qs.x) > W - 0.02 && clerestory(qs, B) < 0.02) {
+      uv    = vec2(latt(qs.z + VAULT_BAY * 0.5, VAULT_BAY) + CLER_HW, qs.y - CLER_SILL);
+      bar   = vec2(CLER_HW * 2.0 / 3.0, 0.48);
+      glass = step(W + 0.27, abs(qs.x));
+    }
+    else if (ze > -0.02 && lunette(qs, B, rr, R) < 0.02) {
+      uv    = vec2(qs.x + W, qs.y - (B.z - VAULT_RISE + LUNE_SILL));
+      bar   = vec2(0.80, 0.60);
+      glass = step(0.27, ze);
+    }
+    else return -1.0;
+    if (glass < 0.5) return 0.0;
+
+    vec2  g  = uv / bar;
+    vec2  f  = abs(fract(g) - 0.5) * bar;
+    float lf = lodFade(0.03);
+    float ir = mix(1.0 - smoothstep(0.025, 0.040, min(bar.x * 0.5 - f.x, bar.y * 0.5 - f.y)), 0.16, lf);
+    float id = hash21(floor(g) + 5.3 + floor(qs.z / B.w) * 2.0);
+    float sm = vnoise(uv * 0.9 + 3.0);
+    float pane = (0.86 + 0.18 * id) * (0.72 + 0.38 * sm) * mix(0.70, 1.0, smoothstep(0.0, 2.4, uv.y))
+               * (1.0 - 0.65 * step(id, 0.03 + dec * 0.30));
+    return 1.0 + pane * (1.0 - ir);
+  }
 `

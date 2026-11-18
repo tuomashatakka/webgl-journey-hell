@@ -119,6 +119,19 @@ const SCENE = `
     // a hole, it is a red tile: flat, frontal and exactly tile-shaped, which is
     // precisely what it looked like.
     float face  = min(min(B.y - abs(qs.x), qs.y), B.z - qs.y);
+
+    // THE GRAND HALL is lit from its windows as well: a cool fill that grows
+    // toward the clerestory, and the glass itself. A window's reveal is not a
+    // break in the shell, so it is neither darkened nor lit red as one.
+    if (abs(C.y - 2.0) < 0.5) {
+      c += alb * vec3(0.46, 0.56, 0.64) * (0.05 + 0.06 * clamp(qs.y / B.z, 0.0, 1.0));
+      float gl = vaultGlass(qs, B, dec);
+      if (gl > -0.5) {
+        face      = 0.0;
+        crackGlow = 0.0;
+        if (gl > 0.5) c = c * 0.30 + vec3(0.62, 0.74, 0.82) * (gl - 1.0) * 3.0;
+      }
+    }
     c *= 1.0 - 0.94 * smoothstep(-0.005, -0.055, face);
     c += vec3(1.00, 0.09, 0.02) * smoothstep(-0.155, -0.225, face) * (0.35 + 2.6 * dec);
 

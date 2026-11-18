@@ -573,6 +573,12 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     return (1.0 - dead) * buzz;
   }
 
+  // How much of the width a row of fittings spans. Under THE GRAND HALL's
+  // vault it is only the stretch of the crown that stays within a hand of the
+  // soffit, and the tube hangs half a metre down from it so the whole tube is
+  // in the air; everywhere else the full row, flush.
+  float lampRun(vec4 C) { return abs(C.y - 2.0) < 0.5 ? 0.545 : 1.0; }
+
   // A fluorescent tube IS a segment, so light it as one: the closest-point-on-
   // segment costs about five instructions and produces the long specular streak
   // across wet tile and water that a point light simply cannot.
@@ -582,14 +588,16 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     float W   = B.y;
     float H   = B.z;
     float band = floor(p.z / sp);
+    float Wl   = W * lampRun(C);
+    float drop = lampRun(C) < 1.0 ? 0.50 : 0.12;
 
     for (int k = 0; k < 3; k++) {
       float bi = band - 1.0 + float(k);
       float on = lampAlive(bi, C);
       if (on < 0.01) continue;
 
-      vec3 a  = vec3(-W * 0.55, H - 0.12, (bi + 0.5) * sp);
-      vec3 ab = vec3(W * 1.10, 0.0, 0.0);
+      vec3 a  = vec3(-Wl * 0.55, H - drop, (bi + 0.5) * sp);
+      vec3 ab = vec3(Wl * 1.10, 0.0, 0.0);
       float u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
       vec3  lp = a + ab * u;
 
@@ -613,7 +621,7 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
   // term on ceiling hits, so it costs nothing on the other 95 march steps.
   float ceilPanel(vec3 p, vec4 B, vec4 C) {
     float sp   = max(C.w, 2.0);
-    float W    = B.y;
+    float W    = B.y * lampRun(C);
     float band = floor(p.z / sp);
     float lz   = p.z - (band + 0.5) * sp;
     float inZ  = 1.0 - smoothstep(0.20, 0.27, abs(lz));
@@ -627,7 +635,9 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     float rib  = mix(0.80 + 0.20 * abs(sin(p.x * 70.0)), 0.90, lf);
     float tube = mix(0.78 + 0.32 * exp(-abs(abs(lz) - 0.09) * 40.0), 0.92, lf);
     float ends = 0.70 + 0.30 * smoothstep(W * 0.56, W * 0.38, abs(p.x));
-    return inZ * inX * lampAlive(band, C) * rib * tube * ends;
+    // Under the vault only the crown carries them, not a gallery's soffit.
+    float up = lampRun(C) < 1.0 ? step(B.z - 1.0, p.y) : 1.0;
+    return inZ * inX * lampAlive(band, C) * rib * tube * ends * up;
   }
 
   // Suspended particulate. Nothing else says "this space is full of water"

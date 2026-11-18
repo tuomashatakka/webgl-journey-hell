@@ -112,12 +112,24 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
       // it gets its own bounding sphere rather than dragging the columns' bound
       // out to meet it.
       vec3  fc = vec3(qs.x - (W - 5.0), qs.y - H * 0.62, qs.z - B.w * 0.5);
-      float bt = min(hx - 2.30, length(fc) - 5.2);
+      float bt = min(hx - 2.50, length(fc) - 5.2);
       if (bt > BOUND_SLACK) return min(d, bt);
 
       // VAULT — THE GRAND HALL. Columns down both sides, and the flume.
-      PUT(sdCapsuleY(vec3(abs(qs.x) - (W - 1.7), qs.y - H * 0.5, latt(qs.z, 6.0)),
-                     H * 0.5, 0.55), MAT_CONC)
+      // Each column carries the rib over it: a plinth, a torus at the foot, a
+      // shaft, a necking and a capital whose top is buried in the rib where
+      // the rib's soffit crosses the column line.
+      float R  = vaultRadius(B);
+      float cx = W - 1.7;
+      float ct = H - R + sqrt((R - VAULT_RIB) * (R - VAULT_RIB) - cx * cx);
+      vec3  cp = vec3(abs(qs.x) - cx, qs.y, latt(qs.z, VAULT_BAY));
+      float cl = sdCylY(cp - vec3(0.0, ct * 0.5, 0.0), ct * 0.5, 0.48);
+      cl = min(cl, sdRoundBox(cp - vec3(0.0, 0.30, 0.0), vec3(0.68, 0.30, 0.68), 0.04));
+      cl = min(cl, sdTorus((cp - vec3(0.0, 0.68, 0.0)).xzy, 0.50, 0.09));
+      cl = min(cl, sdTorus((cp - vec3(0.0, ct - 0.78, 0.0)).xzy, 0.48, 0.06));
+      cl = min(cl, sdRoundBox(cp - vec3(0.0, ct - 0.34, 0.0), vec3(0.62, 0.20, 0.62), 0.05));
+      cl = min(cl, sdRoundBox(cp - vec3(0.0, ct - 0.02, 0.0), vec3(0.74, 0.14, 0.74), 0.02));
+      PUT(cl, MAT_CONC)
 
       // Planters between the columns, on the scale of the room they stand in.
       vec3 vp = vec3(abs(qs.x) - (W - 0.80), qs.y, latt(qs.z - 3.0, 6.0));

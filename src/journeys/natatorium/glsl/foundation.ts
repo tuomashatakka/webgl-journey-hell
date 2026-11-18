@@ -112,6 +112,22 @@ export const foundationGlsl = `
   const float CIST_RX = 2.6;
   const float CIST_RZ = 3.0;
 
+  // THE GRAND HALL (the one TYPE_VAULT room) is a segmental barrel vault over
+  // the whole width, springing off the side walls VAULT_RISE under the crown,
+  // with a transverse rib over every pair of columns (one bay, VAULT_BAY). The
+  // side walls are lit by an arched clerestory window in every bay between the
+  // ribs, the end walls by a thermal window in the lunette the vault leaves.
+  const float VAULT_RISE = 4.5;
+  const float VAULT_BAY  = 6.0;
+  const float VAULT_RIB  = 0.32;   // how far a rib stands under the vault
+  const float CLER_HW    = 1.3;    // clerestory half width, and its arch's radius
+  const float CLER_SILL  = 5.0;
+  const float CLER_ARCH  = 6.9;    // where the arch springs
+  const float LUNE_IN    = 1.0;    // the thermal window's head under the vault
+  const float LUNE_SILL  = 0.45;   // its sill over the springing line
+  const float GAL_Y      = 4.35;   // the end galleries' floor
+  const float GAL_DEEP   = 2.2;    // how far they stand out of the end walls
+
   float gMat;
 
   // The min chain, with the material riding along. A plain min cannot say which
