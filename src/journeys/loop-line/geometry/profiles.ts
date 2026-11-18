@@ -1,4 +1,4 @@
-import { Theme } from '../stations'
+import { JUNCTION_LEAD, Theme } from '../stations'
 import { SurfaceKey } from './surfaces'
 
 /**
@@ -24,6 +24,30 @@ export const CUT = {
   batter: 0.25,
 } as const
 
+/**
+ * THE CONCOURSE's section, metres off the centre line and up from the track:
+ * the walls, the vault (an ellipse springing at `spring`), the galleries and
+ * the floors. Its ribs, columns and balustrades all stand on it.
+ */
+export const HALL = {
+  left:   -12,
+  right:  24,
+  spring: 8.6,
+  rise:   7.4,
+
+  /** The track well's half width, and the concourse floor either side of it. */
+  well:  1.9,
+  floor: 1,
+
+  /** The gallery: its soffit, its deck, and how far it reaches out from the wall. */
+  gallery: 5,
+  deck:    5.6,
+  depth:   3.2,
+
+  /** Where the right floor stops, metres before the hall's end: short of the points. */
+  floorEnd: JUNCTION_LEAD + 6,
+} as const
+
 // --- profiles ----------------------------------------------------------------
 
 /** One section point: right, up (metres), the surface of the edge leaving it, and options. */
@@ -38,6 +62,9 @@ export interface PP {
 export interface Profile {
   points: PP[];
   closed: boolean;
+
+  /** Stop the sweep this many metres before the bay's end. */
+  until?: number;
 }
 
 const pp = (r: number, u: number, s: SurfaceKey, ao = 1, smooth = false): PP =>
@@ -107,32 +134,44 @@ export function profilesFor (theme: Theme): Profile[] {
     }
 
     case Theme.CONCOURSE: {
-      // A tall vaulted hall, wide to the right where the chord diverges. The
-      // track runs on the hall floor; walkways stand along both walls with a
-      // mezzanine gallery over them.
-      const L     = -12,
-        R         = 24,
-        spring    = 8.6
-      const vault = arc((L + R) / 2, spring, (R - L) / 2, 7.4, 0, Math.PI, 16, 'panel', 0.9)
+      // A tall vaulted hall in glazed tile, wide to the right where the chord
+      // diverges. The track runs in a ballasted well between two terrazzo
+      // concourse floors at platform height, under a mezzanine gallery along
+      // both walls. The right floor is its own section, stopped short of the
+      // points (HALL.floorEnd), so from there the well opens out to the right
+      // wall for the chord to swing across to its mouth.
+      const { left: L, right: R, spring, well, floor, gallery, deck, depth } = HALL
+
+      const vault =  arc((L + R) / 2, spring, (R - L) / 2, HALL.rise, 0, Math.PI, 16, 'tile', 0.9)
       return [{
         closed: true,
         points: [
-          pp(-9, -0.38, 'concreteDim', 0.7),
-          pp(21, -0.38, 'concrete', 0.55),
-          pp(21, 1, 'terrazzo'),
-          pp(R, 1, 'plaster', 0.6),
-          pp(R, 5, 'panelDark', 0.7),
-          pp(R - 3.2, 5, 'darkGrey'),
-          pp(R - 3.2, 5.6, 'terrazzo'),
-          pp(R, 5.6, 'plaster', 0.6),
+          pp(-well, -0.38, 'ballast', 0.6),
+          pp(R - 3, -0.38, 'concrete', 0.55),
+          pp(R - 3, floor, 'terrazzo'),
+          pp(R, floor, 'tile', 0.6),
+          pp(R, gallery, 'panelDark', 0.7),
+          pp(R - depth, gallery, 'darkGrey'),
+          pp(R - depth, deck, 'terrazzo'),
+          pp(R, deck, 'tile', 0.6),
           ...vault.slice(0, -1),
-          pp(L, spring, 'plaster'),
-          pp(L, 5.6, 'terrazzo', 0.6),
-          pp(L + 3.2, 5.6, 'darkGrey'),
-          pp(L + 3.2, 5, 'panelDark'),
-          pp(L, 5, 'plaster', 0.7),
-          pp(L, 1, 'terrazzo', 0.6),
-          pp(-9, 1, 'concrete'),
+          pp(L, spring, 'tile'),
+          pp(L, deck, 'terrazzo', 0.6),
+          pp(L + depth, deck, 'darkGrey'),
+          pp(L + depth, gallery, 'panelDark'),
+          pp(L, gallery, 'tile', 0.7),
+          pp(L, floor, 'terrazzo', 0.6),
+          pp(-well, floor, 'concrete'),
+        ],
+      }, {
+        // The right floor, open: the well's side, then the floor out to the
+        // walkway along the wall.
+        closed: false,
+        until:  HALL.floorEnd,
+        points: [
+          pp(well, -0.38, 'concrete', 0.55),
+          pp(well, floor, 'terrazzo'),
+          pp(R - 3, floor, 'terrazzo'),
         ],
       }]
     }

@@ -166,7 +166,8 @@ export function buildBays (gl: WebGL2RenderingContext, circuits: Circuits): BayR
       const builders = new Map<SurfaceKey, MeshBuilder>()
       const step     = bay.theme === Theme.DEPOT || bay.theme === Theme.CUT ? 3 : 2
       for (const profile of profilesFor(bay.theme))
-        sweepProfile(builders, curve, shellSpan[0], shellSpan[1], step, profile)
+        sweepProfile(builders, curve, shellSpan[0],
+                     profile.until === undefined ? shellSpan[1] : span.s1 - profile.until, step, profile)
       fractureAll(builders, bay.theme === Theme.TRESTLE ? 3 : 4.5, SEED + bay.id * 977)
 
       // The earth behind the walls, swept after the fracture so it stays whole.

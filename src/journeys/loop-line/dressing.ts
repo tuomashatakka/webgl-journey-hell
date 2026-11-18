@@ -21,7 +21,7 @@ import type { ClosedCurve, Frame, Vec3 } from '@wjh/geometry/curve'
 import { BAYS, Theme } from './stations'
 import type { BaySpan, Circuits } from './stations'
 import { TIE_PITCH } from './geometry/units'
-import { portalFor } from './geometry/profiles'
+import { HALL, portalFor } from './geometry/profiles'
 import type { SurfaceKey } from './geometry/surfaces'
 
 /** Floats per instance: (pos, sx), (fwd, sy), (up, sz), (s, bay, seed, tint). */
@@ -249,17 +249,40 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
     }
 
     case Theme.CONCOURSE: {
+      const { left, right, well, floor, deck, depth } = HALL
+
+      const floorEnd =  s1 - HALL.floorEnd
+      // Shuttered shops under the galleries, a fascia lit over each shutter.
       for (let s = s0 + 3; s < s1 - 3; s += 5.6) {
-        d.put('shutter', s, 23.92, 1)
-        d.put('shopSign', s, 23.8, 1, { tint: Math.floor(R() * 8) })
-        d.put('shutter', s + 2.8, -11.92, 1)
-        d.put('shopSign', s + 2.8, -11.8, 1, { tint: Math.floor(R() * 8) })
+        d.put('shutter', s, right - 0.08, floor)
+        d.put('shopSign', s, right - 0.2, floor - 0.8, { tint: Math.floor(R() * 8) })
+        d.put('shutter', s + 2.8, left + 0.08, floor)
+        d.put('shopSign', s + 2.8, left + 0.2, floor - 0.8, { tint: Math.floor(R() * 8) })
       }
+      // Balustrades: along both galleries, and round the track well as far
+      // as the right floor goes, then across its end.
       for (let s = s0 + 1; s < s1; s += 2.1) {
-        d.put('railPost', s, 20.85, 5.6)
-        d.put('railTop', s, 20.85, 5.6)
-        d.put('railPost', s, -8.85, 5.6)
-        d.put('railTop', s, -8.85, 5.6)
+        for (const r of [ right - depth + 0.05, left + depth - 0.05 ]) {
+          d.put('railPost', s, r, deck)
+          d.put('railTop', s, r, deck)
+        }
+        for (const r of [ -well - 0.05, well + 0.05 ]) {
+          if (r > 0 && s > floorEnd - 1.2)
+            continue
+          d.put('railPost', s, r, floor)
+          d.put('railTop', s, r, floor)
+        }
+      }
+      for (let r = well + 1.1; r < right - 3; r += 2.1) {
+        d.put('railPost', floorEnd - 0.1, r, floor, { yaw: Math.PI / 2 })
+        d.put('railTop', floorEnd - 0.1, r, floor, { yaw: Math.PI / 2 })
+      }
+      // A rib every bay, a column under each gallery front on the rib's line,
+      // and the pendants on every other rib.
+      for (let s = s0 + 7; s < s1 - 2; s += 7.5) {
+        d.put('vaultRib', s, 0, 0)
+        for (const r of [ right - depth + 0.55, left + depth - 0.55 ])
+          d.put('hallColumn', s, r, 0)
       }
       for (let s = s0 + 7; s < s1; s += 15)
         for (const r of [ -1.5, 13.5 ]) {
@@ -508,7 +531,12 @@ export function buildHeadwalls (c: Circuits): Headwall[] {
 
   // The concourse end wall carries both portals: daylight, and the chord.
   const chordHole = projectPortal(c, c.chordStartAltS, c.main.frameAtDistance(BAYS[3].u0 * L))
-  wall(2, 3, [ -12, -0.38, 24, 16.1 ], 'plaster', [ chordHole ])
+  wall(2, 3, [ HALL.left, -0.38, HALL.right, 16.1 ], 'tile', [ chordHole ])
+
+  // The concourse floors' start, seen past the tube's mouth: the well open.
+  const well = HALL.well
+  wall(2, 2, [ HALL.left, -0.38, HALL.right, HALL.floor ], 'concrete',
+       [[[ -well, -0.6 ], [ well, -0.6 ], [ well, HALL.floor + 0.2 ], [ -well, HALL.floor + 0.2 ]]])
 
   wall(3, 4, [ -8.7, -0.38, 8.7, 11.7 ], 'brickCut')
   wall(4, 5, [ -10, -0.38, 22, 4.9 ], 'plasterDamp')

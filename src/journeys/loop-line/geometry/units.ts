@@ -2,7 +2,7 @@ import { createMeshBuilder, fracture } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { mulberry32 } from '@wjh/math/rng'
 import { SurfaceKey } from './surfaces'
-import { CUT, cutFace } from './profiles'
+import { CUT, HALL, cutFace } from './profiles'
 
 /** Sleeper pitch, metres. */
 export const TIE_PITCH = 0.744
@@ -303,6 +303,32 @@ export const UNITS: Record<string, UnitSpec> = {
   trestleRail:     { surface: 'steel', cell: 0, build: b => b.box(0, 1, 0, 0.03, 0.03, 1.5) },
   redLamp:         { surface: 'redLamp', cell: 0, build: b => sphere(b, 0, 2.6, 0, 0.13, 6) },
   redPost:         { surface: 'darkGrey', cell: 0, build: b => cylY(b, 0, -0.3, 2.5, 0, 0.05, 6) },
+
+  // THE CONCOURSE, placed on the centre line. A brick rib under the vault
+  // every bay, carried down the wall to the gallery on a pilaster; local x is
+  // left, so the hall's centre (right of the track) is at negative x.
+  vaultRib: {
+    surface: 'brick',
+    cell:    2.2,
+    build:   b => {
+      const cx = -(HALL.left + HALL.right) / 2
+      ellipseRib(b, cx, HALL.spring, (HALL.right - HALL.left) / 2 + 0.05, HALL.rise + 0.05, 0.5, 0.3, 28)
+      for (const x of [ -HALL.right + 0.18, -HALL.left - 0.18 ])
+        b.box(x, (HALL.deck + HALL.spring) / 2, 0, 0.22, (HALL.spring - HALL.deck) / 2, 0.36)
+    },
+  },
+  // A cast-iron column under each gallery's front: a base, a shaft, a capital
+  // under the soffit.
+  hallColumn: {
+    surface: 'girder',
+    cell:    0,
+    build:   b => {
+      b.box(0, HALL.floor + 0.12, 0, 0.3, 0.12, 0.3)
+      cylY(b, 0, HALL.floor + 0.24, HALL.gallery - 0.3, 0, 0.16, 12)
+      b.box(0, HALL.gallery - 0.2, 0, 0.26, 0.1, 0.26)
+      b.box(0, HALL.gallery - 0.05, 0, 0.34, 0.05, 0.34)
+    },
+  },
 }
 
 /**
@@ -440,6 +466,56 @@ function ribRing (b: MeshBuilder, cu: number, r: number, depth: number, width: n
       const p = base + i * 2
       b.face(p, p + 2, p + 3)
       b.face(p, p + 3, p + 1)
+    }
+  }
+}
+
+/**
+ * An elliptical rib round the local z axis, centred at (cx, cy), its back on
+ * the ellipse (rx, ry) and `depth` deep toward the centre, from angle 0 to pi:
+ * the underside and both faces, the back being buried in the vault.
+ */
+function ellipseRib (b: MeshBuilder, cx: number, cy: number, rx: number, ry: number,
+  depth: number, width: number, seg: number): void {
+  const at = (a: number, d: number): [ number, number, number, number ] => {
+    const c = Math.cos(a),
+      s     = Math.sin(a)
+    // The ellipse's inward normal, and the point `d` in along it.
+    const nx = -c * ry,
+      ny     = -s * rx
+    const l  = Math.hypot(nx, ny)
+    return [ cx + c * rx + nx / l * d, cy + s * ry + ny / l * d, nx / l, ny / l ]
+  }
+  const base = b.vertexCount
+  for (let i = 0; i <= seg; i++) {
+    const [ x, y, nx, ny ] = at(Math.PI * i / seg, depth)
+    b.vertex(x, y, -width, nx, ny, 0, 0, 0)
+    b.vertex(x, y, width, nx, ny, 0, 0, 0)
+  }
+  for (let i = 0; i < seg; i++) {
+    const p = base + i * 2
+    b.face(p, p + 3, p + 2)
+    b.face(p, p + 1, p + 3)
+  }
+  for (const side of [ -1, 1 ]) {
+    const start = b.vertexCount
+    for (let i = 0; i <= seg; i++) {
+      const a          = Math.PI * i / seg
+      const [ ix, iy ] = at(a, depth)
+      const [ ox, oy ] = at(a, 0)
+      b.vertex(ix, iy, side * width, 0, 0, side, 0, 0)
+      b.vertex(ox, oy, side * width, 0, 0, side, 0, 0)
+    }
+    for (let i = 0; i < seg; i++) {
+      const p = start + i * 2
+      if (side > 0) {
+        b.face(p, p + 2, p + 3)
+        b.face(p, p + 3, p + 1)
+      }
+      else {
+        b.face(p, p + 3, p + 2)
+        b.face(p, p + 1, p + 3)
+      }
     }
   }
 }
