@@ -48,18 +48,20 @@ const UPPER = 4
 /** Points in a cross-section; every call must return the same number. */
 const POINTS = 3 + LOWER + 1 + UPPER + 2
 
+/** The face at one arc length; `cutAt` fills and returns this one object. */
+const cut: CutAt = { h: 0, top: FOOT, ditch: 0.5 }
+
 export interface CutAt {
+
   /** Face height above the road, metres; 0 where there is no face. */
-  h:   number;
+  h: number;
 
   /** Horizontal distance from the spine to the face's top edge. */
   top: number;
 
-  /** Horizontal distance from the spine past which the land drops under the ditch. */
+  /** Horizontal distance from the spine past which the land sinks under the road and the ditch. */
   ditch: number;
 }
-
-const cut: CutAt = { h: 0, top: FOOT, ditch: HALF + 0.3 }
 
 function heightAt (t: number): number {
   if (t <= HEIGHT[0][0] || t >= HEIGHT[HEIGHT.length - 1][0])
@@ -84,9 +86,9 @@ function shape (h: number, wall: number) {
   // Rock is battered back about 1 in 4.5; a retaining wall about 1 in 25.
   const batter = 0.22 + (0.04 - 0.22) * wall
   // A bench halfway up a tall rock face catches what falls off the top half.
-  const bench  = 1.8 * smoothstep(7, 9.5, h) * (1 - wall)
-  const mid    = h * 0.55
-  const top    = FOOT + batter * h + bench
+  const bench = 1.8 * smoothstep(7, 9.5, h) * (1 - wall)
+  const mid   = h * 0.55
+  const top   = FOOT + batter * h + bench
   return { batter, bench, mid, top }
 }
 
@@ -109,13 +111,13 @@ export function wallStart (route: Route): number {
  * the road. The left side is its mirror walked the other way.
  */
 function section (route: Route, s: number): ProfilePoint[] {
-  const t                             = s - route.spans[1].s0
-  const h                             = heightAt(t)
-  const { batter, bench, mid, top }   = shape(h, wallWeight(t))
+  const t                           = s - route.spans[1].s0
+  const h                           = heightAt(t)
+  const { batter, bench, mid, top } = shape(h, wallWeight(t))
   // Where the face has no height the lip and tail sink under the land, so the
   // sweep's ends do not leave a sheet lying on the grass.
-  const g    = smoothstep(0, 1.5, h)
-  const sink = -0.35 * (1 - g)
+  const g                   = smoothstep(0, 1.5, h)
+  const sink                = -0.35 * (1 - g)
   const pts: ProfilePoint[] = [
     [ HALF + 1.9, -0.36 ], [ HALF + 2.7, -0.72 ], [ FOOT, -0.25 ],
   ]
@@ -123,6 +125,7 @@ function section (route: Route, s: number): ProfilePoint[] {
     const u = -0.25 + (mid + 0.25) * k / LOWER
     pts.push([ FOOT + batter * (u + 0.25), u ])
   }
+
   const back = FOOT + batter * (mid + 0.25) + bench
   pts.push([ back, mid + 0.05 * g ])
   for (let k = 1; k <= UPPER; k++) {
@@ -147,16 +150,27 @@ function edgeTo (pts: ProfilePoint[], k: number): number {
  * its tail), so the fragment shader can tell face, coping and the turf behind.
  */
 export function buildCutting (route: Route): SweepArrays {
-  const s0   = route.spans[1].s0 + HEIGHT[0][0]
-  const s1   = route.spans[1].s0 + HEIGHT[HEIGHT.length - 1][0]
-  const TOP  = POINTS - 3
+  const s0    = route.spans[1].s0 + HEIGHT[0][0]
+  const s1    = route.spans[1].s0 + HEIGHT[HEIGHT.length - 1][0]
+  const TOP   = POINTS - 3
   const right = (s: number) => section(route, s)
-  const left  = (s: number) => right(s).map(([ r, u ]): ProfilePoint => [ -r, u ]).reverse()
+  const left  = (s: number) => right(s)
+    .map(([ r, u ]): ProfilePoint => [ -r, u ])
+    .reverse()
+
   const arrays = sweepProfile(route.curve, {
-    s0, s1, step: 1, profile: right, sectionAt: s => edgeTo(right(s), TOP),
+    s0,
+    s1,
+    step:      1,
+    profile:   right,
+    sectionAt: s => edgeTo(right(s), TOP),
   })
   sweepProfile(route.curve, {
-    s0, s1, step: 1, profile: left, into: arrays,
+    s0,
+    s1,
+    step:      1,
+    profile:   left,
+    into:      arrays,
     sectionAt: s => {
       const pts = right(s)
       return -(edgeTo(pts, POINTS - 1) - edgeTo(pts, TOP))

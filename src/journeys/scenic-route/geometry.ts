@@ -324,8 +324,10 @@ export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
 
   // Beside the incline's faces the land stands at the face's top, and the
   // embankment's fall to the natural ground starts from there instead of from
-  // the road. It drops under the ditch from beneath the verge, and rises only
-  // past the face's top edge, under the lip: the heightfield's 4 m cells
+  // the road. Between the faces it sinks well under the road and the ditch:
+  // the bank tips the road's low edge a metre and more under the level by the
+  // second lap, and land held at the level came up through the lane. It rises
+  // only past the face's top edge, under the lip: the heightfield's 4 m cells
   // interpolate between their corners, and a rise that began at the foot of
   // a vertical wall stood up in front of it.
   let lift = 0
@@ -335,10 +337,11 @@ export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
     if (c.h > 0) {
       const g    = smoothstep(0, 1.5, c.h)
       const rise = smoothstep(c.top + 0.5, c.top + 4.5, n.d)
-      lift = -1.5 * g * smoothstep(c.ditch, c.ditch + 1.3, n.d) * (1 - rise) + c.h * rise
+      lift = -4 * g * smoothstep(c.ditch, c.ditch + 1.5, n.d) * (1 - rise) + c.h * rise
       lo  += (c.top + 4.5 - lo) * g
     }
   }
+
   let w = 1 - smoothstep(lo, lo + 50, n.d)
   // The embankment stops at the cliff: the sea side keeps its drop and its
   // seabed, or the corridor would lay a shelf over the water. It also eases

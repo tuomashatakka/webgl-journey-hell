@@ -134,7 +134,7 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
   )
 
   // --- the incline's cutting and walls ----------------------------------------
-  const cutArrays = buildCutting(route)
+  const cutArrays     = buildCutting(route)
   const cutMesh: Mesh = createMeshFromArrays(
     gl, cutArrays.vertices, cutArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
   )

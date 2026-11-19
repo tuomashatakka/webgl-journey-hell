@@ -40,7 +40,7 @@ void main () {
   float rel  = aAux.w >= 0.0 ? aAux.z - aAux.w : -aAux.w - aAux.z;
   float rock = 1.0 - smoothstep(uWallFrom - 1.0, uWallFrom, aSpine.w);
   float bulk = smoothstep(0.0, 1.2, aUp.w) * (1.0 - smoothstep(-0.8, -0.1, rel)) * rock;
-  float d = (vnoise3(level * 0.45) - 0.5) * 1.3 + (vnoise3(level * 1.1 + 7.0) - 0.5) * 0.5;
+  float d = (vnoise3(level * 0.4) - 0.5) * 1.4 + (vnoise3(level * 0.83 + 7.0) - 0.5) * 0.35;
   world += vNormal * d * bulk;
   vWorld = world;
   vAux = vec4(aSpine.w, aRight.w, aUp.w, aAux.z);
@@ -102,7 +102,8 @@ void main () {
   // between them.
   float bed  = p.y * 0.42 + s * 0.03 + fbm3(p * 0.07) * 1.6;
   float band = hash12(vec2(floor(bed), 3.0));
-  vec3 rock  = sR.albedo * vec3(0.95, 0.92, 0.88) * mix(vec3(0.82, 0.8, 0.78), vec3(1.08, 1.0, 0.9), band);
+  // Freshly blasted, so paler than the weathered rock on the hillsides.
+  vec3 rock  = sR.albedo * vec3(1.2, 1.15, 1.08) * mix(vec3(0.82, 0.8, 0.78), vec3(1.08, 1.0, 0.9), band);
   float part = 1.0 - smoothstep(0.0, 0.05, min(fract(bed), 1.0 - fract(bed)));
   rock *= 1.0 - 0.4 * part * near;
   // Presplit traces: a drill hole every 0.9 m, vertical, split in half by the
@@ -129,8 +130,8 @@ void main () {
   // Weep holes in a row near the foot, and what they bleed down the face.
   float wx    = (fract(s / 2.5) - 0.5) * 2.5;
   float hole  = 1.0 - smoothstep(0.035, 0.055, length(vec2(wx, u - 0.75)));
-  float bleed = (1.0 - smoothstep(0.02, 0.12 + 0.1 * vnoise(vec2(s * 3.0, u)), abs(wx))) * step(u, 0.75) * smoothstep(-0.3, 0.6, u);
-  conc = mix(conc, vec3(0.62, 0.61, 0.57), bleed * 0.45);
+  float bleed = (1.0 - smoothstep(0.015, 0.05 + 0.05 * vnoise(vec2(s * 3.0, u * 2.0)), abs(wx))) * step(u, 0.75) * smoothstep(-0.3, 0.7, u);
+  conc = mix(conc, conc * vec3(0.55, 0.5, 0.42), bleed * 0.5);
   // Grime from the coping down, heavier toward the top; a damp foot.
   float grime = vnoise(vec2(s * 1.7, u * 0.1 + 11.0)) * smoothstep(0.5, 3.0, u);
   conc *= 1.0 - 0.35 * smoothstep(0.45, 0.85, grime);
@@ -175,9 +176,9 @@ void main () {
   vec3 col = lightSurface(p, nn, albedo, rough, 0.0, ao, sh);
   // The red under the road is under the hill too: from the second lap it
   // shows in the rock's joints and between the wall's bays.
-  float vein = (1.0 - smoothstep(0.0, 0.022, abs(fbm3(p * vec3(0.18, 0.5, 0.18)) - 0.5))) * (1.0 - wall);
+  float vein = (1.0 - smoothstep(0.0, 0.012, abs(fbm3(p * vec3(0.18, 0.5, 0.18)) - 0.5))) * (1.0 - wall);
   float hell = smoothstep(1.0, 1.6, lapF) * face;
-  col += vec3(12.0, 0.18, 0.04) * (vein * 0.35 + joint * wall * 0.25) * hell * (0.75 + 0.25 * sin(uTime * 3.0 + s * 0.2));
+  col += vec3(12.0, 0.18, 0.04) * (vein * 0.2 + joint * wall * 0.25) * hell * (0.75 + 0.25 * sin(uTime * 3.0 + s * 0.2));
   col = applyFog(col, p);
   fragColor = vec4(col, 1.0);
 }

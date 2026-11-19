@@ -109,6 +109,8 @@ export function createScenicRouteScene (
   const { bankTex, skyTarget, skyTex, shadowTex, shadowFbo } = createTargets(gl, route)
 
   const { roadMesh, cutMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, falls, fallsMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
+
+  // Where the incline's rock gives way to its retaining walls.
   const wallFrom = wallStart(route)
 
   const rig                                                              = createCockpitRig(gl)
