@@ -86,6 +86,55 @@ sign. that is a roll stutter on every beat boundary and it is not the track. the
 bank therefore reads `min(speed, V_MAX)`; the *ride* still gets faster, the
 picture just stops pretending the banking does.
 
+## the station
+
+the boarding platform was a bore with two decks in it: the vault was struck
+from the track, so its haunches came down onto the decks with twenty
+centimetres to spare and the platforms ran off under the curve. it is a
+station hall now, and the route table keeps its numbers apart from the
+ceiling (`ceilH` 4.6 to 5.6).
+
+- **the hall** (`stationVault`): a segmental vault over the whole width, wall
+  to wall, `STATION_RISE` 2.4 m under the crown, struck from the table's bore
+  and ceiling (radius 8.7 m), so it springs at 3.2 m and both decks have
+  2.3 m of straight wall over them. `roomProfile` takes the room's type and
+  hands the platform to it, so the collars and the headland's portal follow
+  the hall.
+- **its far end**: the hall is the bigger room where it meets the drift, so
+  its air stops at its own end plane (`roomSlab`) and the drift's air reaching
+  back into it is the overlap. that end is a tiled wall with the drift's mouth
+  in it, framed by the drift's collar; the drift's own props are cut at its
+  front, so its crown lagging no longer hangs in the hall.
+- **the tile** (`stationShell`): glazed brick bond, 0.24 by 0.12 m, unrolled
+  round the vault's arc so the courses carry on over the springing; a
+  bottle-green dado from the deck to shoulder height under a black line, an
+  oxblood frieze between cream fillets at the springing, soot toward the
+  crown, and seepage running down from the vault in streaks that are darker,
+  browner and wet (roughness 0.12).
+- **the decks**: small grey tile with water standing in the low spots
+  (roughness 0.04, where the battens are seen), a stone coping with the yellow
+  line on it, the face down to the well in a dark course.
+- **the battens** (`STATION_LAMP_X` 3.4): a line over each deck, a 2.9 m
+  fitting a lamp pitch apart on two rods, an opal diffuser under a white
+  housing. `lampPos` hands the platform the nearest point on the nearer tube,
+  so the light, its specular and its halo are long; the shadow ray stops
+  0.2 m short of the fitting it starts in. the diffuser buzzes on the same
+  roll the lighting does.
+- **the walls** (`STATION_BAY` 8 m): a poster frame every bay with what is
+  left of the bill in it (torn back where it is damp), an enamel nameboard
+  between two in lettering nobody can read, and a bench under every other
+  nameboard.
+- **the brake and the chain**: brake shoes either side of the middle along the
+  first beat, worn bright on top; a chain in its trough from `STATION_CHAIN`
+  48 m to the end of the room and on over the drift's first beat
+  (`DRIFT_CHAIN` 26 m), which is where the table's lift runs. its links are
+  drawn in the cart's frame, because while it hauls the cart it moves with it.
+  added after the clearance, under the cart's floor.
+- **what it costs**: about the same as before, around 55 scene evaluations a
+  pixel; the walls and the battens are behind bounds, so a ray down the track
+  pays for the deck and two compares. the void, the concourse and the chapel
+  are byte-identical on the probe.
+
 ## the chapel
 
 the fold on its own is a solid with no way through it and no order in it. the
@@ -312,6 +361,7 @@ bun test src/journeys/switchback/kinematics.test.mjs
 bun tools/journey.mjs probe switchback --from=0 --to=280 --step=20
 bun tools/journey.mjs scan switchback --from=200 --to=210 --step=0.25
 bun tools/journey.mjs hud switchback --from=0 --to=240 --step=60
+node tools/journey.mjs contact switchback --bare --at=0,2,5,9,12,15,17 --cols=4         # the station
 node tools/journey.mjs contact switchback --bare --from=40 --to=49.5 --step=0.5 --cols=5   # the concourse
 node tools/journey.mjs contact switchback --bare --at=98,126.4,141.3 --cols=3            # ...on laps 2 to 4
 ```
