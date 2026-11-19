@@ -160,15 +160,64 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
                      vec3(0.22, 0.05, 1.30), 0.03), MAT_PAINT)
     }
     else if (t < 4.5) {
-      float bt = hx - 1.45;
+      float bt = hx - PLANT_REACH;
       if (bt > BOUND_SLACK) return min(d, bt);
 
-      // PLANT — pumps and pipework, the only warm light in the building.
+      // PLANT — the filter hall under the pools. Down each side, on one line
+      // PLANT_OFF out of the wall, a bay of PLANT_BAY holds a sand filter and
+      // the pump that feeds it, and a header runs over both under the slab on
+      // hangers. Everything stands on a concrete pad; the flood is over the
+      // pumps from the first lap, so what reads above it is the filters' heads,
+      // the risers and the valve wheels, and the drowned sets through the water.
       vec3 pp = vec3(abs(qs.x) - (W - 0.30), qs.y, qs.z);
       PUT(sdCapsuleZ(vec3(pp.x, lattN(pp.y - 1.9, 0.42, 3.0), 0.0), 1e4, 0.085), MAT_METAL)
-      PUT(sdRoundBox(vec3(pp.x - 0.55, qs.y - 0.55, latt(qs.z, 7.0)),
-                     vec3(0.55, 0.55, 0.80), 0.10), MAT_PAINT)
-      PUT(sdTorus(vec3(pp.x, qs.y - 1.35, latt(qs.z, 7.0) - 0.95).zyx, 0.26, 0.045), MAT_METAL)
+
+      float px = abs(qs.x) - (W - PLANT_OFF);
+      float lz = latt(qs.z, PLANT_BAY);
+      float hy0 = H - 0.50;
+
+      // The header, its flanges every 4 m and a hanger every 2 m.
+      vec3 hp = vec3(px, qs.y - hy0, 0.0);
+      PUT(sdCapsuleZ(hp, 1e4, 0.15), MAT_METAL)
+      PUT(sdTorus(vec3(hp.xy, latt(qs.z, 4.0)), 0.15, 0.032), MAT_METAL)
+      PUT(sdCapsuleY(vec3(px, qs.y - (H - 0.25), latt(qs.z + 1.0, 2.0)), 0.25, 0.022), MAT_METAL)
+
+      // The sand filter: a vessel with dished heads on a pad, a girth flange
+      // where the top head is bolted on, a manway on the crown and its outlet
+      // straight up into the header.
+      vec3  fp = vec3(px, qs.y - 1.55, lz + 1.9);
+      float fb = max(max(abs(fp.x), abs(fp.z)) - 1.1, fp.y - 1.6);
+      if (fb < BOUND_SLACK) {
+        PUT(sdRoundBox(vec3(fp.x, qs.y - 0.14, fp.z), vec3(1.05, 0.14, 1.05), 0.03), MAT_CONC)
+        PUT(sdCapsuleY(fp, 0.55, 0.90), MAT_VESSEL)
+        PUT(sdTorus(vec3(fp.x, fp.z, fp.y - 0.55), 0.91, 0.04), MAT_VESSEL)
+        PUT(sdCylY(fp - vec3(0.0, 1.42, 0.0), 0.08, 0.24), MAT_VESSEL)
+      }
+      else d = min(d, fb);
+      PUT(sdCapsuleY(vec3(fp.x, qs.y - (hy0 + 3.0) * 0.5, fp.z), (hy0 - 3.0) * 0.5, 0.10), MAT_METAL)
+
+      // The pump set: a motor on a bedframe, coupled to a volute with its
+      // suction coming in at the eye and turning down into the sump, and its
+      // discharge rising past a gate valve to the header. The valve's wheel
+      // faces the aisle on a stem.
+      vec3  mp = vec3(px, qs.y - 0.84, lz - 1.9);
+      float mb = max(max(abs(mp.x) - 0.65, abs(mp.z) - 1.40), mp.y - 0.62);
+      if (mb < BOUND_SLACK) {
+        PUT(sdRoundBox(vec3(mp.x, qs.y - 0.25, mp.z), vec3(0.55, 0.25, 1.25), 0.03), MAT_CONC)
+        PUT(sdRoundBox(vec3(mp.x, qs.y - 0.55, mp.z), vec3(0.34, 0.05, 1.00), 0.01), MAT_PAINT)
+        PUT(sdCylY(vec3(mp.x, mp.z + 0.42, mp.y), 0.42, 0.30), MAT_PAINT)
+        PUT(sdCylY(vec3(mp.x, mp.z + 0.90, mp.y), 0.07, 0.25), MAT_PAINT)
+        PUT(sdRoundBox(mp - vec3(0.0, 0.0, 0.10), vec3(0.15, 0.15, 0.12), 0.03), MAT_PAINT)
+        PUT(sdCylY(vec3(mp.x, mp.z - 0.42, mp.y - 0.04), 0.13, 0.40), MAT_PAINT)
+        PUT(sdSeg(mp, vec3(0.0, 0.0, 0.50), vec3(0.0, 0.0, 1.05), 0.11), MAT_METAL)
+        PUT(sdSeg(mp, vec3(0.0, 0.0, 1.05), vec3(0.0, -1.1, 1.05), 0.11), MAT_METAL)
+      }
+      else d = min(d, mb);
+      vec3 rp = vec3(mp.x, qs.y, mp.z - 0.42);
+      PUT(sdCapsuleY(vec3(rp.x, qs.y - (hy0 + 1.24) * 0.5, rp.z), (hy0 - 1.24) * 0.5, 0.10), MAT_METAL)
+      PUT(sdCylY(rp - vec3(0.0, 1.90, 0.0), 0.13, 0.16), MAT_PAINT)
+      PUT(sdSeg(rp, vec3(0.0, 1.90, 0.0), vec3(-0.40, 1.90, 0.0), 0.025), MAT_METAL)
+      PUT(sdTorus(vec3(rp.z, rp.y - 1.90, rp.x + 0.40), 0.19, 0.022), MAT_METAL)
     }
     else {
       // RAW — bare concrete. The big room gets columns, the tight ones a rail.

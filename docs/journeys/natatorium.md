@@ -17,8 +17,8 @@ the route, the simulation and the section table live in `kinematics.ts` and
 GLSL ES 1.00, one pass, built from `glsl/` pieces in this order:
 `foundation` (uniforms, SDF helpers, decay, broken tile), `route` (section air,
 aisle, joins), `fittings` (lane ropes, ladders, planters, columns, the flume,
-conduit, lockers, pumps), `waterSurfaces` (water, caustics, tile, props, lamps,
-motes, fish), `dressing` (everything below), then the camera, march, water
+conduit, lockers, the plant room), `waterSurfaces` (water, caustics, tile,
+lamps, motes, fish), `props` (the fittings' materials), `dressing` (everything below), then the camera, march, water
 split and post in `shader.ts`.
 
 march budget, unchanged by the detailing: 96 primary steps at 0.95, 20 for
@@ -87,6 +87,33 @@ groined brick vaults, carried on the board-formed walls.
   lime mortar, bloom down the groins thickening with decay.
 * **floor**: a blanket of silt over the tile, rippled, drifted against the
   plinths, worn through to the tile in patches, thicker every lap.
+
+## the plant room
+
+THE PLANT ROOM (the one `TYPE_PLANT` room, 13 m wide and 5 m high) is the
+filter hall under the pools, and the only warm light in the building.
+
+* **bays**: `PLANT_BAY` 8 m along each side wall (centred at z = 4, 12, 20),
+  everything on one line `PLANT_OFF` 1.45 out of the wall and nothing further in
+  than `PLANT_REACH` 2.45, which is the room's bound on the side-wall distance;
+  the filter and the pump each have a box bound of their own inside it.
+* **sand filter** 1.9 m before each bay's centre: a vessel of radius 0.9 with
+  dished heads, 0.1 to 3.0 above the floor, on a 0.28 pad; a girth flange
+  0.55 over its middle, a manway on the crown, and an outlet straight up into
+  the header. `MAT_VESSEL`: faded blue-grey steel, each vessel its own repaint,
+  a weld seam every 0.75 m, rust weeping from the girth flange, a lime crust at
+  the waterline and silt-dark below.
+* **pump set** 1.9 m after it: a 0.5 pad, a bedframe, a motor (radius 0.30,
+  0.84 long) with its fan cowl, a coupling guard, a volute (radius 0.40), the
+  suction in at the eye and down into the sump; the discharge rises from the
+  volute past a gate valve at 1.9, its handwheel on a stem facing the aisle.
+  The flood is over the sets from the first lap: above it read the filters'
+  heads, the risers and the wheels.
+* **header**: radius 0.15 along each side 0.5 under the slab, a flange every
+  4 m and a hanger rod every 2 m. The three wall pipes are kept behind it all.
+* **light**: the strip lights, their panels and their halos are tinted by
+  `lampWarm` (1.12, 0.86, 0.58), warm white gone amber; exactly one in every
+  other room.
 
 ## the grand hall
 

@@ -102,6 +102,14 @@ export const foundationGlsl = `
   const float MAT_CONC  = 5.0;   // columns, pillars, the dive platform
   const float MAT_STONE = 6.0;   // the cistern's columns
   const float MAT_BRICK = 7.0;   // the cistern's vault
+  const float MAT_VESSEL = 8.0;  // the plant room's sand filters
+
+  // THE PLANT ROOM (the one TYPE_PLANT room): a filter and a pump in every
+  // PLANT_BAY down each side, on one line PLANT_OFF out of the wall, nothing
+  // reaching further in than PLANT_REACH.
+  const float PLANT_BAY   = 8.0;
+  const float PLANT_OFF   = 1.45;
+  const float PLANT_REACH = 2.45;
 
   // THE CISTERN's bays: columns on a 5.2 m grid across (so the outermost line
   // falls on the side walls as half columns) and 6 m along (so both end walls

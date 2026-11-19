@@ -30,6 +30,11 @@ export const routeGlsl = `  // --- the route -----------------------------------
   // the crown (the tube hung 0.5 under it, in the air), elsewhere all of it.
   float lampRun(vec4 C) { return abs(C.y - 2.0) < 0.5 ? 0.545 : 1.0; }
 
+  // The tint of a room's lamps over the cool white every other room has: in
+  // THE PLANT ROOM the old tubes are warm white gone amber behind yellowed
+  // diffusers, the only warm light in the building. Exactly one elsewhere.
+  vec3 lampWarm(vec4 C) { return abs(C.y - 4.0) < 0.5 ? vec3(1.12, 0.86, 0.58) : vec3(1.0); }
+
   // The clerestory's profile on the side wall: a rectangle under a half round,
   // one in every bay between two ribs, none in the bays against the end walls.
   float clerestory(vec3 qs, vec4 B) {

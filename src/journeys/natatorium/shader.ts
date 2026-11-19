@@ -33,11 +33,12 @@ import { foundationGlsl } from './glsl/foundation'
 import { routeGlsl } from './glsl/route'
 import { fittingsGlsl } from './glsl/fittings'
 import { waterSurfacesGlsl } from './glsl/waterSurfaces'
+import { propsGlsl } from './glsl/props'
 import { dressingGlsl } from './glsl/dressing'
 import { previewGlsl } from './glsl/preview'
 
 
-const COMMON = foundationGlsl + routeGlsl + fittingsGlsl + waterSurfacesGlsl + dressingGlsl
+const COMMON = foundationGlsl + routeGlsl + fittingsGlsl + waterSurfacesGlsl + propsGlsl + dressingGlsl
 
 // Camera, march, water split and the inline post chain.
 const SCENE = `
@@ -101,7 +102,7 @@ const SCENE = `
     // right; projecting the pattern in each room's own frame would make it swim
     // sideways every time you crossed a join.
     if (p.y < waterY()) c += alb * causticAt(p) * 0.9;
-    if (ns.y < -0.6) c += vec3(0.95, 0.99, 1.0) * ceilPanel(qs, B, C) * 3.2;
+    if (ns.y < -0.6) c += vec3(0.95, 0.99, 1.0) * lampWarm(C) * ceilPanel(qs, B, C) * 3.2;
 
     // INSIDE A BREAK IN THE SHELL: past the nominal face plane, in the recess a
     // missing tile left behind. Whatever is behind this building is lit, and it
