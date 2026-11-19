@@ -21,7 +21,8 @@ GLSL ES 1.00, two passes (`renderer.ts`): the scene into an 8-bit target, then
 built from `glsl/` pieces in this order: `core` (uniforms, the segment table,
 the camera's path), `palette` (biome colours, the abyss palette, helpers),
 `setpieces` (sector 666), `labyrinth` (sector 5: its solid, its lamps
-and its shading), `march` (the map), `shading` (normals, AO, the tiled
+and its shading), `cave` (sector 3: its solid, its lamp and its shading),
+`march` (the map), `shading` (normals, AO, the tiled
 halls, the camera and `main`).
 
 two builds: the full one (120 primary steps, 5 AO taps, two 40-step reflection
@@ -75,6 +76,54 @@ not change.
   up the walls and columns for 3.5 m above it, falling off as `exp(-0.8 h)`.
 * **decay.** the blood and the glowing cracks the laps bring are laid on the
   tile as on any matte surface (`decayDecals`).
+
+## the crystal cave
+
+sector 3 (loop-local z 130..210, `glsl/cave.ts`) is a limestone cave the
+route slides down, 100 m in 80, lit by nothing but the rider's lamp. the
+route, the camera and the speeds are as `kinematics.ts` has them.
+
+* **the chamber.** an elliptical bore round the eye's line, 6.2 x 5 m
+  half-axes swelling and narrowing by up to a third along the route, its
+  centre 1.8 m over the eye and wandering 1.4 m side to side; the walls
+  lumped and scalloped on oblique warped axes, so nothing rings the
+  descent.
+* **the chute.** a water-worn flowstone floor 1 m under the eye (the
+  camera's offset), dished as `0.06 x^2` across, filleted into the walls
+  (smin 1.2). the camera's carve tightens from 2.0 to 0.7 m over 126..134
+  (`caveTight`) and opens again over 208..216, so the floor stands under
+  the eye instead of being cut into a trench.
+* **the quartz.** hexagonal prisms with six-faced pyramid points 1.6 x
+  the apothem tall, out of the walls in 3.2 m cells of eight sectors
+  (turned per cell): 80 % of the sectors that do not face the floor hold
+  a crystal 1.4..5.2 m long, leaning up to 0.35 rad across and 0.1 along,
+  twisted about its axis, with a sibling half as long leaning toward the
+  sector's middle. no point comes within 2.4 m of the eye's line. the
+  field takes the cell a point is in and the nearer neighbour; the
+  sector's edge bounds the rest, and the 2.3 m clear round the eye's line
+  lets a ray down the middle run.
+* **the beams.** in 60 % of 9 m cells a giant prism (apothem 0.35..0.6)
+  crosses the chamber 3.3..4.3 m over the eye, yawed up to 0.35 rad,
+  never lower than 2.1 m over it, its ends in the walls.
+* **light.** the lamp is 0.2 m over the eye: 1.0/0.91/0.78, gain 9,
+  `1 / (1 + 0.008 d^2)`, a beam down the view (0.70..0.95 of the cone)
+  in a spill of 0.3. ambient 0.05..0.08. no shadow march: a lamp at the
+  eye hides its own shadows.
+* **rock.** limestone 0.30/0.27/0.24, faint strata, mottled, darkened in
+  streaks where water ran; cream flowstone 0.52/0.45/0.36 where it lies
+  flat, wet (a sharper glint on the flat). the laps redden it and lay on
+  the blood and cracks (`decayDecals`).
+* **quartz.** milky to clear, some smoky, some faintly violet. the body
+  carries the lamp from any side, each flat face its own brightness
+  (light caught inside), a faint glow in its depth so a far crystal still
+  reads; Schlick from 0.045 over the dark, a hard glint of the lamp. the
+  laps turn it red. it is its own material (`MAT_CRYSTAL`) and marches no
+  reflection.
+* **the dark.** fog 0.02..0.025 with the lamp scattered down the view,
+  density 0.022. a ray that runs out of steps (a grazing look down the
+  chute) is shaded as the rock it is short of. `caveWeight` (in over
+  122..136, out over 204..216) mixes all of it with the old shading, so
+  neither join has an edge.
 
 ## the stair labyrinth
 

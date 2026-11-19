@@ -30,8 +30,8 @@ export const marchGlsl = `    // Signed Distance Field Map
 
         float cX = getCamX(p.z);
         float cY = fY + getCamOffset(p.z);
-        // (on the walked stair the clearance tightens so the treads stand under the eye)
-        float dCamSafety = length(p.xy - vec2(cX, cY)) - (2.0 - 0.9 * labTight(currentZ));
+        // (on the walked stair and down the cave's chute the clearance tightens so the floor stands under the eye)
+        float dCamSafety = length(p.xy - vec2(cX, cY)) - (2.0 - 0.9 * labTight(currentZ) - 1.3 * caveTight(currentZ));
 
         vec2 res = vec2(1000.0, MAT_MATTE);
 
@@ -101,13 +101,9 @@ export const marchGlsl = `    // Signed Distance Field Map
 
         // --- SECTOR 3: CRYSTAL CAVE (130 to 210; in from 115, gone by 220) ---
         if (currentZ > 115.0 && currentZ < 220.0) {
-        vec3 q3 = p; q3.x -= cX; q3.y -= cY;
-        cave = 6.0 - length(q3.xy - vec2(sin(q3.z * 0.1) * 3.0, cos(q3.z * 0.15) * 2.0));
-        cave += sin(q3.x * 2.0) * sin(q3.y * 1.5) * sin(q3.z * 1.0) * 0.5;
-        vec3 cp = q3; cp.x += sin(iTime * 0.5 + p.z) * 1.0; cp.y += cos(iTime * 0.4 + p.z) * 1.0;
-        cp.xz = mod(cp.xz + 6.0, 12.0) - 6.0; cp.y = mod(cp.y + 4.0, 8.0) - 4.0;
-        crystal = (abs(cp.x) + abs(cp.y) + abs(cp.z)) - 0.8;
-        float dSec3 = min(cave, crystal) * 0.6; // We use MAT_MATTE for cave, crystal handled below
+        float dSec3 = caveField(p, vec3(p.x - cX, p.y - cY, p.z), fY - cY, crystal);
+        cave = dSec3;
+        dSec3 *= 0.6;
 
         dBase = currentZ < 145.0 ? mix(dBase, dSec3, smoothstep_custom(115.0, 145.0, currentZ)) : dSec3;
         }
@@ -165,8 +161,8 @@ export const marchGlsl = `    // Signed Distance Field Map
         if (dBase == dSlideHull && currentZ > 60.0 && currentZ < 130.0) {
             res.y = MAT_GLASS;
         }
-        if (currentZ > 120.0 && currentZ < 220.0 && crystal < cave) {
-            res.y = MAT_GLASS;
+        if (currentZ > 120.0 && currentZ < 220.0 && crystal <= cave) {
+            res.y = MAT_CRYSTAL;
         }
 
         // Fluids

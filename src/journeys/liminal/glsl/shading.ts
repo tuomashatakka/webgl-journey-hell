@@ -418,6 +418,8 @@ export const shadingGlsl = `    // Standard Normal Calculation
         vec3 fogColor = getBiomeColor(ro.z + 30.0);
         float lwc = is666 ? 0.0 : labWeight(camZ + 6.0);
         if (lwc > 0.001) fogColor = mix(fogColor, labFog(rd, loop), lwc);
+        float cvc = is666 ? 0.0 : caveWeight(camZ + 6.0);
+        if (cvc > 0.001) fogColor = mix(fogColor, caveFog(rd, cw, loop), cvc);
         vec3 sunDir = normalize(vec3(0.3, 0.8, 0.1));
 
         if (t < MAX_DIST) {
@@ -543,6 +545,14 @@ export const shadingGlsl = `    // Standard Normal Calculation
                     col = mix(col, decayDecals(lab, p, lZ_p, loop, decayFactor * lw), lw);
                 }
 
+                float cvw = (s_p == 666.0) ? 0.0 : caveWeight(p.z);
+                // (a ray that ran out of steps is short of the rock, and shaded as the rock)
+                if ((matID == MAT_MATTE || matID == MAT_CRYSTAL || matID == 0.0) && cvw > 0.001) {
+                    vec3 cave = shadeCave(p, n, rd, ao, ro, cw, matID == MAT_CRYSTAL ? 1.0 : 0.0, loop);
+                    if (matID != MAT_CRYSTAL) cave = decayDecals(cave, p, lZ_p, loop, decayFactor * cvw);
+                    col = mix(col, cave, cvw);
+                }
+
                 if (matID == MAT_FLESH) {
                     vec3 refDir = reflect(rd, n);
                     float spec = pow(max(dot(refDir, sunDir), 0.0), 12.0) * 0.4;
@@ -605,6 +615,7 @@ export const shadingGlsl = `    // Standard Normal Calculation
         }
 
         if (lwc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.011 * t), lwc);
+        if (cvc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.022 * t), cvc);
 
         col = mix(col, fogColor, fogFactor);
         col += vec3(1.3, 0.05, 0.01) * godRayAccum;
