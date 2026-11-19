@@ -1,21 +1,5 @@
 export const surfacesGlsl = `  // ---- surfaces ------------------------------------------------------------
 
-  /**
-   * Grid lines on a plane, faded to their mean rather than to zero.
-   *
-   * Fourteen millimetres of grout at forty metres is a third of a pixel, and a
-   * third of a pixel of black sampled once per pixel is not a joint, it is moire.
-   * There is no mip chain here (nothing is textured) and ES 1.00 has no
-   * derivatives, so the footprint is estimated from distance and the line
-   * *widens* as it fades. Widening keeps the wall reading as tiled; fading stops
-   * it shimmering.
-   */
-  float tiling(vec2 uv, float cell, float t) {
-    float w = 0.02 + t * 0.0018;
-    vec2 g = abs(fract(uv / cell) - 0.5);
-    return smoothstep(0.5 - w, 0.5, max(g.x, g.y)) * smoothstep(48.0, 12.0, t);
-  }
-
   // ---- the headland's stone -------------------------------------------------
   //
   // The outside of the hill the platform is cut into, which nothing but the
@@ -28,7 +12,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
     if (gMat > M_SHELL + 0.5 || r.bore > 50.0) return false;
     vec2 span = headlandSpan();
     return span.x < 1e4 && q.z > span.y
-        && roomProfile(q, r.bore, r.ceilH, r.floorD) > 0.6;
+        && roomProfile(q, r.type, r.bore, r.ceilH, r.floorD) > 0.6;
   }
 
   /**
@@ -90,15 +74,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       return c * (1.0 - grime * 0.4);
     }
 
-    if (type < T_DRIFT - 0.5) {
-      // THE BOARDING PLATFORM. Wet institutional tile, and a floor that is the
-      // same tile with the shine walked off it.
-      float grout = tiling(uvz, 0.15, t);
-      c = mix(vec3(0.80, 0.83, 0.79), vec3(0.30, 0.34, 0.33), grout);
-      c = mix(c, vec3(0.15, 0.18, 0.19), isFloor * 0.6);
-      c *= 1.0 - grime * 0.45 * smoothstep(0.35, 0.75, fbm(uvz * 1.4));
-    }
-    else if (type < T_SCAFFOLD - 0.5) {
+    if (type < T_SCAFFOLD - 0.5) {
       // THE CHALK DRIFT. Cut chalk: bone, with the pick marks still in it.
       float pick = fbm(uvz * vec2(9.0, 3.2)) * 0.6 + fbm(uvz * 24.0) * 0.4;
       c = mix(vec3(0.90, 0.87, 0.78), vec3(0.56, 0.52, 0.44), pick);
@@ -262,6 +238,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       // mallShell, in the concourse pass. Every other room is shellAlbedo.
       vec3 c;
       if (abs(r.type - T_CONCOURSE) < 0.5) c = mallShell(q, n, r, t, rough, emit);
+      else if (r.type < T_DRIFT - 0.5)     c = stationShell(q, n, r, t, rough);
       else                                 c = shellAlbedo(q, n, r.type, r.grime, t);
 
       // The fissures are lit from *behind*, so they are emission and not a dark
@@ -325,28 +302,11 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
                (0.7 + 0.5 * fbm(vec2(q.x, phaseAt(q.z)) * 46.0));
       }
 
-      if (r.type < T_DRIFT - 0.5) {
-        if (toLamp < 0.70) {
-          emit = lampTint(r.type) * 4.0 * r.lit;
-          rough = 0.40;
-          return vec3(0.90, 0.94, 0.90);
-        }
-        // The deck. Small grey tiles, and the yellow line you are meant to stand
-        // behind, which nobody has stood behind for a while.
-        if (n.y > 0.6) {
-          float grout = tiling(vec2(q.x, phaseAt(q.z)), 0.30, t);
-          vec3 deck = mix(vec3(0.55, 0.56, 0.54), vec3(0.24, 0.26, 0.26), grout);
-          float edge = smoothstep(0.16, 0.06, abs(abs(q.x) - 1.85));
-          return mix(deck, vec3(0.72, 0.60, 0.16), edge * (1.0 - r.grime * 0.5));
-        }
-        if (abs(n.x) > 0.6) {
-          // The deck's face, in the darker course every station platform has,
-          // with the tiles laid the other way up.
-          float grout = tiling(vec2(phaseAt(q.z), q.y), 0.22, t);
-          return mix(vec3(0.30, 0.32, 0.31), vec3(0.13, 0.15, 0.15), grout);
-        }
-        return mix(vec3(0.62, 0.64, 0.62), vec3(0.28, 0.30, 0.29), r.grime * 0.6);
-      }
+      // The brake and the chain, between the rails.
+      if (abs(q.x) < 0.25 && q.y < 0.0 && q.y > -0.2 && r.type < T_SCAFFOLD - 0.5)
+        return liftWayAlbedo(q, n, t, rough);
+
+      if (r.type < T_DRIFT - 0.5) return stationProp(q, n, r, t, toLamp, rough, emit);
       if (r.type < T_SCAFFOLD - 0.5) {
         if (toLamp < 0.20) { emit = lampTint(r.type) * 5.0 * r.lit; return vec3(1.0, 0.92, 0.78); }
         return mix(vec3(0.32, 0.23, 0.14), vec3(0.17, 0.12, 0.08),

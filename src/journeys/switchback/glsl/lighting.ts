@@ -22,7 +22,9 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
       // modelling there, and the one thing they are ever really behind is a
       // gallery. So no ray is marched for them (a reach of nothing ends the
       // loop before its first step) and the gallery's shade is closed-form.
-      float sh = shadowTo(q, l, mall ? -1.0 : min(ld, 16.0));
+      // The battens' rays stop short of the fitting the light is inside.
+      float reach = r.type < T_DRIFT - 0.5 ? ld - 0.2 : min(ld, 16.0);
+      float sh = shadowTo(q, l, mall ? -1.0 : reach);
       if (mall) sh = mallLampShade(q, r.lampY);
       float k = atten * r.lit * flick * sh;
 

@@ -28,9 +28,16 @@ export const skyAndRoomsGlsl = `
     return z;
   }
 
-  /** The nearest lamp of the room a point is in, in track space. */
+  /**
+   * The nearest lamp of the room a point is in, in track space. The platform's
+   * are battens, a line over each deck, so its nearest lamp is the nearest point
+   * on the nearer tube: the light is long, and so is its halo.
+   */
   vec3 lampPos(vec3 q, Room r) {
-    return vec3(0.0, r.lampY, q.z - latt(phaseAt(q.z), r.lamp));
+    float lz = latt(phaseAt(q.z), r.lamp);
+    if (r.type < T_DRIFT - 0.5)
+      return vec3(q.x < 0.0 ? -STATION_LAMP_X : STATION_LAMP_X, r.lampY - 0.05, q.z - lz + clamp(lz, -1.3, 1.3));
+    return vec3(0.0, r.lampY, q.z - lz);
   }
 
   /** The colour a room's lamps burn. */

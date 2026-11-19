@@ -77,6 +77,7 @@ import { roomsGlsl } from './glsl/rooms'
 import { sceneGlsl } from './glsl/scene'
 import { skyAndRoomsGlsl } from './glsl/skyAndRooms'
 import { concourseGlsl } from './glsl/concourse'
+import { stationGlsl } from './glsl/station'
 import { surfacesGlsl } from './glsl/surfaces'
 import { lightingGlsl } from './glsl/lighting'
 import { mainGlsl } from './glsl/main'
@@ -85,7 +86,7 @@ import { mainGlsl } from './glsl/main'
 const COMMON = foundationGlsl + roomsGlsl + sceneGlsl
 
 
-const SCENE = skyAndRoomsGlsl + concourseGlsl + surfacesGlsl + lightingGlsl + mainGlsl
+const SCENE = skyAndRoomsGlsl + concourseGlsl + stationGlsl + surfacesGlsl + lightingGlsl + mainGlsl
 
 export const switchbackFrag = COMMON + SCENE
 
