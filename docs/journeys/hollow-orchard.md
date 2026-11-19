@@ -148,6 +148,30 @@ three ramps carry the arc, all continuous in distance walked, none table-driven.
   (`stageOn(8.)`): waxy grey skin, bruised in patches, the wall's flesh grown
   back over it where it meets the wall (`gMat` 1 to 1.2), the gut's veins in
   the wall, and 0.034 more fog so the bore closes into the dark.
+- **the bloom** is a cap overhead and a gilled funnel under it, authored in
+  polar coordinates round one throat every `BLOOM_CELL` (46) units, so the
+  gills radiate from the throat and run down into it. the funnel's rim lies
+  `BLOOM_RIM` (2.3) under the floor line, below the aisle, so the carve never
+  cuts a trench in it (the old floor sat 0.6 under the eye and was a groove
+  down a blown orange sheet); it falls `BLOOM_DROP` (8.5) on an e-folding
+  radius of `BLOOM_FALL` (5.5), then over the lip of a gullet `BLOOM_GUL` (5)
+  deep over `BLOOM_GULW` (1.4) into the throat (`open * 0.55`), its distance
+  divided by its own slope. the gills are plates in the SDF: a family is the
+  arc distance to the nearest of n planes through the axis (n whole, so it
+  meets itself across the atan seam), which is a true distance across the
+  plate. 48 long ones from the throat, 48 between them from 6 out and 96 more
+  from 11, each rising out of the surface over 2 units; 0.10 tall at the
+  throat to 0.55 by 14 out, short ones 0.8 and 0.6 of that, 0.03 + 0.004 r
+  thick at the foot tapering to a third at the free edge, wandering 0.012 rad
+  as they run. the cap is a dome 26 wide and 7.5 tall over the whole fall,
+  hollowed, holed at the throat, with 96 gills 0.9 deep hung in its underside
+  and a torn margin. anything that depends on the angle dies out over the
+  last 3.5 units of the cell, where the next throat's frame takes over and
+  the gills used to meet in a ruled seam. no fbm in it at all. shading while
+  the stage is on screen (`stageOn(7.)`): pale ochre gill flesh streaked down
+  the plate, shadowed in the trough, spore-dark at the free edge (`gMat` 0 in
+  the trough to 0.4 at the edge), darkening down the funnel; the filament
+  tracery and the shading-only gill stripes are off.
 - the key light is dimmed (`0.08 + 0.55 * ndl`) to leave the lanterns room to be
   what lights a stage. the root labyrinth adds a falloff light from the eye.
 

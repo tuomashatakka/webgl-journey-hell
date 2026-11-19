@@ -348,42 +348,97 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     return d;
   }
 
-  // 7 · THE BLOOM — one enormous cap, aperture widening as you fall past it.
+  // 7 · THE BLOOM — one enormous cap overhead, and under it the gilled funnel
+  // you fall into.
+  //
+  // Both are authored round one throat every BLOOM_CELL down z, in polar
+  // coordinates about it (angle, radius), so the gills radiate from the throat
+  // and run down into it. A gill is a plate in the SDF: a family of them is
+  // the arc distance to the nearest of n planes through the axis, which is a
+  // true distance across the plate, and the plate stands gh proud of the
+  // surface it grows from. Short gills fill in between the long ones as the
+  // gap opens outward, the way they do under any cap. The funnel's rim lies
+  // under the aisle, so the carve that keeps the camera clear never cuts a
+  // trench in it; the old floor sat 0.6 under the eye and was a groove.
+  const float BLOOM_CELL = 46.0;   // metres down z between throats
+  const float BLOOM_RIM  = 2.3;    // the funnel's rim, below the floor line
+  const float BLOOM_DROP = 8.5;    // how far the funnel falls to the throat
+  const float BLOOM_FALL = 5.5;    // the e-folding radius of that fall
+  const float BLOOM_GUL  = 5.0;    // the gullet: a last, steep drop at the throat
+  const float BLOOM_GULW = 1.4;    // over this many metres
+
+  // Arc distance to the nearest of n planes through the axis, offset by off
+  // of a pitch. n is whole, so the family meets itself across the atan seam.
+  float gillFamily(float a, float r, float n, float off) {
+    float c = a * n / TAU + off;
+    return abs(c - floor(c + 0.5)) * TAU / n * r;
+  }
+
+  // One plate of a family, hy above the surface it grows from: th thick at
+  // its foot and a third of that at its free edge, gh tall.
+  float gillPlate(float across, float hy, float th, float gh) {
+    float u = clamp(hy / gh, 0.0, 1.0);
+    return max(across - th * (1.0 - 0.66 * u), hy - gh);
+  }
+
+  // The plates of all three families: long from r0, the second from 6 out
+  // and the third from 11, each rising out of the surface over its first
+  // 2 m instead of starting as a cut block. x: distance to the nearest
+  // plate, y: the long gills' height there, which shading measures against.
+  vec2 bloomGills(float a, float r, float hy, float r0, float w) {
+    float gh = mix(0.10, 0.55, smoothstep(r0, 14.0, r)) * (1.0 + 0.12 * sin(r * 1.7)) * w;
+    float th = 0.03 + 0.004 * r;
+    float h2 = gh * 0.8 * smoothstep(6.0, 8.0, r);
+    float h3 = gh * 0.6 * smoothstep(11.0, 13.0, r);
+    float g1 = gillPlate(gillFamily(a, r, 48.0, 0.0), hy, th,        max(gh, 0.01));
+    float g2 = gillPlate(gillFamily(a, r, 48.0, 0.5), hy, th * 0.85, max(h2, 0.01));
+    float g3 = gillPlate(gillFamily(a, r, 96.0, 0.5), hy, th * 0.7,  max(h3, 0.01));
+    g2 = max(g2, 6.0 - r);
+    g3 = max(g3, 11.0 - r);
+    return vec2(min(g1, min(g2, g3)), gh);
+  }
+
   float sdBloom(vec3 p) {
-    vec3 q = p;
-    q.z    = repS(q.z, 46.0);
+    vec3  q    = p;
+    q.z        = repS(q.z, BLOOM_CELL);
+    float r    = length(q.xz);
+    float a    = atan(q.z, q.x);
+    // The gills wander a little as they run out, so no two are ruled lines.
+    float aw   = a + 0.012 * sin(r * 0.55);
     float open = 3.0 + uWalk.z * 9.0;
+    float rIn  = open * 0.55;                         // the throat
+    // Everything that depends on the angle dies out toward the edge of the
+    // cell, where the next throat's frame takes over: its gills point
+    // elsewhere, and kept to the edge they met in a ruled seam.
+    float w    = smoothstep(BLOOM_CELL * 0.5, BLOOM_CELL * 0.5 - 3.5, abs(q.z));
 
-    float cap  = sdCap(q - vec3(0.0, 7.0, 0.0), 16.0, 6.0);
-    float bore = length(vec2(q.x, q.z)) - open;      // the throat you fall through
-    float d    = smax(cap, -bore, 0.8);
-    d         -= rotDisp(p * 0.35, 0.4) * 0.8;
-    gMat = 0.0; gWet = 0.6; gGlow = 0.6;
+    // The funnel: a surface falling ever more steeply, then over the lip of
+    // the gullet, its distance divided by its own slope.
+    float ex   = exp(-r / BLOOM_FALL);
+    float eg   = exp(-max(r - rIn, 0.0) / BLOOM_GULW);
+    float fy   = -BLOOM_RIM - BLOOM_DROP * ex - BLOOM_GUL * eg + 0.18 * w * sin(a * 5.0 + r * 0.4);
+    float sl   = BLOOM_DROP / BLOOM_FALL * ex + BLOOM_GUL / BLOOM_GULW * eg;
+    float hy   = (q.y - fy) / sqrt(1.0 + sl * sl);
+    vec2  g    = bloomGills(aw, r, hy, rIn, w);
+    float fun  = smin(hy, g.x, 0.05);
+    fun        = smax(fun, rIn - r, 0.6);             // the throat itself
+    float d    = fun;
+    // mat runs 0 in the trough between two gills to 0.4 at a gill's edge.
+    gMat = 0.4 * clamp(hy / max(g.y, 0.01), 0.0, 1.0);
+    gWet = 0.35; gGlow = 0.12;
 
-    // Petal ribs hanging off the rim.
-    float a   = atan(q.z, q.x);
-    float rib = abs(sin(a * 9.0)) * 0.5 + 0.5;
-    d -= rib * 0.35;
-
-    // A sleeve *around* the throat, not a plug inside it: at open = 3 the old
-    // radius of 2.85 sat entirely within the 3-unit bore, so the one opening the
-    // camera is aimed at was filled with solid stalk and you fell through it.
-    // It is a collar hung under the cap, not a column: as a column it ran down
-    // forever, the aisle cut it open, and the fall became one flat orange wedge.
-    float stalk = length(q.xz) - (open + 1.8);
-    stalk = max(stalk, q.y - 7.0);
-    stalk = max(stalk, 2.8 - q.y);
-    stalk = max(stalk, -bore);
-    if (stalk < d) { d = stalk; gMat = 3.0; gWet = 0.9; gGlow = 0.35; }
-
-    // What you fall toward: the bloom's gill funnel, ribbed and narrowing to a
-    // throat below. Levelled off a little below the eye, so between throats it
-    // is the ground you cross; without it the pitched-down fall looked into fog.
-    float r      = length(q.xz);
-    float funnel = (q.y + 6.0 - 0.55 * min(r, 12.0)) * 0.85;
-    funnel      -= abs(sin(a * 26.0)) * 0.16 * smoothstep(1.0, 6.0, r);
-    funnel       = smax(funnel, -(r - open * 0.55), 0.6);
-    if (funnel < d) { d = funnel; gMat = 0.0; gWet = 0.75; gGlow = 0.5; }
+    // The cap overhead: a dome wide enough that the whole fall is under it,
+    // a hole where the throat is, and its gills hung in the skin of its
+    // underside, 0.9 deep.
+    vec3  c    = q - vec3(0.0, 7.5, 0.0);
+    float dome = sdEllipsoid(c, vec3(26.0, 7.5, 26.0));
+    float holl = sdEllipsoid(c - vec3(0.0, -2.6, 0.0), vec3(22.4, 6.0, 22.4));
+    float cap  = smax(dome, -holl, 1.2);
+    float skin = max(dome, -holl - 0.9);
+    cap        = min(cap, max(gillFamily(aw, r, 96.0, 0.0) - 0.06 * w, skin));
+    cap        = smax(cap, open - r, 0.8);
+    cap       += 0.25 * w * sin(a * 7.0 + r * 0.3) * smoothstep(16.0, 24.0, r);   // a torn margin
+    if (cap < d) { d = cap; gMat = 0.2; gWet = 0.25; gGlow = 0.2; }
     return d;
   }
 
