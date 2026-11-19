@@ -45,6 +45,7 @@ import { BANK_STEP, bankGainAt, getRoute } from './course'
 import { SEA_PATCH } from './geometry'
 import { FLESH_END, ROCK_START, jawAngleAt } from './maw'
 import { bendGainAt } from './city'
+import { wallStart } from './cutting'
 
 
 const FOV_BASE = 62 * Math.PI / 180
@@ -100,14 +101,15 @@ export function createScenicRouteScene (
   if (!programs)
     return null
 
-  const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, strandP, fallsP, tubeP, waterP, cockpitP, propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP } = programs
+  const { skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP, mawP, jawP, jawDepthP, strandP, fallsP, tubeP, waterP, cockpitP, propP, propDepthP, railP, cutP, cutDepthP, towerP, towerDepthP, brightP, blurP, compP } = programs
 
   const route     = getRoute()
   const materials = createMaterialArrays(gl)
 
   const { bankTex, skyTarget, skyTex, shadowTex, shadowFbo } = createTargets(gl, route)
 
-  const { roadMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, falls, fallsMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
+  const { roadMesh, cutMesh, chunks, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, falls, fallsMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh } = buildWorld(gl, route)
+  const wallFrom = wallStart(route)
 
   const rig                                                              = createCockpitRig(gl)
   const { cabinMesh, wheelMesh, speedoMesh, tachoMesh, mirror, dialTex } = rig
@@ -364,6 +366,12 @@ export function createScenicRouteScene (
           mesh.drawInstanced(gl, set.count)
         }
 
+        cutDepthP.use()
+        cutDepthP.uniformMatrix4fv('uViewProj', lightVP)
+        cutDepthP.uniform1f('uWallFrom', wallFrom)
+        bindBank(cutDepthP, bankGain)
+        cutMesh.draw(gl)
+
         // The rail casts too; same vertex shader as the road, uniforms retained.
         // The head too, unrolled: its profile is round, its eyes are not.
         roadDepthP.use()
@@ -514,6 +522,15 @@ export function createScenicRouteScene (
         bindLit(railP, cp, sun, env, fogCol, time, shadowOn)
         railMesh.draw(gl)
 
+        // The incline's rock cutting and retaining walls, two-sided like the road.
+        cutP.use()
+        cutP.uniformMatrix4fv('uViewProj', vp)
+        cutP.uniform4f('uRide', ride[0], ride[1], ride[2], ride[3])
+        cutP.uniform1f('uWallFrom', wallFrom)
+        bindBank(cutP, bankGain)
+        bindLit(cutP, cp, sun, env, fogCol, time, shadowOn)
+        cutMesh.draw(gl)
+
         // The props, a draw per set.
         propP.use()
         propP.uniformMatrix4fv('uViewProj', vp)
@@ -612,6 +629,7 @@ export function createScenicRouteScene (
       gl.deleteFramebuffer(shadowFbo)
       roadMesh.dispose(gl)
       railMesh.dispose(gl)
+      cutMesh.dispose(gl)
       for (const c of chunks)
         c.mesh.dispose(gl)
       farMesh.dispose(gl)
@@ -639,7 +657,7 @@ export function createScenicRouteScene (
       towerMesh.dispose(gl)
       for (const p of [
         skyLutP, skyDomeP, roadP, roadDepthP, terrainP, meshDepthP, seaP,
-        propP, propDepthP, railP, towerP, towerDepthP, brightP, blurP, compP,
+        propP, propDepthP, railP, cutP, cutDepthP, towerP, towerDepthP, brightP, blurP, compP,
         mawP, jawP, jawDepthP, strandP, fallsP, tubeP, waterP, cockpitP,
       ])
         p.dispose()

@@ -46,6 +46,7 @@ import { VERTEX_FLOATS, createMeshBuilder } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { hash2 } from '@wjh/math/rng'
 import type { Route } from './course'
+import type { CutAt } from './cutting'
 import { tubeRadius, tubeWidth } from './maw'
 import { smoothstep } from '@wjh/math/scalar'
 
@@ -97,6 +98,13 @@ export interface SpineIndex {
    * tube's wall that `carveAt` writes into every terrain vertex.
    */
   tube?: { idx: SpineIndex; s0: number };
+
+  /**
+   * The incline's rock cutting and retaining walls (cutting.ts): the face's
+   * height and top edge at a road arc length. The land beside the face is
+   * raised to its top, so the face meets ground and not air.
+   */
+  cut?: (s: number) => CutAt;
 }
 
 export interface TerrainChunk {
@@ -309,17 +317,35 @@ export function terrainHeight (idx: SpineIndex, x: number, z: number): number {
   const sea = smoothstep(cx - 9, cx - 1, x)
   const n   = nearestSpine(idx, x, z)
   // A wide embankment: the incline climbs well above the natural hill and
-  // must stand on land, not float over it.
-  if (n.d > 60)
+  // must stand on land, not float over it. Past the cutting's lip it runs out
+  // to about seventy metres.
+  if (n.d > 70)
     return h
 
-  let w = 1 - smoothstep(10, 60, n.d)
+  // Beside the incline's faces the land stands at the face's top, and the
+  // embankment's fall to the natural ground starts from there instead of from
+  // the road. It drops under the ditch from beneath the verge, and rises only
+  // past the face's top edge, under the lip: the heightfield's 4 m cells
+  // interpolate between their corners, and a rise that began at the foot of
+  // a vertical wall stood up in front of it.
+  let lift = 0
+  let lo   = 10
+  if (idx.cut) {
+    const c = idx.cut(n.s)
+    if (c.h > 0) {
+      const g    = smoothstep(0, 1.5, c.h)
+      const rise = smoothstep(c.top + 0.5, c.top + 4.5, n.d)
+      lift = -1.5 * g * smoothstep(c.ditch, c.ditch + 1.3, n.d) * (1 - rise) + c.h * rise
+      lo  += (c.top + 4.5 - lo) * g
+    }
+  }
+  let w = 1 - smoothstep(lo, lo + 50, n.d)
   // The embankment stops at the cliff: the sea side keeps its drop and its
   // seabed, or the corridor would lay a shelf over the water. It also eases
   // off over the brow, or it would hold the brow up level with the road.
   w *= 1 - sea
   w *= 1 - 0.8 * smoothstep(cx - 24, cx - 4, x)
-  return h + (n.y - 0.28 - h) * w
+  return h + (n.y - 0.28 + lift - h) * w
 }
 
 // --- chunks --------------------------------------------------------------------
