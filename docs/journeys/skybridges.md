@@ -207,6 +207,17 @@ the laps, and the blast's shockfront finishes the job.
 - **Place:** a slot 14 m wide between two towers (z 282–340): the fall drops
   between their facades, window grids streaming up past you; a glass bridge
   sweeps up from below between them and takes you.
+  - **The facades** are finned: an anodised bronze fin 0.35 m deep at every
+    1.5 m mullion, the glass set back behind them. A ray reaching the fins'
+    plane goes on to the recessed glass (its rooms seen with that parallax)
+    or, where it crosses a mullion on the way, meets a fin's side, darker
+    deeper in; once a bay is finer than a pixel it is averaged to the fins'
+    share of it. Looking along the slot the faces close up into a wall of fins.
+  - **The glass mirrors the other tower** (`canyonMirror`): a reflection off
+    an inner face crosses the 14 m slot analytically and lands on the opposite
+    face — its panes, rooms, spandrels, mullions and fins, the low sun on it
+    where neither tower is in the way, faded by the haze over the crossing.
+    Only rays past that tower's top or ends reflect the sky.
 - **Light:** golden, sun 3° ahead-right, bounced between the facades.
 - **Breaks:** the catch cracks the rising deck from end to end; the facades
   craze around the impact.
@@ -394,8 +405,9 @@ Things to keep true:
   route, path), `glsl/atmosphere.ts` (light per section, sky, cloud sea,
   skyline), `glsl/blast.ts` (the detonation), `glsl/cracks.ts` (spiderweb and
   running cracks), `glsl/structures.ts` (deck, set pieces, towers),
-  `glsl/materials.ts` (scene, normals, shading), `glsl/camera.ts` (choreography,
-  main).
+  `glsl/materials.ts` (scene, normals, shading) with `glsl/facades.ts` spliced
+  into it (curtain walls: rooms, panes, the canyon's fins and mirror),
+  `glsl/camera.ts` (choreography, main).
 - `kinematics.ts` — speed, lap, section names and bands (HUD and the shader both
   read them).
 - `journey.ts` — wires the env map.
