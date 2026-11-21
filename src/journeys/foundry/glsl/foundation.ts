@@ -59,7 +59,9 @@ export const foundationGlsl = `
   const float PLATE_T = 0.09;    // plate half-thickness
   const float SPAN_MID = 229.8;  // centre of the cut in the furnace floor
   const float SPAN_HALF = 13.0;  // half-length of that cut
-  const float MELT_Y = -30.0;
+  // The bath in the casting pit under the span, a man's height and a half down:
+  // close enough to see, to light the plates from underneath and to feel.
+  const float MELT_Y = -2.6;
 
   // --- oblivion (mirrors physics.ts) ----------------------------------------
   const float OB_PERIOD = 64.0;  // vertical period of the shaft with no bottom

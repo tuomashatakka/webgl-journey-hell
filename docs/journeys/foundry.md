@@ -188,13 +188,49 @@ faded to their average before they can alias.
   piston gallery and the gearworks; the ribs as riveted I-sections in oxide.
 - **the cage**: the floor bars, roof and side grating are bare steel (the posts
   stay in hazard paint) — the drop used to be watched through a yellow grid.
-- **the melt**: a dark slag crust that splits into plates along bright seams,
-  hottest at deep orange rather than white, read up the face of a tap channel
-  as well as across the pool. the tap channels warm the brick around them.
+- **the melt**: in the tap channels, a dark slag crust that splits into plates
+  along bright seams, hottest at deep orange rather than white, read up the
+  channel's face. the tap channels warm the brick around them. the pool under
+  the span is its own thing (the casting pit, below).
 - **occlusion**: two taps of the field along the normal after the hit
   (`occ`, floor 0.4), scaled back up by the decay's step factor so the lap does
   not darken with it. it darkens the ambient and, as contact shadow, the lamps'
   direct light down to 0.55. two `mapScene` calls per pixel.
+
+## the casting pit
+
+the cut in the furnace floor used to drop 30 m to a melt you never saw: the
+crossing was a plate over a dark brick well, and the only fire in the hall was
+the tap channels in the walls. the bath is now **`MELT_Y` = −2.6 m**, a man's
+height and a half under the plates, and it is the hall's light.
+
+- **the bath** (`shadeMelt`): the metal wells up along the middle of the pit and
+  rolls out to the walls (the pattern advects outward in |x|, offset per side),
+  so there is a bright split down the centre where the skin keeps tearing open,
+  rafts of dark slag (an fbm mask) drifting outward, broken into plates of every
+  size along the joints of a warped jittered grid (`plateEdge`, F2 − F1) with the
+  metal glowing in the joints and the broken edges glowing dull red, thin crust
+  glowing through itself, and a skull of frozen slag banked against the lining
+  where nothing moves — in the SDF as well, a rim up to 0.38 m standing out of
+  a bath that swells by ±8 cm. the open metal carries a skin streaked along the
+  flow. the hottest metal is (3.2, 0.92, 0.10), deep orange, and the joints fade
+  to their average once the footprint passes them.
+- **the lining** (`pitLining`): the hall's brick carried down to the bath,
+  incandescent where the metal licks it, a black tide of slag caked on 0.12 to
+  ~0.8 m above, and lit by the bath for the first few metres up (`exp(−h·0.35)`)
+  far more than anything up in the hall.
+- **the bath's light** (`furnaceLight`): falls off over 12 m above the bath
+  instead of 34, and by facing — strongest on what faces down at it (the plates'
+  undersides), weakest on what faces up.
+- **the fume**: gathered by the march like the steam (`fumeAt`): dense on the
+  metal, thinning out over a few metres (`exp(−h·1.1)`), rising in slow columns,
+  orange from underneath, never more than a 0.45 mix.
+- a ray that skims the bath can spend every step creeping along it; one that
+  runs out over the pit is put on the bath plane, so the far side of the pool is
+  never a hole.
+
+every other hall is byte-identical on the probe; only the frames that see the
+furnace floor change (mean luminance at the start of the crossing 25 → 46).
 
 ## the index channel
 
@@ -326,7 +362,8 @@ pay nothing for it:
   circle in y, so nothing pops when y wraps; that includes the rust and the
   flicker of the red from below, which were plain functions of y before.
 - there is no melt under the shaft on runs 1 to 3 (the pit has a floor); the
-  red from below is oblivion's.
+  red from below is oblivion's. the casting pit under the span is a different
+  pit.
 
 ## gates
 

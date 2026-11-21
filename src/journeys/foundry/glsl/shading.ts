@@ -132,13 +132,84 @@ export const shadingGlsl = /* glsl */`
 
   // The melt under the folding span: a warm updraft that only reaches the last
   // hall of the lap. An enormous area source, so it is ambient-shaped, not a point.
+  // It is strongest on what faces down at it from close above, the plates and
+  // the pit's lining, and dies off up the hall walls and out past the lip.
   vec3 furnaceLight(vec3 p, Surface s, float zc) {
     float near = 1.0 - smoothstep(SPAN_HALF, SPAN_HALF + 16.0, abs(cycd(zc - SPAN_MID)));
     if (near < 0.01) return vec3(0.0);
-    float up = max(dot(s.normal, vec3(0.0, -1.0, 0.0)), 0.0) * 0.75 + 0.30;
-    float depth = clamp((p.y - MELT_Y) / 34.0, 0.0, 1.0);
+    float up = max(-s.normal.y, 0.0) * 0.9 + 0.22 - 0.14 * max(s.normal.y, 0.0);
+    float depth = clamp((p.y - MELT_Y) / 12.0, 0.0, 1.0);
     float flick = 0.85 + 0.15 * fbm(vec2(p.z * 0.4, iTime * 1.7));
-    return s.albedo * up * near * (1.0 - depth * 0.55) * flick * vec3(1.0, 0.22, 0.035);
+    return s.albedo * up * near * mix(1.6, 0.30, depth) * flick * vec3(1.0, 0.22, 0.035);
+  }
+
+  /** How far x is from the nearest edge between two crust plates (F2 - F1 of a jittered grid). */
+  float plateEdge(vec2 x) {
+    vec2 c = floor(x), f = fract(x);
+    float d1 = 8.0, d2 = 8.0;
+    for (int j = -1; j <= 1; j++) {
+      for (int i = -1; i <= 1; i++) {
+        vec2 g = vec2(float(i), float(j));
+        vec2 o = vec2(hash21(c + g), hash21(c + g + 17.31)) * 0.8 + 0.1;
+        float d = length(g + o - f);
+        if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) { d2 = d; }
+      }
+    }
+    return d2 - d1;
+  }
+
+  // The bath in the casting pit. The metal wells up along the middle of the pit
+  // and rolls out to the walls, so the slag floats out with it: a bright split
+  // down the centre where the skin keeps tearing open, rafts of dark crust
+  // drifting outward, broken into plates with the metal glowing in the joints,
+  // and a frozen skull banked against the lining where nothing moves. The
+  // hottest metal is deep orange, not white.
+  vec3 shadeMelt(vec3 p, float zc, float W, vec3 dpx, vec3 dpy) {
+    float fw = max(length(dpx), length(dpy));
+    float edge = min(W - abs(p.x), SPAN_HALF - abs(cycd(zc - SPAN_MID)));
+    float side = p.x < 0.0 ? 41.0 : 0.0;
+    vec2 a = vec2(abs(p.x) - iTime * 0.12, zc + side);
+    float skull = 1.0 - smoothstep(0.3, 1.6, edge);
+    float well = 1.0 - smoothstep(0.2, 1.1, abs(p.x) + (vnoise(vec2(zc * 0.6, iTime * 0.2)) - 0.5) * 0.8);
+    float raft = fbm(a * 0.45 + 3.7) + skull * 0.8 - well * 0.7;
+    float crust = smoothstep(0.44, 0.54, raft);
+    // The rafts are broken into plates of every size; a joint shows the metal
+    // under it, opening wider where the raft is thin, and the plate glows dull
+    // red along its broken edge.
+    vec2 aw = a * 1.25 + (vec2(vnoise(a * 0.6), vnoise(a * 0.6 + 9.0)) - 0.5) * 1.4;
+    float pe = plateEdge(aw);
+    float jw = 0.02 + 0.07 * (1.0 - smoothstep(0.50, 0.72, raft));
+    float far = smoothstep(0.06, 0.30, fw);
+    float joint = (1.0 - smoothstep(jw, jw + 0.03 + fw * 3.0, pe)) * mix(1.0, 0.35, far);
+    float rim = (1.0 - smoothstep(jw, jw + 0.22, pe)) * mix(1.0, 0.5, far);
+    crust *= 1.0 - joint * (1.0 - skull * 0.7);
+    float temp = clamp(0.30 + 0.50 * fbm(a * 0.9 + vec2(0.0, iTime * 0.06)) + well * 0.40 - skull * 0.30, 0.0, 1.0);
+    vec3 hot = mix(vec3(1.6, 0.24, 0.020), vec3(2.5, 0.52, 0.046), temp);
+    hot = mix(hot, vec3(3.2, 0.92, 0.10), smoothstep(0.80, 1.0, temp));
+    // The open metal carries a skin that streaks out along the flow.
+    hot *= 0.72 + 0.28 * vnoise(vec2(a.x * 1.6, a.y * 5.0) + 30.0);
+    // A thin crust still glows dull red through itself; a thick one is black,
+    // with a lighter grey bloom of oxide on the oldest plates.
+    float thick = smoothstep(0.48, 0.80, raft);
+    vec3 slag = mix(vec3(0.050, 0.030, 0.022), vec3(0.020, 0.008, 0.004), vnoise(a * 3.1))
+      + hot * (0.10 * (1.0 - thick) + 0.22 * rim * (1.0 - skull * 0.6));
+    return mix(hot, slag, crust);
+  }
+
+  /**
+   * The pit's brick lining: incandescent where the bath licks it, a black tide
+   * of slag caked on just above, the heat fading up the wall.
+   */
+  vec3 pitLining(vec3 col, vec3 p, Surface s) {
+    float h = p.y - MELT_Y;
+    float heat = exp(-max(h - 0.15, 0.0) * 1.9);
+    float top = 0.62 + 0.30 * vnoise(vec2(p.x + p.z, 0.0) * 1.3);
+    float tide = smoothstep(0.12, 0.28, h) * (1.0 - smoothstep(top, top + 0.12, h));
+    col = mix(col, vec3(0.030, 0.008, 0.003) + s.albedo * vec3(0.20, 0.03, 0.004), tide * 0.85);
+    // Half of what the lining sees is the bath: it is lit by it far more than
+    // anything up in the hall, for the first few metres above it.
+    vec3 bath = s.albedo * vec3(1.0, 0.22, 0.035) * 1.4 * exp(-h * 0.35);
+    return col + (bath + s.albedo * vec3(2.6, 0.45, 0.05) * heat) * (1.0 - tide * 0.8);
   }
 
   /** Brake sparks off the rail contact patch, the only key light while the shoes bite. */
@@ -385,7 +456,8 @@ export const shadingGlsl = /* glsl */`
     // It floats a dark crust of slag that splits into plates along bright seams;
     // the hottest metal is deep orange, not white, so the tap never clips.
     if (mat > 7.5 && mat < 8.5) {
-      // The pool is read across its surface, a tap channel's face up its side.
+      if (p.y < -1.0) return shadeMelt(p, zc, W, dpx, dpy);
+      // A tap channel's face is read up its side.
       vec2 mq = abs(nGeo.y) > 0.5 ? p.xz : vec2(p.z, p.y * 2.5);
       float churn = fbm(vec2(mq.x * 0.5, mq.y * 0.5 - iTime * 0.35));
       float plates = vnoise(mq * 1.7 + vec2(0.0, iTime * 0.12));
@@ -410,6 +482,8 @@ export const shadingGlsl = /* glsl */`
     }
     col += direct * mix(0.55, 1.0, occ);
     col += furnaceLight(p, s, zc) + sparkLight(p, s, V, dzl);
+    if (p.y < 0.0 && mat < 0.5 && abs(cycd(zc - SPAN_MID)) < SPAN_HALF + 0.05)
+      col = pitLining(col, p, s);
 
     // The shaft lamps' own fittings: a guarded bulb in a housing on the plate.
     if (gMat < 0.5 && onShaftWall(p, nGeo, dzl, H)) {

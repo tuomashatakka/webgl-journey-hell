@@ -42,6 +42,18 @@ export const cameraGlsl = /* glsl */`
     return (wall + flo) * blot * shafts * dv;
   }
 
+  /**
+   * Fume off the bath, rising out of the casting pit in slow columns: dense on
+   * the metal, thinning to nothing a few metres up. Lit from underneath.
+   */
+  float fumeAt(vec3 p, float zc) {
+    float h = p.y - MELT_Y;
+    float dz = abs(cycd(zc - SPAN_MID));
+    if (h > 7.0 || dz > SPAN_HALF + 2.0) return 0.0;
+    float wisp = vnoise(vec2(p.x * 0.55 + p.z * 0.31, h * 0.45 - iTime * 0.6 + p.z * 0.17));
+    return exp(-max(h, 0.0) * 1.1) * (0.15 + wisp * wisp * 1.6) * (1.0 - smoothstep(SPAN_HALF - 1.5, SPAN_HALF + 2.0, dz));
+  }
+
   void main() {
     vec2 uv = (gl_FragCoord.xy - 0.5 * iResolution.xy) / iResolution.y;
     float dec = decayVis();
@@ -89,7 +101,7 @@ export const cameraGlsl = /* glsl */`
     // The march gathers the air on the way: steam off the flanges, and the red
     // the cracks let through.
     float dist = 0.0, hit = -1.0;
-    float steam = 0.0, leak = 0.0;
+    float steam = 0.0, leak = 0.0, fume = 0.0;
     vec3 p = ro;
     for (int i = 0; i < RM_STEPS; i++) {
       p = ro + rd * dist;
@@ -103,9 +115,22 @@ export const cameraGlsl = /* glsl */`
         float w = min(stepL, 1.2);
         steam += steamAt(p, zc, pr.x, pr.y, sec) * w;
         leak += leakAt(p, pr.x) * w;
+        fume += fumeAt(p, zc) * w;
       }
       dist += stepL;
       if (dist > MAX_DIST) break;
+    }
+
+    // A ray skimming the bath can spend every step creeping along it and never
+    // arrive. The bath is flat to a few centimetres, so one that runs out over
+    // the pit is put on it: the far side of the pool, not a hole in it.
+    if (hit < 0.0 && rd.y < 0.0 && oblivion() < 0.5) {
+      float tm = (MELT_Y - ro.y) / rd.y;
+      vec3 pm = ro + rd * tm;
+      if (tm < MAX_DIST && abs(cycd(cyc(pm.z) - SPAN_MID)) < SPAN_HALF && abs(pm.x) < 7.8) {
+        p = pm; dist = tm; hit = 1.0;
+        mapScene(p);
+      }
     }
 
     // Derivatives of the hit for the texture lookups, taken here where every
@@ -174,6 +199,7 @@ export const cameraGlsl = /* glsl */`
       }
       vec3 steamCol = hallAmbient(a0) * 3.0 + lampRadiance(a0) * 0.04;
       col = mix(col, steamCol, 1.0 - exp(-steam * 1.4));
+      col = mix(col, vec3(0.9, 0.20, 0.03), (1.0 - exp(-fume * 0.12)) * 0.45);
       // Saturating: by the fourth lap the air is red, never a red wall.
       col += vec3(1.0, 0.08, 0.02) * (1.0 - exp(-leak * leakI() * 0.9)) * 1.1;
     }
