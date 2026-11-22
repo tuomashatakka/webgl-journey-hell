@@ -52,19 +52,22 @@ vec3 carInterior (vec3 p, vec3 dir, float side) {
   else {
     float win = step(1.72, h.y) * step(h.y, 2.66) * step(0.68, abs(abs(h.z) - 4.6));
     float rack = step(2.78, h.y) * step(h.y, 2.86);
-    c = mix(vec3(0.62, 0.6, 0.55) * lift, vec3(0.02, 0.022, 0.03), win);
+    c = mix(vec3(0.4, 0.38, 0.34) * lift, vec3(0.02, 0.022, 0.03), win);
     c = mix(c, vec3(0.2), rack);
   }
-  for (int k = 0; k < 2; k++) {
-    float row = k == 0 ? side : -side;
-    float tp = abs(dir.x) > 0.01 ? (row * 0.8 - p.x) / dir.x : -1.0;
-    if (tp > 0.0 && tp < t) {
-      vec3 sp = p + dir * tp;
-      float back = step(fract(sp.z / 1.8 + 0.3), 0.09) * step(sp.y, 2.15);
-      float seat = max(back, step(sp.y, 1.55)) * step(0.85, abs(abs(sp.z) - 4.6));
-      if (seat > 0.5) {
-        t = tp;
-        c = vec3(0.1, 0.16, 0.42) * (0.45 + 0.4 * smoothstep(1.2, 2.2, sp.y));
+  // Seat backs: slabs across the car every 1.8 m either side of the aisle,
+  // found as the next three planes along the ray, none in the vestibules.
+  if (abs(dir.z) > 1e-3) {
+    float k0 = dir.z > 0.0 ? ceil(p.z / 1.8 - 0.3) : floor(p.z / 1.8 - 0.3);
+    for (int k = 0; k < 3; k++) {
+      float zk = (k0 + sign(dir.z) * float(k) + 0.3) * 1.8;
+      float tz = (zk - p.z) / dir.z;
+      if (tz <= 0.0 || tz >= t) continue;
+      vec3 sp = p + dir * tz;
+      float ax = abs(sp.x);
+      if (ax > 0.36 && ax < 1.3 && sp.y < 2.2 && abs(abs(sp.z) - 4.6) > 0.85) {
+        float head = smoothstep(1.95, 2.05, sp.y);
+        c = mix(vec3(0.08, 0.12, 0.32), vec3(0.42, 0.4, 0.36), head * 0.6) * (0.5 + 0.4 * smoothstep(1.2, 2.2, sp.y));
         break;
       }
     }

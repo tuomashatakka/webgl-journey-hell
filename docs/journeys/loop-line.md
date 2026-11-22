@@ -168,6 +168,31 @@ camera passes through a mouth and the walls sweep past — motion, not a pop.
   the dressing; pale lime patches; a damp green foot. Past a few centimetres a
   pixel the streaks show their mean. The other bays are pixel-identical on the
   probe.
+* **THE DEPOT's parked sets are cars** (`carriage`, `carriageFrame`, `bogie`
+  in `geometry/units.ts`, the body in `geometry/rolling.ts`, the face in
+  `shader/carriage.ts`). A body 17.2 m long with tumblehome sides and a curved
+  roof (crown 3.68 m, widest 1.43 m off the centre line at 1.5 m), swept in
+  metre-long rings so it shatters into panels; consecutive cars stand 18.4 m
+  apart so their gangway bellows meet. Under it, solebars, equipment cases
+  and a coupler at each end; two bogies 6.1 m off the middle, each with side
+  frames, spring nests over the axleboxes and four wheels on the rail head.
+  The shader draws a double door 1.36 m wide at 4.6 m either side of the
+  middle (red, with a window in each leaf), six rounded panes between the
+  doors and two in each end bay, a black window surround, a red stripe, grime
+  from the bogies up and a ribbed grey roof. A lit car shows its saloon,
+  interior-mapped from the camera's position in the car's own frame (`vCamL`):
+  the far wall and its dark windows, the ceiling with two light lines, the
+  floor, and a seat back across the car every 1.8 m either side of the aisle,
+  none in the vestibules, so the inside slides against the glass as you pass.
+  A pane under a few centimetres a pixel shows its mean. Each siding stands on
+  its own ballast bed (`sidingBed`, 6 m lengths every 5.6 m).
+* **The shed is a running shed** (`shed*`): 20.4 m bays of corrugated wall
+  26 m deep on a sooty brick plinth, a gabled roof whose ridge runs with the
+  track (eaves 9.45 m, ridge 13.6 m), a stanchion at every bay line, an eaves
+  gutter and a downpipe, and three lengths of works glazing per bay on the
+  yard side (mode `SHED_GLASS`: 0.52 by 0.4 m panes in steel bars, each lit a
+  little differently, a few dark). A bay's glazing shares the lamps' failure
+  roll and goes out with them. The other bays are pixel-identical on the probe.
 * The flood is a level plane, not a track-following one: the annex is the bottom
   of a dip, so the water lies only where the floor is below it.
 * A slim cab — a dashboard band and two pillars at the frame's edges — rides
@@ -210,10 +235,10 @@ reads as confetti, and there is nowhere left for the next lap to go.
 ```
 stations.ts    the plan, the profile, the nine bays, both circuits, the chord
 kinematics.ts  JourneySimulation: integrates the train, owns lapF, packs uniforms
-geometry.ts    surfaces, the cross-sections, the sweep, baked AO, rock layers, unit props
+geometry/     surfaces, the cross-sections, the sweep, baked AO, rock layers, unit props, rolling stock
 dressing.ts    where every prop, lamp, building and headwall goes
 scene.ts       the renderer: build once, then medium, sky, lamps, draws, post
-shader.ts      GLSL ES 3.00 (geometry, sky, bloom, composite) + the ES 1.00 preview
+shader/       GLSL ES 3.00 (geometry, the parked cars, sky, bloom, composite) + the ES 1.00 preview
 audio.ts       traction motor, rail joints, room tones, degrading announcements
 ```
 
