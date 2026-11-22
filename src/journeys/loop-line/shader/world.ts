@@ -51,6 +51,7 @@
 
 import { MATERIAL_GLSL, SKY_GLSL, SURFACE_GLSL } from '@wjh/delta/glsl'
 import { HASH11, HASH12 } from '@wjh/glsl/hash'
+import { CARRIAGE_GLSL } from './carriage'
 import { HEADER, MAX_HOLE, MAX_LAMPS, MAX_SCATTER } from './header'
 
 // --- vertex ---------------------------------------------------------------------
@@ -76,6 +77,7 @@ uniform vec4 uAmbA;       // previous bay: ambient rgb, open
 uniform vec4 uAmbB;
 uniform vec4 uAmbC;
 uniform float uLift;      // world-y offset for the whole draw (the flood)
+uniform vec3 uCamPos;
 
 out vec3 vWorld;
 out vec3 vNormal;
@@ -84,6 +86,7 @@ out vec3 vLocal;
 out vec3 vLocalN;
 out vec4 vFog;
 out vec4 vAmb;
+out vec3 vCamL;           // the camera in the prop's own frame, unscaled
 out vec4 vInst;           // seed, tint, broken, s
 
 mat3 axisAngle (vec3 axis, float angle) {
@@ -160,6 +163,8 @@ void main () {
   vUv     = aUv;
   vLocal  = lp;
   vLocalN = aNormal;
+  vec3 dc = uCamPos - iA.xyz;
+  vCamL   = vec3(dot(dc, Lf), dot(dc, U), dot(dc, F));
   vInst   = vec4(iD.z, iD.w, amount, s);
   gl_Position = uViewProj * vec4(world, 1.0);
 }
@@ -179,6 +184,7 @@ in vec3 vLocal;
 in vec3 vLocalN;
 in vec4 vFog;
 in vec4 vAmb;
+in vec3 vCamL;
 in vec4 vInst;
 
 uniform vec3  uCamPos;
@@ -365,6 +371,8 @@ float stainNoise (vec2 p) {
              mix(hash12(i + vec2(0.0, 1.0)), hash12(i + vec2(1.0, 1.0)), f.x), f.y);
 }
 
+${CARRIAGE_GLSL}
+
 void main () {
   float bakedAo = clamp(length(vNormal), 0.05, 1.0);
   vec3 Ng = normalize(vNormal);
@@ -521,19 +529,53 @@ void main () {
     }
   }
   else if (mode > 4.5 && mode < 5.5) {
-    // CARRIAGE: a parked car, its window band lit or not.
+    // CARRIAGE: a parked car. Its sides carry the glazing, the door pairs,
+    // a dark window surround and a red stripe, grimed from the bogies up;
+    // the roof is weathered grey. A lit car shows its saloon through the
+    // glass, interior-mapped; a dark one is black glass with the yard in it.
     vec3 an = abs(vLocalN);
-    if (an.x > 0.5) {
-      float band = step(1.55, vLocal.y) * step(vLocal.y, 2.75);
-      float pane = step(0.12, fract(vLocal.z / 1.9)) * step(fract(vLocal.z / 1.9), 0.88);
-      float win = band * pane;
-      float lit = step(0.35, tint) * (1.0 - step(tint, uRupture.y));
-      emissive += vec3(0.85, 0.95, 1.0) * win * lit * 0.45;
-      s.albedo = mix(s.albedo, vec3(0.02), win * (1.0 - lit * 0.6));
-      s.rough = mix(s.rough, 0.28, win);
-      // A livery stripe under the windows.
-      s.albedo = mix(s.albedo, vec3(0.55, 0.06, 0.05), step(1.25, vLocal.y) * step(vLocal.y, 1.45));
+    float px = max(fwidth(vLocal.z), fwidth(vLocal.y));
+    float aa = max(px, 1e-3);
+    float lit = step(0.35, tint) * (1.0 - step(tint, uRupture.y));
+    float grime = stainNoise(vec2(vLocal.z * 1.7, vLocal.y * 0.35) + seed * 40.0);
+    if (an.x > 0.55) {
+      float side = sign(vLocal.x);
+      vec2 p = vec2(vLocal.z, vLocal.y);
+      vec3 f = carSide(p);
+      float glass = 1.0 - smoothstep(-aa, aa, f.x);
+      float door = 1.0 - smoothstep(-aa, aa, f.y);
+      // The door's outline and the meeting line of its two leaves.
+      float meet = door > 0.5 ? abs(abs(vLocal.z) - 4.6) : 1.0;
+      float seam = 1.0 - smoothstep(0.5 * aa, 0.01 + 1.5 * aa, min(abs(f.y), abs(meet)));
+      float surround = step(1.62, p.y) * step(p.y, 2.76) * (1.0 - door);
+      vec3 body = s.albedo;
+      body = mix(body, vec3(0.03, 0.032, 0.035), surround);
+      body = mix(body, vec3(0.46, 0.05, 0.04), step(1.34, p.y) * step(p.y, 1.47) * (1.0 - door));
+      body = mix(body, vec3(0.5, 0.06, 0.04), door);
+      body *= mix(0.45 + 0.25 * grime, 1.0, smoothstep(1.05, 2.0, p.y));
+      body *= 1.0 - seam * 0.8 * (1.0 - smoothstep(0.02, 0.06, px));
+      s.albedo = mix(body, vec3(0.012), glass);
+      s.rough = mix(mix(s.rough, 0.22, surround), 0.05, glass);
+      s.metal = mix(s.metal, 0.0, max(glass, surround));
+      s.normal = mix(s.normal, Ng, glass);
+      if (glass > 0.0 && lit > 0.5) {
+        vec3 dir = normalize(vLocal - vCamL);
+        vec3 room = carInterior(vLocal, dir, side);
+        float fres = 0.04 + 0.96 * pow(1.0 - clamp(abs(dot(Ng, V)), 0.0, 1.0), 5.0);
+        // A pane under a few centimetres a pixel is shown as its mean.
+        room = mix(room, vec3(0.42, 0.4, 0.36), smoothstep(0.03, 0.09, px));
+        emissive += room * 0.22 * glass * (1.0 - fres);
+      }
     }
+    else if (vLocalN.y > 0.4) {
+      // The roof: grey, darker along the gutters, a rib every 0.6 m.
+      float rib = 1.0 - smoothstep(0.0, 0.03 + px, abs(fract(vLocal.z / 0.6) - 0.5) - 0.46);
+      s.albedo = vec3(0.17, 0.165, 0.155) * (0.7 + 0.5 * grime) * (1.0 - rib * 0.3);
+      s.rough = 0.75;
+      s.metal = 0.1;
+    }
+    else
+      s.albedo *= 0.55 + 0.25 * grime;
   }
   else if (mode > 5.5 && mode < 6.5) {
     // SIGNAL lens: red, green or yellow by tint, dead once the lap kills it.
@@ -555,6 +597,22 @@ void main () {
     s.rough = 0.35;
     // Shop signs are lit from inside.
     emissive += c * uGlow * alive * 0.8;
+  }
+  else if (mode > 9.5) {
+    // SHED GLASS: works glazing in steel bars, 0.52 by 0.4 m panes, each lit
+    // a little differently, a few dark or gone; the bay goes out with the
+    // yard's lamps. Past a few centimetres a pixel, the panes' mean.
+    vec2 g = vec2(vLocal.z / 0.52, vLocal.y / 0.4);
+    vec2 id = floor(g);
+    vec2 q = abs(fract(g) - 0.5);
+    float px = max(fwidth(g.x), fwidth(g.y));
+    float bar = smoothstep(0.43 - px, 0.43, max(q.x, q.y));
+    float h = hash12(id + seed * 97.0);
+    float pane = step(0.12, h) * (0.55 + 0.6 * hash11(h * 41.0));
+    float glowAmt = mix(pane * (1.0 - bar), 0.62 * 0.8, smoothstep(0.2, 0.6, px));
+    emissive = uGlow * glowAmt * alive;
+    s.albedo = mix(vec3(0.03), vec3(0.05, 0.05, 0.055), bar);
+    s.rough = mix(0.15, 0.6, bar);
   }
   else if (mode > 8.5) {
     // STAINED: a retaining wall twenty years out in the weather. uvm is

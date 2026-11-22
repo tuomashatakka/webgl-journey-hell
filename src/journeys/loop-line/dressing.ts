@@ -401,6 +401,9 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
           d.put('sleeperWood', s, r, -0.04)
           d.put('rail', s, r, -0.04, { seed: 0.5, sz: 1.4 })
         }
+      for (const r of sidings)
+        for (let s = s0 - 4; s < s1 + 4; s += 5.6)
+          d.put('sidingBed', s, r, 0, { seed: 0.5 })
       // Parked sets, two to four cars, on some of the sidings.
       for (const r of sidings) {
         let s = s0 + R() * 30
@@ -411,6 +414,7 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
               const sc = s + k * 18.4
               d.put('carriage', sc, r, -0.04, { seed: R(), tint: R() })
               d.put('bogie', sc, r, -0.04)
+              d.put('carriageFrame', sc, r, -0.04, { seed: 0.5 })
             }
           s += cars * 18.4 + 14 + R() * 26
         }
@@ -421,9 +425,11 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
           d.put('mast', s, r, -0.42)
           d.put('floodHead', s, r, -0.42, { seed: lamp.roll })
         }
+      // The running shed, bay by bay. Its windows die with the yard's lamps.
       for (let s = s0 + 20; s < s1 - 30; s += 20.4) {
-        d.put('shed', s, 46, -0.42, { sx: 26, sz: 20.4 })
-        d.put('shedRoof', s, 46, -0.42, { sx: 26, sz: 20.4 })
+        for (const unit of [ 'shed', 'shedPlinth', 'shedRoof', 'shedFrame' ])
+          d.put(unit, s, 46, -0.42, { seed: 0.5 })
+        d.put('shedGlass', s, 46, -0.42, { seed: R() })
       }
       break
     }

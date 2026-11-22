@@ -3,6 +3,7 @@ import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { mulberry32 } from '@wjh/math/rng'
 import { SurfaceKey } from './surfaces'
 import { CUT, HALL, cutFace } from './profiles'
+import { CAR_HALF, carBody, cylX } from './rolling'
 
 /** Sleeper pitch, metres. */
 export const TIE_PITCH = 0.744
@@ -10,6 +11,14 @@ export const TIE_PITCH = 0.744
 /** An overbridge's girders: half their span across the cut, and their offset along the track. */
 const BRIDGE_SPAN   = 9.6
 const BRIDGE_GIRDER = 3.9
+
+/** A parked car's bogie centres off its middle, and its wheels on the rail head. */
+const BOGIE_PITCH = 6.1
+const WHEEL_R     = 0.42
+const RAIL_TOP    = 0.144
+
+/** Half the depth of the running shed, metres. */
+const SHED_HALF = 13
 
 export const UNITS: Record<string, UnitSpec> = {
   sleeperConcrete: { surface: 'concreteDim', cell: 0.9, build: b => b.box(0, -0.1, 0, 1.3, 0.09, 0.13) },
@@ -253,20 +262,59 @@ export const UNITS: Record<string, UnitSpec> = {
     },
   },
 
+  // THE DEPOT's parked sets. A car is a body shell 17.2 m long with
+  // tumblehome sides and a curved roof (the shader draws its windows, doors,
+  // livery and the lit saloon behind the glass), an underframe and two
+  // bogies; consecutive cars stand 18.4 m apart, so their bellows meet.
   carriage: {
     surface: 'carriage',
     cell:    1.8,
+    build:   b => carBody(b),
+  },
+  carriageFrame: {
+    surface: 'darkGrey',
+    cell:    0,
     build:   b => {
-      b.box(0, 2, 0, 1.4, 1.45, 8.6)
-      b.box(0, 3.5, 0, 1.25, 0.08, 8.4)
+      // Solebars under the skirt, equipment cases between the bogies, the
+      // gangway bellows at both ends and a coupler under each.
+      for (const x of [ -1.12, 1.12 ])
+        b.box(x, 0.98, 0, 0.06, 0.08, CAR_HALF - 0.1)
+      for (const [ z, hz, hx, hy ] of [[ -3.1, 1.15, 0.9, 0.26 ], [ -0.6, 0.7, 0.75, 0.2 ], [ 1.2, 0.55, 0.95, 0.3 ], [ 3.3, 1, 0.8, 0.24 ]])
+        b.box(0, 1.05 - hy, z, hx, hy, hz)
+      for (const side of [ -1, 1 ]) {
+        b.box(0, 2.15, side * (CAR_HALF + 0.3), 0.62, 1.02, 0.3)
+        b.box(0, 0.86, side * (CAR_HALF + 0.25), 0.12, 0.09, 0.35)
+      }
     },
   },
   bogie: { surface: 'black',
     cell:    0,
     build:   b => {
-      b.box(0, 0.42, -5.8, 1.1, 0.32, 1.2)
-      b.box(0, 0.42, 5.8, 1.1, 0.32, 1.2)
+      for (const zc of [ -BOGIE_PITCH, BOGIE_PITCH ]) {
+        for (const x of [ -1.02, 1.02 ]) {
+          // Side frame, with its spring nests over the axleboxes.
+          b.box(x, 0.66, zc, 0.07, 0.1, 1.55)
+          for (const za of [ -1.25, 1.25 ]) {
+            b.box(x, 0.57, zc + za, 0.11, 0.13, 0.16)
+            b.box(x, 0.84, zc + za, 0.09, 0.08, 0.12)
+          }
+        }
+        // Transom and bolster.
+        b.box(0, 0.68, zc, 1.02, 0.09, 0.2)
+        b.box(0, 0.88, zc, 0.85, 0.08, 0.32)
+        for (const za of [ -1.25, 1.25 ]) {
+          b.box(0, WHEEL_R + RAIL_TOP, zc + za, 0.82, 0.05, 0.05)
+          for (const x of [ -0.7175, 0.7175 ])
+            cylX(b, x - 0.06, x + 0.06, WHEEL_R + RAIL_TOP, zc + za, WHEEL_R, 14)
+        }
+      }
     } },
+  // A siding's own ballast bed, a 6 m length: placed every 5.6 m, so they lap.
+  sidingBed: {
+    surface: 'ballastDark',
+    cell:    0,
+    build:   b => prism(b, [[ -2.35, -0.42 ], [ 2.35, -0.42 ], [ 1.6, -0.17 ], [ -1.6, -0.17 ]], -3, 3),
+  },
   mast: { surface: 'steel',
     cell:    2,
     build:   b => {
@@ -279,8 +327,38 @@ export const UNITS: Record<string, UnitSpec> = {
       for (const x of [ -1.1, -0.37, 0.37, 1.1 ])
         b.box(x, 21.8, 0, 0.3, 0.22, 0.2)
     } },
-  shed:     { surface: 'corrugRust', cell: 0, build: b => b.box(0, 7, 0, 0.5, 7, 0.5) },
-  shedRoof: { surface: 'corrugated', cell: 0, build: b => b.box(0, 14.2, 0, 0.55, 0.2, 0.52) },
+  // The running shed, one 20.4 m bay of it: brick-plinthed corrugated walls
+  // 26 m deep, a gabled roof whose ridge runs with the track, a stanchion at
+  // each bay line, an eaves gutter, and a band of works glazing along the
+  // side that faces the yard (local +x), lit from inside.
+  shed: {
+    surface: 'corrugRust',
+    cell:    0,
+    build:   b => b.box(0, 5.2, 0, SHED_HALF, 4.4, 10.2),
+  },
+  shedPlinth: { surface: 'brickSoot', cell: 0, build: b => b.box(0, 0.4, 0, SHED_HALF + 0.08, 0.4, 10.2) },
+  shedRoof:   {
+    surface: 'corrugDark',
+    cell:    0,
+    build:   b => prism(b, [[ -SHED_HALF - 0.5, 9.45 ], [ SHED_HALF + 0.5, 9.45 ], [ 0, 13.6 ]], -10.2, 10.2),
+  },
+  shedFrame: {
+    surface: 'girder',
+    cell:    0,
+    build:   b => {
+      b.box(SHED_HALF + 0.12, 4.8, 10.2, 0.12, 4.8, 0.16)
+      b.box(SHED_HALF + 0.42, 9.5, 0, 0.14, 0.12, 10.2)
+      b.box(SHED_HALF + 0.3, 4.8, 9.6, 0.05, 4.7, 0.05)
+    },
+  },
+  shedGlass: {
+    surface: 'shedGlass',
+    cell:    0,
+    build:   b => {
+      for (const z of [ -6.4, 0, 6.4 ])
+        b.box(SHED_HALF + 0.02, 6.1, z, 0.03, 1.2, 2.6)
+    },
+  },
 
   bent: {
     surface: 'steel',
