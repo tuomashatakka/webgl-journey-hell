@@ -168,8 +168,8 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
     else if (q.y > DRIFT_CAP_Y - 0.105 && abs(sz) < 0.125)                // a cap
       c = driftWood(q.x, q.y + sz, id, near);
     else {                                                                // a post, or a collar
-      float round = atan(sz, abs(q.x) - DRIFT_LEG_X + DRIFT_LEG_B * (q.y + r.floorD)) * 0.12;
-      c = driftWood(q.y, round, id * 2.0 + step(0.0, q.x), near);
+      float ring  = atan(sz, abs(q.x) - DRIFT_LEG_X + DRIFT_LEG_B * (q.y + r.floorD)) * 0.12;
+      c = driftWood(q.y, ring, id * 2.0 + step(0.0, q.x), near);
       float foot = smoothstep(0.35, -0.30, q.y);
       c = mix(c, vec3(0.11, 0.09, 0.065), foot * 0.75);
       rough = mix(rough, 0.35, foot);

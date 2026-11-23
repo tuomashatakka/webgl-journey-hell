@@ -135,6 +135,56 @@ ceiling (`ceilH` 4.6 to 5.6).
   pays for the deck and two compares. the void, the concourse and the chapel
   are byte-identical on the probe.
 
+## the drift
+
+the chalk drift was a smooth bore of the table's 3.4 m half-width with a box
+for a leg standing in each wall, a cap 4 m long hung under the arch on
+nothing, and a sun that lit the walls through the rock. it is an adit cut by
+hand now, timbered, with daylight coming down its raises and nowhere else.
+
+- **the section** (`driftBore`): walls battered in from `DRIFT_HALF` 2.3 m at
+  the floor by `DRIFT_BATTER` 0.12 per metre to the springing at
+  `DRIFT_SPRING` 1.5 m, and a segmental crown through the springing points
+  and the table's ceiling (3.3 m). `roomProfile` hands the drift to it, so
+  the collars and the station's end wall frame the new mouth.
+- **the hewing** (`driftHewn`): two octaves of relief laid along the profile
+  (`y + |x|`, so it runs up the wall and over the crown without a seam), at
+  most `DRIFT_HEW` 0.1 m either way, divided by 1.5 for its slope. it comes in
+  over the first half metre of wall (the floor is trodden flat) and goes at
+  both ends, where the collars are struck from the smooth profile. more than
+  0.45 m off the wall the plain profile, moved by the most the relief could,
+  is the bound, so a ray down the middle pays nothing for it.
+- **the sets** (`DRIFT_SET` 1.6 m, divides the lamp pitch and `PHASE_WRAP`):
+  two round posts leaning in with the walls (`DRIFT_LEG_X` 2.02 m at the
+  floor, `DRIFT_LEG_B` 0.166 per metre), a squared cap across their heads at
+  `DRIFT_CAP_Y` 2.55 m, and boards laid along the drift over the caps. all of
+  it is outside the clearance by construction. a set stands under every
+  lamp, and the bulb hangs from its cap (`lampY` 2.36) on a holder in a cage
+  of three hoops, so its glass clears the cart.
+- **the raises** (`driftVent`, `DRIFT_VENT` 32 m, between two sets): a square
+  shaft 1.2 m across, 0.5 m off the line, from the crown up `DRIFT_VENT_H`
+  6 m to a square of sky, with the boards left open under it.
+  `driftVentLight` carries a point up the light (`DRIFT_VENT_L`, a little off
+  the plumb) to the raise's foot and its top and tests both squares, softened
+  by how far it carried; one field is the pool under the raise
+  (`directLight`, no ray marched) and the column of daylight in the dust
+  (`shafts`, spread by most of a sample's spacing). the drift's sun no longer
+  lights anything else.
+- **the chalk** (`driftShell`): bone to warm grey in broad patches, the
+  pick's strokes in rows raking down with a lit lip beside each, soft grey
+  marl partings, three seams of flint nodules (grey-black with a white
+  cortex, half the 0.55 m cells, each its own size), damp coming down from
+  the crown, green round every bulb, splash up the foot of the walls, and a
+  floor trodden to a paste with water standing in it.
+- **the timber** (`driftProp`): one tone per piece, grain along the member and
+  round the posts, dark and wet at the foot of the posts, chalk dust on
+  everything that faces up.
+- the drift's lamp shadow rays leave 4 cm off the face: its hewn walls and
+  round posts are grazed by every ray toward a bulb, and a grazing ray
+  started on the surface shadowed itself in a speckle.
+- every probe frame without the drift in it is byte-identical; the
+  platform's and the void's frames that see its mouth change only there.
+
 ## the chapel
 
 the fold on its own is a solid with no way through it and no order in it. the
@@ -362,6 +412,7 @@ bun tools/journey.mjs probe switchback --from=0 --to=280 --step=20
 bun tools/journey.mjs scan switchback --from=200 --to=210 --step=0.25
 bun tools/journey.mjs hud switchback --from=0 --to=240 --step=60
 node tools/journey.mjs contact switchback --bare --at=0,2,5,9,12,15,17 --cols=4         # the station
+node tools/journey.mjs contact switchback --bare --at=16,20,23,26,30,33 --cols=3        # the drift
 node tools/journey.mjs contact switchback --bare --from=40 --to=49.5 --step=0.5 --cols=5   # the concourse
 node tools/journey.mjs contact switchback --bare --at=98,126.4,141.3 --cols=3            # ...on laps 2 to 4
 ```
