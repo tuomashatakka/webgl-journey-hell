@@ -71,7 +71,7 @@ export const SECTIONS: Section[] = [
     ceilH:  3.3,
     floorD: 0.38,
     lamp:   8,
-    lampY:  2.25,
+    lampY:  2.36, // hung from a cap, clear of the cart
     grime:  0.6,
     sky:    0.1, // the vents let just enough daylight in to be worse than none
   },

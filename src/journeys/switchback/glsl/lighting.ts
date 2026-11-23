@@ -23,7 +23,8 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
       // gallery. So no ray is marched for them (a reach of nothing ends the
       // loop before its first step) and the gallery's shade is closed-form.
       // The battens' rays stop short of the fitting the light is inside.
-      float reach = r.type < T_DRIFT - 0.5 ? ld - 0.2 : min(ld, 16.0);
+      // So do the drift's, which would otherwise end in the bulb's own cage.
+      float reach = r.type < T_SCAFFOLD - 0.5 ? ld - 0.2 : min(ld, 16.0);
       float sh = shadowTo(q, l, mall ? -1.0 : reach);
       if (mall) sh = mallLampShade(q, r.lampY);
       float k = atten * r.lit * flick * sh;
@@ -65,6 +66,14 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
         sl     = MALL_SUN;
         reach  = gain > 0.003 ? min(back - 2.0, 12.0) : -1.0;
         sunCol = mallSunTint();
+      }
+      else if (r.type < T_SCAFFOLD - 0.5) {
+        // The drift's daylight comes down its raises and nowhere else: the
+        // pool under each is closed-form, so no ray is marched for it.
+        gain   = r.sky * driftVentLight(q, r.ceilH, 0.0) * 9.0;
+        sl     = DRIFT_VENT_L;
+        reach  = -1.0;
+        sunCol = driftDaylight();
       }
 
       // The sun's shadow is the one term here worth switching off. uHeavy is a
@@ -272,15 +281,16 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
 
       if (r.sky < 0.03) continue;
 
-      float zp = phaseAt(q.z);
       vec3 tone;
       float m;
 
       if (r.type < T_SCAFFOLD - 0.5) {
-        // A vent every twenty-four metres, dropping a cone of daylight and dust.
+        // A raise every DRIFT_VENT, dropping a column of daylight into the dust:
+        // the same field that lights the pool under it.
+        // Spread by most of a sample's spacing, or the column stipples.
         float h = clamp((q.y + r.floorD) / (r.ceilH + r.floorD), 0.0, 1.0);
-        m = smoothstep(2.1, 0.0, lattAbs(zp, 24.0) + abs(q.x - 0.6) * 0.8) * mix(0.12, 1.0, h);
-        tone = vec3(0.88, 0.90, 0.94);
+        m = driftVentLight(q, r.ceilH, 1.0) * mix(0.35, 1.0, h) * 2.6;
+        tone = driftDaylight();
       }
       else continue;
 

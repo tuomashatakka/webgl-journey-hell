@@ -21,6 +21,67 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     return max(box, vault);
   }
 
+  // ---- the drift -------------------------------------------------------------
+  //
+  // THE CHALK DRIFT is an adit cut by hand: walls battered in from the floor to
+  // a segmental crown, every face left as the pick left it, a three-piece
+  // timber set every DRIFT_SET (two round posts leaning in with the walls, a
+  // squared cap across their heads, boards laid over the caps), and a raise up
+  // to the daylight every DRIFT_VENT, between two sets.
+
+  const float DRIFT_SET    = 1.6;    // set pitch: divides the lamp pitch and PHASE_WRAP
+  const float DRIFT_HALF   = 2.30;   // the wall's half-width at the floor
+  const float DRIFT_BATTER = 0.12;   // ...and how far it leans in per metre up
+  const float DRIFT_SPRING = 1.5;    // where the crown springs from the walls
+  const float DRIFT_CAP_Y  = 2.55;   // the cap's centre line
+  const float DRIFT_LEG_X  = 2.02;   // a post's centre at the floor
+  const float DRIFT_LEG_B  = 0.166;  // ...and its batter, per metre up
+  const float DRIFT_HEW    = 0.10;   // the most the hewing moves a face
+  const float DRIFT_VENT   = 32.0;   // a raise every this far, divides PHASE_WRAP
+  const float DRIFT_VENT_X = 0.5;    // its centre, off the line
+  const float DRIFT_VENT_W = 0.6;    // its half-width
+  const float DRIFT_VENT_H = 6.0;    // how far it climbs past the crown
+
+  /**
+   * The drift's air, as a cross-section: a trapezoid up to the springing and
+   * a circle through the springing points and the crown above it. The wall
+   * plane is divided by its own length, so the distance stays euclidean.
+   */
+  float driftBore(vec3 q, float ceilH, float floorD) {
+    float ws    = DRIFT_HALF - DRIFT_BATTER * (DRIFT_SPRING + floorD);
+    float yc    = (ceilH * ceilH - ws * ws - DRIFT_SPRING * DRIFT_SPRING) / (2.0 * (ceilH - DRIFT_SPRING));
+    float wall  = (abs(q.x) - DRIFT_HALF + DRIFT_BATTER * (q.y + floorD)) / sqrt(1.0 + DRIFT_BATTER * DRIFT_BATTER);
+    float trap  = max(max(wall, -floorD - q.y), q.y - DRIFT_SPRING);
+    float crown = max(length(vec2(q.x, q.y - yc)) - (ceilH - yc), -floorD - q.y);
+    return min(trap, crown);
+  }
+
+  /** The raise, as air: a square shaft from the crown up to the daylight. */
+  float driftVent(vec3 q, float ceilH) {
+    float y0 = ceilH - 0.7, y1 = ceilH + DRIFT_VENT_H;
+    vec3  v  = vec3(q.x - DRIFT_VENT_X, q.y - 0.5 * (y0 + y1), latt(phaseAt(q.z) + 0.5 * DRIFT_VENT, DRIFT_VENT));
+    return sdBox(v, vec3(DRIFT_VENT_W, 0.5 * (y1 - y0), DRIFT_VENT_W));
+  }
+
+  /**
+   * The faces as the pick left them: two octaves of relief, up to DRIFT_HEW
+   * either way, laid along the profile (y + |x| runs up the wall and across
+   * the crown without a seam). The floor is trodden flat, so the relief comes
+   * in over the first half metre of wall, and it goes at both ends, where the
+   * collars are struck from the smooth profile. Their slopes add to about
+   * half, hence the divisor; a metre clear of the wall the relief cannot
+   * reach and the plain profile, moved by the most it could, is the bound.
+   */
+  float driftHewn(vec3 q, float prof, vec4 A, vec4 B) {
+    float vent = driftVent(q, B.x);
+    if (prof < -0.45) return min(prof + DRIFT_HEW, vent);
+
+    vec2  u   = vec2(phaseAt(q.z), q.y + abs(q.x));
+    float rel = 0.12 * (vnoise(u * 0.8 + 1.7) - 0.5) + 0.04 * (vnoise(u * 2.4 + 5.3) - 0.5);
+    rel *= smoothstep(0.05 - B.y, 0.65 - B.y, q.y) * smoothstep(0.4, 1.9, min(q.z - A.x, A.y - q.z));
+    return min((prof + rel) / 1.5, vent);
+  }
+
   /**
    * The air a room is carved out of: a box up to the springing line, unioned
    * with the barrel vault above it, clipped to the room's z-range.
@@ -31,10 +92,12 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
    * nave; a room with no walls at all gets a four-hundred-metre box, which is a
    * finite number a sphere trace can step against where an infinity would
    * poison the 'min'. The platform is the exception (stationVault): a vault
-   * struck from the track alone brought its haunches down onto the decks.
+   * struck from the track alone brought its haunches down onto the decks. So
+   * is the drift (driftBore), which was cut by hand and not struck at all.
    */
   float roomProfile(vec3 q, float type, float bore, float ceilH, float floorD) {
     if (type < T_DRIFT - 0.5) return stationVault(q, bore, ceilH, floorD);
+    if (type < T_DRIFT + 0.5) return driftBore(q, ceilH, floorD);
 
     float archR = min(bore, ceilH * 0.75);
     float archY = ceilH - archR;
@@ -62,7 +125,9 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
   float roomAir(vec3 q, vec4 A, vec4 B) {
     float slab = roomSlab(q, A);
     vec3 w = A.z > T_FALL - 0.5 ? fallWarp(q) : q;
-    return max(roomProfile(w, A.z, A.w, B.x, B.y), slab);
+    float prof = roomProfile(w, A.z, A.w, B.x, B.y);
+    if (abs(A.z - T_DRIFT) < 0.5) prof = driftHewn(q, prof, A, B);
+    return max(prof, slab);
   }
 
   /**
@@ -229,24 +294,41 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     return min(shoe, chainWay(q, A.x + STATION_CHAIN, A.y));
   }
 
-  /** THE CHALK DRIFT: timber sets, crown lagging, and a caged bulb on the cap. */
-  float driftProps(vec3 q, float bore, float ceilH, float lamp, float lampY) {
+  /**
+   * THE CHALK DRIFT: a set every DRIFT_SET (two posts battered in with the
+   * walls, a cap across their heads), boards laid along the drift over the
+   * caps with the raises left open, and a caged bulb hung from the cap of
+   * every set a lamp pitch apart. Behind one bound for the sets, so a ray
+   * between two of them pays for the boards and a compare.
+   */
+  float driftProps(vec3 q, float ceilH, float floorD, float lamp, float lampY) {
     float ax = abs(q.x);
     float zp = phaseAt(q.z);
-    float fz = latt(zp, 3.2);
 
-    float leg = sdBox(vec3(ax - (bore - 0.20), q.y - 0.55, fz), vec3(0.15, 1.30, 0.11));
-    float cap = sdBox(vec3(q.x, q.y - (ceilH - 0.80), fz), vec3(bore * 0.60, 0.14, 0.11));
+    float lag = max(sdBox2(vec2(latt(q.x + 0.135, 0.27), q.y - DRIFT_CAP_Y - 0.13), vec2(0.105, 0.03)), ax - 1.3);
+    float hole = max(abs(q.x - DRIFT_VENT_X), lattAbs(zp + 0.5 * DRIFT_VENT, DRIFT_VENT)) - DRIFT_VENT_W - 0.02;
+    lag = max(lag, -hole);
 
-    float lag = sdBox2(vec2(latt(q.x, 0.42), q.y - (ceilH - 0.22)), vec2(0.15, 0.06));
-    lag = max(lag, ax - bore * 0.72);
+    float sz  = latt(zp, DRIFT_SET);
+    float set = abs(sz) - 0.14;
+    if (set > 0.3) return min(lag, set);
 
-    float bulb = length(vec3(q.x, q.y - lampY, latt(zp, lamp))) - 0.11;
-    float hangTop = ceilH - 0.30;
-    float flex = sdBox(vec3(q.x, q.y - 0.5 * (lampY + hangTop), latt(zp, lamp)),
-                       vec3(0.016, max(0.0, 0.5 * (hangTop - lampY)), 0.016));
+    float py   = q.y + floorD;
+    float lx   = ax - (DRIFT_LEG_X - DRIFT_LEG_B * py);
+    float post = max(length(vec2(lx, sz)) / 1.014 - 0.105, max(-py, q.y - DRIFT_CAP_Y + 0.10));
+    float cap  = sdBox(vec3(q.x, q.y - DRIFT_CAP_Y, sz), vec3(1.80, 0.10, 0.11));
+    float d    = min(lag, min(post, cap));
 
-    return min(min(leg, cap), min(lag, min(bulb, flex)));
+    // The bulb: a holder under the cap, the glass, and a cage of three hoops.
+    vec3  b  = vec3(q.x, q.y - lampY, latt(zp, lamp));
+    float lb = length(b) - 0.2;
+    if (lb > 0.1) return min(d, lb);
+
+    float hold  = sdBox(b - vec3(0.0, DRIFT_CAP_Y - 0.12 - lampY, 0.0), vec3(0.035, 0.05, 0.035));
+    float glass = length(b) - 0.075;
+    float hoops = min(length(vec2(length(b.xz) - 0.10, b.y)),
+                      min(length(vec2(length(b.xy) - 0.10, b.z)), length(vec2(length(b.zy) - 0.10, b.x)))) - 0.007;
+    return min(d, min(min(hold, glass), max(hoops, -b.y - 0.085)));
   }
 
   /**
@@ -659,7 +741,7 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     float d;
 
     if (t < T_DRIFT - 0.5)          d = platformProps(q, A.w, B.z, C.w);
-    else if (t < T_SCAFFOLD - 0.5)  d = max(driftProps(q, A.w, B.x, B.z, C.w), A.x - q.z);
+    else if (t < T_SCAFFOLD - 0.5)  d = max(driftProps(q, B.x, B.y, B.z, C.w), A.x - q.z);
     else if (t < T_CONCOURSE - 0.5) d = scaffoldProps(q, B.w);
     else if (t < T_CHAPEL - 0.5)    d = concourseProps(q, A);
     else if (t < T_OVERLOOK - 0.5)  d = chapelProps(q, A, B, C);

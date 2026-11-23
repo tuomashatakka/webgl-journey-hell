@@ -74,14 +74,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       return c * (1.0 - grime * 0.4);
     }
 
-    if (type < T_SCAFFOLD - 0.5) {
-      // THE CHALK DRIFT. Cut chalk: bone, with the pick marks still in it.
-      float pick = fbm(uvz * vec2(9.0, 3.2)) * 0.6 + fbm(uvz * 24.0) * 0.4;
-      c = mix(vec3(0.90, 0.87, 0.78), vec3(0.56, 0.52, 0.44), pick);
-      c = mix(c, vec3(0.24, 0.19, 0.14), isFloor * 0.6);
-      c *= 1.0 - grime * 0.25 * fbm(uvz * 0.7 + 3.1);
-    }
-    else if (type < T_CONCOURSE - 0.5) {
+    if (type < T_CONCOURSE - 0.5) {
       c = vec3(0.030, 0.028, 0.040);   // the void's far bound, never actually reached
     }
     else if (type < T_OVERLOOK - 0.5) {
@@ -239,6 +232,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       vec3 c;
       if (abs(r.type - T_CONCOURSE) < 0.5) c = mallShell(q, n, r, t, rough, emit);
       else if (r.type < T_DRIFT - 0.5)     c = stationShell(q, n, r, t, rough);
+      else if (r.type < T_SCAFFOLD - 0.5)  c = driftShell(q, n, r, t, rough, emit);
       else                                 c = shellAlbedo(q, n, r.type, r.grime, t);
 
       // The fissures are lit from *behind*, so they are emission and not a dark
@@ -307,11 +301,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
         return liftWayAlbedo(q, n, t, rough);
 
       if (r.type < T_DRIFT - 0.5) return stationProp(q, n, r, t, toLamp, rough, emit);
-      if (r.type < T_SCAFFOLD - 0.5) {
-        if (toLamp < 0.20) { emit = lampTint(r.type) * 5.0 * r.lit; return vec3(1.0, 0.92, 0.78); }
-        return mix(vec3(0.32, 0.23, 0.14), vec3(0.17, 0.12, 0.08),
-                   fbm(vec2(phaseAt(q.z) * 6.0, q.y * 2.0)));
-      }
+      if (r.type < T_SCAFFOLD - 0.5) return driftProp(q, n, r, t, toLamp, rough, emit);
       if (r.type < T_CONCOURSE - 0.5) {
         rough = 0.45;
         float rust = smoothstep(0.35, 0.85, fbm(vec2(phaseAt(q.z) * 1.6, q.y * 1.6)));
