@@ -13,7 +13,7 @@ units the route enters purgatory and never leaves it.
 | ---: | --- | --- | --- |
 | 0–70 | spillway threshold | `DAWN` | mass-concrete flood control: a buttressed dam face, a baffled ogee chute dropping into a stilling basin, sluice bays with lift gates over stepped pools |
 | 70–155 | protean weather bridge | `OVERCAST` | nothing but structure and weather — portal pylons, suspension catenary and hangers, an open grating deck on a truss, low wind fencing, a cloud deck and a cloud sea below |
-| 155–235 | turbine canyon | `DAY` | a stratified canyon wide enough for its machines: three-blade rotors on pedestals, penstocks, a gantry |
+| 155–235 | turbine canyon | `DAY` | a stratified canyon wide enough for its machines: three-blade rotors on towers on pedestals, penstocks, a crane gantry |
 | 235–325 | conveyor escarpment | `EVENING` | warm quarry benches, a roofed conveyor gallery on trestles, bucket wheel, transfer tower |
 | 325–410 | cooling field | `HAZE` | hyperboloid towers on raked column rings, pipe racks, banded chimneys, cooling ponds |
 | 410–500 | shear horizon | `AURORA` | torn strata, suspended stair fragments, rings, the rift (a gorge under the stair, lit from below) |
@@ -211,6 +211,41 @@ down its own flight.
   the sky because from inside the act the far wall fills the view.
 - the preview's cooling towers on the horizon are not brought over: the walls
   hide the horizon over the whole forward view.
+
+## act III, the turbine canyon
+
+the wind runs down the canyon, so its machines face up it, toward the stair
+(`turbineCanyon`, `turbineBlade` in `glsl/acts.ts`). they were drums: a
+cylinder seven across turned to face the stair, three slabs through it and a
+lit ring round its hub, on a box.
+
+- **the canyon**: walls 19.5 off the line (were 12.5), stratified, topped
+  about 26 over the rail; talus banked against their feet from 16 out at 0.6
+  in 1, a rough floor 3.6 under the rail.
+- **the turbines**: one each side every 28 units (`TURB_X` 10.5 off the line).
+  a three-blade rotor, hub `TURB_Y` 7.6 over the rail, tips at `TURB_R` 6.2,
+  in a plane `TURB_W` 1.6 ahead of the tower, so the nearest tip passes 4.3
+  off the line and 1.4 over the rail. one blade is evaluated, folded into its
+  120 degree sector: an elliptical section a fifth as thick as its chord,
+  round at the root, 0.62 at its widest and 0.13 at the tip, twisted from 0.5
+  rad at the root to 0.08 at the tip. an ogive spinner, a rounded nacelle
+  behind it, a tower tapering from 0.66 to 0.4 to the yaw bearing, a concrete
+  pedestal at its foot, and a red obstruction light blinking on the nacelle's
+  roof. every rotor turns the same way seen from the stair, at 0.9 rad/s from
+  a phase hashed per turbine.
+- **the penstocks**: a pipe 1.4 in radius along the foot of each wall, 15.5
+  off the line, flanged every 7 units, on a concrete anchor block every 14.
+- **the gantry**: a vierendeel crane girder wall to wall 12.5 over the rail,
+  halfway between two pairs of turbines every 56 units, with a hoist trolley,
+  its rope and a hook block.
+- **the paint** (`machineDetail`): the turbines an even off-white gelcoat,
+  glossier on the rotor, with panel seams and grime only on the nacelle and
+  the tower; the penstocks dark green, the gantry signal yellow, both on
+  `steelDetail`'s chipped and rusting steel.
+- **what it costs**: the turbines sit behind one box bound, so a ray down
+  the canyon pays a compare for them; the blade is one section where three
+  boxes were. every frame that does not see the canyon is byte-identical on
+  the probe.
 
 ## act VI, the shear horizon
 
