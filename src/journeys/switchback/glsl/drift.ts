@@ -32,7 +32,7 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
       if (k < 0.0) continue;
       vec2  p = vec2(q.x + DRIFT_VENT_L.x * k - DRIFT_VENT_X,
                      latt(phaseAt(q.z + DRIFT_VENT_L.z * k) + 0.5 * DRIFT_VENT, DRIFT_VENT));
-      float soft = 0.05 + 0.04 * k + spread;
+      float soft = 0.12 + 0.07 * k + spread;
       lit *= smoothstep(soft, -soft, max(abs(p.x), abs(p.y)) - DRIFT_VENT_W);
     }
     return lit;
@@ -41,18 +41,18 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
   /**
    * One seam of flint nodules along the drift at height 'band' (in the
    * profile's own coordinate). Returns the nodule, 0..1; 'rim' is its white
-   * cortex. A nodule to a cell of 0.42 m, not every cell, each its own size
+   * cortex. A nodule to a cell of 0.55 m, half the cells, each its own size
    * and a little off the seam's line.
    */
   float driftFlint(float zp, float v, float band, out float rim) {
-    float cell = floor(zp / 0.42);
+    float cell = floor(zp / 0.55);
     float h    = hash21(vec2(cell, band * 7.1));
-    float dz   = latt(zp, 0.42) - (h - 0.5) * 0.12;
+    float dz   = latt(zp, 0.55) - (h - 0.5) * 0.24;
     float dy   = v - band - (hash21(vec2(cell, band + 3.3)) - 0.5) * 0.10
                - (vnoise(vec2(zp * 0.6, band)) - 0.5) * 0.16;
-    vec2  r    = vec2(0.07 + 0.10 * h, 0.045 + 0.035 * fract(h * 13.0));
-    float e    = length(vec2(dz, dy) / r) + (vnoise(vec2(zp, v) * 14.0) - 0.5) * 0.35;
-    float on   = step(0.30, h);
+    vec2  r    = vec2(0.05 + 0.08 * h, 0.03 + 0.03 * fract(h * 13.0));
+    float e    = length(vec2(dz, dy) / r) + (vnoise(vec2(zp, v) * 18.0) - 0.5) * 0.55;
+    float on   = step(0.50, h);
     rim = (smoothstep(1.18, 1.0, e) - smoothstep(1.0, 0.86, e)) * on;
     return smoothstep(1.0, 0.86, e) * on;
   }
@@ -65,7 +65,7 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
 
     // The top of a raise is the sky.
     if (q.y > r.ceilH + DRIFT_VENT_H - 0.06) {
-      emit = driftDaylight() * 2.4;
+      emit = driftDaylight() * 4.0;
       return vec3(0.0);
     }
 
@@ -97,8 +97,9 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
     flint = max(flint, driftFlint(zp, v, 0.42, rim)); rimAll = max(rimAll, rim);
     flint = max(flint, driftFlint(zp, v, 1.66, rim)); rimAll = max(rimAll, rim);
     flint = max(flint, driftFlint(zp, v, 3.05, rim)); rimAll = max(rimAll, rim);
-    c = mix(c, vec3(0.96, 0.94, 0.88), rimAll * 0.8 * near);
-    c = mix(c, vec3(0.085, 0.085, 0.095), flint * mix(0.35, 1.0, near));
+    vec3 stone = mix(vec3(0.15, 0.15, 0.17), vec3(0.30, 0.29, 0.30), fbm(u * 9.0 + 1.3));
+    c = mix(c, vec3(0.96, 0.94, 0.88), rimAll * 0.7 * near);
+    c = mix(c, stone, flint * mix(0.3, 0.9, near));
     rough = mix(rough, 0.30, flint * near);
 
     // Damp: streaks from the crown, darker and wetter than the chalk round them.
@@ -167,7 +168,8 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
     else if (q.y > DRIFT_CAP_Y - 0.105 && abs(sz) < 0.125)                // a cap
       c = driftWood(q.x, q.y + sz, id, near);
     else {                                                                // a post, or a collar
-      c = driftWood(q.y, sz * 3.0 + q.x, id * 2.0 + step(0.0, q.x), near);
+      float round = atan(sz, abs(q.x) - DRIFT_LEG_X + DRIFT_LEG_B * (q.y + r.floorD)) * 0.12;
+      c = driftWood(q.y, round, id * 2.0 + step(0.0, q.x), near);
       float foot = smoothstep(0.35, -0.30, q.y);
       c = mix(c, vec3(0.11, 0.09, 0.065), foot * 0.75);
       rough = mix(rough, 0.35, foot);

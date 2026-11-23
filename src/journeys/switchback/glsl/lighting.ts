@@ -74,7 +74,7 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
       else if (r.type < T_SCAFFOLD - 0.5) {
         // The drift's daylight comes down its raises and nowhere else: the
         // pool under each is closed-form, so no ray is marched for it.
-        gain   = r.sky * driftVentLight(q, r.ceilH, 0.0) * 9.0;
+        gain   = r.sky * driftVentLight(q, r.ceilH, 0.0) * 24.0;
         sl     = DRIFT_VENT_L;
         reach  = -1.0;
         sunCol = driftDaylight();
@@ -293,7 +293,7 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
         // the same field that lights the pool under it.
         // Spread by most of a sample's spacing, or the column stipples.
         float h = clamp((q.y + r.floorD) / (r.ceilH + r.floorD), 0.0, 1.0);
-        m = driftVentLight(q, r.ceilH, 1.0) * mix(0.35, 1.0, h) * 2.6;
+        m = driftVentLight(q, r.ceilH, 1.0) * mix(0.35, 1.0, h) * 5.0;
         tone = driftDaylight();
       }
       else continue;
