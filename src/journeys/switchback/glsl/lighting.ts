@@ -25,7 +25,11 @@ export const lightingGlsl = `  // ---- lights ----------------------------------
       // The battens' rays stop short of the fitting the light is inside.
       // So do the drift's, which would otherwise end in the bulb's own cage.
       float reach = r.type < T_SCAFFOLD - 0.5 ? ld - 0.2 : min(ld, 16.0);
-      float sh = shadowTo(q, l, mall ? -1.0 : reach);
+      // The drift's rays leave from a few centimetres off the face: its hewn
+      // walls and round posts are grazed by every ray toward a bulb, and a
+      // grazing ray started on the surface shadows itself in a speckle.
+      vec3  qs = abs(r.type - T_DRIFT) < 0.5 ? q + n * 0.04 : q;
+      float sh = shadowTo(qs, l, mall ? -1.0 : reach);
       if (mall) sh = mallLampShade(q, r.lampY);
       float k = atten * r.lit * flick * sh;
 

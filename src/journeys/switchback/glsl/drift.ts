@@ -79,7 +79,7 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
 
     // Marl partings: grey, soft, a hand's breadth, wandering.
     float marl = abs(fract(v / 0.95 + 0.35 * fbm(u * vec2(0.3, 0.6))) - 0.5);
-    c = mix(c, c * vec3(0.80, 0.80, 0.82), smoothstep(0.06, 0.0, marl) * 0.7);
+    c = mix(c, c * vec3(0.84, 0.84, 0.86), smoothstep(0.09, 0.0, marl) * 0.4);
 
     // The pick: a stroke to a cell, in rows, each a groove with its lit lip
     // beside it, raking down at the angle a right-handed swing leaves.
@@ -104,7 +104,7 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
     // Damp: streaks from the crown, darker and wetter than the chalk round them.
     float seep = smoothstep(0.58, 0.80, fbm(vec2(zp * 1.3, v * 0.10) + 3.0)) * smoothstep(-0.2, 1.2, q.y);
     c *= 1.0 - 0.32 * seep * (0.6 + r.grime * 0.6);
-    rough = mix(rough, 0.22, seep);
+    rough = mix(rough, 0.55, seep);
 
     // Green round every bulb, where the light has kept something alive.
     vec3  lp    = lampPos(q, r);
@@ -141,9 +141,15 @@ export const driftGlsl = `  // ---- the drift ----------------------------------
     float near = smoothstep(20.0, 4.0, t);
     rough = 0.80;
 
-    // The bulb in its cage, and the holder it hangs from.
+    // The bulb in its cage, and the holder it hangs from. Told apart by where
+    // the wires are rather than by radius: a hit is up to a cone epsilon off
+    // its surface, which at range is more than the gap between glass and cage.
     if (toLamp < 0.2 && q.y < DRIFT_CAP_Y - 0.10) {
-      if (toLamp < 0.085 && q.y < r.lampY + 0.06) {
+      vec3  b    = vec3(q.x, q.y - r.lampY, latt(zp, r.lamp));
+      float wire = min(length(vec2(length(b.xz) - 0.10, b.y)),
+                       min(length(vec2(length(b.xy) - 0.10, b.z)), length(vec2(length(b.zy) - 0.10, b.x))));
+      float cage = smoothstep(0.016, 0.008, wire) * near;
+      if (b.y < 0.065 && cage < 0.5) {
         emit = lampTint(r.type) * 6.0 * r.lit;
         rough = 0.2;
         return vec3(1.0, 0.92, 0.78);
