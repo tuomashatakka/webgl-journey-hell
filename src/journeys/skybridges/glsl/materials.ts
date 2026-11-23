@@ -1,3 +1,5 @@
+import { facadesGlsl } from './facades'
+
 // The scene map, normals, sunlight, and how each material takes the light:
 // glass that reflects the world-fixed sky and shows what is behind it, curtain
 // walls with rooms behind them, steel, concrete, the train, frosted glass.
@@ -7,6 +9,12 @@ export const materialsGlsl = /* glsl */`
   void keep(float d, inout float best) {
     if (d < best) { best = d; gMat = cMat; gInfo = cInfo; gBoxC = cBoxC; gBoxH = cBoxH; }
   }
+
+  #ifdef LITE
+  #define FROST_STEPS 6
+  #else
+  #define FROST_STEPS 10
+  #endif
 
   float ssd(float a, float b, float z) { float u = clamp((z - a) / (b - a), 0.0, 1.0); return 6.0 * u * (1.0 - u) / (b - a); }
 
@@ -55,6 +63,12 @@ export const materialsGlsl = /* glsl */`
     return normalize(n);
   }
 
+  /** 1 inside the station's hall (canonical p), 0 outside it: the roof over the train. */
+  float hallCover(vec3 p) {
+    float zl = mod(p.z, LOOP_Z);
+    return step(262.0, zl) * step(zl, 284.0) * step(abs(p.x), 9.05) * step(p.y, 9.05);
+  }
+
   // --- sunlight: closed form, no march ---------------------------------------------
   /** 1 if a ray from ro along rd misses the box (c, h), else 0. */
   float boxClear(vec3 ro, vec3 rd, vec3 c, vec3 h) {
@@ -84,7 +98,14 @@ export const materialsGlsl = /* glsl */`
       if (towerBox(k0 + (float(i) - 1.0) * dir, side, c, h) > 0.5) lit *= boxClear(p, sd, c, h);
     }
     if (zl > 90.0 && zl < 215.0) lit *= boxClear(p, sd, vec3(-19.5, -85.0, base + 151.0), vec3(15.0, 155.0, 47.0));
-    if (zl > 240.0 && zl < 300.0) lit *= boxClear(p, sd, vec3(0.0, -82.5, base + 273.0), vec3(22.0, 157.5, 11.0));
+    if (zl > 240.0 && zl < 300.0) {
+      // Inside the station's hall the sun comes in only through the end it faces.
+      if (hallCover(p) > 0.0) {
+        float te = ((sd.z > 0.0 ? 284.0 : 262.0) - zl) / sd.z;
+        vec2 e = vec2(p.x, p.y) + sd.xy * max(te, 0.0);
+        lit *= step(abs(e.x), 9.0) * step(e.y, 9.0);
+      } else lit *= boxClear(p, sd, vec3(0.0, -82.5, base + 273.0), vec3(22.0, 157.5, 11.0));
+    }
     if (zl > 270.0 && zl < 350.0) lit *= boxClear(p, sd, vec3(-22.0, -97.5, base + 311.0), vec3(15.0, 142.5, 29.0))
       * boxClear(p, sd, vec3(22.0, -97.5, base + 311.0), vec3(15.0, 142.5, 29.0));
     if (zl > 405.0 && zl < 495.0) lit *= boxClear(p, sd, vec3(27.0, -90.0, base + 450.0), vec3(20.0, 150.0, 36.0));
@@ -121,6 +142,13 @@ export const materialsGlsl = /* glsl */`
   vec3 ambient(vec3 n) {
     vec3 below = mix(gHorizon, vec3(1.0), 0.25) * 0.5 * (1.0 - 0.8 * gNight) + vec3(0.6, 0.3, 0.12) * 0.05 * gNight;
     return mix(below, mix(gHorizon, gZenith, 0.55), n.y * 0.5 + 0.5);
+  }
+
+  /** What lights a surface inside the hall: daylight from the open ends, warm lamps under every slab. */
+  vec3 hallAmbient(vec3 n, vec3 pc) {
+    float zl = mod(pc.z, LOOP_Z);
+    float open = max(smoothstep(268.0, 262.0, zl), smoothstep(278.0, 284.0, zl));
+    return ambient(n) * mix(0.3, 0.8, open) + vec3(1.0, 0.78, 0.52) * (0.13 + 0.07 * max(-n.y, 0.0));
   }
 
   vec3 direct(vec3 n, float sun) {
@@ -184,184 +212,228 @@ export const materialsGlsl = /* glsl */`
     return (0.5 + 0.5 * cos(vec3(0.0, 2.094, 4.188) + a * 2.0)) * smoothstep(1.2, 2.6, a);
   }
 
-  vec3 shadeFrost(vec3 w, vec3 n, vec3 rd, vec3 behind, float px) {
+  /**
+   * What frosted glass lets through along rd: the overcast, and the towers
+   * outside as soft dark shapes. A short march of the towers alone, kept as a
+   * cone (the soft-shadow trick): the frost scatters what crosses it by about a
+   * fifth of a radian, so nothing sharper than that survives, and the snow in
+   * the air takes what is left within a few tens of metres.
+   */
+  vec3 frostBeyond(vec3 w, vec3 rd) {
+    vec3 d = toWorld(rd);
+    vec3 air = skyBase(normalize(vec3(d.x, max(d.y, 0.0) + 0.04, d.z)));
+    vec3 col = mix(air, 0.9 * mix(gHorizon, gZenith, 0.35), smoothstep(0.02, -0.2, d.y));
+    vec3 p0 = unbend(w);
+    vec3 rc = canonDir(rd, p0.z);
+    float t = 0.6, cover = 1.0, tc = 60.0;
+    for (int i = 0; i < FROST_STEPS; i++) {
+      float dt = mapTowers(p0 + rc * t);
+      float k = dt / (0.2 * t);
+      if (k < cover) { cover = k; tc = t; }
+      if (dt < 0.05) break;
+      t += clamp(dt, 1.0, 12.0);
+      if (t > 80.0) break;
+    }
+    float shape = (1.0 - smoothstep(0.0, 1.0, cover)) * exp(-tc * 0.03);
+    // the floors, smeared to bands: lit rooms are a warmth, not windows
+    float fy = (p0.y + rc.y * tc) / 3.6;
+    vec3 tower = gHorizon * 0.32 + vec3(1.0, 0.8, 0.55) * 0.05 * (0.5 + 0.5 * sin(fy * 2.0 * PI)) * step(0.5, hash21(vec2(floor(fy), floor(tc))));
+    return mix(col, tower, shape);
+  }
+
+  /**
+   * The frost gallery's glass. Hoarfrost grows inward from every ring (the
+   * cold steel), lies thick where the cold air pools low and feathers into
+   * fern at its front; even where it is thinnest the glass is frosted, so
+   * the world is only ever blurred shapes. Snow lies on the crown outside and
+   * dims the light through it. Light arrives through the glass from outside,
+   * so the tube glows with the overcast: bright overhead, the cloud sea's
+   * paler bounce below. Crystals glint, flakes slide past outside, and the
+   * fractures are white and run through the frost.
+   */
+  vec3 shadeFrost(vec3 w, vec3 n, vec3 rd, float px) {
     vec3 pc = unbend(w);
-    vec2 uv = vec2(atan(pc.x, pc.y - deckTop(pc.z) - 1.25) * 2.6, pc.z);
-    float fr = fbm(uv * 3.0) * 0.6 + vnoise(uv * 41.0) * 0.4;
+    vec2 rc = vec2(pc.x, pc.y - deckTop(pc.z) - 1.25);
+    float ang = atan(rc.x, rc.y);                                 // 0 at the crown, +-pi under the deck
+    vec2 uv = vec2(ang * 2.6, pc.z);
+    vec3 o = renderDir(vec3(normalize(rc), 0.0), pc.z);          // outward
+    float dz = abs(fract(uv.y / 3.0 + 0.5) - 0.5) * 3.0;           // to the nearest ring
+
+    // How thick the frost is: from the rings, from below, and in fern at its front.
+    float grow = 1.2 * exp(-dz / 0.4) + 0.5 * smoothstep(1.4, 2.8, abs(ang)) + (fbm(uv * 1.3) - 0.5) * 0.7 + 0.12 * gDamage;
+    float fa = vnoise(vec2(uv.x * 34.0 + vnoise(uv * 5.0) * 4.0, dz * 6.0));
+    float fb = vnoise(vec2((uv.x + dz) * 26.0, (uv.x - dz) * 4.0) + 3.1);
+    float fc = vnoise(vec2((uv.x - dz) * 26.0, (uv.x + dz) * 4.0) + 7.7);
+    float fern = max(fa, max(fb, fc) * 0.9);
+    float frost = smoothstep(0.25, 0.8, grow + (fern - 0.5) * 0.9);
+    frost = max(frost, 0.45 + 0.1 * vnoise(uv * 9.0));
+    float drift = smoothstep(1.0, 0.65, abs(ang) + (vnoise(vec2(uv.y * 0.8, ang * 3.0)) - 0.5) * 0.4);
+
+    vec3 col;
+    if (dot(rd, o) > 0.0) {
+      // Inside, looking out: what comes through is the overcast, and what lies on the glass dims it.
+      vec3 through = ambient(o) * mix(vec3(1.0), vec3(0.55, 0.6, 0.68), drift);
+      vec3 beyond = frostBeyond(w, rd);
+      col = mix(beyond, through * 0.92, frost);
+      col = mix(col, through * 0.8, drift * 0.85);
+      // Flakes sliding over the outside, soft through the frost.
+      vec2 fg = uv * 2.2 + vec2(gTm * 0.35, -gTm * 0.6);
+      float fh = hash21(floor(fg) + 4.2);
+      float flake = step(0.86, fh) * smoothstep(0.22, 0.02, length(fract(fg) - 0.5 - (vec2(fh, fract(fh * 17.0)) - 0.5) * 0.55));
+      col *= 1.0 - 0.16 * flake * (1.0 - 0.6 * frost);
+      // The crystals' own edges catch the light: the fern reads white at the frost's front.
+      col += through * 0.12 * smoothstep(0.45, 0.7, frost) * (1.0 - smoothstep(0.75, 1.0, frost));
+    } else {
+      // Outside: snow on the crown, frosted glass round the rest.
+      vec3 lit = ambient(o) + direct(o, 1.0);
+      col = mix(lit * vec3(0.62, 0.66, 0.70), lit * vec3(0.95, 0.97, 1.0), max(drift, frost * 0.35));
+    }
+
+    // Crystals catching the light: a point here and there, gone once smaller than a pixel.
+    vec2 sg = uv * 130.0;
+    float sh = hash21(floor(sg) + 0.7);
+    float spark = step(0.996, sh) * smoothstep(0.25, 0.0, length(fract(sg) - 0.5)) * frost * (1.0 - drift);
+    spark *= clamp(0.004 / max(px, 1e-4), 0.0, 1.0) * (0.5 + 0.5 * sin(gTm * 2.0 + sh * 80.0 + dot(rd, vec3(30.0, 23.0, 41.0))));
+    col += vec3(1.0, 0.98, 0.94) * spark * 0.8;
+
+    // White fracture lines through the frost, crystalline, as the tube flexes.
     vec2 id = floor(vec2(uv.x / 1.6, uv.y / 3.0));
     float h = hash21(id + 2.2);
     vec4 cr = spiderweb((uv - (id + vec2(0.3 + 0.4 * h, 0.5)) * vec2(1.6, 3.0)), iTime - ((id.y + 0.5) * 3.0 / SPEED - 1.2 + h * 3.0), h, px, 1.2);
-    vec3 lit = ambient(n) + direct(n, 1.0);
-    vec3 col = mix(mix(behind, lit, 0.5) * 0.85, lit * 0.95, 0.55 + 0.35 * fr);
-    col = mix(col, lit * 1.25 + 0.05, cr.x * 0.9);
+    vec3 lit = ambient(o) + direct(o, 1.0);
+    col = mix(col, lit * 1.2 + 0.05, cr.x * 0.9);
+    col = mix(col, lit * 0.95, cr.y * 0.6);
     float F = fresnel(clamp(dot(n, -rd), 0.0, 1.0), 0.03);
-    return col + skyBase(toWorld(reflect(rd, n))) * F * 0.5;
+    return col + ambient(reflect(rd, n)) * F * 0.35;
   }
 
-  // --- curtain walls -------------------------------------------------------------
-  /** Rooms behind the glass: one per three panes, ceiling panels, lit or dark. dir is the ray in face space (x along, y up, z in). */
-  vec3 interior(vec2 uv, vec3 dir, float lit, float seed) {
-    vec2 room = vec2(4.5, 3.6);
-    vec2 cell = floor(uv / room);
-    vec2 f = uv - cell * room;
-    float h = hash21(cell + seed);
-    float tx = dir.x > 0.0 ? (room.x - f.x) / dir.x : f.x / max(-dir.x, 1e-4);
-    float ty = dir.y > 0.0 ? (room.y - f.y) / dir.y : f.y / max(-dir.y, 1e-4);
-    float tz = (4.0 + 3.0 * fract(h * 7.1)) / max(dir.z, 1e-3);
-    float tm = min(tx, min(ty, tz));
-    vec3 hp = vec3(f, 0.0) + dir * tm;
-    float on = step(1.0 - lit, fract(h * 13.7));
-    vec3 lightC = mix(vec3(1.0, 0.82, 0.6), vec3(0.85, 0.92, 1.0), fract(h * 3.3));
-    vec3 wallC = mix(vec3(0.55, 0.52, 0.48), vec3(0.35, 0.38, 0.42), fract(h * 5.9));
-    float amb = 0.1 * (1.0 - gNight) + 0.01;
-    on *= mix(1.0, 0.3, gNight);   // night exposure is high: a lit office must not burn out
-    if (tm == ty && dir.y > 0.0) {
-      vec2 g = fract(vec2(hp.x / 1.5, hp.z / 1.2));
-      float panel = step(0.2, g.x) * step(g.x, 0.8) * step(0.3, g.y) * step(g.y, 0.7);
-      return mix(wallC * (amb + 0.35 * on), lightC * 2.5, panel * on);
-    }
-    if (tm == ty) return vec3(0.12, 0.11, 0.10) * (amb + 0.6 * on);
-    if (tm == tz) return wallC * (amb + 0.7 * on) * lightC * (0.85 + 0.15 * step(0.5, fract(hp.x * 0.6 + h)));
-    return wallC * (amb + 0.5 * on);
-  }
-
-  vec3 shadeFacade(vec3 w, vec3 n, vec3 rd, float t, float px) {
-    float sun = sunlight(w + n * 0.1);
-    vec3 pc = unbend(w);
-    vec3 nc = canonDir(n, pc.z);
-    vec3 rdc = canonDir(rd, pc.z);
-    vec3 an = abs(nc);
-    if (an.y > an.x && an.y > an.z) {
-      // a roof: gravel and plant, nobody looks
-      return vec3(0.16, 0.16, 0.17) * (ambient(n) + direct(n, sun));
-    }
-    vec3 N = an.x > an.z ? vec3(sign(nc.x), 0.0, 0.0) : vec3(0.0, 0.0, sign(nc.z));
-    vec3 T = an.x > an.z ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
-    vec2 uv = vec2(dot(pc, T), pc.y);
-    vec2 g = uv / vec2(1.5, 3.6);
-    vec2 id = floor(g);
-    vec2 f = g - id;
-
-    float style = gInfo.x;
-    float seed = style < 0.5 ? hash21(gInfo.yz) : style * 0.173;
-    float tsel = fract(seed * 4.7);
-    vec3 tint = tsel < 0.25 ? vec3(0.55, 0.70, 0.74) : tsel < 0.5 ? vec3(0.50, 0.54, 0.58) : tsel < 0.75 ? vec3(0.66, 0.55, 0.42) : vec3(0.42, 0.56, 0.72);
-    float lit = mix(0.3, 0.6, gNight);
-    float f0 = 0.08;
-    if (style > 0.5 && style < 1.5) { f0 = 0.16; tint = vec3(0.55, 0.66, 0.72); }
-    if (style > 1.5 && style < 2.5) lit = 0.85;
-    if (style > 2.5 && style < 3.5) tint = vec3(0.70, 0.60, 0.45);
-    if (style > 3.5) { lit = 0.75; tint = vec3(0.60, 0.68, 0.74); }
-
-    // The pane's fate: a crack front from near bridge height as the runner comes past.
-    vec3 face = gBoxC + N * gBoxH;
-    vec3 origin = vec3(an.x > an.z ? face.x : gBoxC.x, 0.0, an.x > an.z ? gBoxC.z + (seed - 0.5) * gBoxH.z : face.z);
-    vec3 paneC = T * (id.x + 0.5) * 1.5 + vec3(0.0, (id.y + 0.5) * 3.6, 0.0) + N * dot(face, N);
-    float eHit = gArrive + 1.5 * (seed - 0.5);
-    vec2 fate = facadeFate(id + style * 101.0, seed, paneC, origin, gBoxC.z / SPEED, eHit);
-
-    float h1 = hash21(id + seed), h2 = hash21(id.yx + seed * 3.0);
-    float spandrel = step(f.y, 0.24);
-    float near = 1.0 - smoothstep(120.0, 220.0, t);
-    vec4 cr = vec4(0.0);
-    if (fate.x > 0.0 && near > 0.0) cr = spiderweb((f - vec2(0.3 + 0.4 * h2, 0.45 + 0.4 * h1)) * vec2(1.5, 3.6), fate.x, h1, px, 1.4) * near;
-    // The shockfront: every pane crazed at once, no star at all.
-    #ifdef PLAIN_GLASS
-    float crazed = 0.0;
-    #else
-    float hitAge = gE - eHit;
-    float crazed = hitAge > 0.0 ? smoothstep(0.0, 0.06, hitAge) : 0.0;
-    if (crazed > 0.0) {
-      #ifdef LITE
-      vec2 cz = vec2(0.45, h1);
-      #else
-      vec2 cz = crazing(uv + id * 0.37, px);
-      #endif
-      cr = vec4(max(cr.x * 0.4, cz.x * crazed), cr.y, cz.y, 1.0);
-    }
-    #endif
-
-    // Oil-canning: every pane a fraction of a degree off true, and the shards more.
-    vec3 Tr = renderDir(T, pc.z);
-    vec3 nn = normalize(n + (Tr * (h1 - 0.5) + vec3(0.0, 1.0, 0.0) * (h2 - 0.5)) * 0.02);
-    nn = shardNormal(nn, cr);
-    float F = fresnel(clamp(dot(nn, -rd), 0.0, 1.0), f0);
-    vec3 R = reflect(rd, nn);
-    vec3 refl = sky(R, w.y, 0.0) + glint(R, sun, 0.04);
-    vec3 dirF = vec3(dot(rdc, T), rdc.y, -dot(rdc, N));
-    vec3 room = interior(uv, dirF, lit, seed * 31.0) * near + vec3(0.04, 0.045, 0.05) * (1.0 - near) * (0.4 + lit);
-
-    // The heat pulse sets the rooms facing it alight: curtains and desks first,
-    // whole floors a few seconds later, smoke banking under the ceilings.
-    #ifndef PLAIN_GLASS
-    if (gE > 0.6) {
-      vec2 rm = floor(uv / vec2(4.5, 3.6));
-      float hr = hash21(rm + seed * 7.0);
-      float facing = smoothstep(0.05, 0.4, dot(n, gBlastDir));
-      float burn = facing * smoothstep(0.6 + hr * 6.0, 3.0 + hr * 9.0, gE) * step(0.35, hr);
-      if (burn > 0.0) {
-        float lick = vnoise(vec2(uv.x * 1.3, uv.y * 0.9 - gTm * 2.2)) * 0.7 + vnoise(vec2(uv.x * 4.0 + hr, gTm * 9.0)) * 0.5;
-        float vy = fract(uv.y / 3.6);
-        vec3 flame = vec3(1.0, 0.36, 0.07) * (0.6 + 1.4 * lick) * smoothstep(0.95, 0.25, vy) * 1.6;
-        room = mix(room, room * 0.2 + flame, burn);
-        room *= 1.0 - 0.7 * burn * smoothstep(0.55, 0.9, vy);   // the smoke under the slab
-      }
-    }
-    #endif
-
-    vec3 col;
-    if (spandrel > 0.5) col = mix(tint * 0.06 * (ambient(n) + direct(n, sun)), refl, F);
-    else col = mix(room * tint, refl, F);
-    vec3 litC = ambient(nn) + direct(nn, sun);
-    col = mix(col, litC * 0.8 + 0.02, cr.x * 0.42 * (1.0 - spandrel));
-    col = mix(col, litC * 0.5, cr.w * 0.14 * (1.0 - spandrel));      // a cracked pane scatters: it goes faintly milky
-    // Round the impact the glass is ground to powder and goes pale.
-    col = mix(col, litC * 0.7 + 0.03, cr.y * 0.6 * (1.0 - spandrel));
-    col = mix(col, litC * 0.55 + room * tint * 0.3, crazed * 0.45 * (1.0 - spandrel));
-
-    // Blown out: the room, and the jagged rim of glass still in the frame.
-    if (fate.y > 0.5 && spandrel < 0.5) {
-      vec2 e = min(f - vec2(0.0, 0.24), 1.0 - f) * vec2(1.5, 3.6);
-      float rim = min(e.x, e.y) - 0.05 - 0.12 * vnoise(f * vec2(9.0, 21.0) + id);
-      col = rim < 0.0 ? litC * 0.8 + 0.05 : room;
-    }
-
-    // Mullions and slab edges, faded to their average as they shrink below a pixel.
-    float fade = clamp(0.05 / max(px, 1e-4), 0.0, 1.0);
-    float mull = max(1.0 - smoothstep(0.026, 0.026 + px / 1.5, min(f.x, 1.0 - f.x)), 1.0 - smoothstep(0.012, 0.012 + px / 3.6, abs(f.y - 0.24)));
-    vec3 alu = vec3(0.2, 0.21, 0.22) * (ambient(n) + direct(n, sun));
-    col = mix(col, alu, mull * fade * 0.9);
-    return mix(col, mix(col, alu, 0.15), 1.0 - fade);
-  }
-
+${facadesGlsl}
   // --- the rest ------------------------------------------------------------------
-  vec3 shadeSteel(vec3 w, vec3 n, vec3 rd) {
+  /** Steel. rime > 0 on the frost gallery's rings: the cold metal furred white, thickest underneath. */
+  vec3 shadeSteel(vec3 w, vec3 n, vec3 rd, float rime) {
     float sun = sunlight(w + n * 0.05);
     vec3 R = reflect(rd, n);
     float F = fresnel(clamp(dot(n, -rd), 0.0, 1.0), 0.45);
-    return vec3(0.22, 0.23, 0.25) * (ambient(n) + direct(n, sun)) * 0.8
+    vec3 col = vec3(0.22, 0.23, 0.25) * (ambient(n) + direct(n, sun)) * 0.8
       + skyBase(toWorld(R)) * F * 0.3 + glint(R, sun, 0.5) * F * 0.3;
+    if (rime > 0.5) {
+      vec3 pc = unbend(w);
+      float fur = vnoise(vec2(pc.x * 17.0 + pc.y * 11.0, pc.z * 23.0)) * 0.6 + vnoise(vec2(pc.x * 61.0 - pc.y * 47.0, pc.z * 71.0)) * 0.4;
+      float a = smoothstep(0.3, 0.7, fur + 0.25 - 0.2 * n.y);
+      col = mix(col, vec3(0.86, 0.9, 0.95) * (ambient(n) * 1.1 + direct(n, sun)), a);
+    }
+    return col;
   }
 
-  vec3 shadeConcrete(vec3 w, vec3 n) {
+  /**
+   * Concrete. The viaduct (info.x 0): board joints along the girder, a stain
+   * of rust and rain below the rails. The station (info.x 1, y its level):
+   * terrazzo on top with a yellow edge on the platform, a fascia, and a soffit
+   * with a line of lamps under every balcony.
+   */
+  vec3 shadeConcrete(vec3 w, vec3 n, vec4 info) {
     float sun = sunlight(w + n * 0.05);
     vec3 pc = unbend(w);
+    float zl = mod(pc.z, LOOP_Z);
     float grain = 0.85 + 0.3 * vnoise(pc.xz * 3.0 + pc.y * 2.0);
-    return vec3(0.42, 0.41, 0.39) * grain * (ambient(n) * 0.8 + direct(n, sun));
+    if (info.x < 0.5) {
+      float lift = 1.0 - 0.25 * smoothstep(0.03, 0.0, abs(fract(pc.y / 0.6) - 0.5) * 0.6 - 0.27);
+      float joint = 1.0 - 0.3 * smoothstep(0.04, 0.0, abs(fract(zl / 6.0) - 0.5) * 6.0 - 2.96);
+      float stain = smoothstep(-6.4, -7.6, pc.y) * (0.6 + 0.4 * vnoise(vec2(zl * 1.7, pc.y * 0.4)));
+      vec3 base = mix(vec3(0.44, 0.43, 0.41), vec3(0.30, 0.24, 0.19), stain * 0.5);
+      return base * grain * lift * joint * (ambient(n) * 0.8 + direct(n, sun));
+    }
+    vec3 lightIn = hallAmbient(n, pc) + direct(n, sun);
+    if (n.y > 0.5) {
+      vec2 tq = pc.xz * 1.6;
+      float terr = 0.8 + 0.2 * vnoise(tq * 6.0) + 0.25 * step(0.82, vnoise(tq * 23.0));
+      vec3 col = vec3(0.55, 0.53, 0.50) * terr;
+      float tile = step(0.97, max(fract(pc.x / 1.2), fract(zl / 1.2)));
+      col *= 1.0 - 0.25 * tile;
+      if (info.y < 0.5) {
+        float ex = abs(pc.x) - 1.6;
+        col = mix(col, vec3(0.80, 0.62, 0.10), step(ex, 0.4) * step(0.12, ex));
+        col = mix(col, vec3(0.62, 0.62, 0.60), step(ex, 0.12));
+      }
+      vec3 R = reflect(normalize(w - vec3(0.0, pathY(gZ), gZ)), n);
+      return col * lightIn + vec3(1.0, 0.8, 0.55) * 0.05 * smoothstep(0.6, 1.0, R.y);
+    }
+    if (n.y < -0.5) {
+      // the soffit: a lamp line along each balcony, its glow round it
+      float lx = abs(abs(pc.x) - (info.y < 0.5 ? 4.6 : 7.6));
+      float seg = step(0.12, fract(zl / 2.4));
+      vec3 lamp = vec3(1.0, 0.84, 0.62) * 3.2 * step(lx, 0.06) * seg;
+      return vec3(0.6, 0.58, 0.55) * grain * lightIn * (1.0 + 0.8 * exp(-lx * 2.0)) + lamp;
+    }
+    return vec3(0.75, 0.75, 0.74) * lightIn;   // the painted fascia
   }
 
+  /**
+   * The train: fluted stainless with a livery stripe, a ribbon of windows onto a
+   * lit saloon with a pair of doors each side, a raked cab glazed dark on the end
+   * cars, rubber bellows between cars. info.xyz is the car's own frame, w the
+   * car (-1 the bellows).
+   */
   vec3 shadeTrain(vec3 w, vec3 n, vec3 rd, vec4 info) {
     float sun = sunlight(w + n * 0.05);
+    vec3 pc = unbend(w);
     vec3 c = info.xyz;
+    vec3 lightIn = mix(ambient(n), hallAmbient(n, pc), hallCover(pc)) + direct(n, sun);
+    float cv = clamp(dot(n, -rd), 0.0, 1.0);
+    if (info.w < -0.5) {
+      float fold = 0.55 + 0.45 * sin(c.z * 55.0);
+      return vec3(0.05, 0.05, 0.055) * fold * lightIn;
+    }
+    float cab = info.w > 3.5 ? c.z : info.w < 0.5 ? -c.z : -9.0;
     float side = step(0.6, abs(n.x));
-    float win = side * step(abs(c.y - 0.25), 0.36) * step(0.35, fract(c.z / 1.6 + 0.5));
-    float stripe = side * step(abs(c.y + 0.45), 0.07);
-    vec3 R = reflect(rd, n);
-    float F = fresnel(clamp(dot(n, -rd), 0.0, 1.0), 0.06);
-    vec3 paint = mix(vec3(0.82, 0.84, 0.86), vec3(0.62, 0.85, 1.0), stripe);
-    vec3 col = paint * (ambient(n) + direct(n, sun)) + skyBase(toWorld(R)) * F * 0.6 + glint(R, sun, 0.2) * F;
-    vec3 glass = mix(vec3(0.03, 0.035, 0.04) + vec3(1.0, 0.85, 0.6) * 0.25 * step(0.4, fract(info.w * 0.37 + floor(c.z / 1.6) * 0.31)), sky(R, w.y, 0.0), fresnel(clamp(dot(n, -rd), 0.0, 1.0), 0.05));
-    return mix(col, glass, win);
+    float roof = step(0.5, n.y) * (1.0 - side) * step(cab, 3.3);
+    float az = abs(c.z);
+    // Flutes on the roof and below the windows bend the normal; a cab face is smooth.
+    vec3 nn = n;
+    if (roof > 0.5) nn = normalize(n + vec3(0.12 * sin(c.x * 52.0), 0.0, 0.0));
+    else if (side > 0.5 && c.y < -0.55) nn = normalize(n + vec3(0.0, 0.1 * sin(c.y * 48.0), 0.0));
+    vec3 R = reflect(rd, nn);
+    float F = fresnel(cv, 0.35);
+    vec3 env = sky(R, w.y, 0.0) * mix(1.0, 0.25, hallCover(pc));
+    float dirt = 0.75 + 0.25 * vnoise(vec2(c.z * 2.3, c.y * 9.0 + c.x * 3.0));
+    vec3 steel = vec3(0.50, 0.52, 0.54) * dirt;
+    vec3 col = steel * lightIn * 0.7 + env * F * 0.55 + glint(R, sun, 0.25) * F * 0.4;
+    if (side > 0.5) {
+      float stripe = step(abs(c.y + 0.75), 0.11);
+      col = mix(col, vec3(0.06, 0.32, 0.55) * lightIn * 0.8 + env * 0.08, stripe);
+      // two doors each side at a quarter of the car, a ribbon of windows between
+      float dz = abs(az - 2.25);
+      float door = step(dz, 0.68);
+      float doorEdge = (step(abs(dz - 0.68), 0.025) + step(dz, 0.015)) * step(c.y, 0.95);
+      float winY = step(abs(c.y - 0.28), 0.42);
+      float pane = winY * step(az, 4.0) * (1.0 - door) * step(0.08, fract(az / 1.05 + 0.1));
+      float dwin = door * step(abs(c.y - 0.35), 0.45) * step(dz, 0.5);
+      float glassM = max(pane, dwin);
+      if (glassM > 0.5 && cab < 3.0) {
+        // the saloon: a lit ceiling, grab rails, seat backs below the sill
+        float on = step(0.25, hash21(vec2(info.w, 3.1)));
+        float yy = (c.y - 0.28) / 0.42;
+        vec3 inner = vec3(0.95, 0.92, 0.82) * (0.06 + 0.5 * on * smoothstep(0.2, 1.0, yy));
+        inner *= 1.0 - 0.6 * step(yy, -0.45) * step(0.5, fract(az / 0.9));
+        float Fg = fresnel(cv, 0.05);
+        col = mix(inner, env + glint(R, sun, 0.0), Fg) * 0.9;
+      }
+      col *= 1.0 - 0.7 * doorEdge;
+    }
+    if (cab > 3.2 && side < 0.5 && roof < 0.5) {
+      // the cab: a dark raked windscreen and two lamps under it
+      float Fg = fresnel(cv, 0.05);
+      vec3 wind = mix(vec3(0.01, 0.012, 0.015), env + glint(R, sun, 0.0), Fg);
+      col = mix(col, wind, step(-0.05, c.y) * step(abs(c.x), 1.15));
+      float lamp = smoothstep(0.14, 0.08, length(vec2(abs(c.x) - 0.85, c.y + 0.45)));
+      col += vec3(1.0, 0.95, 0.85) * 4.0 * lamp;
+    }
+    if (roof > 0.5) {
+      // hatches and the grime of the walkway down the middle
+      float hatch = step(abs(abs(c.x) - 0.45), 0.012) * step(az, 0.9) + step(abs(az - 0.9), 0.012) * step(abs(c.x), 0.45);
+      col *= (1.0 - 0.5 * hatch) * (1.0 - 0.25 * smoothstep(0.6, 0.0, abs(c.x)) * vnoise(c.xz * 4.0));
+    }
+    return col;
   }
 
   // --- through the glass -----------------------------------------------------------
@@ -405,12 +477,13 @@ export const materialsGlsl = /* glsl */`
     float px = t / (iResolution.y * 1.25);
 
     if (abs(mat - M_FACADE) < 0.5) return shadeFacade(w, n, rd, t, px);
-    if (abs(mat - M_STEEL) < 0.5) return shadeSteel(w, n, rd);
-    if (abs(mat - M_CONCRETE) < 0.5) return shadeConcrete(w, n);
+    if (abs(mat - M_STEEL) < 0.5) return shadeSteel(w, n, rd, step(5.5, info.x));
+    // Frost lets nothing sharp through, so it is not seen through: it blurs what is there (frostBeyond).
+    if (abs(mat - M_FROST) < 0.5) return shadeFrost(w, n, rd, px);
+    if (abs(mat - M_CONCRETE) < 0.5) return shadeConcrete(w, n, info);
     if (abs(mat - M_TRAIN) < 0.5) return shadeTrain(w, n, rd, info);
 
     vec3 behind = uHeavy > 0.5 ? throughGlass(w, rd, n) : sky(rd, w.y, 1.0);
-    if (abs(mat - M_FROST) < 0.5) return shadeFrost(w, n, rd, behind, px);
 
     vec3 pc = unbend(w);
     float sun = sunlight(w + n * 0.05);

@@ -9,7 +9,7 @@ import { fieldsChunk } from '../fields'
  * Reading the bank table. R32F texels, 1024 wide, wrapped rows; linear between
  * samples — identical to route.ts's bankTableAt, which is the point.
  */
-const bankChunk = /* glsl */`
+export const bankChunk = /* glsl */`
 uniform sampler2D uBankLut;
 uniform ivec2 uBankInfo;   // (sample count, unused)
 uniform float uBankStep;

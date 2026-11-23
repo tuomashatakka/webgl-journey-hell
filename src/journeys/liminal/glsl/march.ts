@@ -30,7 +30,8 @@ export const marchGlsl = `    // Signed Distance Field Map
 
         float cX = getCamX(p.z);
         float cY = fY + getCamOffset(p.z);
-        float dCamSafety = length(p.xy - vec2(cX, cY)) - 2.0;
+        // (on the walked stair and down the cave's chute the clearance tightens so the floor stands under the eye)
+        float dCamSafety = length(p.xy - vec2(cX, cY)) - (2.0 - 0.9 * labTight(currentZ) - 1.3 * caveTight(currentZ));
 
         vec2 res = vec2(1000.0, MAT_MATTE);
 
@@ -54,7 +55,21 @@ export const marchGlsl = `    // Signed Distance Field Map
             return res;
         }
 
-        // --- SECTORS 1 & 2 (0 to 130) ---
+        // Each sector's field is built only where its cross-fade weight is not
+        // zero: a sample pays for the room it is in (two across a join), not
+        // for all six. The weights are the smoothsteps below, so the windows
+        // are their supports.
+        float dBase = 1000.0;
+        float dSlideHull = 1000.0;
+        float cave = 1000.0;
+        float crystal = 1000.0;
+
+        // The pool columns: sector 1, and again where sector 6 runs back into it.
+        vec3 q1 = p; q1.z = mod(q1.z + 3.0, 6.0) - 3.0; q1.x = abs(q1.x) - 4.5 * cFactor;
+        float dCol1 = length(max(abs(vec2(q1.x, q1.z)) - 0.4, 0.0)) - 0.05;
+
+        // --- SECTORS 1 & 2 (0 to 130, gone by 145) ---
+        if (currentZ < 145.0) {
         // Interpolate width and height
         float r_t = clamp((currentZ - 60.0) / 70.0, 0.0, 1.0);
         if (currentZ < 60.0) r_t = 0.0;
@@ -66,19 +81,15 @@ export const marchGlsl = `    // Signed Distance Field Map
         float dWalls = r_width - abs(p.x);
         float dRoom12 = min(dFloor, min(dCeil, dWalls));
 
-        vec3 q1 = p; q1.z = mod(q1.z + 3.0, 6.0) - 3.0; q1.x = abs(q1.x) - 4.5 * cFactor;
-        float dCol1 = length(max(abs(vec2(q1.x, q1.z)) - 0.4, 0.0)) - 0.05;
-        
         vec3 q2 = p; q2.z = mod(q2.z + 15.0, 30.0) - 15.0; q2.x = abs(q2.x) - 16.0 * cFactor;
         float dCol2 = length(q2.xz) - 3.0;
         
         float dSec1 = min(dRoom12, dCol1);
         float dSec2 = min(dRoom12, dCol2);
         
-        float dBase = mix(dSec1, dSec2, smoothstep_custom(50.0, 70.0, currentZ));
+        dBase = mix(dSec1, dSec2, smoothstep_custom(50.0, 70.0, currentZ));
 
         // Add glass slide for Sec 2
-        float dSlideHull = 1000.0;
         if (currentZ > 60.0 && currentZ < 130.0) {
             float slide_x = cX;
             float slide_y = fY + 1.2;
@@ -86,19 +97,19 @@ export const marchGlsl = `    // Signed Distance Field Map
             dSlideHull = max(abs(length(dSlideQ) - 1.8) - 0.1, dSlideQ.y - 0.2);
             dBase = min(dBase, dSlideHull); 
         }
+        }
 
-        // --- SECTOR 3: CRYSTAL CAVE (130 to 210) ---
-        vec3 q3 = p; q3.x -= cX; q3.y -= cY;
-        float cave = 6.0 - length(q3.xy - vec2(sin(q3.z * 0.1) * 3.0, cos(q3.z * 0.15) * 2.0));
-        cave += sin(q3.x * 2.0) * sin(q3.y * 1.5) * sin(q3.z * 1.0) * 0.5;
-        vec3 cp = q3; cp.x += sin(iTime * 0.5 + p.z) * 1.0; cp.y += cos(iTime * 0.4 + p.z) * 1.0;
-        cp.xz = mod(cp.xz + 6.0, 12.0) - 6.0; cp.y = mod(cp.y + 4.0, 8.0) - 4.0;
-        float crystal = (abs(cp.x) + abs(cp.y) + abs(cp.z)) - 0.8;
-        float dSec3 = min(cave, crystal) * 0.6; // We use MAT_MATTE for cave, crystal handled below
+        // --- SECTOR 3: CRYSTAL CAVE (130 to 210; in from 115, gone by 220) ---
+        if (currentZ > 115.0 && currentZ < 220.0) {
+        float dSec3 = caveField(p, vec3(p.x - cX, p.y - cY, p.z), fY - cY, crystal);
+        cave = dSec3;
+        dSec3 *= 0.6;
 
-        dBase = mix(dBase, dSec3, smoothstep_custom(115.0, 145.0, currentZ));
+        dBase = currentZ < 145.0 ? mix(dBase, dSec3, smoothstep_custom(115.0, 145.0, currentZ)) : dSec3;
+        }
 
-        // --- SECTOR 4: COGS & PNEUMATICS (210 to 280) ---
+        // --- SECTOR 4: COGS & PNEUMATICS (210 to 280; in from 200, gone by 290) ---
+        if (currentZ > 200.0 && currentZ < 290.0) {
         vec3 q4 = p; q4.x -= cX; q4.y -= cY;
         vec3 q4m = q4; q4m.xz = mod(q4m.xz + 10.0, 20.0) - 10.0;
         
@@ -123,44 +134,26 @@ export const marchGlsl = `    // Signed Distance Field Map
         float pneumatics = min(cA, min(min(csB, crB), min(csC, crC)));
         
         float dSec4 = min(p.y - (fY - 1.0), min(allCols, min(gears, pneumatics)) * 0.4);
-        dBase = mix(dBase, dSec4, smoothstep_custom(200.0, 220.0, currentZ));
+        dBase = currentZ < 220.0 ? mix(dBase, dSec4, smoothstep_custom(200.0, 220.0, currentZ)) : dSec4;
+        }
 
-        // --- SECTOR 5: VOID BASIS LABYRINTH (280 to 430) ---
-        vec3 q5 = p; q5.x -= cX;
-        float dMainStair = max(abs(q5.x) - 2.5 * cFactor, abs(q5.y - fY) - 0.45);
-        
-        vec3 lq = q5;
-        lq.yz = mat2(cos(sin(q5.x*0.015)*0.5), -sin(sin(q5.x*0.015)*0.5), sin(sin(q5.x*0.015)*0.5), cos(sin(q5.x*0.015)*0.5)) * lq.yz;
-        lq.zx = mat2(cos(cos(q5.y*0.015)*0.5), -sin(cos(q5.y*0.015)*0.5), sin(cos(q5.y*0.015)*0.5), cos(cos(q5.y*0.015)*0.5)) * lq.zx;
-        lq = mod(lq + 10.0, 20.0) - 10.0;
-        
-        float block = max(max(abs(lq.x)-10.0, abs(lq.y)-10.0), abs(lq.z)-10.0);
-        float inner = max(max(abs(lq.x)-9.0, abs(lq.y)-9.0), abs(lq.z)-9.0);
-        block = max(block, -inner);
-        float doorX = max(max(abs(lq.x)-11.0, abs(lq.y)-5.0), abs(lq.z)-5.0);
-        float doorY = max(max(abs(lq.x)-5.0, abs(lq.y)-11.0), abs(lq.z)-5.0);
-        float doorZ = max(max(abs(lq.x)-5.0, abs(lq.y)-5.0), abs(lq.z)-11.0);
-        block = max(block, -min(doorX, min(doorY, doorZ)));
-        
-        vec3 sq_ = lq; sq_.y -= floor(sq_.z / 0.5) * 0.5; sq_.z = mod(sq_.z, 0.5) - 0.25;
-        float stair_ = max(abs(lq.x)-2.5, max(abs(lq.y)-8.5, abs(lq.z)-8.5));
-        stair_ = max(stair_, max(abs(sq_.x)-2.5, max(abs(sq_.y)-0.125, abs(sq_.z)-0.125)));
-        
-        vec3 sq3_ = vec3(lq.y, lq.z, lq.x); sq3_.y -= floor(sq3_.z / 0.5) * 0.5; sq3_.z = mod(sq3_.z, 0.5) - 0.25;
-        float stair3_ = max(abs(sq3_.x)-2.5, max(abs(sq3_.y)-0.125, abs(sq3_.z)-0.125));
-        stair3_ = max(stair3_, max(abs(lq.y)-2.5, max(abs(lq.z)-8.5, abs(lq.x)-8.5)));
-        
-        float dSec5 = min(dMainStair, min(block, min(stair_, stair3_)) * 0.4);
-        dBase = mix(dBase, dSec5, smoothstep_custom(270.0, 290.0, currentZ));
+        // --- SECTOR 5: THE STAIR LABYRINTH (280 to 360; in from 270, gone by 370) ---
+        if (currentZ > 270.0 && currentZ < 370.0) {
+        float lPart;
+        float dSec5 = labField(p, currentZ - 280.0, cFactor, lPart) * 0.8;
+        dBase = currentZ < 290.0 ? mix(dBase, dSec5, smoothstep_custom(270.0, 290.0, currentZ)) : dSec5;
+        }
 
-        // --- SECTOR 6: HALLWAY EXIT (360 to 500) ---
+        // --- SECTOR 6: HALLWAY EXIT (360 to 500; in from 340) ---
+        if (currentZ > 340.0) {
         float dFloor6 = p.y - fY;
         float dCeil6 = (fY + 7.0 * mix(1.0, 0.45, 1.0 - cFactor)) - p.y;
         float dWalls6 = 12.0 * cFactor - abs(p.x);
         float dSec6 = min(dFloor6, min(dCeil6, dWalls6));
         dSec6 = min(dSec6, mix(100.0, dCol1, smoothstep_custom(450.0, 500.0, currentZ)));
-        dBase = mix(dBase, dSec6, smoothstep_custom(340.0, 370.0, currentZ));
-        
+        dBase = currentZ < 370.0 ? mix(dBase, dSec6, smoothstep_custom(340.0, 370.0, currentZ)) : dSec6;
+        }
+
         dBase = max(dBase, -dCamSafety);
         res = opU(res, vec2(dBase, MAT_MATTE));
 
@@ -168,8 +161,8 @@ export const marchGlsl = `    // Signed Distance Field Map
         if (dBase == dSlideHull && currentZ > 60.0 && currentZ < 130.0) {
             res.y = MAT_GLASS;
         }
-        if (currentZ > 120.0 && currentZ < 220.0 && crystal < cave) {
-            res.y = MAT_GLASS;
+        if (currentZ > 120.0 && currentZ < 220.0 && crystal <= cave) {
+            res.y = MAT_CRYSTAL;
         }
 
         // Fluids

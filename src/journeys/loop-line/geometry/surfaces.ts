@@ -13,6 +13,8 @@ const enum Mode {
   SIGNAL = 6,
   POSTER = 7,
   RAIL = 8,
+  STAINED = 9,
+  SHED_GLASS = 10,
 }
 
 export interface Surface {
@@ -66,6 +68,7 @@ export const SURF = {
   lining:      tex(MAT.STEEL, [ 0.3, 0.29, 0.28 ], { rough: 1.1 }),
   corrugated:  tex(MAT.CORRUGATED, [ 0.75, 0.78, 0.8 ]),
   corrugRust:  tex(MAT.CORRUGATED, [ 0.62, 0.48, 0.4 ]),
+  corrugDark:  tex(MAT.CORRUGATED, [ 0.26, 0.26, 0.27 ]),
   wood:        tex(MAT.WOOD, [ 0.55, 0.48, 0.42 ], { pom: false }),
   rock:        tex(MAT.ROCK, [ 0.62, 0.6, 0.58 ]),
   plaster:     tex(MAT.PLASTER, [ 0.88, 0.86, 0.82 ]),
@@ -73,6 +76,8 @@ export const SURF = {
   hazard:      tex(MAT.HAZARD, [ 1, 1, 1 ], { pom: false }),
   dirt:        tex(MAT.DIRT, [ 0.8, 0.78, 0.74 ]),
   coping:      tex(MAT.CONCRETE, [ 1.1, 1.08, 1.04 ], { pom: false }),
+  // The cutting's retaining walls: engineering brick with its weather drawn on.
+  brickCut:    { ...tex(MAT.BRICK, [ 0.66, 0.58, 0.55 ]), mode: Mode.STAINED },
 
   void:      paint([ 0, 0, 0 ], 1),
   yellow:    paint([ 0.8, 0.56, 0.04 ], 0.55),
@@ -84,6 +89,7 @@ export const SURF = {
   blue:      paint([ 0.02, 0.06, 0.32 ], 0.45),
   greyPaint: paint([ 0.3, 0.31, 0.32 ], 0.5, { metal: 0.3 }),
   cream:     paint([ 0.72, 0.68, 0.58 ], 0.7),
+  girder:    paint([ 0.07, 0.11, 0.09 ], 0.6, { metal: 0.25 }),
 
   rail:   { ...tex(MAT.STEEL, [ 0.55, 0.5, 0.46 ], { pom: false }), mode: Mode.RAIL },
   poster: { ...paint([ 1, 1, 1 ], 0.35), mode: Mode.POSTER },
@@ -99,5 +105,6 @@ export const SURF = {
   windows:      { ...tex(MAT.PANEL, [ 0.42, 0.4, 0.38 ], { pom: false }), mode: Mode.WINDOWS },
   windowsBrick: { ...tex(MAT.BRICK, [ 0.4, 0.33, 0.3 ], { pom: false }), mode: Mode.WINDOWS },
   rack:         { ...tex(MAT.STEEL, [ 0.1, 0.1, 0.11 ], { pom: false }), mode: Mode.RACK },
-  carriage:     { ...paint([ 0.55, 0.56, 0.58 ], 0.4, { metal: 0.4 }), mode: Mode.CARRIAGE },
+  carriage:     { ...paint([ 0.62, 0.63, 0.64 ], 0.38, { metal: 0.35 }), mode: Mode.CARRIAGE },
+  shedGlass:    { ...glow([ 0.62, 0.42, 0.2 ]), mode: Mode.SHED_GLASS },
 } satisfies Record<string, Surface>

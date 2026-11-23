@@ -58,6 +58,12 @@ export const foundationGlsl = `
   float sdCapsuleY(vec3 p, float h, float r) { p.y -= clamp(p.y, -h, h); return length(p) - r; }
   float sdCapsuleZ(vec3 p, float h, float r) { p.z -= clamp(p.z, -h, h); return length(p) - r; }
 
+  // Capped cylinder about y, half height h. Exact inside and out.
+  float sdCylY(vec3 p, float h, float r) {
+    vec2 d = abs(vec2(length(p.xz), p.y)) - vec2(r, h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+  }
+
   // Ring in the plane of p.xy, axis along p.z. Swizzle the argument to turn it.
   float sdTorus(vec3 p, float R, float r) {
     return length(vec2(length(p.xy) - R, p.z)) - r;
@@ -94,6 +100,41 @@ export const foundationGlsl = `
   const float MAT_PAINT = 3.0;   // lockers, benches, pump housings, the flume
   const float MAT_LEAF  = 4.0;   // everything green
   const float MAT_CONC  = 5.0;   // columns, pillars, the dive platform
+  const float MAT_STONE = 6.0;   // the cistern's columns
+  const float MAT_BRICK = 7.0;   // the cistern's vault
+  const float MAT_VESSEL = 8.0;  // the plant room's sand filters
+
+  // THE PLANT ROOM (the one TYPE_PLANT room): a filter and a pump in every
+  // PLANT_BAY down each side, on one line PLANT_OFF out of the wall, nothing
+  // reaching further in than PLANT_REACH.
+  const float PLANT_BAY   = 8.0;
+  const float PLANT_OFF   = 1.45;
+  const float PLANT_REACH = 2.45;
+
+  // THE CISTERN's bays: columns on a 5.2 m grid across (so the outermost line
+  // falls on the side walls as half columns) and 6 m along (so both end walls
+  // meet the crown of a transverse barrel, not a groin). The vault springs from
+  // the impost at H - CIST_RX - 0.12 and crowns 0.12 under the slab.
+  const float CIST_PX = 5.2;
+  const float CIST_PZ = 6.0;
+  const float CIST_RX = 2.6;
+  const float CIST_RZ = 3.0;
+
+  // THE GRAND HALL (the one TYPE_VAULT room) is a segmental barrel vault over
+  // the whole width, springing off the side walls VAULT_RISE under the crown,
+  // with a transverse rib over every pair of columns (one bay, VAULT_BAY). The
+  // side walls are lit by an arched clerestory window in every bay between the
+  // ribs, the end walls by a thermal window in the lunette the vault leaves.
+  const float VAULT_RISE = 4.5;
+  const float VAULT_BAY  = 6.0;
+  const float VAULT_RIB  = 0.32;   // how far a rib stands under the vault
+  const float CLER_HW    = 1.3;    // clerestory half width, and its arch's radius
+  const float CLER_SILL  = 5.0;
+  const float CLER_ARCH  = 6.9;    // where the arch springs
+  const float LUNE_IN    = 1.0;    // the thermal window's head under the vault
+  const float LUNE_SILL  = 0.45;   // its sill over the springing line
+  const float GAL_Y      = 4.35;   // the end galleries' floor
+  const float GAL_DEEP   = 2.2;    // how far they stand out of the end walls
 
   float gMat;
 
@@ -155,7 +196,9 @@ export const foundationGlsl = `
   const float SALT_FLR  = 3.7;
   const float SALT_CEIL = 8.1;
 
-  void tileBreak(vec3 qs, vec4 B, float dec, out float proud, out float hole) {
+  // tiled is 0 in the raw concrete rooms: there is no glaze there to lift, so
+  // nothing stands proud, but the walls still spall into the same pockets.
+  void tileBreak(vec3 qs, vec4 B, float dec, float tiled, out float proud, out float hole) {
     proud = 0.0;
     hole  = 1e5;
 
@@ -173,6 +216,10 @@ export const foundationGlsl = `
     else                      { m1 = dz; m2 = min(dx, dy); uv = vec2(qs.x, qs.z); salt = SALT_CEIL; ts = TILE_F; }
     if (m2 - m1 < 0.30) return;
 
+    // A slab or a soffit does not shed square pieces of itself; only the walls
+    // of the raw rooms spall, where the cover over the ties is thinnest.
+    if (tiled < 0.5 && salt != SALT_WALL) return;
+
     vec2  g    = floor(uv / ts);
     float id   = hash21(g + salt);
 
@@ -186,7 +233,7 @@ export const foundationGlsl = `
     }
     else {
       float pr = hash21(g + salt + 41.3);
-      proud = step(pr, 0.02 + dec * 0.18) * PROUD * (0.35 + 0.65 * fract(pr * 53.0));
+      proud = tiled * step(pr, 0.02 + dec * 0.18) * PROUD * (0.35 + 0.65 * fract(pr * 53.0));
     }
   }
 

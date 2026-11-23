@@ -32,7 +32,7 @@ const ACTS: ActLight[] = [
   { sky: 'DAY', yaw: -0.38, sun: 7, exposure: 0.8 },
   { sky: 'EVENING', yaw: -0.36, sun: 6, exposure: 0.85 },
   { sky: 'HAZE', yaw: -0.24, sun: 5, exposure: 0.75 },
-  { sky: 'AURORA', yaw: 0, sun: 0, exposure: 2.4 },
+  { sky: 'AURORA', yaw: 0, sun: 0, exposure: 2.8 },
   { sky: 'OVERCAST', yaw: 0.35, sun: 0, exposure: 1.3 },
 ]
 

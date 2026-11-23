@@ -28,7 +28,7 @@ floor, no coordinate drift, and a track that could cross itself.
 | 1 | PLATFORM SIX | cream subway tile, a platform with a yellow line, columns, benches, roundels, posters | warm fluorescent strips | the edge crumbles |
 | 2 | THE RUNNING TUNNEL | a bored tube, cast-iron rings, cable runs | a bulkhead every 16 m | the rings crack and slip |
 | 3 | THE CONCOURSE | a vaulted hall, terrazzo walkways, mezzanine galleries, shuttered shops; **the points** | big pendant globes | the vault comes loose |
-| 4 | THE CUT | a ten-metre cutting under the day, overbridges, fences on the crest | the noon sky (Δ `DAY`) and its sun | the sky comes down |
+| 4 | THE CUT | a ten-metre cutting under the day: battered brick retaining walls with counterforts, a drain and cable troughs along the cess, plate-girder overbridges, fences on the crest | the noon sky (Δ `DAY`) and its sun | the sky comes down |
 | 5 | THE ANNEX | a low flooded interchange, rows of columns, beams | flickering green tubes | the water rises a step per lap |
 | 6 | THE VIADUCT | a brick viaduct on arches over a city at dusk | sodium lamps on the parapets, a thousand windows | the city goes dark |
 | 7 | THE STACKS | a machine hall through a corrugated building, rows of 45 U cabinets under cable trays and roof beams | cold battens on drop rods, server LEDs, a beacon on every cabinet | the racks advance, and go dark |
@@ -135,6 +135,64 @@ camera passes through a mouth and the walls sweep past — motion, not a pop.
   only racks are tinted; before that the rails, the strips and everything else
   in the bay walked sideways with them. The walk is capped at 3 m, which
   leaves a face 1.75 m off the centre line.
+* **THE CONCOURSE is a tiled hall** (`HALL` in `geometry/profiles.ts`). An
+  elliptical vault in glazed cream tile, 36 m across and springing at 8.6 m
+  (crown 16 m), with a brick rib every 7.5 m carried down the wall on a
+  pilaster to the gallery deck; a cast-iron column under each gallery front on
+  the rib's line, the pendant globes on every other rib. The track runs in a
+  ballasted well 3.8 m wide between two terrazzo concourse floors at
+  platform height (1 m), balustraded along the well. The right floor is its
+  own section (`Profile.until`) and stops `JUNCTION_LEAD + 6` m before the
+  hall's end, short of the points, with a balustrade across its end: from there
+  the well opens out to the right wall, ballasted, for the chord to swing
+  across to its mouth. A headwall at the hall's start closes the floors'
+  section where it shows past the tube's mouth. Shuttered shops line both
+  walls under the galleries, a lit fascia over each shutter; the walls and the
+  end wall are the same tile. The hall's ambient is the tile's bounce,
+  0.085. The other bays are pixel-identical on the probe.
+* **THE CUT is a railway cutting** (`CUT` and `cutFace` in `geometry/profiles.ts`).
+  Walked across: a coping that overhangs the face, engineering brick battered
+  back one in four from 5.45 m off the centre line at the plinth to 7.7 m under
+  the coping (10.08 m up), a 1 m concrete plinth, a drain at its foot, the
+  cess at -0.3 with concrete cable troughing 4.25 m out, a ballast shoulder,
+  and the bed filled to the top of the sleepers (-0.12). Counterforts stand
+  0.35 m proud of the face every 6.5 m of arc length under a sloped stone cap;
+  a weep pipe 2.2 m up sits halfway between each pair. An overbridge replaces
+  the counterfort on every thirteenth place: two plate girders 7.8 m apart
+  (web, flanges, a stiffener every 1.2 m) on bed stones in the face, cross
+  girders under a deck slab, a railing on top. The end wall is the same brick,
+  the annex mouth framed by stone jambs and a lintel, its parapet coped.
+* **The brick carries its weather in the shader** (mode `STAINED`, surface
+  `brickCut`): streaks of run-off down from the coping, of a length per metre
+  of wall; a green-black fan under every weep hole, on the same 6.5 m grid as
+  the dressing; pale lime patches; a damp green foot. Past a few centimetres a
+  pixel the streaks show their mean. The other bays are pixel-identical on the
+  probe.
+* **THE DEPOT's parked sets are cars** (`carriage`, `carriageFrame`, `bogie`
+  in `geometry/units.ts`, the body in `geometry/rolling.ts`, the face in
+  `shader/carriage.ts`). A body 17.2 m long with tumblehome sides and a curved
+  roof (crown 3.68 m, widest 1.43 m off the centre line at 1.5 m), swept in
+  metre-long rings so it shatters into panels; consecutive cars stand 18.4 m
+  apart so their gangway bellows meet. Under it, solebars, equipment cases
+  and a coupler at each end; two bogies 6.1 m off the middle, each with side
+  frames, spring nests over the axleboxes and four wheels on the rail head.
+  The shader draws a double door 1.36 m wide at 4.6 m either side of the
+  middle (red, with a window in each leaf), six rounded panes between the
+  doors and two in each end bay, a black window surround, a red stripe, grime
+  from the bogies up and a ribbed grey roof. A lit car shows its saloon,
+  interior-mapped from the camera's position in the car's own frame (`vCamL`):
+  the far wall and its dark windows, the ceiling with two light lines, the
+  floor, and a seat back across the car every 1.8 m either side of the aisle,
+  none in the vestibules, so the inside slides against the glass as you pass.
+  A pane under a few centimetres a pixel shows its mean. Each siding stands on
+  its own ballast bed (`sidingBed`, 6 m lengths every 5.6 m).
+* **The shed is a running shed** (`shed*`): 20.4 m bays of corrugated wall
+  26 m deep on a sooty brick plinth, a gabled roof whose ridge runs with the
+  track (eaves 9.45 m, ridge 13.6 m), a stanchion at every bay line, an eaves
+  gutter and a downpipe, and three lengths of works glazing per bay on the
+  yard side (mode `SHED_GLASS`: 0.52 by 0.4 m panes in steel bars, each lit a
+  little differently, a few dark). A bay's glazing shares the lamps' failure
+  roll and goes out with them. The other bays are pixel-identical on the probe.
 * The flood is a level plane, not a track-following one: the annex is the bottom
   of a dip, so the water lies only where the floor is below it.
 * A slim cab — a dashboard band and two pillars at the frame's edges — rides
@@ -177,10 +235,10 @@ reads as confetti, and there is nowhere left for the next lap to go.
 ```
 stations.ts    the plan, the profile, the nine bays, both circuits, the chord
 kinematics.ts  JourneySimulation: integrates the train, owns lapF, packs uniforms
-geometry.ts    surfaces, the cross-sections, the sweep, baked AO, rock layers, unit props
+geometry/     surfaces, the cross-sections, the sweep, baked AO, rock layers, unit props, rolling stock
 dressing.ts    where every prop, lamp, building and headwall goes
 scene.ts       the renderer: build once, then medium, sky, lamps, draws, post
-shader.ts      GLSL ES 3.00 (geometry, sky, bloom, composite) + the ES 1.00 preview
+shader/       GLSL ES 3.00 (geometry, the parked cars, sky, bloom, composite) + the ES 1.00 preview
 audio.ts       traction motor, rail joints, room tones, degrading announcements
 ```
 

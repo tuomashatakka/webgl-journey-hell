@@ -48,31 +48,94 @@ vec2 barrier (vec3 p, float zs, float closing) {
 // --- the six acts --------------------------------------------------------------
 
 // I · THE SPILLWAY THRESHOLD — mass concrete, water, a cold dawn.
+// The flight goes down a spine of mass concrete between two bodies of water.
+// To its right (-x) a baffled chute twelve wide between training walls: an
+// ogee crest where it leaves the wall, an apron of staggered baffle blocks at
+// the stair's own pitch, then a drop steeper than the stair into a stilling
+// basin whose still water the stair stays over to the end. A battered
+// concrete bank climbs away beyond it. To its left (+x) the dam: a face
+// standing level while the stair goes down it, buttressed every nine units,
+// and in each bay between buttresses a bottom outlet with a lift gate raised
+// in its guides by a hoist on the face, a white tongue of water from under
+// the leaf and a still pool, the pools stepping down bay by bay.
+float spillDrop (float z) { return 6.0 * smoothstep(26.0, 44.0, z); }
+// The chute's floor, its water and the basin's water, absolute heights.
+float spillFloor (float z) {
+  return pathY(0.0, z) - 1.7 + 1.0 * (1.0 - smoothstep(9.0, 16.0, z)) - spillDrop(z);
+}
+float spillBasin () { return pathY(0.0, 44.0) - 7.0; }
+float spillSheet (float z) { return max(spillFloor(z) + 0.3, spillBasin()); }
+// Each bay's pool lies level at its own height under the bay's middle.
+float spillPool (float z) { return pathY(0.0, z - (mod(z, 9.0) - 4.5)) - 2.0; }
+float spillDamTop () { return pathY(0.0, 9.0) + 13.0; }
+
 vec2 spillway (vec3 p) {
   float px = pathX(0.0, p.z);
   float py = pathY(0.0, p.z);
-  float zCell = mod(p.z + 9.0, 18.0) - 9.0;
-  float zBay = mod(p.z + 4.5, 9.0) - 4.5;
-  float dam = sdBox(p - vec3(-13.0, py + 7.0, p.z), vec3(5.5, 15.0, 130.0));
-  float chute = p.y - py + 2.0 + benchedGround(p.x + 22.0, 3.4, 0.85, 0.06) * 0.5;
-  chute = max(chute, -(p.x + 34.0));
-  chute = max(chute, p.x + 8.0);
-  float buttress = sdBox(vec3(abs(p.x + 7.0) - 3.0, p.y - py - 2.5, zCell), vec3(0.65, 5.0, 1.2));
-  float penstock = sdCylinderZ(vec3(p.x - 8.5, p.y - py + 4.0, zCell), 8.0, 1.8);
-  float gate = sdBox(vec3(p.x - 6.0, p.y - py - 2.0, zCell), vec3(3.6, 3.2, 0.34));
-  float screw = sdCylinderY(vec3(p.x - 6.0, p.y - py - 6.4, zCell), 3.0, 0.13);
-  float gantry = sdBox(vec3(p.x - 6.0, p.y - py - 9.2, zCell), vec3(4.0, 0.3, 0.55));
-  float sluice = min(gate, min(screw, gantry));
-  float baffle = sdBox(vec3(mod(p.x + 30.0, 4.2) - 2.1, p.y - py + 1.4, zBay), vec3(0.5, 0.9, 0.5));
-  baffle = max(baffle, p.x + 12.0);
-  float ground = p.y - py + 3.2;
-  float concrete = min(dam, min(chute, min(buttress, min(baffle, ground))));
-  float steel = min(sluice, penstock);
-  float water = p.y - py + 2.55;
-  water = max(water, -(p.x + 34.0));
-  water = max(water, p.x + 8.5);
+  float dx = p.x - px;
+
+  // The spine under the flight, the chute's training walls and the pools' curb.
+  float spine = max(abs(dx + 0.25) - 3.25, p.y - py + 1.4);
+  float wallNear = max(abs(dx + 3.9) - 0.4, p.y - py + 1.1);
+  float wallFar = max(abs(dx + 15.9) - 0.4, p.y - py - 0.6);
+  // The chute and the basin share one floor; the basin's is level.
+  float fl = max(spillFloor(p.z), pathY(0.0, 44.0) - 10.5);
+  float chute = max((p.y - fl) * 0.8, abs(dx + 9.9) - 5.6);
+  // Baffle blocks on the apron, staggered row by row.
+  float row = floor(p.z / 3.6);
+  vec3 bq = vec3(mod(dx + 9.9 + mod(row, 2.0) * 1.2, 2.4) - 1.2,
+                 p.y - spillFloor(row * 3.6 + 1.8) - 0.35, mod(p.z, 3.6) - 1.8);
+  float baffle = sdBox(bq, vec3(0.42, 0.42, 0.32));
+  baffle = max(baffle, max(abs(dx + 9.9) - 5.0, abs(p.z - 24.5) - 12.5));
+  // Beyond the far wall, a battered bank climbing away from the chute.
+  float bank = max(dx + 15.5, (p.y - py - 0.6 - (-16.3 - dx) * 1.2) * 0.64);
+
+  // The dam: its face stands level, its buttresses battered against it.
+  float top = spillDamTop();
+  float zB = mod(p.z + 4.5, 9.0) - 4.5;
+  float pyB = pathY(0.0, p.z - zB);
+  float zL = mod(p.z, 9.0) - 4.5;
+  float wl = spillPool(p.z);
+  float curb = max(abs(dx - 3.4) - 0.4, p.y - wl - 0.35);
+  float face = max(12.5 - dx, p.y - top);
+  face = min(face, sdBox(vec3(dx - 12.2, p.y - top - 0.6, 0.0), vec3(0.3, 0.6, 1e4)));
+  float outlet = sdBox(vec3(dx - 12.5, p.y - wl - 1.0, zL), vec3(0.9, 1.3, 1.6));
+  face = max(face, -outlet);
+  float xo = 7.5 + max(0.0, p.y - pyB + 1.0) * 0.3;
+  float buttress = max(max(abs(zB) - 0.6, (xo - dx) * 0.95), max(dx - 13.0, p.y - top));
+  // Inside the buttresses, a low wall between one bay's pool and the next.
+  buttress = min(buttress, max(abs(zB) - 0.4, max(3.0 - dx, p.y - pyB + 0.6)));
+  float concrete = min(min(min(spine, curb), min(wallNear, wallFar)), min(min(chute, baffle), min(bank, min(face, buttress))));
+
+  // The outlet's gate: a leaf raised in its guides, the stem, the hoist.
+  float leaf = sdBox(vec3(dx - 12.2, p.y - wl - 2.2, zL), vec3(0.08, 1.6, 1.75));
+  float guides = sdBox(vec3(dx - 12.3, p.y - wl - 4.5, abs(zL) - 1.85), vec3(0.2, 4.8, 0.1));
+  float stem = sdCylinderY(vec3(dx - 12.15, p.y - wl - 6.5, zL), 2.7, 0.08);
+  float hoist = sdBox(vec3(dx - 11.9, p.y - wl - 9.6, zL), vec3(0.6, 0.55, 2.1));
+  float steel = min(min(leaf, guides), min(stem, hoist));
+
+  float sheet = max((p.y - spillSheet(p.z)) * 0.8, abs(dx + 9.9) - 5.6);
+  float pool = max(p.y - wl, max(3.8 - dx, dx - 12.5));
+  // The tongue of water from under the leaf, falling into the pool.
+  float tongue = sdBox(vec3(dx - 10.7, p.y - wl - 0.2 - (dx - 10.7) * 0.18, zL), vec3(1.55, 0.12, 1.5)) * 0.95;
+  float water = min(sheet, min(pool, tongue));
+
   vec2 r = steel < concrete ? vec2(steel, M_MACHINE) : vec2(concrete, M_CONCRETE);
   return water < r.x ? vec2(water, M_WATER) : r;
+}
+
+// How white the spillway's water is at a point on it: the whole of the sheet
+// down the chute, the hydraulic jump fading out across the basin, and the pools
+// churned under each outlet.
+float spillFoam (vec3 p) {
+  float dx = p.x - pathX(0.0, p.z);
+  if (dx < 0.0) return exp(-max(spillBasin() - spillFloor(p.z) - 0.3, 0.0) * 1.2);
+  return max(exp(-(12.2 - dx) * 0.4), step(spillPool(p.z) + 0.04, p.y));
+}
+
+// The water a concrete face stands in, for its tide line.
+float spillWet (vec3 p) {
+  return p.x - pathX(0.0, p.z) < 0.0 ? spillSheet(p.z) : spillPool(p.z);
 }
 
 // II · PROTEAN WEATHER BRIDGE — nothing but structure and weather.
@@ -130,41 +193,109 @@ vec2 stormBridge (vec3 p) {
 }
 
 // III · THE TURBINE CANYON — rock and rotation.
+// The wind runs down the canyon, so the machines face up it, toward the
+// stair: a three-blade rotor on a nacelle on a tapered tower, standing on a
+// concrete pedestal, one on each side every 28 units. Penstocks lie along
+// the foot of both walls on anchor blocks, and a crane girder spans the
+// canyon between every other pair of turbines.
+const float TURB_X = 10.5;   // tower axis off the line
+const float TURB_Y = 7.6;    // hub over the rail
+const float TURB_R = 6.2;    // blade tip radius
+const float TURB_W = -1.6;   // rotor plane, in the cell (the cart comes from -z)
+
+// One blade, in the rotor's own frame: u along the span, v round the rotor,
+// w along the axis. A twisted elliptical section that narrows to the tip.
+float turbineBlade (float u, float v, float w) {
+  float k = saturate((u - 1.6) / (TURB_R - 1.6));
+  float chord = mix(0.62, 0.13, k) * min(1.0, 0.55 + (u - 0.9) * 0.6);
+  float thick = max(chord * 0.2, 0.26 * (1.0 - saturate((u - 0.9) / 0.9)));
+  vec2 vw = vec2(v, w);
+  vw *= rot(mix(0.5, 0.08, k));
+  float e = (length(vec2(vw.x / chord, vw.y / thick)) - 1.0) * min(chord, thick);
+  return max(e * 0.8, max(0.8 - u, u - TURB_R));
+}
+
 vec2 turbineCanyon (vec3 p) {
   float px = pathX(2.0, p.z);
   float py = pathY(2.0, p.z);
-  float zCell = mod(p.z + 14.0, 28.0) - 14.0;
   float dx = p.x - px;
-  // The canyon is wide enough for its machines: walls stand back at twelve
-  // metres, stratified and undercut, and the rotors stand free in front of
-  // them instead of buried in the rock.
+  float ax = abs(dx);
+  float hy = p.y - py;
+  float zCell = mod(p.z + 14.0, 28.0) - 14.0;
+  float cell = floor((p.z + 14.0) / 28.0) * 2.0 + step(0.0, dx);
+
+  // The canyon is wide enough for its machines: walls stand back at nineteen
+  // metres, stratified, with talus banked against their feet.
   float strata = sin(p.y * 1.6 + sin(p.z * 0.09) * 1.4) * 0.35 + sin(p.y * 4.1 + p.z * 0.3) * 0.08;
-  float walls = 12.5 - abs(dx) + strata + sin(p.z * 0.05) * 1.5;
-  walls = max(walls, p.y - py - 20.0 - sin(p.z * 0.031 + p.x * 0.02) * 4.0);
-  float talus = p.y - (py - 3.4 + max(0.0, abs(dx) - 9.5) * 0.65);
-  talus = max(talus, abs(dx) - 17.0);
-  float floorRock = p.y - py + 3.6 + sin(p.x * 0.3) * sin(p.z * 0.21) * 0.3;
-  vec3 rotorP = vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell);
-  rotorP.yz *= rot(animTime() * 0.32 + hash11(floor(p.z / 28.0)) * 6.28);
-  float housing = sdCylinderX(rotorP, 2.0, 3.5);
-  float hub = sdCylinderX(rotorP, 2.9, 0.65);
-  float blades = sdBox(rotorP, vec3(2.25, 0.16, 3.0));
-  rotorP.yz *= rot(2.0944);
-  blades = min(blades, sdBox(rotorP, vec3(2.25, 0.16, 3.0)));
-  rotorP.yz *= rot(2.0944);
-  blades = min(blades, sdBox(rotorP, vec3(2.25, 0.16, 3.0)));
-  float tail = sdBox(vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell + 3.4), vec3(1.1, 1.1, 2.6));
-  float penstock = sdCylinderZ(vec3(abs(dx) - 11.0, p.y - py + 1.2, zCell), 13.0, 1.6);
-  float gantry = sdBox(vec3(dx, p.y - py - 11.5, mod(p.z + 33.0, 66.0) - 33.0), vec3(12.5, 0.28, 0.9));
-  float gantryLeg = sdBox(vec3(abs(dx) - 11.6, p.y - py - 4.0, mod(p.z + 33.0, 66.0) - 33.0), vec3(0.2, 8.0, 0.6));
-  float trayY = p.y - py - 6.4 + cos((mod(p.z, 14.0) - 7.0) * 0.22) * 0.5;
-  float tray = sdBox(vec3(dx + 5.4, trayY, p.z), vec3(0.42, 0.1, 200.0));
+  float walls = 19.5 - ax + strata + sin(p.z * 0.05) * 1.5;
+  walls = max(walls, hy - 26.0 - sin(p.z * 0.031 + p.x * 0.02) * 4.0);
+  float talus = hy + 3.4 - max(0.0, ax - 16.0) * 0.6;
+  talus = max(talus, ax - 23.0);
+  float floorRock = hy + 3.6 + sin(p.x * 0.3) * sin(p.z * 0.21) * 0.3;
   float rock = min(min(walls, talus), floorRock);
-  float pedestal = sdBox(vec3(abs(dx) - 8.5, p.y - py + 1.0, zCell + 0.6), vec3(1.6, 2.4, 3.6));
-  float machine = min(min(housing, min(hub, blades)), min(tail, min(penstock, min(gantry, min(gantryLeg, min(tray, pedestal))))));
-  float lamp = sdCylinderX(vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell), 3.05, 0.2);
-  if (lamp < min(rock, machine)) return vec2(lamp, M_EMISSIVE);
-  return rock < machine ? vec2(rock, M_ROCK) : vec2(machine, M_MACHINE);
+
+  // Penstocks along the foot of each wall, flanged every 7 units, on a
+  // concrete anchor block every 14.
+  vec2 pipeQ = vec2(ax - 15.5, hy + 1.4);
+  float pipe = length(pipeQ) - 1.4;
+  float flange = max(length(pipeQ) - 1.55, abs(mod(p.z + 3.5, 7.0) - 3.5) - 0.11);
+  float penstock = min(pipe, flange);
+  float anchor = sdBox(vec3(ax - 15.5, hy + 2.6, mod(p.z + 7.0, 14.0) - 7.0), vec3(1.75, 1.2, 0.7));
+
+  // The crane girder: a vierendeel box at twelve and a half units, wall to
+  // wall, halfway between two pairs of turbines every 56, with a hoist
+  // trolley on it.
+  float gz = mod(p.z + 14.0, 56.0) - 28.0;
+  float gy = hy - 12.5;
+  float web = sdBox(vec3(dx, gy, abs(gz) - 0.45), vec3(22.0, 0.65, 0.05));
+  web = max(web, -sdBox(vec3(mod(dx + 0.6, 1.2) - 0.6, gy, gz), vec3(0.42, 0.42, 1.0)));
+  float chords = sdBox(vec3(dx, abs(gy) - 0.62, gz), vec3(22.0, 0.08, 0.55));
+  float trolley = sdBox(vec3(dx - 3.2, gy + 0.95, gz), vec3(0.75, 0.3, 0.7));
+  float rope = length(vec2(dx - 3.2, gz)) - 0.03;
+  rope = max(rope, abs(gy + 3.6) - 2.4);
+  float hook = sdBox(vec3(dx - 3.2, gy + 6.15, gz), vec3(0.22, 0.32, 0.16));
+  float gantry = min(min(web, chords), min(trolley, min(rope, hook)));
+
+  float machine = min(penstock, gantry);
+  float concrete = anchor;
+
+  // The turbines, behind a bound: a ray down the canyon pays one box.
+  float lamp = 1e4;
+  float tb = max(max(abs(ax - TURB_X) - 7.0, abs(hy - 3.2) - 11.0), abs(zCell - 0.5) - 3.6);
+  if (tb < 1.0) {
+    // Mirrored by side for the distance, unmirrored for the spin, so every
+    // rotor turns the same way seen from the stair.
+    float side = dx < 0.0 ? -1.0 : 1.0;
+    float spin = animTime() * 0.9 + hash11(cell) * 6.28;
+    vec3 q = vec3((ax - TURB_X) * side, hy - TURB_Y, zCell - TURB_W);
+    float r = length(q.xy);
+    float a = atan(q.y, q.x) - spin;
+    a -= floor(a / 2.0944 + 0.5) * 2.0944;
+    float blade = turbineBlade(r * cos(a), r * sin(a), q.z);
+    // The spinner: an ogive nose on the hub, closed into the nacelle.
+    vec3 sq = vec3(q.xy, q.z - 0.15);
+    float spinner = (length(vec3(sq.xy, sq.z * (sq.z < 0.0 ? 0.62 : 1.0))) - 0.82) * 0.62;
+    spinner = max(spinner, q.z - 0.9);
+    // The nacelle: a rounded housing behind the rotor, a little above its axis.
+    float nacelle = sdBox(vec3(q.x, q.y - 0.1, q.z - 2.6), vec3(0.62, 0.72, 1.85)) - 0.3;
+    // The tower, tapering from its pedestal to the yaw bearing.
+    vec2 tq = vec2(ax - TURB_X, zCell - 1.0);
+    float tr = mix(0.66, 0.4, saturate((hy + 2.0) / (TURB_Y + 1.4)));
+    float tower = max((length(tq) - tr) * 0.98, max(hy - TURB_Y + 0.4, -2.0 - hy));
+    float pedestal = sdBox(vec3(tq.x, hy + 2.9, tq.y), vec3(1.5, 1.1, 1.5)) - 0.06;
+    float turbine = min(min(blade, spinner), min(nacelle, tower));
+    machine = min(machine, turbine);
+    concrete = min(concrete, pedestal);
+    // A red obstruction light on the nacelle's roof.
+    lamp = length(vec3(q.x, q.y - 1.1, q.z - 3.6)) - 0.13;
+  } else {
+    machine = min(machine, tb);
+  }
+
+  vec2 res = rock < machine ? vec2(rock, M_ROCK) : vec2(machine, M_MACHINE);
+  if (concrete < res.x) res = vec2(concrete, M_CONCRETE);
+  if (lamp < res.x) res = vec2(lamp, M_EMISSIVE);
+  return res;
 }
 
 // IV · CONVEYOR ESCARPMENT — extraction, warm and dusty.
@@ -234,33 +365,126 @@ vec2 coolingField (vec3 p) {
 }
 
 // VI · THE SHEAR HORIZON — where the anthology stops being architecture.
+// The ground has torn open along the line of the stair. Either side, a cliff
+// of level strata broken into fault blocks 11 units long, each thrown up or
+// down and tipped on its own, so the bedding steps from block to block and
+// every join is a scarp. Thirty units down, the gorge floor is split by the
+// rift: a slit of light that lights the cliffs from below. In the air over
+// the gorge hang what the tear threw up: slabs of strata with ragged
+// undersides, short flights torn out of a stair like this one, and rings,
+// broken hoops of steel the stair passes through, with a light along their
+// inner face.
+const float RIFT_DEPTH = 30.0;
+const vec3 RIFT_LIGHT = vec3(0.12, 0.5, 1.1);
+// How bright the rift burns: low on the first traversal, up with every one
+// after it, and blazing through the finale.
+float riftPower () { return (1.0 + uRupture * 0.6 + uFinale * 1.2) * (1.0 - uPurgatory); }
+float riftX (float z) { return sin(z * 0.09) * 2.5 + sin(z * 0.23 + 1.3) * 0.8; }
+
+// One fault block of one side's cliff. Its face stands back 9.5 to 12 from
+// the line, each bed of the strata at its own depth, and the beds are counted
+// from the block's throw, so they step at every fault.
+float faultBlock (vec3 p, float ax, float side, float cell) {
+  float zc = (cell + 0.5) * 11.0;
+  float seed = cell * 3.1 + side * 17.0;
+  float throwY = (hash11(seed) - 0.6) * 14.0 + uRupture * (hash11(seed + 5.0) - 0.5) * 6.0;
+  float tilt = (hash11(seed + 1.7) - 0.5) * 0.22;
+  float dip = (hash11(seed + 2.9) - 0.4) * 0.25;
+  float top = pathY(5.0, zc) + 3.0 + throwY + (p.z - zc) * tilt - (ax - 10.0) * dip;
+  float s = (p.y - throwY) / 2.3;
+  float k = floor(s);
+  float bed = mix(hash11(k + side * 31.0), hash11(k + 1.0 + side * 31.0), smoothstep(0.78, 1.0, fract(s)));
+  float face = 9.5 + hash11(seed + 4.2) * 2.5 + bed * 1.1 +
+               sin(p.z * 0.35 + p.y * 0.21) * 0.45 + sin(p.y * 1.3 + p.z * 0.8) * 0.15;
+  float d = max((face - ax) * 0.6, (p.y - top) * 0.8);
+  return max(d, abs(p.z - zc) - 5.5);
+}
+
 vec2 shearHorizon (vec3 p) {
   float px = pathX(5.0, p.z);
   float py = pathY(5.0, p.z);
-  float cell = floor((p.z + 6.0) / 12.0);
-  float zCell = mod(p.z + 6.0, 12.0) - 6.0;
   float dx = p.x - px;
-  float angle = (hash11(cell * 4.7) - 0.5) * (0.4 + uRupture * 1.4);
-  vec3 shardP = vec3(abs(dx) - 7.0 - hash11(cell) * 7.0, p.y - py - 3.0, zCell);
-  shardP.xy *= rot(angle + uFinale * sin(cell) * 1.2);
-  float shard = sdBox(shardP, vec3(2.8 + hash11(cell + 2.0) * 3.0, 0.5, 5.0));
-  float sCell = floor((p.z + 19.0) / 38.0);
-  vec3 slabP = vec3(dx + (hash11(sCell) - 0.5) * 26.0, p.y - py + 6.0 - hash11(sCell + 4.0) * 16.0, mod(p.z + 19.0, 38.0) - 19.0);
-  slabP.xy *= rot((hash11(sCell + 7.0) - 0.5) * 2.2);
-  float slab = sdBox(slabP, vec3(7.0, 0.42, 9.0));
-  float fCell = floor((p.z + 8.0) / 16.0);
-  vec3 fragP = vec3(dx - (hash11(fCell + 2.0) - 0.5) * 30.0, p.y - py - 2.0 - hash11(fCell + 11.0) * 14.0, mod(p.z + 8.0, 16.0) - 8.0);
-  fragP.xy *= rot(hash11(fCell + 3.0) * 3.0 + uFinale);
-  float tread = sdBox(vec3(fragP.x, mod(fragP.y + 0.35, 0.7) - 0.35, fragP.z), vec3(1.6, 0.09, 0.42));
-  float frag = max(tread, sdBox(fragP, vec3(1.7, 2.2, 3.0)));
-  vec3 ringP = vec3(dx, p.y - py - 12.0, mod(p.z + 40.0, 80.0) - 40.0);
-  ringP.xy *= rot(0.7 + uFinale * 0.8);
-  float ring = sdTorusX(ringP, vec2(13.0, 0.6));
-  float monolith = sdBox(vec3(abs(dx) - 18.0, p.y - py - 7.0, zCell), vec3(2.0, 11.0, 3.5));
-  float rift = max(abs(p.y - py + 14.0) - 0.35, abs(dx) - 40.0);
-  float lit = min(ring, rift);
-  float solid = min(shard, min(slab, min(frag, monolith)));
-  return lit < solid ? vec2(lit, M_EMISSIVE) : vec2(solid, M_ROCK);
+  float ax = abs(dx);
+  float side = dx < 0.0 ? -1.0 : 1.0;
+
+  // The cliffs: this block and the nearer of its neighbours. Any other block
+  // is at least half a block away along the line, and no block of either
+  // side stands nearer the line than 9.5 or higher than 20 over the stair,
+  // so away from the cliffs a ray is not held to half a block a step.
+  float cell = floor(p.z / 11.0);
+  float nbr = cell + (fract(p.z / 11.0) < 0.5 ? -1.0 : 1.0);
+  float cap = max((9.5 - ax) * 0.6, (p.y - py - 20.0 - max(ax - 10.0, 0.0) * 0.15) * 0.7);
+  float cliff = min(min(faultBlock(p, ax, side, cell), faultBlock(p, ax, side, nbr)), max(5.5, cap));
+
+  // The gorge floor, rising toward the cliffs, split by the rift.
+  float rx = dx - riftX(p.z);
+  float floorY = py - RIFT_DEPTH + abs(rx) * 0.08 + sin(p.x * 0.4) * sin(p.z * 0.3) * 0.6;
+  float ground = max((p.y - floorY) * 0.8, 0.8 - abs(rx));
+  float rift = max(p.y - floorY + 1.2, abs(rx) - 1.0);
+
+  // Slabs of strata thrown up out of the gorge, clear over the stair or out
+  // beside it, with bedding in their sides and a torn underside.
+  float sCell = floor((p.z + 13.0) / 26.0);
+  float sz = mod(p.z + 13.0, 26.0) - 13.0;
+  float ss = hash11(sCell * 1.9 + 4.0) > 0.5 ? 1.0 : -1.0;
+  vec3 sq = vec3(dx - ss * (7.0 + hash11(sCell + 1.0) * 7.0),
+                 p.y - pathY(5.0, p.z - sz) - 7.0 - hash11(sCell + 4.0) * 9.0 - sin(animTime() * 0.3 + sCell) * 0.4,
+                 sz);
+  sq.xy *= rot((hash11(sCell + 7.0) - 0.5) * 1.2 + uFinale * ss);
+  sq.yz *= rot((hash11(sCell + 8.0) - 0.5) * 0.5);
+  vec3 sb = vec3(2.6 + hash11(sCell + 2.0) * 2.5, 0.9 + hash11(sCell + 9.0), 3.0 + hash11(sCell + 3.0) * 3.0);
+  float slab = sdBox(sq, sb) + sin(sq.y * 7.0 + sin(sq.x * 0.8) * 2.0) * 0.05;
+  slab -= sin(sq.x * 1.7 + sq.z * 1.1) * sin(sq.z * 1.3 + sCell) * 0.35 * smoothstep(0.3, -0.6, sq.y);
+  slab *= 0.75;
+
+  // Flights torn out of a stair: steel treads on a pair of stringers, a rail
+  // on one side, three to five treads either side of the middle.
+  float fCell = floor((p.z + 7.0) / 14.0);
+  float fz = mod(p.z + 7.0, 14.0) - 7.0;
+  float fs = hash11(fCell * 2.3) > 0.5 ? 1.0 : -1.0;
+  vec3 fq = vec3(dx - fs * (5.2 + hash11(fCell + 2.0) * 4.0),
+                 p.y - pathY(5.0, p.z - fz) - mix(-7.0, 7.0, hash11(fCell + 11.0)) - sin(animTime() * 0.4 + fCell) * 0.25,
+                 fz);
+  fq.xy *= rot((hash11(fCell + 3.0) - 0.5) * 0.9 + uFinale * fs * 0.8);
+  fq.yz *= rot((hash11(fCell + 5.0) - 0.5) * 0.6);
+  float flight = 1e4;
+  if (length(fq) < 6.0) {
+    const float FR = 0.2;
+    const float FG = 0.32;
+    float fn = 3.0 + floor(hash11(fCell + 7.0) * 3.0);
+    float k = clamp(floor(fq.z / FG + 0.5), -fn, fn);
+    float tread = sdBox(vec3(fq.x, fq.y + k * FR, fq.z - k * FG), vec3(0.95, 0.03, FG * 0.5 - 0.01));
+    float fl = length(vec2(FR, FG));
+    vec2 sc = vec2(fq.y * FG + fq.z * FR, fq.z * FG - fq.y * FR) / fl;
+    float stringer = sdBox(vec3(abs(fq.x) - 1.0, sc.x + 0.12, sc.y), vec3(0.05, 0.16, (fn + 0.5) * fl));
+    float rail = sdBox(vec3(fq.x - 1.0, sc.x - 0.95, sc.y), vec3(0.025, 0.03, fn * fl));
+    float kp = clamp(floor(fq.z / (2.0 * FG) + 0.5), -floor(fn * 0.5), floor(fn * 0.5));
+    float post = sdBox(vec3(fq.x - 1.0, fq.y + 2.0 * kp * FR - 0.5, fq.z - 2.0 * kp * FG), vec3(0.02, 0.48, 0.02));
+    flight = min(min(tread, stringer), min(rail, post));
+  } else flight = length(fq) - 5.0;
+
+  // Rings: broken hoops of steel round the line every 45 units, each tipped
+  // and turning slowly in its own plane, with a light along the inner face.
+  float rz = mod(p.z + 22.5, 45.0) - 22.5;
+  float rCell = floor((p.z + 22.5) / 45.0);
+  vec3 rq = vec3(dx, p.y - pathY(5.0, p.z - rz) - 3.0, rz);
+  rq.yz *= rot((hash11(rCell + 1.0) - 0.5) * 0.7);
+  rq.xz *= rot((hash11(rCell + 2.0) - 0.5) * 0.8);
+  rq.xy *= rot(animTime() * (hash11(rCell) - 0.5) * 0.1 + uFinale * 0.8 + rCell);
+  float rr = length(rq.xy);
+  float ang = atan(rq.y, rq.x);
+  float gap = min(abs(mod(ang + 2.74, 6.2832) - 3.1416), abs(mod(ang - 0.86, 6.2832) - 3.1416)) -
+              0.18 - hash11(rCell + 3.0) * 0.3;
+  gap *= rr;
+  float hoop = sdBox(vec3(rr - 11.5, rq.z, 0.0), vec3(0.32, 0.85, 1.0)) - 0.04;
+  hoop = max(hoop, -gap);
+  float glow = max(length(vec2(rr - 11.15, rq.z)) - 0.08, -gap - 0.3);
+
+  float lit = min(glow, rift);
+  float steel = min(hoop, flight);
+  float rock = min(min(cliff, ground), slab);
+  vec2 r = steel < rock ? vec2(steel, M_MACHINE) : vec2(rock, M_ROCK);
+  return lit < r.x ? vec2(lit, M_EMISSIVE) : r;
 }
 
 vec2 actEnvironment (vec3 p, float a) {

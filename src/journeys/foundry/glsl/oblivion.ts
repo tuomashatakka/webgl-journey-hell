@@ -150,8 +150,12 @@ export const oblivionGlsl = `  // ============================= OBLIVION =======
         if (span < d) { d = span; gMat = 6.0; gWear = 0.20; }
 
         if (p.y < 0.4) {
-          float surf = MELT_Y + fbm(vec2(p.x * 0.22, p.z * 0.22 + iTime * 0.10)) * 1.3;
-          float melt = p.y - surf;
+          // A slow swell on the bath, and a skull of frozen slag banked up
+          // against the lining where the metal meets the cold brick.
+          float edge = min(W - abs(p.x), SPAN_HALF - abs(cycd(zc - SPAN_MID)));
+          float skull = (1.0 - smoothstep(0.0, 1.4, edge)) * (0.22 + 0.16 * vnoise(p.xz * 1.7));
+          float surf = MELT_Y + (fbm(vec2(p.x * 0.35, p.z * 0.35 + iTime * 0.08)) - 0.5) * 0.16 + skull;
+          float melt = (p.y - surf) * 0.9;
           if (melt < d) { d = melt; gMat = 8.0; gWear = 0.0; gGlow = 1.0; }
         }
       }

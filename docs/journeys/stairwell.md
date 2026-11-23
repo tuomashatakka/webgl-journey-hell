@@ -11,12 +11,12 @@ units the route enters purgatory and never leaves it.
 
 | distance | act | sky (Δ) | visual contract |
 | ---: | --- | --- | --- |
-| 0–70 | spillway threshold | `DAWN` | mass-concrete flood control: dam wall, ogee chute, sluice bays, baffle blocks, a basin of still water |
+| 0–70 | spillway threshold | `DAWN` | mass-concrete flood control: a buttressed dam face, a baffled ogee chute dropping into a stilling basin, sluice bays with lift gates over stepped pools |
 | 70–155 | protean weather bridge | `OVERCAST` | nothing but structure and weather — portal pylons, suspension catenary and hangers, an open grating deck on a truss, low wind fencing, a cloud deck and a cloud sea below |
-| 155–235 | turbine canyon | `DAY` | a stratified canyon wide enough for its machines: three-blade rotors on pedestals, penstocks, a gantry |
+| 155–235 | turbine canyon | `DAY` | a stratified canyon wide enough for its machines: three-blade rotors on towers on pedestals, penstocks, a crane gantry |
 | 235–325 | conveyor escarpment | `EVENING` | warm quarry benches, a roofed conveyor gallery on trestles, bucket wheel, transfer tower |
 | 325–410 | cooling field | `HAZE` | hyperboloid towers on raked column rings, pipe racks, banded chimneys, cooling ponds |
-| 410–500 | shear horizon | `AURORA` | torn strata, suspended stair fragments, rings, the rift |
+| 410–500 | shear horizon | `AURORA` | torn strata, suspended stair fragments, rings, the rift (a gorge under the stair, lit from below) |
 | 2000+ | **purgatory** | `OVERCAST`, drained | the six acts recurring as monochrome ghosts, endlessly |
 
 ## seams, not crossfades
@@ -143,6 +143,37 @@ its own average by the pixel's world footprint.
   own coordinates wherever act V is in view, starting and stopping with the
   act's scenery like the cloud deck.
 
+## act I, the spillway threshold
+
+the flight goes down a spine of mass concrete between two bodies of water
+(`spillway`, `spillFoam`, `spillWet` in `glsl/acts.ts`). all of it is placed
+against the act's own rail, so it pitches over with the stair.
+
+- **the chute** (to the right, -x): twelve wide between training walls, the
+  near one's top 1.1 under the treads so the water is in view over it. its
+  floor (`spillFloor`) leaves the wall at an ogee crest a unit high, runs at
+  the stair's pitch 1.7 under it, then drops a further 6 between 26 and 44
+  (`spillDrop`) into a stilling basin whose floor lies level 10.5 under the
+  rail at 44. the water is a sheet 0.3 over the floor until it meets the
+  basin's still level (7 under the rail at 44), which is where the jump is;
+  the stair stays above that water to the end of the act. staggered rows of
+  baffle blocks every 3.6 stand out of the sheet from 12 to 37.
+- **the far side**: a training wall 0.6 over the rail, then a battered
+  concrete bank climbing away at 1.2 in 1.
+- **the dam** (to the left, +x): a face at 12.5 off the line standing level,
+  13 over the rail at the wall, so it towers higher as the stair goes down
+  it, with a parapet. buttresses every 9 units, 1.2 thick, their feet 7.5 off
+  the line battered back to the face. in every bay a bottom outlet with a
+  lift gate raised in its guides, its stem and hoist on the face, and a
+  tongue of water from under the leaf into the bay's pool (`spillPool`,
+  level under the bay's middle, 2 under the rail there), so the pools step
+  down bay by bay behind a curb, a low wall between each and the next.
+- **the water's colour**: the act's water is the shared rippled mirror, made
+  white by `spillFoam` — all of the sheet, the jump fading over the basin,
+  the tongues and the churn under each outlet — streaked along the flow
+  (down the chute, out from the gates) and banded at every baffle row. the
+  concrete's tide line follows the water beside it (`spillWet`).
+
 ## act II, the weather bridge
 
 act II is the index preview's scape built for real: an open suspension deck seen
@@ -180,6 +211,79 @@ down its own flight.
   the sky because from inside the act the far wall fills the view.
 - the preview's cooling towers on the horizon are not brought over: the walls
   hide the horizon over the whole forward view.
+
+## act III, the turbine canyon
+
+the wind runs down the canyon, so its machines face up it, toward the stair
+(`turbineCanyon`, `turbineBlade` in `glsl/acts.ts`). they were drums: a
+cylinder seven across turned to face the stair, three slabs through it and a
+lit ring round its hub, on a box.
+
+- **the canyon**: walls 19.5 off the line (were 12.5), stratified, topped
+  about 26 over the rail; talus banked against their feet from 16 out at 0.6
+  in 1, a rough floor 3.6 under the rail.
+- **the turbines**: one each side every 28 units (`TURB_X` 10.5 off the line).
+  a three-blade rotor, hub `TURB_Y` 7.6 over the rail, tips at `TURB_R` 6.2,
+  in a plane `TURB_W` 1.6 ahead of the tower, so the nearest tip passes 4.3
+  off the line and 1.4 over the rail. one blade is evaluated, folded into its
+  120 degree sector: an elliptical section a fifth as thick as its chord,
+  round at the root, 0.62 at its widest and 0.13 at the tip, twisted from 0.5
+  rad at the root to 0.08 at the tip. an ogive spinner, a rounded nacelle
+  behind it, a tower tapering from 0.66 to 0.4 to the yaw bearing, a concrete
+  pedestal at its foot, and a red obstruction light blinking on the nacelle's
+  roof. every rotor turns the same way seen from the stair, at 0.9 rad/s from
+  a phase hashed per turbine.
+- **the penstocks**: a pipe 1.4 in radius along the foot of each wall, 15.5
+  off the line, flanged every 7 units, on a concrete anchor block every 14.
+- **the gantry**: a vierendeel crane girder wall to wall 12.5 over the rail,
+  halfway between two pairs of turbines every 56 units, with a hoist trolley,
+  its rope and a hook block.
+- **the paint** (`machineDetail`): the turbines an even off-white gelcoat,
+  glossier on the rotor, with panel seams and grime only on the nacelle and
+  the tower; the penstocks dark green, the gantry signal yellow, both on
+  `steelDetail`'s chipped and rusting steel.
+- **what it costs**: the turbines sit behind one box bound, so a ray down
+  the canyon pays a compare for them; the blade is one section where three
+  boxes were. every frame that does not see the canyon is byte-identical on
+  the probe.
+
+## act VI, the shear horizon
+
+the ground has torn open along the line of the stair, and the act is lit by
+the tear. (the aurora is there, but the far wall covers it from anywhere in
+the act, and its sun is 0: the rift is the key light.)
+
+- **torn strata**: either side, a cliff of level beds broken into fault
+  blocks 11 units long (`faultBlock`). each block is thrown up or down on its
+  own (its top from 5.4 under the stair to 8.6 over it, the range wider with `uRupture`), tipped along the
+  line and dipped away from it; its face stands 9.5 to 12 off the line and
+  each 2.3-unit bed stands at its own depth, counted from the block's throw,
+  so the bedding steps at every fault and every join is a scarp. a sample
+  builds its own block and the nearer neighbour; no block stands nearer than
+  9.5 or higher than 20 over the stair, so rays away from the cliffs are not
+  held to half a block a step.
+- **the rift**: the gorge floor lies `RIFT_DEPTH` (30) under the stair,
+  rising toward the cliffs, split along a meander (`riftX`) by a slit 2 wide
+  whose light is white at the core and cold at the lips. it is a line light:
+  every surface in the act takes `RIFT_LIGHT` toward the nearest point of the
+  slit, falling off as 1/(d + 2), so the cliffs glow at their feet and
+  darken toward their tops; the air below the horizon takes its glow; a
+  faint cold underside fill remains. `riftPower()` is 1 on the first
+  traversal, up with `uRupture`, blazing through the finale, gone in the
+  residue.
+- **suspended fragments**: slabs of strata thrown up out of the gorge (every
+  26 units, 7 to 16 over the stair and 7 to 14 off the line, bedding in their
+  sides and a ragged underside), and short flights torn out of a stair like
+  this one (every 14 units: steel treads at 0.2 rise and 0.32 going on a
+  pair of stringers, a rail and posts on one side), drifting slowly and
+  tipping further with `uFinale`.
+- **rings**: a broken hoop of steel round the line every 45 units, radius
+  11.5 about a point 3 over the stair, tipped and turning slowly in its own
+  plane, two gaps cut in it, and a light along its inner face.
+- act VI's exposure is 2.8.
+- a ray that runs out of march steps less than a unit from a surface ends on
+  it (all acts): skimming the cliff tops edge on, such rays had been taken for
+  escapes and drew a seam of sky along every crest.
 
 ## traversal rupture
 

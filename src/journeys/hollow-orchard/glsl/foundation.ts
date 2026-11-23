@@ -148,7 +148,9 @@ export const foundationGlsl = `
   }
   // A mushroom cap: squashed dome, hollowed underside, rim softened.
   // Gills are a *shading* term (see shadeSurface) — putting them in the SDF
-  // costs the distance bound and the march falls apart on grazing rays.
+  // costs the distance bound and the march falls apart on grazing rays. (THE
+  // BLOOM's gills are in its SDF, but as plates measured straight across,
+  // which keep the bound; see gillFamily.)
   float sdCap(vec3 p, float r, float h) {
     float dome   = sdEllipsoid(p, vec3(r, h, r));
     float hollow = sdEllipsoid(p - vec3(0.0, -h * 0.35, 0.0), vec3(r * 0.86, h * 0.8, r * 0.86));

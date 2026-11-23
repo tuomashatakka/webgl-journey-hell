@@ -180,8 +180,25 @@ the laps, and the blast's shockfront finishes the job.
   lower viaduct (−6.6 m) that runs *through* a glass tower's atrium station
   (z 262–284): a tall hall cut through the tower, floor slabs and lit balconies
   either side, then out the far facade to where the viaduct is sheared off.
-- **Light:** low side light from the right (sun 12°), hard and dramatic; sparks
-  under the cars.
+  - **The viaduct** is a U-girder: its webs' tops are the −6.6 deck level, the
+    track (sleepers every 0.65 m, rails at ±0.75) is down in the trough at
+    −7.7, pier caps under it, board joints and a rust stain on the concrete,
+    and the end at 288 is ragged.
+  - **The train** is five stainless cars, 3.1 m from skirt (−7.0) to crown
+    (−3.9, the roof the runner rides): rounded shoulders, a crowned and fluted
+    roof with two air-conditioning units and a hatch, rubber bellows between
+    the cars, a blue stripe, a ribbon of windows onto a lit saloon, two doors a
+    side, and a raked cab glazed dark with two lamps on the end cars.
+  - **The station:** a platform either side at the girder's level (x 1.6–9.0)
+    in terrazzo with a yellow edge, three balconies above it at 4.2 m
+    (x 6.2–9.0) with glass balustrades and a handrail on posts, a lamp line
+    under every slab, a coffered ceiling with a lamp in each coffer. Its walls
+    are inside: they take the hall's light (daylight from the open ends, warm
+    lamps) and mirror the hall, not the sky, except along it.
+- **Light:** low side light from the right (sun 12°), hard and dramatic; inside
+  the hall the sun comes in only through the open end it faces; sparks thrown
+  back from the wheels, streaking out from the vanishing point beside the cars
+  (never over the roof).
 - **Breaks:** the station's facade shatters outward as the train punches through.
 - **Out (fall):** the train rolls off the sheared end at z 288; free fall,
   pitch hard down, the stub receding.
@@ -190,6 +207,17 @@ the laps, and the blast's shockfront finishes the job.
 - **Place:** a slot 14 m wide between two towers (z 282–340): the fall drops
   between their facades, window grids streaming up past you; a glass bridge
   sweeps up from below between them and takes you.
+  - **The facades** are finned: an anodised bronze fin 0.35 m deep at every
+    1.5 m mullion, the glass set back behind them. A ray reaching the fins'
+    plane goes on to the recessed glass (its rooms seen with that parallax)
+    or, where it crosses a mullion on the way, meets a fin's side, darker
+    deeper in; once a bay is finer than a pixel it is averaged to the fins'
+    share of it. Looking along the slot the faces close up into a wall of fins.
+  - **The glass mirrors the other tower** (`canyonMirror`): a reflection off
+    an inner face crosses the 14 m slot analytically and lands on the opposite
+    face — its panes, rooms, spandrels, mullions and fins, the low sun on it
+    where neither tower is in the way, faded by the haze over the crossing.
+    Only rays past that tower's top or ends reflect the sky.
 - **Light:** golden, sun 3° ahead-right, bounced between the facades.
 - **Breaks:** the catch cracks the rising deck from end to end; the facades
   craze around the impact.
@@ -200,7 +228,29 @@ the laps, and the blast's shockfront finishes the job.
 - **Place:** an enclosed tube bridge (r 2.6 m, steel rings every 3 m), its glass
   frosted and rimed; snow outside; the world beyond only blurred shapes. The tube
   curves +120°.
-- **Light:** overcast, cold, diffuse; the sun a pale smear.
+  - **The frost** is hoarfrost grown inward from the rings (the cold steel): a
+    solid band at each ring falling off over about 0.4 m, thicker towards the
+    bottom where the cold air pools, broken by fbm and feathered into fern at
+    its front (three stretched noises, along the ring's normal and on both
+    diagonals); the fern's edges catch the light. It never thins below about
+    half, so nothing sharp is ever seen through it. Crystals glint here and
+    there (faded out below a pixel), and growing damage thickens it.
+  - **Through it** (`frostBeyond`): the overcast and the towers outside as soft
+    dark shapes, a ten-step march of the towers alone held as a cone of about
+    0.2 rad (the soft-shadow trick, six steps on the phone builds), faded by
+    the snow in the air within a few tens of metres, their floors smeared to
+    warm bands. Frost is not seen through with the see-through march: it
+    blurs, so it does not pay for one.
+  - **Snow** lies on the crown outside in a drift with a ragged edge and dims the
+    light through it; flakes slide over the outside, soft through the frost.
+    The screen's falling snow stops inside the sealed tube (on the tube and
+    within 6 m) and falls only past its open ends.
+  - **The rings** are rimed: the cold metal furred white in patches, thickest
+    underneath (steel `cInfo.x` 6).
+- **Light:** overcast, cold, diffuse; the sun a pale smear. The tube is lit
+  through its own glass: each point glows with the overcast outside it
+  (`ambient` of the outward normal), bright overhead and the cloud sea's paler
+  bounce below.
 - **Breaks:** white fracture lines run through the frost layer, crystalline, as
   the tube flexes in the wind.
 - **Out:** level, storm sway in and out.
@@ -321,7 +371,9 @@ Things to keep true:
   globals, the crack noise or the dust storm left out, `PROBE_NO_VIEW` /
   `PROBE_NO_CRACK` / `PROBE_NO_STORM`) and lists which link.
 - Heavy effects (`uHeavy`) add the see-through continuation march; everything
-  else is the same at every tier.
+  else is the same at every tier. Frost takes no see-through march (it
+  blurs what is behind it with `frostBeyond`, towers only), which more than
+  doubled the frost gallery's frame rate with heavy effects on.
 - Set pieces sit behind band tests; towers are two cells on one side per sample,
   with the far flank bounded by its distance.
 - Falling panes are a domain repetition clamped to their cell, so a march never
@@ -353,8 +405,9 @@ Things to keep true:
   route, path), `glsl/atmosphere.ts` (light per section, sky, cloud sea,
   skyline), `glsl/blast.ts` (the detonation), `glsl/cracks.ts` (spiderweb and
   running cracks), `glsl/structures.ts` (deck, set pieces, towers),
-  `glsl/materials.ts` (scene, normals, shading), `glsl/camera.ts` (choreography,
-  main).
+  `glsl/materials.ts` (scene, normals, shading) with `glsl/facades.ts` spliced
+  into it (curtain walls: rooms, panes, the canyon's fins and mirror),
+  `glsl/camera.ts` (choreography, main).
 - `kinematics.ts` — speed, lap, section names and bands (HUD and the shader both
   read them).
 - `journey.ts` — wires the env map.

@@ -2,9 +2,23 @@ import { createMeshBuilder, fracture } from '@wjh/geometry/meshBuilder'
 import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
 import { mulberry32 } from '@wjh/math/rng'
 import { SurfaceKey } from './surfaces'
+import { CUT, HALL, cutFace } from './profiles'
+import { CAR_HALF, carBody, cylX } from './rolling'
 
 /** Sleeper pitch, metres. */
 export const TIE_PITCH = 0.744
+
+/** An overbridge's girders: half their span across the cut, and their offset along the track. */
+const BRIDGE_SPAN   = 9.6
+const BRIDGE_GIRDER = 3.9
+
+/** A parked car's bogie centres off its middle, and its wheels on the rail head. */
+const BOGIE_PITCH = 6.1
+const WHEEL_R     = 0.42
+const RAIL_TOP    = 0.144
+
+/** Half the depth of the running shed, metres. */
+const SHED_HALF = 13
 
 export const UNITS: Record<string, UnitSpec> = {
   sleeperConcrete: { surface: 'concreteDim', cell: 0.9, build: b => b.box(0, -0.1, 0, 1.3, 0.09, 0.13) },
@@ -81,17 +95,99 @@ export const UNITS: Record<string, UnitSpec> = {
   railTop:      { surface: 'greyPaint', cell: 0, build: b => b.box(0, 1.1, 0, 0.04, 0.03, 1.05) },
   pointMachine: { surface: 'green', cell: 0.5, build: b => b.box(0, 0.25, 0, 0.35, 0.28, 0.7) },
 
-  overbridge: {
-    surface: 'concreteDim',
-    cell:    3.5,
+  // THE CUT. Each piece is built outward along local +x (left) from the
+  // centre line, so the left wall's is placed as it is and the right's turned
+  // round; heights are the section's, so they stand at u = 0.
+  //
+  // A counterfort every 6.5 m: brick standing proud of the face and battered
+  // with it, down into the drain, under a sloped stone cap.
+  buttress: {
+    surface: 'brickCut',
+    cell:    1.6,
     build:   b => {
-      b.box(0, 10, 0, 15.5, 0.55, 4.6) // deck
-      b.box(-14.6, 11.2, 0, 0.3, 0.7, 4.6)
-      b.box(14.6, 11.2, 0, 0.3, 0.7, 4.6)
-      b.box(0, 8.95, -3.6, 15.5, 0.5, 0.45) // edge beams
-      b.box(0, 8.95, 3.6, 15.5, 0.5, 0.45)
+      for (const poly of buttressSections())
+        prism(b, poly, -0.5, 0.5)
     },
   },
+  buttressCap: {
+    surface: 'coping',
+    cell:    0,
+    build:   b => {
+      const [ , , crown, knee ] = buttressSections()[1]
+      prism(b, [ knee, crown, [ crown[0], crown[1] + 0.12 ], [ knee[0] - 0.06, knee[1] + 0.12 ]], -0.56, 0.56)
+    },
+  },
+  // The pipe end of a weep hole, a little proud of the face, 2.2 m up.
+  weepPipe: { surface: 'black', cell: 0, build: b => b.box(cutFace(2.2) - 0.03, 2.2, 0, 0.07, 0.05, 0.05) },
+  // Concrete cable troughing along the cess, a lid every two metres.
+  trough:   { surface: 'concreteDim', cell: 0, build: b => b.box(0, CUT.cess + 0.12, 0, 0.22, 0.12, 0.97) },
+  // A location case: the grey cabinet the signalling lives in, on its plinth.
+  locCase:  {
+    surface: 'steel',
+    cell:    0,
+    build:   b => {
+      b.box(0, CUT.cess + 0.95, 0, 0.32, 0.7, 0.55)
+      b.box(0, CUT.cess + 1.7, 0, 0.36, 0.05, 0.6)
+      b.box(0, CUT.cess + 0.12, 0, 0.26, 0.12, 0.48)
+    },
+  },
+  // An overbridge: two plate girders across the cut, resting on bed stones
+  // on the face, with cross girders under the deck between them. From the
+  // train it is a deep steel fascia with its stiffeners, and from under it a
+  // ribbed soffit.
+  overbridgeGirder: {
+    surface: 'girder',
+    cell:    3,
+    build:   b => {
+      for (const z of [ -BRIDGE_GIRDER, BRIDGE_GIRDER ]) {
+        b.box(0, 10.1, z, BRIDGE_SPAN, 0.75, 0.03) // web
+        b.box(0, 9.38, z, BRIDGE_SPAN, 0.03, 0.22) // flanges
+        b.box(0, 10.82, z, BRIDGE_SPAN, 0.03, 0.22)
+        for (let x = -7.2; x <= 7.21; x += 1.2)
+          b.box(x, 10.1, z, 0.012, 0.72, 0.2) // stiffeners, both faces
+      }
+      for (let x = -6.4; x <= 6.41; x += 1.6) {
+        b.box(x, 9.62, 0, 0.012, 0.25, BRIDGE_GIRDER - 0.03)
+        b.box(x, 9.38, 0, 0.11, 0.02, BRIDGE_GIRDER - 0.03)
+      }
+    },
+  },
+  overbridgeDeck:    { surface: 'concreteDim', cell: 3.5, build: b => b.box(0, 9.95, 0, BRIDGE_SPAN, 0.08, BRIDGE_GIRDER - 0.03) },
+  overbridgeRailing: {
+    surface: 'darkGrey',
+    cell:    0,
+    build:   b => {
+      for (const z of [ -BRIDGE_GIRDER, BRIDGE_GIRDER ]) {
+        for (let x = -8.4; x <= 8.41; x += 1.2)
+          b.box(x, 11.3, z, 0.03, 0.45, 0.03)
+        b.box(0, 11.76, z, 8.45, 0.025, 0.04)
+        b.box(0, 11.3, z, 8.45, 0.015, 0.015)
+      }
+    },
+  },
+  overbridgeBearing: {
+    surface: 'coping',
+    cell:    0,
+    build:   b => {
+      for (const x of [ -7.45, 7.45 ])
+        for (const z of [ -BRIDGE_GIRDER, BRIDGE_GIRDER ])
+          b.box(x, 9.2, z, 0.3, 0.16, 0.42)
+    },
+  },
+  // The annex mouth in the cut's end wall: stone jambs, a lintel, and a
+  // coping along the parapet the wall carries above the fields. Built just in
+  // front of the wall's plane, which is local z = 0.
+  portalStone: {
+    surface: 'coping',
+    cell:    0,
+    build:   b => {
+      for (const x of [ -4.9, 4.9 ])
+        b.box(x, 2.11, -0.15, 0.3, 2.49, 0.15)
+      b.box(0, 5.05, -0.18, 5.4, 0.45, 0.18)
+      b.box(0, 11.82, -0.2, 8.9, 0.12, 0.3)
+    },
+  },
+
   fencePost: { surface: 'darkGrey',
     cell:    0,
     build:   b => {
@@ -166,20 +262,59 @@ export const UNITS: Record<string, UnitSpec> = {
     },
   },
 
+  // THE DEPOT's parked sets. A car is a body shell 17.2 m long with
+  // tumblehome sides and a curved roof (the shader draws its windows, doors,
+  // livery and the lit saloon behind the glass), an underframe and two
+  // bogies; consecutive cars stand 18.4 m apart, so their bellows meet.
   carriage: {
     surface: 'carriage',
     cell:    1.8,
+    build:   b => carBody(b),
+  },
+  carriageFrame: {
+    surface: 'darkGrey',
+    cell:    0,
     build:   b => {
-      b.box(0, 2, 0, 1.4, 1.45, 8.6)
-      b.box(0, 3.5, 0, 1.25, 0.08, 8.4)
+      // Solebars under the skirt, equipment cases between the bogies, the
+      // gangway bellows at both ends and a coupler under each.
+      for (const x of [ -1.12, 1.12 ])
+        b.box(x, 0.98, 0, 0.06, 0.08, CAR_HALF - 0.1)
+      for (const [ z, hz, hx, hy ] of [[ -3.1, 1.15, 0.9, 0.26 ], [ -0.6, 0.7, 0.75, 0.2 ], [ 1.2, 0.55, 0.95, 0.3 ], [ 3.3, 1, 0.8, 0.24 ]])
+        b.box(0, 1.05 - hy, z, hx, hy, hz)
+      for (const side of [ -1, 1 ]) {
+        b.box(0, 2.15, side * (CAR_HALF + 0.3), 0.62, 1.02, 0.3)
+        b.box(0, 0.86, side * (CAR_HALF + 0.25), 0.12, 0.09, 0.35)
+      }
     },
   },
   bogie: { surface: 'black',
     cell:    0,
     build:   b => {
-      b.box(0, 0.42, -5.8, 1.1, 0.32, 1.2)
-      b.box(0, 0.42, 5.8, 1.1, 0.32, 1.2)
+      for (const zc of [ -BOGIE_PITCH, BOGIE_PITCH ]) {
+        for (const x of [ -1.02, 1.02 ]) {
+          // Side frame, with its spring nests over the axleboxes.
+          b.box(x, 0.66, zc, 0.07, 0.1, 1.55)
+          for (const za of [ -1.25, 1.25 ]) {
+            b.box(x, 0.57, zc + za, 0.11, 0.13, 0.16)
+            b.box(x, 0.84, zc + za, 0.09, 0.08, 0.12)
+          }
+        }
+        // Transom and bolster.
+        b.box(0, 0.68, zc, 1.02, 0.09, 0.2)
+        b.box(0, 0.88, zc, 0.85, 0.08, 0.32)
+        for (const za of [ -1.25, 1.25 ]) {
+          b.box(0, WHEEL_R + RAIL_TOP, zc + za, 0.82, 0.05, 0.05)
+          for (const x of [ -0.7175, 0.7175 ])
+            cylX(b, x - 0.06, x + 0.06, WHEEL_R + RAIL_TOP, zc + za, WHEEL_R, 14)
+        }
+      }
     } },
+  // A siding's own ballast bed, a 6 m length: placed every 5.6 m, so they lap.
+  sidingBed: {
+    surface: 'ballastDark',
+    cell:    0,
+    build:   b => prism(b, [[ -2.35, -0.42 ], [ 2.35, -0.42 ], [ 1.6, -0.17 ], [ -1.6, -0.17 ]], -3, 3),
+  },
   mast: { surface: 'steel',
     cell:    2,
     build:   b => {
@@ -192,8 +327,38 @@ export const UNITS: Record<string, UnitSpec> = {
       for (const x of [ -1.1, -0.37, 0.37, 1.1 ])
         b.box(x, 21.8, 0, 0.3, 0.22, 0.2)
     } },
-  shed:     { surface: 'corrugRust', cell: 0, build: b => b.box(0, 7, 0, 0.5, 7, 0.5) },
-  shedRoof: { surface: 'corrugated', cell: 0, build: b => b.box(0, 14.2, 0, 0.55, 0.2, 0.52) },
+  // The running shed, one 20.4 m bay of it: brick-plinthed corrugated walls
+  // 26 m deep, a gabled roof whose ridge runs with the track, a stanchion at
+  // each bay line, an eaves gutter, and a band of works glazing along the
+  // side that faces the yard (local +x), lit from inside.
+  shed: {
+    surface: 'corrugRust',
+    cell:    0,
+    build:   b => b.box(0, 5.2, 0, SHED_HALF, 4.4, 10.2),
+  },
+  shedPlinth: { surface: 'brickSoot', cell: 0, build: b => b.box(0, 0.4, 0, SHED_HALF + 0.08, 0.4, 10.2) },
+  shedRoof:   {
+    surface: 'corrugDark',
+    cell:    0,
+    build:   b => prism(b, [[ -SHED_HALF - 0.5, 9.45 ], [ SHED_HALF + 0.5, 9.45 ], [ 0, 13.6 ]], -10.2, 10.2),
+  },
+  shedFrame: {
+    surface: 'girder',
+    cell:    0,
+    build:   b => {
+      b.box(SHED_HALF + 0.12, 4.8, 10.2, 0.12, 4.8, 0.16)
+      b.box(SHED_HALF + 0.42, 9.5, 0, 0.14, 0.12, 10.2)
+      b.box(SHED_HALF + 0.3, 4.8, 9.6, 0.05, 4.7, 0.05)
+    },
+  },
+  shedGlass: {
+    surface: 'shedGlass',
+    cell:    0,
+    build:   b => {
+      for (const z of [ -6.4, 0, 6.4 ])
+        b.box(SHED_HALF + 0.02, 6.1, z, 0.03, 1.2, 2.6)
+    },
+  },
 
   bent: {
     surface: 'steel',
@@ -216,6 +381,32 @@ export const UNITS: Record<string, UnitSpec> = {
   trestleRail:     { surface: 'steel', cell: 0, build: b => b.box(0, 1, 0, 0.03, 0.03, 1.5) },
   redLamp:         { surface: 'redLamp', cell: 0, build: b => sphere(b, 0, 2.6, 0, 0.13, 6) },
   redPost:         { surface: 'darkGrey', cell: 0, build: b => cylY(b, 0, -0.3, 2.5, 0, 0.05, 6) },
+
+  // THE CONCOURSE, placed on the centre line. A brick rib under the vault
+  // every bay, carried down the wall to the gallery on a pilaster; local x is
+  // left, so the hall's centre (right of the track) is at negative x.
+  vaultRib: {
+    surface: 'brick',
+    cell:    2.2,
+    build:   b => {
+      const cx = -(HALL.left + HALL.right) / 2
+      ellipseRib(b, cx, HALL.spring, (HALL.right - HALL.left) / 2 + 0.05, HALL.rise + 0.05, 0.5, 0.3, 28)
+      for (const x of [ -HALL.right + 0.18, -HALL.left - 0.18 ])
+        b.box(x, (HALL.deck + HALL.spring) / 2, 0, 0.22, (HALL.spring - HALL.deck) / 2, 0.36)
+    },
+  },
+  // A cast-iron column under each gallery's front: a base, a shaft, a capital
+  // under the soffit.
+  hallColumn: {
+    surface: 'girder',
+    cell:    0,
+    build:   b => {
+      b.box(0, HALL.floor + 0.12, 0, 0.3, 0.12, 0.3)
+      cylY(b, 0, HALL.floor + 0.24, HALL.gallery - 0.3, 0, 0.16, 12)
+      b.box(0, HALL.gallery - 0.2, 0, 0.26, 0.1, 0.26)
+      b.box(0, HALL.gallery - 0.05, 0, 0.34, 0.05, 0.34)
+    },
+  },
 }
 
 /**
@@ -254,6 +445,39 @@ function disc (b: MeshBuilder, r0: number, r1: number, z: number, seg: number): 
         b.face(a0, a1, a1 + 1)
       }
     }
+  }
+}
+
+/**
+ * A counterfort's section in (out, up), as two convex polygons wound
+ * anticlockwise: the block in the drain, and the battered pier above it, whose
+ * last two corners are the top of its slope (at the wall, then at the front).
+ */
+function buttressSections (): [ number, number ][][] {
+  const front = CUT.drainLip + 0.25
+  const back  = CUT.foot + 0.3
+  const knee  = cutFace(9.45) - 0.35
+  const crown = cutFace(9.9) + 0.2
+  return [
+    [[ front, CUT.drain ], [ back, CUT.drain ], [ back, CUT.plinth ], [ front, CUT.plinth ]],
+    [[ front, CUT.plinth ], [ back, CUT.plinth ], [ crown, 9.9 ], [ knee, 9.45 ]],
+  ]
+}
+
+/** A convex polygon in local (x, y), wound anticlockwise, extruded from z0 to z1 and capped. */
+function prism (b: MeshBuilder, poly: [ number, number ][], z0: number, z1: number): void {
+  const n = poly.length
+  for (let i = 0; i < n; i++) {
+    const [ px, py ] = poly[i]
+    const [ qx, qy ] = poly[(i + 1) % n]
+    b.quad([ px, py, z0 ], [ qx, qy, z0 ], [ qx, qy, z1 ], [ px, py, z1 ])
+  }
+  for (let i = 1; i < n - 1; i++) {
+    const [ ax, ay ] = poly[0]
+    const [ bx, by ] = poly[i]
+    const [ cx, cy ] = poly[i + 1]
+    b.tri(ax, ay, z1, bx, by, z1, cx, cy, z1)
+    b.tri(ax, ay, z0, cx, cy, z0, bx, by, z0)
   }
 }
 
@@ -320,6 +544,56 @@ function ribRing (b: MeshBuilder, cu: number, r: number, depth: number, width: n
       const p = base + i * 2
       b.face(p, p + 2, p + 3)
       b.face(p, p + 3, p + 1)
+    }
+  }
+}
+
+/**
+ * An elliptical rib round the local z axis, centred at (cx, cy), its back on
+ * the ellipse (rx, ry) and `depth` deep toward the centre, from angle 0 to pi:
+ * the underside and both faces, the back being buried in the vault.
+ */
+function ellipseRib (b: MeshBuilder, cx: number, cy: number, rx: number, ry: number,
+  depth: number, width: number, seg: number): void {
+  const at = (a: number, d: number): [ number, number, number, number ] => {
+    const c = Math.cos(a),
+      s     = Math.sin(a)
+    // The ellipse's inward normal, and the point `d` in along it.
+    const nx = -c * ry,
+      ny     = -s * rx
+    const l  = Math.hypot(nx, ny)
+    return [ cx + c * rx + nx / l * d, cy + s * ry + ny / l * d, nx / l, ny / l ]
+  }
+  const base = b.vertexCount
+  for (let i = 0; i <= seg; i++) {
+    const [ x, y, nx, ny ] = at(Math.PI * i / seg, depth)
+    b.vertex(x, y, -width, nx, ny, 0, 0, 0)
+    b.vertex(x, y, width, nx, ny, 0, 0, 0)
+  }
+  for (let i = 0; i < seg; i++) {
+    const p = base + i * 2
+    b.face(p, p + 3, p + 2)
+    b.face(p, p + 1, p + 3)
+  }
+  for (const side of [ -1, 1 ]) {
+    const start = b.vertexCount
+    for (let i = 0; i <= seg; i++) {
+      const a          = Math.PI * i / seg
+      const [ ix, iy ] = at(a, depth)
+      const [ ox, oy ] = at(a, 0)
+      b.vertex(ix, iy, side * width, 0, 0, side, 0, 0)
+      b.vertex(ox, oy, side * width, 0, 0, side, 0, 0)
+    }
+    for (let i = 0; i < seg; i++) {
+      const p = start + i * 2
+      if (side > 0) {
+        b.face(p, p + 2, p + 3)
+        b.face(p, p + 3, p + 1)
+      }
+      else {
+        b.face(p, p + 3, p + 2)
+        b.face(p, p + 1, p + 3)
+      }
     }
   }
 }

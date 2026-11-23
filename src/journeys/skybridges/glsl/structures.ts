@@ -8,8 +8,11 @@
 //
 // cInfo.x on glass says what kind: 1 deck pane, 2 balustrade, 3 panelled glass
 // (hall, spokes, spans, canopy), 4 the hall's floor, 5 the snapped catwalk.
+// On steel it is 0, or 6 on the frost gallery's rings, which carry rime.
 // On facades it is the style: 0 generic, 1 the curtain wall, 2 the station,
-// 3 the canyon, 4 the helix tower.
+// 3 the canyon, 4 the helix tower. On concrete it is 1 in the station (y its
+// level, 0 the platform) and 0 on the viaduct; on the train xyz is the car's own
+// frame and w the car (-1 the bellows between cars).
 
 export const structuresGlsl = /* glsl */`
   // --- the deck ----------------------------------------------------------------
@@ -268,10 +271,25 @@ export const structuresGlsl = /* glsl */`
     float bz = max(212.0 - zl, zl - 356.0);
     if (bz > 0.0) return bz + 4.0;
     float base = p.z - zl;
-    float d = sdBox(vec3(p.x, p.y + 7.15, zl - 259.0), vec3(2.4, 0.55, 29.0));
+
+    // The viaduct is a U-girder: two webs whose tops are the deck level (-6.6),
+    // the track down in the trough between them, sheared off raggedly at 288.
+    vec3 g = vec3(p.x, p.y + 7.4, zl - 259.0);
+    float d = max(sdBox(g, vec3(2.15, 0.8, 29.0)), -sdBox(g - vec3(0.0, 0.4, 0.0), vec3(1.85, 0.7, 30.0)));
+    float jag = 0.35 * sin(p.x * 2.1 + 1.3) + 0.25 * sin(p.y * 4.0 + p.x);
+    d = max(d, (zl - 287.6 - jag) * 0.5);
     float pier = sdBox(vec3(p.x, p.y + 130.0, (fract((zl - 239.0) / 18.0 + 0.5) - 0.5) * 18.0), vec3(1.1, 122.0, 1.1));
+    pier = min(pier, sdBox(vec3(p.x, p.y + 8.55, (fract((zl - 239.0) / 18.0 + 0.5) - 0.5) * 18.0), vec3(2.3, 0.35, 1.4)));
     d = min(d, max(pier, max(230.0 - zl, zl - 280.0)));
     cMat = M_CONCRETE; cInfo = vec4(0.0);
+    // Sleepers every 0.65 m and two rails on them, inside a box that bounds them.
+    float trk = sdBox(vec3(p.x, p.y + 7.5, g.z), vec3(1.25, 0.2, 29.0));
+    if (trk < 0.3) {
+      float sl = sdBox(vec3(p.x, p.y + 7.6, (fract(zl / 0.65) - 0.5) * 0.65), vec3(1.2, 0.1, 0.12));
+      float rail = sdBox(vec3(abs(p.x) - 0.75, p.y + 7.42, 0.0), vec3(0.035, 0.08, 1.0));
+      trk = max(min(sl, rail), max(abs(g.z) - 29.0, (zl - 287.6 - jag) * 0.5));
+    }
+    if (trk < d) { d = trk; cMat = M_STEEL; cInfo = vec4(0.0); }
 
     // Five cars, parked under the landing until the runner leaps, then carrying
     // them; the runner rides the front of the middle car. Past the sheared end at
@@ -286,19 +304,45 @@ export const structuresGlsl = /* glsl */`
       c.y += 3.77 * over * over;
       c.yz = rot(min(over * 0.9, 1.3)) * c.yz;
     }
-    float car = min(sdBox(c, vec3(1.37, 1.07, 4.47)) - 0.08,
-      min(sdBox(c - vec3(0.0, 1.22, 0.0), vec3(0.8, 0.1, 2.6)), sdBox(vec3(c.x, c.y + 1.4, abs(c.z) - 3.0), vec3(1.1, 0.3, 0.9))));
+    // A stainless body with rounded shoulders and a crowned roof, 3.1 m from the
+    // skirt (-7.0) to the crown (-3.9); the end cars have a raked cab.
+    vec2 q = vec2(abs(c.x), c.y + 0.4) - vec2(1.05, 1.23);
+    float car = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.32;
+    car = max(car, length(vec2(c.x, c.y + 6.75)) - 7.9);
+    car = max(car, abs(c.z) - 4.47);
+    float endZ = k > 3.5 ? c.z : k < 0.5 ? -c.z : -9.0;
+    if (endZ > 2.0) car = max(car, dot(vec2(endZ - 3.3, c.y - 1.15), vec2(0.62, 0.78)));
+    float kit = sdBox(vec3(c.x, c.y - 1.12, abs(c.z) - 2.3), vec3(0.72, 0.13, 0.95)) - 0.04;                 // air-conditioning units
+    kit = min(kit, sdBox(vec3(c.x, c.y + 2.1, abs(c.z) - 3.0), vec3(1.0, 0.25, 1.0)));                      // bogies
+    float info = k;
+    if (endZ < 0.0 && over < 0.0) {
+      float bel = sdBox(vec3(c.x, c.y + 0.35, abs(c.z) - 4.78), vec3(0.95, 1.15, 0.34)) - 0.05;             // the gangway's bellows
+      if (bel < car) info = -1.0;
+      car = min(car, bel);
+    }
+    car = min(car, kit);
     if (over > -1.0 && abs(zl - cc) < 4.8) car = min(car, max(4.8 - abs(zl - cc), max(abs(p.x) - 3.0, p.y + 2.5)) + 0.2);
-    if (car < d) { d = car; cMat = M_TRAIN; cInfo = vec4(c, k); }
+    if (car < d) { d = car; cMat = M_TRAIN; cInfo = vec4(c, info); }
 
-    // The station: a tower with a hall cut through it, balconies down both sides.
+    // The station: a tower with a hall cut through it, a platform either side of
+    // the girder and balconies above it with glass balustrades.
     vec3 sc = vec3(0.0, -82.5, base + 273.0);
     vec3 sh = vec3(22.0, 157.5, 11.0);
     float st = max(sdBox(p - sc, sh), -sdBox(p - vec3(0.0, -1.5, base + 273.0), vec3(9.0, 10.5, 12.0)));
     if (st < d) { d = st; cMat = M_FACADE; cBoxC = sc; cBoxH = sh; cInfo = vec4(2.0, 0.0, 0.0, 0.0); }
-    float by = (fract((p.y + 12.0) / 4.2 + 0.5) - 0.5) * 4.2;
-    float slab = max(sdBox(vec3(abs(p.x) - 7.6, by, zl - 273.0), vec3(1.4, 0.14, 11.0)), max(-12.5 - p.y, p.y - 8.5));
-    if (slab < d) { d = slab; cMat = M_CONCRETE; cInfo = vec4(0.0); }
+    float plat = sdBox(vec3(abs(p.x) - 5.3, p.y + 6.74, zl - 273.0), vec3(3.7, 0.14, 11.0));
+    if (plat < d) { d = plat; cMat = M_CONCRETE; cInfo = vec4(1.0, 0.0, 0.0, 0.0); }
+    float lvl = clamp(floor((p.y + 6.74) / 4.2 + 0.5), 1.0, 3.0);
+    float by = p.y + 6.74 - lvl * 4.2;
+    float slab = sdBox(vec3(abs(p.x) - 7.6, by, zl - 273.0), vec3(1.4, 0.14, 11.0));
+    if (slab < d) { d = slab; cMat = M_CONCRETE; cInfo = vec4(1.0, lvl, 0.0, 0.0); }
+    vec3 b = vec3(abs(p.x) - 6.27, by - 0.14, zl - 273.0);
+    float hr = min(sdBox(b - vec3(0.0, 1.05, 0.0), vec3(0.04, 0.025, 11.0)),
+      sdBox(vec3(b.x, b.y - 0.52, (fract(b.z / 1.5) - 0.5) * 1.5), vec3(0.025, 0.52, 0.02)));
+    hr = max(hr, abs(b.z) - 11.0);
+    if (hr < d) { d = hr; cMat = M_STEEL; cInfo = vec4(0.0); }
+    float pane = sdBox(b - vec3(0.0, 0.5, 0.0), vec3(0.01, 0.46, 11.0));
+    if (pane < d) { d = pane; cMat = M_GLASS; cInfo = vec4(2.0, p.x < 0.0 ? -1.0 : 1.0, 0.0, 0.0); }
     return d;
   }
 
@@ -323,9 +367,8 @@ export const structuresGlsl = /* glsl */`
     float ends = max(362.0 - zl, zl - 418.0);
     float shell = max(abs(r - 2.6) - 0.03, ends);
     float rib = max(length(vec2(r - 2.63, (fract(zl / 3.0 + 0.5) - 0.5) * 3.0)) - 0.07, ends);
-    cInfo = vec4(0.0);
-    if (rib < shell) { cMat = M_STEEL; return rib; }
-    cMat = M_FROST;
+    if (rib < shell) { cMat = M_STEEL; cInfo = vec4(6.0, 0.0, 0.0, 0.0); return rib; }
+    cMat = M_FROST; cInfo = vec4(0.0);
     return shell;
   }
 

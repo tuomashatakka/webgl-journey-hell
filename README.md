@@ -46,9 +46,9 @@ src/components/  React views
 src/hooks/       React hooks: every useState and useEffect lives here or in a provider
 src/journeys/    framework-free journey content, one folder per journey + registry
 src/packages/    bun workspaces, framework-free, never import react or next
-assets/          posters, screenshots, textures: every image in the repo
+assets/          posters, screenshots, textures, archive: every image in the repo
 docs/            architecture, design system, tooling, runtime, per-journey specs
-tools/           CLI: journey.mjs, shoot-posters.mjs, shoot-ui.mjs, chromium.mjs, verify-geometry.ts, harness/
+tools/           CLI: journey.mjs, shoot-posters.mjs, shoot-ui.mjs, shoot-gifs.mjs, gif.mjs, chromium.mjs, verify-geometry.ts, harness/
 ```
 
 ## Read next

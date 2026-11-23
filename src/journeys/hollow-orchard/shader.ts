@@ -64,31 +64,84 @@ const SCENE = `
     float lamp = stageOn(4.0);
     // And of FRUITING BODY, which is shaded as the inside of something alive.
     float gut  = stageOn(5.0);
+    // MARROW GROVE is bone, and MYCELIAL FALL is lit from inside its filaments.
+    float bone = stageOn(3.0);
+    float web  = stageOn(10.0);
+    // HOST is people grown into a wall of flesh.
+    float host = stageOn(8.0);
+    // THE BLOOM is the underside of a cap and the gills of a funnel.
+    float gills = stageOn(7.0);
 
     vec3 base;
-    if (mat < 0.5)      base = uTint * 0.55 + vec3(0.10, 0.06, 0.05);   // flesh / fungus
-    else if (mat < 1.5) base = vec3(0.78, 0.74, 0.66);                  // bark / bone
+    if (mat < 0.5) {                                                    // flesh / fungus
+      base = uTint * 0.55 + vec3(0.10, 0.06, 0.05);
+      // Gill flesh is a pale ochre, streaked down the plate, shadowed in the
+      // trough between two gills (mat 0), dark at the free edge with the
+      // spores it sheds (mat 0.4), and darker the deeper down the funnel.
+      if (gills > 0.0) {
+        float u = mat / 0.4;
+        vec3 gc = vec3(0.66, 0.52, 0.34) * (0.82 + 0.3 * vnoise3(p * vec3(2.5, 9.0, 2.5)));
+        gc     *= (0.5 + 0.5 * smoothstep(0.0, 0.3, u)) * (0.3 + 0.7 * smoothstep(-13.0, -3.0, p.y));
+        gc      = mix(gc, vec3(0.26, 0.15, 0.08), smoothstep(0.8, 1.0, u) * 0.85);
+        base    = mix(base, gc, gills);
+      }
+    }
+    else if (mat < 1.5) {                                               // bark / bone, marrow at 1.3
+      base = vec3(0.78, 0.74, 0.66);
+      if (bone > 0.0) {
+        // Grain running with the shaft, pores, a few cracks, and the stain the
+        // loam has drawn up the foot of every trunk.
+        float grain = vnoise3(p * vec3(15.0, 1.3, 15.0));
+        float pore  = smoothstep(0.62, 0.9, vnoise3(p * 27.0));
+        float crack = ridge(p * vec3(2.6, 0.5, 2.6) + 3.0);
+        crack *= crack; crack *= crack; crack *= crack; crack *= crack;
+        float foot  = smoothstep(1.6, 0.0, p.y + 0.9 * vnoise3(p * 1.7));
+        vec3  aged  = base * vec3(1.0, 0.96, 0.86) * (0.84 + 0.3 * grain);
+        aged       *= 1.0 - 0.3 * pore - 0.6 * crack;
+        aged        = mix(aged, vec3(0.32, 0.25, 0.17) * (0.6 + 0.6 * grain), foot * 0.75);
+        // The snapped end: spongy, dark red, a paler rind round it.
+        vec3 marrow = vec3(0.34, 0.07, 0.05) * (0.45 + 1.1 * vnoise3(p * 34.0));
+        aged        = mix(aged, marrow, smoothstep(1.05, 1.25, mat));
+        base        = mix(base, aged, bone);
+      }
+      // Skin gone waxy and grey in the wall, bruised where it is pressed into
+      // it, and the wall's own flesh grown back over its edges (mat 1.2).
+      if (host > 0.0) {
+        vec3 skin = vec3(0.60, 0.53, 0.50) * (0.8 + 0.35 * vnoise3(p * 6.0));
+        skin      = mix(skin, vec3(0.42, 0.30, 0.40), smoothstep(0.55, 0.85, vnoise3(p * 2.3 + 5.0)) * 0.6);
+        skin      = mix(skin, uTint * 0.55 + vec3(0.10, 0.06, 0.05), smoothstep(1.0, 1.2, mat));
+        base      = mix(base, skin, host);
+      }
+    }
     else if (mat < 2.5) {                                               // soil, and root bark at 2.4
       base = vec3(0.20, 0.15, 0.11);
+      // Bone meal trodden into the loam of the grove.
+      if (bone > 0.0)
+        base = mix(base, vec3(0.62, 0.58, 0.48), smoothstep(0.80, 0.86, vnoise3(p * vec3(11.0, 3.0, 11.0))) * bone * 0.7);
       if (lamp > 0.0) {
         vec3 bark = vec3(0.30, 0.19, 0.11) * (0.7 + 0.6 * vnoise3(p * vec3(9.0, 9.0, 1.2)));
         base      = mix(base, bark, smoothstep(2.0, 2.4, mat) * lamp);
       }
     }
     else if (mat < 3.5) base = uTint * 0.85 + vec3(0.12, 0.02, 0.04);   // wet fruit
-    else                base = vec3(0.62, 0.66, 0.78);                  // spore crust
+    else {                                                              // spore crust
+      base = vec3(0.62, 0.66, 0.78);
+      // A hypha is a wet tube, fibrous along its length and not chalk white.
+      if (web > 0.0)
+        base = mix(base, vec3(0.34, 0.40, 0.56) * (0.7 + 0.6 * vnoise3(p * vec3(19.0, 19.0, 2.5))), web);
+    }
 
     // Rot mottling, and gills where a cap is facing down.
     float mott = fbm3(p * 2.4);
     base *= mix(1.0, 0.55 + mott * 0.9, 0.35 + 0.5 * uWalk.w);
     if (mat < 0.5) {
       float gill = 0.5 + 0.5 * sin(atan(p.z, p.x) * 36.0);
-      base *= mix(1.0, 0.72 + gill * 0.5, clamp(-n.y, 0.0, 1.0));
-      // Veins under the wall of the gut, dark and bruised, running with it.
-      if (gut > 0.0) {
+      base *= mix(1.0, 0.72 + gill * 0.5, clamp(-n.y, 0.0, 1.0) * (1.0 - gills));
+      // Veins under the wall of the gut and of the host, dark and bruised.
+      if (gut + host > 0.0) {
         float vein = ridge(p * vec3(0.6, 0.6, 0.3) + 7.0);
         vein *= vein; vein *= vein; vein *= vein; vein *= vein;
-        base  = mix(base, base * vec3(0.38, 0.22, 0.46), vein * gut * 0.85);
+        base  = mix(base, base * vec3(0.38, 0.22, 0.46), vein * (gut + host) * 0.85);
       }
     }
 
@@ -96,7 +149,8 @@ const SCENE = `
     float ao  = calcAO(p, n);
     // The key is dimmed to leave the lanterns room to be what lights a stage.
     // And further inside the gut, where there is no sky at all.
-    vec3  col = base * uKey * (0.08 + 0.55 * ndl) * ao * (1.0 - 0.45 * gut);
+    // And in the web, where the light is what travels down the filaments.
+    vec3  col = base * uKey * (0.08 + 0.55 * ndl) * ao * (1.0 - 0.45 * gut) * (1.0 - 0.5 * web);
 
     // THE ROOT LABYRINTH is a dug passage with no sky, so the key alone lights
     // only the floor. Light it from the eye instead, falling off with distance,
@@ -115,6 +169,11 @@ const SCENE = `
       col += uLantern * lanternGloss(ps, n, rd, 5.0) * wet * ao * gut * 4.0;
     col += uLantern * max(glow - 1.0, 0.0) * 1.15;
     glow = min(glow, 1.0);
+    // The packets passing down the hyphae, and the beads, lit from inside.
+    if (web > 0.0 && mat > 2.5) {
+      float pk = smoothstep(0.3, 1.0, glow);
+      col += mix(uLantern, vec3(1.0), 0.35 * pk) * pk * web * (0.55 + 0.45 * clamp(dot(n, -rd), 0.0, 1.0)) * 1.5;
+    }
 
     // Hemisphere ambient — the ground is dead, the air above it glows a little.
     col += base * mix(uBg * 0.5, uKey * 0.18, 0.5 + 0.5 * n.y) * ao;
@@ -135,8 +194,9 @@ const SCENE = `
 
     // Mycelial filament tracery, heavy-effects only.
     // Thinned in the gut: over a whole wall of flesh it was a net, not a wall.
+    // And gone from the gills, where it marbled every plate like lava.
     if (uHeavy > 0.5)
-      col += uTint * pow(ridge(p * 3.2 + vec3(0.0, 0.0, iTime * 0.06)), 6.0) * glow * 0.7 * (1.0 - 0.7 * gut);
+      col += uTint * pow(ridge(p * 3.2 + vec3(0.0, 0.0, iTime * 0.06)), 6.0) * glow * 0.7 * (1.0 - 0.7 * gut) * (1.0 - gills);
 
     // The breach: scorched lips, red heat in the fissures, and the red light from
     // below catching whatever faces down toward it.
@@ -215,11 +275,21 @@ const SCENE = `
     // also what hides the geometry morph underneath it.
     // (Named xfade, not cross -- cross() is a GLSL builtin called above in this scope.)
     float xfade = sin(uStage.z * PI);
-    // FRUITING BODY is a closed tube, and the march runs out of steps down its
-    // bore before it runs out of tube: its air is thick enough that the wall is
-    // already the dark by then, so the far end closes instead of showing a hole.
-    float den   = 0.016 + 0.030 * uWalk.w + 0.05 * xfade + 0.02 * uPulse.z + 0.018 * stageOn(5.0);
+    // FRUITING BODY and HOST are closed tubes, and the march runs out of steps
+    // down the bore before it runs out of tube: their air is thick enough that
+    // the wall is already the dark by then, so the far end closes instead of
+    // showing a hole.
+    // MYCELIAL FALL has no walls to stop the eye, so its air does: the web
+    // thins into the dark instead of standing sharp to the far plane.
+    float web   = stageOn(10.0);
+    float den   = 0.016 + 0.030 * uWalk.w + 0.05 * xfade + 0.02 * uPulse.z + 0.018 * stageOn(5.0) + 0.034 * stageOn(8.0) + 0.034 * web;
     col = mix(uBg, col, exp(-t * den));
+    // And past where the march gives out there is more web, too fine to resolve.
+    if (web > 0.0 && !hit) {
+      float far = ridge(rd * 7.0 + vec3(0.0, 0.0, uWalk.x * 0.02));
+      far *= far; far *= far; far *= far;
+      col += uTint * far * 0.10 * web;
+    }
 
     // Cheap wavelength split in the haze only — the one chromatic effect a
     // single pass can afford, since it needs no resampling of the scene.

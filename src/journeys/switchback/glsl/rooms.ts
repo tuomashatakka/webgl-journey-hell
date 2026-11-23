@@ -1,17 +1,41 @@
 export const roomsGlsl = `  // ---- rooms ---------------------------------------------------------------
 
+  // ---- the station -----------------------------------------------------------
+  //
+  // THE BOARDING PLATFORM is a station hall, not a bore: a segmental vault over
+  // the whole width, wall to wall, springing STATION_RISE under the crown, so
+  // both decks have a storey of headroom and the walls stand straight up off
+  // them. Struck from the table's own bore and ceiling, so the route table
+  // keeps its numbers and the collars and the headland follow the hall.
+
+  const float STATION_RISE   = 2.4;    // crown over the springing line
+  const float STATION_LAMP_X = 3.4;    // the two lines of battens, over the decks
+  const float STATION_DECK   = 0.92;   // deck top above the rail head
+  const float STATION_BAY    = 8.0;    // posters on it, nameboards between them
+
+  /** The hall's air, as a cross-section: negative inside. */
+  float stationVault(vec3 q, float bore, float ceilH, float floorD) {
+    float rad  = (bore * bore + STATION_RISE * STATION_RISE) / (2.0 * STATION_RISE);
+    float vault = length(vec2(q.x, q.y - (ceilH - rad))) - rad;
+    float box   = sdBox2(vec2(q.x, q.y - 0.5 * (ceilH - floorD)), vec2(bore, 0.5 * (ceilH + floorD)));
+    return max(box, vault);
+  }
+
   /**
    * The air a room is carved out of: a box up to the springing line, unioned
    * with the barrel vault above it, clipped to the room's z-range.
    *
-   * One profile serves all six rooms because the arch radius is *derived* rather
-   * than authored — three quarters of the ceiling height, capped at the bore. A
-   * low wide room (the platform) gets a shallow subway vault; a tall narrow one
-   * (the chapel) gets thirteen metres of wall and then a nave; a room with no
-   * walls at all gets a four-hundred-metre box, which is a finite number a
-   * sphere trace can step against where an infinity would poison the 'min'.
+   * One profile serves five of the rooms because the arch radius is *derived*
+   * rather than authored — three quarters of the ceiling height, capped at the
+   * bore. A tall narrow one (the chapel) gets thirteen metres of wall and then a
+   * nave; a room with no walls at all gets a four-hundred-metre box, which is a
+   * finite number a sphere trace can step against where an infinity would
+   * poison the 'min'. The platform is the exception (stationVault): a vault
+   * struck from the track alone brought its haunches down onto the decks.
    */
-  float roomProfile(vec3 q, float bore, float ceilH, float floorD) {
+  float roomProfile(vec3 q, float type, float bore, float ceilH, float floorD) {
+    if (type < T_DRIFT - 0.5) return stationVault(q, bore, ceilH, floorD);
+
     float archR = min(bore, ceilH * 0.75);
     float archY = ceilH - archR;
 
@@ -23,10 +47,22 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     return min(box, arch);
   }
 
+  /**
+   * A room's own z-slab, OVERLAP past both ends, so two neighbours' air
+   * overlaps rather than touching on a plane. The station is the exception at
+   * its far end: it is the bigger room there, so the drift's air reaching back
+   * into it is the overlap, and the hall stops at its own end plane, with a
+   * tiled end wall and the drift's mouth in it, rather than a metre and more
+   * into the chalk.
+   */
+  float roomSlab(vec3 q, vec4 A) {
+    return max(A.x - OVERLAP - q.z, q.z - A.y - (A.z < T_DRIFT - 0.5 ? 0.0 : OVERLAP));
+  }
+
   float roomAir(vec3 q, vec4 A, vec4 B) {
-    float slab = max(A.x - OVERLAP - q.z, q.z - A.y - OVERLAP);
+    float slab = roomSlab(q, A);
     vec3 w = A.z > T_FALL - 0.5 ? fallWarp(q) : q;
-    return max(roomProfile(w, A.w, B.x, B.y), slab);
+    return max(roomProfile(w, A.z, A.w, B.x, B.y), slab);
   }
 
   /**
@@ -46,9 +82,9 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
 
     float end = abs(q.z - A.x) < abs(q.z - A.y) ? A.x : A.y;
     float dz  = abs(q.z - end) - 0.34;
-    if (dz > 0.05) return dz;                      // bound, handed back while it is clear
+    if (dz > 1.0) return dz;                       // bound, handed back while it is clear
 
-    float prof = roomProfile(q, A.w, B.x, B.y);
+    float prof = roomProfile(q, A.z, A.w, B.x, B.y);
     return max(max(prof - 0.70, -prof), dz);
   }
 
@@ -126,19 +162,71 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     return sdBox2(vec2(q.x, q.y - (top - h)), vec2(1.15, h));
   }
 
-  /** THE BOARDING PLATFORM: two raised decks, queue stanchions, strip lights. */
-  float platformProps(vec3 q, float bore, float ceilH, float lamp, float lampY) {
+  /**
+   * THE BOARDING PLATFORM: two decks with a stone coping on the edge, battens
+   * hung from the vault over each, and on the walls a poster frame every bay,
+   * a nameboard between two, and a bench under every other nameboard. Behind
+   * one bound for the walls and one for the lights, so a ray down the track
+   * pays for the deck and two compares.
+   */
+  float platformProps(vec3 q, float bore, float lamp, float lampY) {
     float ax = abs(q.x);
     float zp = phaseAt(q.z);
 
-    float deck = sdBox2(vec2(ax - (bore * 0.5 + 1.55), q.y - 0.20), vec2(bore * 0.5 - 0.05, 0.72));
+    float deck  = sdBox2(vec2(ax - (bore * 0.5 + 1.55), q.y - 0.20), vec2(bore * 0.5 - 0.05, 0.72));
+    float cope  = sdBox2(vec2(ax - 1.68, q.y - 0.885), vec2(0.10, 0.055));
+    float d     = min(deck, cope);
 
-    float post = length(vec2(ax - 1.62, latt(zp, 3.2))) - 0.035;
-    post = max(post, abs(q.y - 1.30) - 0.42);
+    // The battens: a slim fitting a lamp pitch apart over each deck's edge,
+    // on two rods up to the vault.
+    float lb = max(abs(ax - STATION_LAMP_X) - 0.2, abs(q.y - lampY - 0.3) - 0.45);
+    if (lb > 0.3) d = min(d, lb);
+    else {
+      float lz  = latt(zp, lamp);
+      float fit = sdRoundBox(vec3(ax - STATION_LAMP_X, q.y - lampY, lz), vec3(0.09, 0.045, 1.42), 0.02);
+      float rod = max(length(vec2(ax - STATION_LAMP_X, abs(lz) - 1.05)) - 0.012, abs(q.y - lampY - 0.35) - 0.35);
+      d = min(d, min(fit, rod));
+    }
 
-    float tube = sdBox(vec3(q.x, q.y - lampY, latt(zp, lamp)), vec3(0.90, 0.09, 0.62));
+    // The walls: frames, boards and benches stand within a metre of them.
+    float wb = bore - 0.75 - ax;
+    if (wb > 0.3) return min(d, wb);
 
-    return min(deck, min(post, tube));
+    float fz     = latt(zp + 0.5 * STATION_BAY, STATION_BAY);
+    float poster = sdBox(vec3(ax - bore, q.y - 2.15, fz), vec3(0.05, 0.66, 1.05));
+    float bz     = latt(zp, STATION_BAY);
+    float board  = sdBox(vec3(ax - bore, q.y - 2.62, bz), vec3(0.06, 0.22, 1.25));
+
+    float sz    = latt(zp, 2.0 * STATION_BAY);
+    float seat  = sdBox(vec3(ax - (bore - 0.50), q.y - 1.36, sz), vec3(0.21, 0.035, 1.0));
+    float back  = sdBox(vec3(ax - (bore - 0.27), q.y - 1.66, sz), vec3(0.025, 0.24, 1.0));
+    float legs  = sdBox(vec3(ax - (bore - 0.50), q.y - 1.13, abs(sz) - 0.86), vec3(0.17, 0.21, 0.035));
+    float bench = min(seat, min(back, legs));
+
+    return min(d, min(min(poster, board), bench));
+  }
+
+  // The platform's chain beat starts here, two thirds of the way down the room,
+  // and the drift's first beat, which the chain runs on over, is this long.
+  const float STATION_CHAIN = 48.0;
+  const float DRIFT_CHAIN   = 26.0;
+
+  /**
+   * The chain, in its trough between the rails, from depth z0 to z1. Laid
+   * under the cart's floor, so it is added after the clearance rather than cut
+   * by it; its links are drawn by the shading.
+   */
+  float chainWay(vec3 q, float z0, float z1) {
+    return sdBox(vec3(q.x, q.y + 0.10, q.z - 0.5 * (z0 + z1)), vec3(0.075, 0.038, 0.5 * (z1 - z0)));
+  }
+
+  /**
+   * The platform's permanent way: brake shoes along the first beat, which the
+   * cart comes in on, and the chain along the last, which hauls it out.
+   */
+  float platformWay(vec3 q, vec4 A) {
+    float shoe = sdBox(vec3(abs(q.x) - 0.14, q.y + 0.07, q.z - A.x - 12.0), vec3(0.014, 0.062, 9.0));
+    return min(shoe, chainWay(q, A.x + STATION_CHAIN, A.y));
   }
 
   /** THE CHALK DRIFT: timber sets, crown lagging, and a caged bulb on the cap. */
@@ -189,25 +277,180 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     return min(min(leg, cap), min(diag, bars));
   }
 
-  /** THE CARPET CONCOURSE: shopfront pylons, dead escalators, planters, mullions. */
-  float concourseProps(vec3 q, float bore, float ceilH) {
+  // ---- the concourse: a galleria, and the sunset let into it ----------------
+  //
+  // The room the route table carves is a mall's section already: a barrel vault
+  // over the middle and a low aisle down either side. What it lacked was a
+  // building. So a gallery runs along both springing lines on columns, the
+  // aisles under it are arcades of shopfronts, a rib crosses the vault on every
+  // bay, and a band of glazing runs round each haunch. As in the chapel, the
+  // glazing is one set of numbers read by everything that needs it: the glass on
+  // the vault, the pool of sun on the carpet and the beam in the air between.
+
+  // The vault, as roomProfile strikes it from the table's 11 m bore and 10.5 m
+  // ceiling: its radius, and the height of its centre.
+  const float MALL_R      = 7.875;
+  const float MALL_ARCH_Y = 2.625;
+
+  // A bay: a rib, a column under it and a shopfront between two of them.
+  // Divides PHASE_WRAP, and so do the mullions at a quarter of it.
+  const float MALL_BAY = 5.0;
+
+  // The gallery: how far off the track its edge is, and the height of its floor.
+  const float MALL_GAL_X = 6.3;
+  const float MALL_GAL_Y = 3.375;
+
+  // The clerestory, as heights above the vault's centre: sill and head at 24 and
+  // 60 degrees round the haunch, and the two transoms that make three lights of
+  // it at 36 and 48.
+  const float MALL_WIN_Y0 = 3.203;
+  const float MALL_WIN_Y1 = 6.820;
+  const float MALL_WIN_T0 = 4.629;
+  const float MALL_WIN_T1 = 5.852;
+
+  // Where the sun is, in the track's frame: ahead, off to the right and thirty
+  // degrees up, so the beams come down across the hall toward the cart. A
+  // constant and not uSun, for the chapel's reason: the glazing is built into
+  // the vault and the vault turns with the track.
+  const vec3 MALL_SUN = vec3(0.773, 0.503, 0.387);
+
+  /** A bar across the light, as what gets past it: half-width, then softness. */
+  float mallBar(float d, float hw, float soft) {
+    return smoothstep(hw - soft, hw + soft, d);
+  }
+
+  /**
+   * How much of the sun reaches a point through the clerestory, 0..1.
+   *
+   * The point is carried back along MALL_SUN to the vault (a circle in section,
+   * so it is one square root) and the glazing is tested there: the band, its
+   * transoms, the mullions and the ribs. 'soft' is the width of an edge in
+   * metres; past a third of a metre the transoms and mullions are finer than
+   * the question and are answered by their mean. 'back' is the distance to the
+   * glass.
+   */
+  float mallSun(vec3 q, float soft, out float back) {
+    vec2  o    = vec2(q.x, q.y - MALL_ARCH_Y);
+    float b    = dot(o, MALL_SUN.xy);
+    float dd   = dot(MALL_SUN.xy, MALL_SUN.xy);
+    float disc = b * b - dd * (dot(o, o) - MALL_R * MALL_R);
+    back = (sqrt(max(disc, 0.0)) - b) / dd;
+    if (disc < 0.0 || back < 0.0) return 0.0;
+
+    vec2  w  = o + MALL_SUN.xy * back;
+    float zw = phaseAt(q.z + MALL_SUN.z * back);
+
+    float lit = smoothstep(-soft, soft, w.y - MALL_WIN_Y0) * smoothstep(soft, -soft, w.y - MALL_WIN_Y1);
+    if (lit < 0.002) return 0.0;
+
+    lit *= mallBar(lattAbs(zw, MALL_BAY), 0.17, soft);
+    if (soft < 0.33)
+      lit *= mallBar(abs(w.y - MALL_WIN_T0), 0.05, soft) * mallBar(abs(w.y - MALL_WIN_T1), 0.05, soft)
+           * mallBar(lattAbs(zw + 0.625, 1.25), 0.045, soft);
+    else
+      lit *= 0.84;
+
+    // Under the far gallery the slab is in the way: only what clears its edge
+    // gets in, and that reaches the foot of the shopfronts and no higher.
+    if (q.x < -MALL_GAL_X && q.y < MALL_ARCH_Y + 0.1)
+      lit *= smoothstep(soft, -soft, q.y - (q.x + MALL_GAL_X) * 0.6507 - MALL_ARCH_Y);
+
+    return lit;
+  }
+
+  /**
+   * THE CARPET CONCOURSE: a galleria that has been shut for a while.
+   *
+   * Extrusions along the track wherever they will do (the gallery, its glass
+   * and its rail are three 2D shapes), lattices on the bay for the rest. Three
+   * groups, and each hands back a bound until a ray is near it: what is on the
+   * walls, what stands on the hall floor, and the escalators. A ray down the
+   * middle of the hall, which is most of them, pays for one square root.
+   */
+  float concourseProps(vec3 q, vec4 A) {
     float ax = abs(q.x);
     float zp = phaseAt(q.z);
 
-    float pz = latt(zp, 6.0);
-    float pylon  = sdBox(vec3(ax - (bore - 0.9), q.y - 1.6, pz), vec3(0.55, 2.2, 0.55));
-    float fascia = sdBox2(vec2(ax - (bore - 0.9), q.y - 3.9), vec2(0.62, 0.42));
+    // Everything on the walls is past the gallery's edge or within a rib's
+    // depth of the vault, so out in the hall the nearer of those two is the
+    // answer and none of it is evaluated.
+    float under = MALL_R - 0.30 - length(vec2(q.x, q.y - MALL_ARCH_Y));
+    float d     = min(MALL_GAL_X - ax, under);
+    if (d < 0.3) {
+      float bz = latt(zp, MALL_BAY);
 
-    float ez = latt(zp, 24.0);
-    float ramp = sdBox(vec3(ax - bore * 0.62, q.y - 1.9 - ez * 0.30, ez),
-                       vec3(0.80, 0.28, 5.4)) / 1.0440;
+      // The gallery: a slab off the springing line and a glass balustrade
+      // standing on its edge, capped with a rail the shading draws.
+      float slab  = sdBox2(vec2(ax - (MALL_GAL_X + 1.1), q.y - (MALL_GAL_Y - 0.375)), vec2(1.1, 0.375));
+      float glass = sdBox2(vec2(ax - (MALL_GAL_X + 0.07), q.y - (MALL_GAL_Y + 0.54)), vec2(0.025, 0.54));
 
-    float planter = sdBox(vec3(ax - 3.6, q.y + 0.10, latt(zp, 8.0)), vec3(0.50, 0.36, 1.30));
+      // A column under the gallery's edge and a rib over the vault, on every bay.
+      float col = max(length(vec2(ax - (MALL_GAL_X + 0.32), bz)) - 0.25, q.y - MALL_ARCH_Y - 0.1);
+      float rib = max(max(under, abs(bz) - 0.11), MALL_GAL_Y - q.y);
 
-    float mull = sdBox2(vec2(latt(q.x, 1.9), q.y - (ceilH - 0.35)), vec2(0.09, 0.30));
-    mull = max(mull, ax - bore * 0.62);
+      d = min(min(slab, glass), min(col, rib));
+    }
 
-    return min(min(pylon, fascia), min(min(ramp, planter), mull));
+    // The hall floor, 4.2 m off the track on both sides: a palm in a tub on the
+    // tens and a bench on the fives between them.
+    float fx = ax - 4.2;
+    float fb = max(abs(fx) - 1.9, q.y - 3.1);
+    if (fb > 0.25) d = min(d, fb);
+    else {
+      float pz = latt(zp + 5.0, 10.0);
+      float pr = length(vec2(fx, pz));
+      float f  = min(max(pr - 0.62, q.y - 0.05), max(pr - 0.085, q.y - 2.35));
+
+      // The fronds: two surfaces of revolution about the trunk, one arching up
+      // and one hanging, each cut into blades by angle. The height above a
+      // curved sheet is not the distance to it, so each is scaled by the
+      // steepest slope its curve reaches, which can only under-state.
+      float cy = q.y - 2.30;
+      float cb = max(pr - 1.80, abs(cy + 0.20) - 0.78);
+      if (cb > 0.2) f = min(f, cb);
+      else {
+        float a  = atan(pz, fx);
+        float bw = 0.012 + 0.20 * smoothstep(0.0, 0.45, pr) * (1.0 - smoothstep(0.85, 1.75, pr));
+        float fu = max(max(abs(cy - (0.85 - 0.42 * pr) * pr) * 0.76 - 0.014, pr * abs(latt(a, 0.8976)) - bw), pr - 1.75);
+        float fd = max(max(abs(cy - (0.22 - 0.50 * pr) * pr) * 0.60 - 0.014, pr * abs(latt(a + 0.5, 1.0472)) - bw), pr - 1.55);
+        f = min(f, 0.9 * min(fu, fd));
+      }
+
+      // The bench: one block, slatted on top by the shading.
+      d = min(d, min(f, sdBox(vec3(fx, q.y + 0.33, latt(zp, 10.0)), vec3(0.26, 0.22, 0.95))));
+    }
+
+    // Escalators up to the gallery, a pair every forty metres, stopped, each
+    // between two palms. A pair that an end of the room would cut in half is
+    // left out: its nearest neighbour is sixteen metres off, further than
+    // anything else in the hall.
+    float ex = ax - 5.7;
+    if (abs(ex) > 0.95) d = min(d, abs(ex) - 0.65);
+    else {
+      float ez = latt(zp - 5.0, 40.0);
+      float ec = q.z - ez;
+      float eb = abs(ez) - 3.4;
+      if (min(ec - A.x, A.y - ec) > 7.0) {
+        if (eb > 0.3) d = min(d, eb);
+        else {
+          // Thirty degrees, as a shear in height: the truss and the two
+          // balustrades standing on it, hard against the gallery's edge.
+          float ys    = q.y - (1.4125 + 0.5772 * ez);
+          float truss = sdBox(vec3(ex, ys + 0.40, ez), vec3(0.60, 0.42, 3.4));
+          float sides = sdBox(vec3(abs(ex) - 0.53, ys - 0.45, ez), vec3(0.045, 0.47, 3.4));
+          d = min(d, min(truss, sides) / 1.1547);
+        }
+      }
+    }
+
+    // The front. Seen from the void the hall is a section drawing with the lid
+    // off, so the vault is closed over the way in by a glazed lunette standing
+    // on the gallery, and the way in is everything under it.
+    d = min(d, max(abs(q.z - A.x - 1.35) - 0.15, MALL_GAL_Y - q.y));
+
+    // Nothing of the hall stands out past its own front, in the void's air, or
+    // through the chapel's gable at the other end.
+    return max(d, max(A.x + 1.2 - q.z, q.z - A.y + 0.45));
   }
 
   // ---- the chapel's nave, and the light let into it -------------------------
@@ -303,7 +546,7 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     float inside = min(q.z - A.x, A.y - q.z);
     float dz     = abs(inside) - 0.45;
     if (dz < 1.5)
-      fit = min(fit, max(max(dz, -nave), roomProfile(q, bore, B.x, B.y) - 0.70));
+      fit = min(fit, max(max(dz, -nave), roomProfile(q, T_CHAPEL, bore, B.x, B.y) - 0.70));
 
     // Deep in the nave's air the cut is the nearer surface whatever the fold is
     // doing, and '-nave' is a bound on the whole carve (it is one side of a max).
@@ -404,17 +647,21 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
 
   float roomProps(vec3 q, vec4 A, vec4 B, vec4 C) {
     // The room's own z-slab is the outermost bound every prop shares. Handed back
-    // as a distance only while it is comfortably clear of the hit epsilon.
-    float slab = max(A.x - OVERLAP - q.z, q.z - A.y - OVERLAP);
-    if (slab > 0.05) return slab;
+    // as a distance only while it is comfortably clear of the hit epsilon, and
+    // that is the epsilon at the far end of the march (0.15 m at T_MAX) times
+    // the bend's Lipschitz divisor, not the epsilon at the near end: a bound
+    // under it is a hit, and with nothing behind the slab, as past the
+    // overlook's headland, that hit was a wall across the whole sky.
+    float slab = roomSlab(q, A);
+    if (slab > 1.0) return slab;
 
     float t = A.z;
     float d;
 
-    if (t < T_DRIFT - 0.5)          d = platformProps(q, A.w, B.x, B.z, C.w);
-    else if (t < T_SCAFFOLD - 0.5)  d = driftProps(q, A.w, B.x, B.z, C.w);
+    if (t < T_DRIFT - 0.5)          d = platformProps(q, A.w, B.z, C.w);
+    else if (t < T_SCAFFOLD - 0.5)  d = max(driftProps(q, A.w, B.x, B.z, C.w), A.x - q.z);
     else if (t < T_CONCOURSE - 0.5) d = scaffoldProps(q, B.w);
-    else if (t < T_CHAPEL - 0.5)    d = concourseProps(q, A.w, B.x);
+    else if (t < T_CHAPEL - 0.5)    d = concourseProps(q, A);
     else if (t < T_OVERLOOK - 0.5)  d = chapelProps(q, A, B, C);
     else if (t < T_FALL - 0.5)      d = overlookProps(q);
     else                            d = fallProps(q, B.w);
@@ -426,6 +673,15 @@ export const roomsGlsl = `  // ---- rooms --------------------------------------
     // Nothing may enter the swept tube. It cannot fail to clear the cart,
     // because it is defined by where the cart goes.
     d = max(max(d, -clearance(q)), slab);
+
+    // The brake and the chain, between the rails, where nothing else goes.
+    float way = max(abs(q.x) - 0.25, abs(q.y + 0.08) - 0.12);
+    if (way < 0.3) {
+      if (t < T_DRIFT - 0.5)         way = platformWay(q, A);
+      else if (t < T_SCAFFOLD - 0.5) way = chainWay(q, A.x - OVERLAP, A.x + DRIFT_CHAIN);
+      else                           way = 1e5;
+    }
+    d = min(d, max(way, slab));
 
     // ...and the portal collar is outside the bore by construction, so it does
     // not go through the clearance test and cannot be eaten by it.

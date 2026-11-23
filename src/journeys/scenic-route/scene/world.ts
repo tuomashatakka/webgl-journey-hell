@@ -12,6 +12,8 @@ import type { Hinged, Jaw } from '../maw'
 import { buildProps } from '../props'
 import type { PropSet } from '../props'
 import { buildCity } from '../city'
+import { buildCutting, cutAt } from '../cutting'
+import { STANDARD_LAYOUT, VERTEX_FLOATS } from '@wjh/geometry/meshBuilder'
 
 import { PORTAL_LIFT } from './shared'
 import type { Drawable } from './shared'
@@ -67,6 +69,8 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
   // The land is carved away wherever it would pass through the throat or the
   // cave: the tube's spine lets every terrain vertex know how far inside it is.
   spine.tube = { idx: buildSpineIndex(route, [ 5, 6 ], 32), s0: route.spans[5].s0 }
+  // And it rises beside the incline to the top of the cutting and the walls.
+  spine.cut = s => cutAt(route, s)
 
   const chunks: Drawable[] = buildNearChunks(spine).map(c => ({
     mesh: createMesh(gl, c.builder), cx: c.cx, cy: c.cy, cz: c.cz, radius: c.radius,
@@ -108,7 +112,7 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
 
   // --- downtown ------------------------------------------------------------------
   const city      = buildCity(route, spine)
-  const towerMesh = createMesh(gl, city.builder, 3)
+  const towerMesh = createMeshFromArrays(gl, city.vertices, city.indices, STANDARD_LAYOUT, VERTEX_FLOATS, 4)
   towerMesh.setInstances(gl, city.instances)
 
   // --- the coast guardrail -----------------------------------------------------
@@ -129,5 +133,11 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
     gl, railArrays.vertices, railArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
   )
 
-  return { profile, roadMesh, chunks, far, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, falls, fallsMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh }
+  // --- the incline's cutting and walls ----------------------------------------
+  const cutArrays     = buildCutting(route)
+  const cutMesh: Mesh = createMeshFromArrays(
+    gl, cutArrays.vertices, cutArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
+  )
+
+  return { profile, roadMesh, cutMesh, chunks, far, farMesh, seaMesh, patchMesh, maw, mouthDir, headMesh, jaws, rings, lureMesh, strandMesh, falls, fallsMesh, tube, tubeFront, tubeBack, waterMesh, props, city, towerMesh, railMesh }
 }

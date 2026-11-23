@@ -34,6 +34,8 @@ import { evaluateFrame } from '@wjh/journey/frame'
 
 import { seekSimulation } from '@wjh/journey/seek'
 
+import { CONFIG } from '@wjh/config/config'
+
 
 const errors: string[] = []
 
@@ -44,9 +46,24 @@ console.error          = (...args: unknown[]) => {
   origError(...args)
 }
 
+type JourneyType = (typeof JOURNEY_DEFINITIONS)[string]
+
+/** What a held page answers to: another instant, where a film ends, the frame again. */
+interface HeldPage {
+  frame: NonNullable<Window['__harnessFrame']>;
+  onset: NonNullable<Window['__harnessOnset']>;
+  again: () => void;
+}
+
 declare global {
   interface Window {
     __harnessErrors?: string[];
+
+    /** Draw another instant on the held page; the pixels come back as base64 RGBA. */
+    __harnessFrame?: (time: number) => { label: string, rgba: string };
+
+    /** The instant the journey's signal starts to go, or `limit`. */
+    __harnessOnset?: (limit: number) => number;
   }
 }
 
@@ -117,6 +134,57 @@ function withOverrides (custom: Record<string, number | number[]>): Record<strin
   return custom
 }
 
+/**
+ * The instant the signal starts to go: the first step at which the journey has
+ * been in its ending for longer than the grace it is given. `limit` if it never
+ * is. Walked at the seek's own timestep, like everything else here.
+ */
+function signalOnset (journey: JourneyType, dt: number, limit: number): number {
+  const sim = journey.createSimulation?.() ?? null
+  for (let time = dt; time < limit; time += dt) {
+    sim?.step(dt, time)
+
+    const marks = sim?.marks?.() ?? journey.marksAt?.(time)
+    if ((marks?.signalAge ?? 0) > CONFIG.signal.graceSeconds)
+      return time
+  }
+  return limit
+}
+
+/** The canvas's pixels as base64 RGBA, bottom row first, the way readPixels hands them over. */
+function readRgba (gl: WebGLRenderingContext | WebGL2RenderingContext, canvas: HTMLCanvasElement): string {
+  const px = new Uint8Array(canvas.width * canvas.height * 4)
+  gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, px)
+
+  let text = ''
+  for (let i = 0; i < px.length; i += 0x8000)
+    text += String.fromCharCode(...px.subarray(i, i + 0x8000))
+  return btoa(text)
+}
+
+/**
+ * What a held page can still be asked for once its frame is up.
+ *
+ * Further instants, so a whole film costs one bundle and one shader compile
+ * (tools/shoot-gifs.mjs), and where that film should stop. And, under ?loop=1,
+ * the held frame drawn again on every tick: without it the frame is drawn once
+ * and the page idles at the display's rate whatever the shader costs, so this
+ * is what makes counting ticks a measurement (journey.mjs fps).
+ */
+function holdPage ({ frame, onset, again }: HeldPage): void {
+  window.__harnessFrame = frame
+  window.__harnessOnset = onset
+
+  if (new URLSearchParams(location.search).get('loop') !== '1')
+    return
+
+  const tick = () => {
+    again()
+    requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+}
+
 async function whenReady (renderer: RendererType): Promise<void> {
   const deadline = performance.now() + 20_000
   while (renderer.ready && !renderer.ready() && performance.now() < deadline)
@@ -171,8 +239,11 @@ async function main (): Promise<void> {
   // does too; ?heavy=0 renders the phone path.
   const heavy   = new URLSearchParams(location.search).get('heavy') === '0' ? 0 : 1
   const pointer = d.pointer ? { x: d.pointer[0], y: d.pointer[1] } : { x: 0, y: 0 }
-  renderer.draw({ time: t, pointer, heavy, custom })
-  gl.finish()
+  const draw    = (time: number, uniforms: typeof custom) => {
+    renderer.draw({ time, pointer, heavy, custom: uniforms })
+    gl.finish()
+  }
+  draw(t, custom)
 
   publishDebugState({
     journey:  slug,
@@ -187,5 +258,19 @@ async function main (): Promise<void> {
     speed:    1,
     pan:      [ 0, 0 ],
     uniforms: custom,
+  })
+
+  holdPage({
+    // Replayed from zero like any ?t=, which makes it the frame that URL shows.
+    frame: time => {
+      const fresh = journey.createSimulation?.() ?? null
+      seekSimulation(fresh, time, d.dt)
+
+      const at = evaluateFrame(journey, fresh, time)
+      draw(time, withOverrides(at.custom ?? {}))
+      return { label: at.label, rgba: readRgba(gl, canvas) }
+    },
+    onset: limit => signalOnset(journey, d.dt, limit),
+    again: () => draw(t, custom),
   })
 }

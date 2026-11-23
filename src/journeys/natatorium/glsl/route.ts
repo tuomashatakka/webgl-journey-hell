@@ -17,6 +17,62 @@ export const routeGlsl = `  // --- the route -----------------------------------
     return vec3(A.x * v.x - A.y * v.z, v.y, A.y * v.x + A.x * v.z);
   }
 
+  // THE GRAND HALL's shell inside its box. The vault is the outside of one
+  // cylinder across the hall, centred far below the floor so a 4.5 m rise
+  // spans the full width: one length() and it is exact. A rib is the band of
+  // that solid VAULT_RIB deep under every column pair; the windows are recesses
+  // cut back into the walls, added to the air with min like the door stubs.
+  float vaultRadius(vec4 B) {
+    return (B.y * B.y + VAULT_RISE * VAULT_RISE) / (2.0 * VAULT_RISE);
+  }
+
+  // How much of the width a row of strip lights spans: under the vault only
+  // the crown (the tube hung 0.5 under it, in the air), elsewhere all of it.
+  float lampRun(vec4 C) { return abs(C.y - 2.0) < 0.5 ? 0.545 : 1.0; }
+
+  // The tint of a room's lamps over the cool white every other room has: in
+  // THE PLANT ROOM the old tubes are warm white gone amber behind yellowed
+  // diffusers, the only warm light in the building. Exactly one elsewhere.
+  vec3 lampWarm(vec4 C) { return abs(C.y - 4.0) < 0.5 ? vec3(1.12, 0.86, 0.58) : vec3(1.0); }
+
+  // The clerestory's profile on the side wall: a rectangle under a half round,
+  // one in every bay between two ribs, none in the bays against the end walls.
+  float clerestory(vec3 qs, vec4 B) {
+    float wz = latt(qs.z + VAULT_BAY * 0.5, VAULT_BAY);
+    float hh = (CLER_ARCH - CLER_SILL) * 0.5;
+    float w2 = min(max(abs(wz) - CLER_HW, abs(qs.y - CLER_SILL - hh) - hh),
+                   length(vec2(wz, qs.y - CLER_ARCH)) - CLER_HW);
+    return max(w2, abs(qs.z - B.w * 0.5) - (B.w * 0.5 - 2.5));
+  }
+
+  // The thermal window: the lunette taken in by LUNE_IN under the vault, over a
+  // sill LUNE_SILL above the springing, split in three lights by two mullions.
+  float lunette(vec3 qs, vec4 B, float rr, float R) {
+    float l2 = max(rr - (R - LUNE_IN), (B.z - VAULT_RISE + LUNE_SILL) - qs.y);
+    return max(l2, 0.14 - abs(abs(qs.x) - B.y * 0.30));
+  }
+
+  float vaultShell(vec3 qs, vec4 B, float room) {
+    float R   = vaultRadius(B);
+    float rr  = length(vec2(qs.x, qs.y - (B.z - R)));
+    float rib = max(R - VAULT_RIB - rr, abs(latt(qs.z, VAULT_BAY)) - 0.30);
+    float air = max(max(room, rr - R), -rib);
+
+    // A gallery across each end wall, over the doorway: a slab GAL_DEEP out
+    // of the wall and a balustrade along its edge, balusters every 0.3 m.
+    float ez  = min(qs.z, B.w - qs.z) + OVERLAP;
+    float gal = max(abs(qs.y - GAL_Y + 0.18) - 0.18, ez - GAL_DEEP);
+    float bal = max(abs(qs.y - GAL_Y - 0.48) - 0.48, abs(ez - GAL_DEEP + 0.08) - 0.08);
+    bal = max(bal, -max(abs(latt(qs.x, 0.30)) - 0.10, abs(qs.y - GAL_Y - 0.47) - 0.33));
+    air = max(air, -min(gal, bal));
+
+    // Both reveals 0.34 deep: from 0.05 proud of the face to 0.29 behind it.
+    float wx = abs(abs(qs.x) - (B.y + 0.12)) - 0.17;
+    air = min(air, max(clerestory(qs, B), wx));
+    float ze = abs(qs.z - B.w * 0.5) - (B.w * 0.5 + OVERLAP);
+    return min(air, max(lunette(qs, B, rr, R), abs(ze - 0.12) - 0.17));
+  }
+
   // The air volume of one section: a box whose floor ramps at C.x.
   //
   // Shearing y to flatten the ramp scales the metric by sqrt(1 + s*s), so the
@@ -47,9 +103,13 @@ export const routeGlsl = `  // --- the route -----------------------------------
     // long steps are and therefore where the frame is actually spent.
     if (room > -0.55) {
       float proud, hole;
-      tileBreak(qs, B, decay(), proud, hole);
+      tileBreak(qs, B, decay(), step(C.y, 4.5), proud, hole);
       room = min(room + proud, hole);
     }
+
+    // After the breaks, so the vault closes over the soffit's holes rather
+    // than leaving them hanging in it. A compare on a uniform.
+    if (abs(C.y - 2.0) < 0.5) room = vaultShell(qs, B, room);
 
     // Every section carries its own doorways, at both ends, whether or not the
     // room on the far side is loaded.

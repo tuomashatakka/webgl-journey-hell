@@ -33,11 +33,12 @@ import { foundationGlsl } from './glsl/foundation'
 import { routeGlsl } from './glsl/route'
 import { fittingsGlsl } from './glsl/fittings'
 import { waterSurfacesGlsl } from './glsl/waterSurfaces'
+import { propsGlsl } from './glsl/props'
 import { dressingGlsl } from './glsl/dressing'
 import { previewGlsl } from './glsl/preview'
 
 
-const COMMON = foundationGlsl + routeGlsl + fittingsGlsl + waterSurfacesGlsl + dressingGlsl
+const COMMON = foundationGlsl + routeGlsl + fittingsGlsl + waterSurfacesGlsl + propsGlsl + dressingGlsl
 
 // Camera, march, water split and the inline post chain.
 const SCENE = `
@@ -64,7 +65,9 @@ const SCENE = `
     float dec = decay();
 
     vec3 alb, nn; float rough;
-    tileSurface(qs, ns, wy, C.z, alb, nn, rough);
+    // The raw rooms are below the tile line: same outs, poured concrete.
+    if (C.y > 4.5) concreteSurface(qs, ns, wy, C.z, alb, nn, rough);
+    else           tileSurface(qs, ns, wy, C.z, alb, nn, rough);
     dressSurface(qs, ns, wy, B, C, alb, nn, rough);
 
     // Was it the building, or something standing in it? One extra evaluation of
@@ -73,7 +76,7 @@ const SCENE = `
     // from the geometry instead would mean writing every fitting out twice.
     float pd = sectionProps(qs, B, C, uSecD[1]);
     if (pd < 0.035 && gMat > 0.5) {
-      propSurface(qs, gMat, dec, alb, rough);
+      propSurface(qs, gMat, dec, B, alb, rough);
       nn = ns;
       crackGlow = 0.0;
     }
@@ -99,7 +102,7 @@ const SCENE = `
     // right; projecting the pattern in each room's own frame would make it swim
     // sideways every time you crossed a join.
     if (p.y < waterY()) c += alb * causticAt(p) * 0.9;
-    if (ns.y < -0.6) c += vec3(0.95, 0.99, 1.0) * ceilPanel(qs, B, C) * 3.2;
+    if (ns.y < -0.6) c += vec3(0.95, 0.99, 1.0) * lampWarm(C) * ceilPanel(qs, B, C) * 3.2;
 
     // INSIDE A BREAK IN THE SHELL: past the nominal face plane, in the recess a
     // missing tile left behind. Whatever is behind this building is lit, and it
@@ -117,13 +120,27 @@ const SCENE = `
     // a hole, it is a red tile: flat, frontal and exactly tile-shaped, which is
     // precisely what it looked like.
     float face  = min(min(B.y - abs(qs.x), qs.y), B.z - qs.y);
+
+    // THE GRAND HALL is lit from its windows as well: a cool fill that grows
+    // toward the clerestory, and the glass itself. A window's reveal is not a
+    // break in the shell, so it is neither darkened nor lit red as one.
+    if (abs(C.y - 2.0) < 0.5) {
+      c += alb * vec3(0.46, 0.56, 0.64) * (0.05 + 0.06 * clamp(qs.y / B.z, 0.0, 1.0));
+      float gl = vaultGlass(qs, B, dec);
+      if (gl > -0.5) {
+        face      = 0.0;
+        crackGlow = 0.0;
+        if (gl > 0.5) c = c * 0.30 + vec3(0.62, 0.74, 0.82) * (gl - 1.0) * 3.0;
+      }
+    }
     c *= 1.0 - 0.94 * smoothstep(-0.005, -0.055, face);
     c += vec3(1.00, 0.09, 0.02) * smoothstep(-0.155, -0.225, face) * (0.35 + 2.6 * dec);
 
     // ...and what it falls on. Suppressed inside the recess itself, where the
     // neighbours are on the other side of a wall and the surface is already the
     // source rather than something the source is lighting.
-    if (face > -0.02 && dec > 0.12) {
+    // The raw rooms only hole their side walls, so only those can spill.
+    if (face > -0.02 && dec > 0.12 && (C.y < 4.5 || abs(ns.x) > 0.7)) {
       vec2  suv; float ssz, ssl;
       if (abs(ns.y) > 0.7)      { suv = qs.xz; ssz = TILE_F; ssl = ns.y > 0.0 ? SALT_FLR : SALT_CEIL; }
       else if (abs(ns.x) > 0.7) { suv = qs.zy; ssz = TILE_W; ssl = SALT_WALL; }

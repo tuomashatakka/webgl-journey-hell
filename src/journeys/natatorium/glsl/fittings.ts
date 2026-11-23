@@ -112,12 +112,24 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
       // it gets its own bounding sphere rather than dragging the columns' bound
       // out to meet it.
       vec3  fc = vec3(qs.x - (W - 5.0), qs.y - H * 0.62, qs.z - B.w * 0.5);
-      float bt = min(hx - 2.30, length(fc) - 5.2);
+      float bt = min(hx - 2.50, length(fc) - 5.2);
       if (bt > BOUND_SLACK) return min(d, bt);
 
       // VAULT — THE GRAND HALL. Columns down both sides, and the flume.
-      PUT(sdCapsuleY(vec3(abs(qs.x) - (W - 1.7), qs.y - H * 0.5, latt(qs.z, 6.0)),
-                     H * 0.5, 0.55), MAT_CONC)
+      // Each column carries the rib over it: a plinth, a torus at the foot, a
+      // shaft, a necking and a capital whose top is buried in the rib where
+      // the rib's soffit crosses the column line.
+      float R  = vaultRadius(B);
+      float cx = W - 1.7;
+      float ct = H - R + sqrt((R - VAULT_RIB) * (R - VAULT_RIB) - cx * cx);
+      vec3  cp = vec3(abs(qs.x) - cx, qs.y, latt(qs.z, VAULT_BAY));
+      float cl = sdCylY(cp - vec3(0.0, ct * 0.5, 0.0), ct * 0.5, 0.48);
+      cl = min(cl, sdRoundBox(cp - vec3(0.0, 0.30, 0.0), vec3(0.68, 0.30, 0.68), 0.04));
+      cl = min(cl, sdTorus((cp - vec3(0.0, 0.68, 0.0)).xzy, 0.50, 0.09));
+      cl = min(cl, sdTorus((cp - vec3(0.0, ct - 0.78, 0.0)).xzy, 0.48, 0.06));
+      cl = min(cl, sdRoundBox(cp - vec3(0.0, ct - 0.34, 0.0), vec3(0.62, 0.20, 0.62), 0.05));
+      cl = min(cl, sdRoundBox(cp - vec3(0.0, ct - 0.02, 0.0), vec3(0.74, 0.14, 0.74), 0.02));
+      PUT(cl, MAT_CONC)
 
       // Planters between the columns, on the scale of the room they stand in.
       vec3 vp = vec3(abs(qs.x) - (W - 0.80), qs.y, latt(qs.z - 3.0, 6.0));
@@ -148,23 +160,111 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
                      vec3(0.22, 0.05, 1.30), 0.03), MAT_PAINT)
     }
     else if (t < 4.5) {
-      float bt = hx - 1.45;
+      float bt = hx - PLANT_REACH;
       if (bt > BOUND_SLACK) return min(d, bt);
 
-      // PLANT — pumps and pipework, the only warm light in the building.
+      // PLANT — the filter hall under the pools. Down each side, on one line
+      // PLANT_OFF out of the wall, a bay of PLANT_BAY holds a sand filter and
+      // the pump that feeds it, and a header runs over both under the slab on
+      // hangers. Everything stands on a concrete pad; the flood is over the
+      // pumps from the first lap, so what reads above it is the filters' heads,
+      // the risers and the valve wheels, and the drowned sets through the water.
       vec3 pp = vec3(abs(qs.x) - (W - 0.30), qs.y, qs.z);
       PUT(sdCapsuleZ(vec3(pp.x, lattN(pp.y - 1.9, 0.42, 3.0), 0.0), 1e4, 0.085), MAT_METAL)
-      PUT(sdRoundBox(vec3(pp.x - 0.55, qs.y - 0.55, latt(qs.z, 7.0)),
-                     vec3(0.55, 0.55, 0.80), 0.10), MAT_PAINT)
-      PUT(sdTorus(vec3(pp.x, qs.y - 1.35, latt(qs.z, 7.0) - 0.95).zyx, 0.26, 0.045), MAT_METAL)
+
+      float px = abs(qs.x) - (W - PLANT_OFF);
+      float lz = latt(qs.z, PLANT_BAY);
+      float hy0 = H - 0.50;
+
+      // The header, its flanges every 4 m and a hanger every 2 m.
+      vec3 hp = vec3(px, qs.y - hy0, 0.0);
+      PUT(sdCapsuleZ(hp, 1e4, 0.15), MAT_METAL)
+      PUT(sdTorus(vec3(hp.xy, latt(qs.z, 4.0)), 0.15, 0.032), MAT_METAL)
+      PUT(sdCapsuleY(vec3(px, qs.y - (H - 0.25), latt(qs.z + 1.0, 2.0)), 0.25, 0.022), MAT_METAL)
+
+      // The sand filter: a vessel with dished heads on a pad, a girth flange
+      // where the top head is bolted on, a manway on the crown and its outlet
+      // straight up into the header.
+      vec3  fp = vec3(px, qs.y - 1.55, lz + 1.9);
+      float fb = max(max(abs(fp.x), abs(fp.z)) - 1.1, fp.y - 1.6);
+      if (fb < BOUND_SLACK) {
+        PUT(sdRoundBox(vec3(fp.x, qs.y - 0.14, fp.z), vec3(1.05, 0.14, 1.05), 0.03), MAT_CONC)
+        PUT(sdCapsuleY(fp, 0.55, 0.90), MAT_VESSEL)
+        PUT(sdTorus(vec3(fp.x, fp.z, fp.y - 0.55), 0.91, 0.04), MAT_VESSEL)
+        PUT(sdCylY(fp - vec3(0.0, 1.42, 0.0), 0.08, 0.24), MAT_VESSEL)
+      }
+      else d = min(d, fb);
+      PUT(sdCapsuleY(vec3(fp.x, qs.y - (hy0 + 3.0) * 0.5, fp.z), (hy0 - 3.0) * 0.5, 0.10), MAT_METAL)
+
+      // The pump set: a motor on a bedframe, coupled to a volute with its
+      // suction coming in at the eye and turning down into the sump, and its
+      // discharge rising past a gate valve to the header. The valve's wheel
+      // faces the aisle on a stem.
+      vec3  mp = vec3(px, qs.y - 0.84, lz - 1.9);
+      float mb = max(max(abs(mp.x) - 0.65, abs(mp.z) - 1.40), mp.y - 0.62);
+      if (mb < BOUND_SLACK) {
+        PUT(sdRoundBox(vec3(mp.x, qs.y - 0.25, mp.z), vec3(0.55, 0.25, 1.25), 0.03), MAT_CONC)
+        PUT(sdRoundBox(vec3(mp.x, qs.y - 0.55, mp.z), vec3(0.34, 0.05, 1.00), 0.01), MAT_PAINT)
+        PUT(sdCylY(vec3(mp.x, mp.z + 0.42, mp.y), 0.42, 0.30), MAT_PAINT)
+        PUT(sdCylY(vec3(mp.x, mp.z + 0.90, mp.y), 0.07, 0.25), MAT_PAINT)
+        PUT(sdRoundBox(mp - vec3(0.0, 0.0, 0.10), vec3(0.15, 0.15, 0.12), 0.03), MAT_PAINT)
+        PUT(sdCylY(vec3(mp.x, mp.z - 0.42, mp.y - 0.04), 0.13, 0.40), MAT_PAINT)
+        PUT(sdSeg(mp, vec3(0.0, 0.0, 0.50), vec3(0.0, 0.0, 1.05), 0.11), MAT_METAL)
+        PUT(sdSeg(mp, vec3(0.0, 0.0, 1.05), vec3(0.0, -1.1, 1.05), 0.11), MAT_METAL)
+      }
+      else d = min(d, mb);
+      vec3 rp = vec3(mp.x, qs.y, mp.z - 0.42);
+      PUT(sdCapsuleY(vec3(rp.x, qs.y - (hy0 + 1.24) * 0.5, rp.z), (hy0 - 1.24) * 0.5, 0.10), MAT_METAL)
+      PUT(sdCylY(rp - vec3(0.0, 1.90, 0.0), 0.13, 0.16), MAT_PAINT)
+      PUT(sdSeg(rp, vec3(0.0, 1.90, 0.0), vec3(-0.40, 1.90, 0.0), 0.025), MAT_METAL)
+      PUT(sdTorus(vec3(rp.z, rp.y - 1.90, rp.x + 0.40), 0.19, 0.022), MAT_METAL)
     }
     else {
-      // RAW — bare concrete. The big room gets pillars, the tight ones a rail.
+      // RAW — bare concrete. The big room gets columns, the tight ones a rail.
       if (W > 6.0) {
-        // Offset half a bay so no pillar stands on the walked line: the aisle
-        // would carve a tunnel clean through it and leave a floating stump.
-        PUT(sdCapsuleY(vec3(lattN(qs.x - 2.75, 5.5, 2.0), qs.y - H * 0.5, latt(qs.z, 6.5)),
-                       H * 0.5, 0.62), MAT_CONC)
+        // THE CISTERN: a hall of columns under groined brick vaults. The column
+        // lines are offset half a bay from the walked line (a column on it would
+        // be bored through by the aisle and left as a stump in the air) and the
+        // outermost line falls on the side walls, where it stands as a half
+        // column carrying the vault's last bay.
+        float vs = H - CIST_RX - 0.12;
+
+        // The vault: two barrels per bay, one each way, the air their union and
+        // the brick everything above both. Every bit of it is above the
+        // springing line, so below that line the springing line is the bound.
+        // The barrel across the 6 m bays is stilted (scaled along z) to crown at
+        // the same height; scaling by less than one only shortens the steps.
+        float vb = vs - qs.y;
+        if (vb > BOUND_SLACK) d = min(d, vb);
+        else {
+          float vx = latt(qs.x + CIST_PX * 0.5, CIST_PX);
+          float vz = latt(qs.z + CIST_PZ * 0.5, CIST_PZ);
+          float vy = max(qs.y - vs, 0.0);
+          float a1 = length(vec2(vx, vy)) - CIST_RX;
+          float a2 = length(vec2(vz * (CIST_RX / CIST_RZ), vy)) - CIST_RX;
+          PUT(-min(a1, a2), MAT_BRICK)
+        }
+
+        // The columns: a square plinth, a torus at the foot of the shaft, a
+        // shaft with a little taper, an astragal, a basket capital that
+        // widens to the impost block the groins land on.
+        vec3  c  = vec3(latt(qs.x, CIST_PX), qs.y, latt(qs.z, CIST_PZ));
+        float cb = max(abs(c.x), abs(c.z)) - 0.68;
+        if (cb > BOUND_SLACK) return min(d, cb);
+
+        float sr = 0.42 - 0.03 * clamp(qs.y / vs, 0.0, 1.0);
+        float cl = sdCylY(c - vec3(0.0, vs * 0.5, 0.0), vs * 0.5, sr);
+        cl = min(cl, sdRoundBox(c - vec3(0.0, 0.21, 0.0), vec3(0.62, 0.21, 0.62), 0.03));
+        cl = min(cl, sdTorus((c - vec3(0.0, 0.50, 0.0)).xzy, 0.44, 0.08));
+        cl = min(cl, sdTorus((c - vec3(0.0, vs - 0.80, 0.0)).xzy, 0.41, 0.045));
+
+        // The basket: half width 0.40 at its neck to 0.56 under the impost,
+        // a slope of 0.3, so the field is held down by its 1.05 Lipschitz.
+        float ky = clamp((qs.y - (vs - 0.76)) / 0.52, 0.0, 1.0);
+        float kw = 0.40 + 0.16 * ky;
+        cl = min(cl, sdRoundBox(c - vec3(0.0, vs - 0.48, 0.0), vec3(kw, 0.27, kw), 0.08) * 0.95);
+        cl = min(cl, sdRoundBox(c - vec3(0.0, vs - 0.11, 0.0), vec3(0.64, 0.11, 0.64), 0.02));
+        PUT(cl, MAT_STONE)
       }
       else {
         float bt = hx - 0.25;

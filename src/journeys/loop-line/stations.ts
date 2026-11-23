@@ -148,7 +148,7 @@ export const BAYS: Bay[] = [
     speed:      13,
     fog:        [ 0.055, 0.05, 0.046 ],
     fogDensity: 0.007,
-    ambient:    [ 0.05, 0.046, 0.04 ],
+    ambient:    [ 0.085, 0.078, 0.068 ],
     open:       0,
     sky:        null,
     exposure:   1.05,
@@ -299,7 +299,7 @@ const JUNCTION_BAY = 2
 export const REJOIN_BAY = 4
 
 /** How far inside the concourse the points are, before the end wall. */
-const JUNCTION_LEAD = 70
+export const JUNCTION_LEAD = 70
 
 /** How far into the annex the chord merges. */
 const REJOIN_TAIL = 70

@@ -68,7 +68,13 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     return d;
   }
 
-  // 3 · MARROW GROVE — bone-white trunks, knuckled, twisted.
+  // 3 · MARROW GROVE — long bones stood on end, knuckled at every joint.
+  //
+  // A trunk is a stack of bones: a shaft that waists between joints and swells
+  // into a pair of condyles at each one, with the cartilage line cut between
+  // them. One per 4.5 unit cell, jittered off the grid and moved out of the
+  // walked line, so the aisle never carves one into a stump hanging in the air.
+  // One in five broke off low, on a slant, and shows its marrow (mat 1.3).
   float sdMarrowGrove(vec3 p) {
     // Dark loam under the bone, not more bone: a white floor under white trunks
     // blew the whole grove out to one flat cream.
@@ -80,22 +86,65 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     q.x       = repS(q.x, 4.5);
     q.z       = repS(q.z, 4.5);
     float rnd = hash21(cell + 3.1);
+    float rn2 = hash21(cell + 17.7);
+    float rn3 = fract(rnd * 41.3 + rn2 * 7.9);
 
-    q.xz *= rot2(q.y * (0.06 + rnd * 0.09));        // slow twist up the trunk
-    float r     = 0.30 + 0.07 * sin(q.y * 3.0 + rnd * 6.0);  // knuckles
+    // Off the grid, then clear of the aisle: 1.75 from the walked line.
+    float ox  = (rn2 - 0.5) * 0.8;
+    float dx0 = cell.x * 4.5 - trackX(cell.y * 4.5);
+    float dx  = dx0 + ox;
+    if (abs(dx) < 1.75) ox = (dx0 < 0.0 ? -1.75 : 1.75) - dx0;
+    q.x -= ox;
+    q.z -= (rn3 - 0.5) * 1.3;
+    q.xz -= vec2(rn2 - 0.5, rn3 - 0.5) * 0.09 * p.y;   // each one leans its own way
+
+    q.xz *= rot2(q.y * (0.06 + rnd * 0.09) + rnd * 6.0);   // slow twist up the trunk
+
+    float seg   = mix(2.3, 3.3, rnd);                // one bone of the stack
+    float jy    = repS(q.y - rn2 * seg, seg);        // height off the nearest joint
+    float aj    = abs(jy);
+    float r     = mix(0.17, 0.24, rn2) + 0.09 * smoothstep(0.75, 0.15, aj);
     float trunk = length(q.xz) - r;
-    trunk       = max(trunk, p.y - mix(7.0, 12.0, rnd));
+    float knob  = length(vec3(abs(q.x) - 0.15, jy * 1.25, q.z)) - (0.21 + 0.06 * rn2);
+    trunk       = smin(trunk, knob, 0.14);
+    trunk      += 0.035 * smoothstep(0.10, 0.0, aj);  // the joint itself
+
+    float top   = mix(7.0, 12.0, rnd);
+    float snap  = 0.0;
+    if (rn3 > 0.8) {                                  // broken off low, on a slant
+      top   = mix(1.1, 3.2, rn2) + q.x * 0.9 + 0.05 * sin(q.z * 9.0 + q.x * 7.0);
+      snap  = 1.0;
+    }
+    float cut   = p.y - top;
+    snap       *= step(trunk, cut);
+    trunk       = max(trunk, cut);
     trunk       = max(trunk, -p.y - 0.2);
     trunk       = smin(trunk, d + 0.5, 0.9);        // flare into the floor
 
-    if (trunk < d) { d = trunk; gMat = 1.0; gWet = 0.02; gGlow = 0.0; }
+    if (trunk < d) { d = trunk; gMat = 1.0 + 0.3 * snap; gWet = 0.02 + 0.5 * snap; gGlow = 0.0; }
 
-    // Fallen litter.
+    // Fallen litter: a long bone with its two heads on most cells, lying
+    // whichever way it fell, and on some a cage of ribs standing out of the loam.
     vec3 l    = p;
-    l.x       = repS(l.x, 4.5) + 1.4;
+    l.x       = repS(l.x, 4.5);
     l.z       = repS(l.z + 2.2, 4.5);
-    float bone = sdCapsule(l, vec3(-0.9, 0.13, 0.0), vec3(0.9, 0.13, 0.25), 0.11);
-    if (bone < d) { d = bone; gMat = 1.0; gWet = 0.05; gGlow = 0.0; }
+    vec2 lc   = floor(vec2(p.x + 2.25, p.z + 4.45) / 4.5);
+    float lr  = hash21(lc + 29.3);
+    l.x      += 1.15;
+    l.xz     *= rot2(lr * 6.28);
+    if (lr < 0.68) {
+      float len  = mix(0.55, 0.95, fract(lr * 13.7));
+      vec3  e    = vec3(len, 0.0, 0.0);
+      float bone = sdCapsule(l, vec3(0.0, 0.10, 0.0) - e, vec3(0.0, 0.12, 0.0) + e, 0.065);
+      vec3  hd   = vec3(abs(l.x) - len, l.y - 0.12, abs(l.z) - 0.06);
+      bone       = smin(bone, length(hd) - 0.105, 0.07);
+      if (bone < d) { d = bone; gMat = 1.0; gWet = 0.05; gGlow = 0.0; }
+    } else {
+      float cx  = l.x - 0.34 * clamp(floor(l.x / 0.34 + 0.5), -2.0, 2.0);
+      float rib = length(vec2(length(l.zy - vec2(0.0, -0.1)) - 0.62 + 0.05 * abs(l.x), cx)) - 0.04;
+      rib     = smin(rib, sdCapsule(l, vec3(-0.85, 0.5, 0.0), vec3(0.85, 0.5, 0.0), 0.06), 0.05);
+      if (rib < d) { d = rib; gMat = 1.0; gWet = 0.05; gGlow = 0.0; }
+    }
     return d;
   }
 
@@ -299,70 +348,183 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     return d;
   }
 
-  // 7 · THE BLOOM — one enormous cap, aperture widening as you fall past it.
+  // 7 · THE BLOOM — one enormous cap overhead, and under it the gilled funnel
+  // you fall into.
+  //
+  // Both are authored round one throat every BLOOM_CELL down z, in polar
+  // coordinates about it (angle, radius), so the gills radiate from the throat
+  // and run down into it. A gill is a plate in the SDF: a family of them is
+  // the arc distance to the nearest of n planes through the axis, which is a
+  // true distance across the plate, and the plate stands gh proud of the
+  // surface it grows from. Short gills fill in between the long ones as the
+  // gap opens outward, the way they do under any cap. The funnel's rim lies
+  // under the aisle, so the carve that keeps the camera clear never cuts a
+  // trench in it; the old floor sat 0.6 under the eye and was a groove.
+  const float BLOOM_CELL = 46.0;   // metres down z between throats
+  const float BLOOM_RIM  = 2.3;    // the funnel's rim, below the floor line
+  const float BLOOM_DROP = 8.5;    // how far the funnel falls to the throat
+  const float BLOOM_FALL = 5.5;    // the e-folding radius of that fall
+  const float BLOOM_GUL  = 5.0;    // the gullet: a last, steep drop at the throat
+  const float BLOOM_GULW = 1.4;    // over this many metres
+
+  // Arc distance to the nearest of n planes through the axis, offset by off
+  // of a pitch. n is whole, so the family meets itself across the atan seam.
+  float gillFamily(float a, float r, float n, float off) {
+    float c = a * n / TAU + off;
+    return abs(c - floor(c + 0.5)) * TAU / n * r;
+  }
+
+  // One plate of a family, hy above the surface it grows from: th thick at
+  // its foot and a third of that at its free edge, gh tall.
+  float gillPlate(float across, float hy, float th, float gh) {
+    float u = clamp(hy / gh, 0.0, 1.0);
+    return max(across - th * (1.0 - 0.66 * u), hy - gh);
+  }
+
+  // The plates of all three families: long from r0, the second from 6 out
+  // and the third from 11, each rising out of the surface over its first
+  // 2 m instead of starting as a cut block. x: distance to the nearest
+  // plate, y: the long gills' height there, which shading measures against.
+  vec2 bloomGills(float a, float r, float hy, float r0, float w) {
+    float gh = mix(0.10, 0.55, smoothstep(r0, 14.0, r)) * (1.0 + 0.12 * sin(r * 1.7)) * w;
+    float th = 0.03 + 0.004 * r;
+    float h2 = gh * 0.8 * smoothstep(6.0, 8.0, r);
+    float h3 = gh * 0.6 * smoothstep(11.0, 13.0, r);
+    float g1 = gillPlate(gillFamily(a, r, 48.0, 0.0), hy, th,        max(gh, 0.01));
+    float g2 = gillPlate(gillFamily(a, r, 48.0, 0.5), hy, th * 0.85, max(h2, 0.01));
+    float g3 = gillPlate(gillFamily(a, r, 96.0, 0.5), hy, th * 0.7,  max(h3, 0.01));
+    g2 = max(g2, 6.0 - r);
+    g3 = max(g3, 11.0 - r);
+    return vec2(min(g1, min(g2, g3)), gh);
+  }
+
   float sdBloom(vec3 p) {
-    vec3 q = p;
-    q.z    = repS(q.z, 46.0);
+    vec3  q    = p;
+    q.z        = repS(q.z, BLOOM_CELL);
+    float r    = length(q.xz);
+    float a    = atan(q.z, q.x);
+    // The gills wander a little as they run out, so no two are ruled lines.
+    float aw   = a + 0.012 * sin(r * 0.55);
     float open = 3.0 + uWalk.z * 9.0;
+    float rIn  = open * 0.55;                         // the throat
+    // Everything that depends on the angle dies out toward the edge of the
+    // cell, where the next throat's frame takes over: its gills point
+    // elsewhere, and kept to the edge they met in a ruled seam.
+    float w    = smoothstep(BLOOM_CELL * 0.5, BLOOM_CELL * 0.5 - 3.5, abs(q.z));
 
-    float cap  = sdCap(q - vec3(0.0, 7.0, 0.0), 16.0, 6.0);
-    float bore = length(vec2(q.x, q.z)) - open;      // the throat you fall through
-    float d    = smax(cap, -bore, 0.8);
-    d         -= rotDisp(p * 0.35, 0.4) * 0.8;
-    gMat = 0.0; gWet = 0.6; gGlow = 0.6;
+    // The funnel: a surface falling ever more steeply, then over the lip of
+    // the gullet, its distance divided by its own slope.
+    float ex   = exp(-r / BLOOM_FALL);
+    float eg   = exp(-max(r - rIn, 0.0) / BLOOM_GULW);
+    float fy   = -BLOOM_RIM - BLOOM_DROP * ex - BLOOM_GUL * eg + 0.18 * w * sin(a * 5.0 + r * 0.4);
+    float sl   = BLOOM_DROP / BLOOM_FALL * ex + BLOOM_GUL / BLOOM_GULW * eg;
+    float hy   = (q.y - fy) / sqrt(1.0 + sl * sl);
+    vec2  g    = bloomGills(aw, r, hy, rIn, w);
+    float fun  = smin(hy, g.x, 0.05);
+    fun        = smax(fun, rIn - r, 0.6);             // the throat itself
+    float d    = fun;
+    // mat runs 0 in the trough between two gills to 0.4 at a gill's edge.
+    gMat = 0.4 * clamp(hy / max(g.y, 0.01), 0.0, 1.0);
+    gWet = 0.35; gGlow = 0.12;
 
-    // Petal ribs hanging off the rim.
-    float a   = atan(q.z, q.x);
-    float rib = abs(sin(a * 9.0)) * 0.5 + 0.5;
-    d -= rib * 0.35;
-
-    // A sleeve *around* the throat, not a plug inside it: at open = 3 the old
-    // radius of 2.85 sat entirely within the 3-unit bore, so the one opening the
-    // camera is aimed at was filled with solid stalk and you fell through it.
-    // It is a collar hung under the cap, not a column: as a column it ran down
-    // forever, the aisle cut it open, and the fall became one flat orange wedge.
-    float stalk = length(q.xz) - (open + 1.8);
-    stalk = max(stalk, q.y - 7.0);
-    stalk = max(stalk, 2.8 - q.y);
-    stalk = max(stalk, -bore);
-    if (stalk < d) { d = stalk; gMat = 3.0; gWet = 0.9; gGlow = 0.35; }
-
-    // What you fall toward: the bloom's gill funnel, ribbed and narrowing to a
-    // throat below. Levelled off a little below the eye, so between throats it
-    // is the ground you cross; without it the pitched-down fall looked into fog.
-    float r      = length(q.xz);
-    float funnel = (q.y + 6.0 - 0.55 * min(r, 12.0)) * 0.85;
-    funnel      -= abs(sin(a * 26.0)) * 0.16 * smoothstep(1.0, 6.0, r);
-    funnel       = smax(funnel, -(r - open * 0.55), 0.6);
-    if (funnel < d) { d = funnel; gMat = 0.0; gWet = 0.75; gGlow = 0.5; }
+    // The cap overhead: a dome wide enough that the whole fall is under it,
+    // a hole where the throat is, and its gills hung in the skin of its
+    // underside, 0.9 deep.
+    vec3  c    = q - vec3(0.0, 7.5, 0.0);
+    float dome = sdEllipsoid(c, vec3(26.0, 7.5, 26.0));
+    float holl = sdEllipsoid(c - vec3(0.0, -2.6, 0.0), vec3(22.4, 6.0, 22.4));
+    float cap  = smax(dome, -holl, 1.2);
+    float skin = max(dome, -holl - 0.9);
+    cap        = min(cap, max(gillFamily(aw, r, 96.0, 0.0) - 0.06 * w, skin));
+    cap        = smax(cap, open - r, 0.8);
+    cap       += 0.25 * w * sin(a * 7.0 + r * 0.3) * smoothstep(16.0, 24.0, r);   // a torn margin
+    if (cap < d) { d = cap; gMat = 0.2; gWet = 0.25; gGlow = 0.2; }
     return d;
   }
 
   // 8 · HOST — bodies grown into the wall of the shaft.
+  //
+  // A shaft of flesh with people grown flat into it, lying in the wall the way
+  // a fossil lies in rock: face to the lumen, the legs going under first, the
+  // edges of every body taken back into the wall. Authored in the wall's own
+  // frame (arc, height off the wall, z), as FRUITING BODY is, so a body rides
+  // the wall wherever it breathes. One per cell of 8 sectors by HOST_CELL,
+  // staggered, on 72 % of cells, each turned its own way round the shaft and
+  // kept inside its cell, so no cell edge slices one.
+  const float HOST_R    = 5.5;    // the shaft's radius
+  const float HOST_CELL = 4.6;    // metres down z between bodies in a sector
+  const float HOST_BODY = 1.15;   // a body's scale: a little over life size
+
+  // One limb: two capsules, the joint between them.
+  float sdLimb(vec3 q, vec3 a, vec3 b, vec3 c, float ra, float rc) {
+    return min(sdCapsule(q, a, b, ra), sdCapsule(q, b, c, rc));
+  }
+
+  // A body lying on its back in the plane h = 0, head toward +u. Each arm
+  // takes its own pose (s: 0 at the side, 0.5 out, 1 reaching past the head).
+  float sdHostBody(vec3 q, float sL, float sR) {
+    float s  = q.y < 0.0 ? sL : sR;
+    vec3  m  = vec3(q.x, abs(q.y), q.z);
+    float hd = sdEllipsoid(q - vec3(1.08, 0.0, 0.0), vec3(0.125, 0.085, 0.105));
+    float nk = sdCapsule(q, vec3(0.84, 0.0, -0.03), vec3(0.98, 0.0, -0.01), 0.052);
+    float ch = sdEllipsoid(q - vec3(0.56, 0.0, -0.03), vec3(0.25, 0.18, 0.11));
+    float pv = sdEllipsoid(q - vec3(0.14, 0.0, -0.04), vec3(0.22, 0.155, 0.09));
+    float lg = sdLimb(m, vec3(-0.02, 0.09, -0.04), vec3(-0.68, 0.11, -0.03), vec3(-1.32, 0.12, -0.07), 0.078, 0.052);
+    vec3  el = s < 0.33 ? vec3(0.42, 0.27, -0.02) : (s < 0.66 ? vec3(0.66, 0.5, -0.02) : vec3(1.02, 0.31, -0.01));
+    vec3  hn = s < 0.33 ? vec3(0.13, 0.25, -0.03) : (s < 0.66 ? vec3(0.62, 0.8, -0.04)  : vec3(1.34, 0.28, -0.03));
+    float am = sdLimb(m, vec3(0.73, 0.19, -0.02), el, hn, 0.052, 0.042);
+    float d  = smin(ch, pv, 0.12);
+    d = smin(d, nk, 0.06);
+    d = smin(d, hd, 0.05);
+    d = smin(d, lg, 0.07);
+    return smin(d, am, 0.05);
+  }
+
   float sdHost(vec3 p) {
-    float rad = 5.5 + breathe(p) * 1.6;
-    float d   = rad - length(p.xy - vec2(0.0, 1.5));
+    vec2  o   = p.xy - vec2(0.0, 1.5);
+    float r   = length(o);
+    float a   = atan(o.y, o.x);
+    float rad = HOST_R + breathe(p) * 1.6;
+    float h   = rad - r;                                // height off the wall, into the lumen
+    float d   = h - rotDisp(p * 0.8, 0.22) * 0.7;
     gMat = 0.0; gWet = 0.7; gGlow = 0.2;
+    if (h > 1.0) return min(d, h - 0.45);               // the bodies stand under 0.45 proud
 
-    for (int i = 0; i < 5; i++) {
-      float fi = float(i);
-      float a  = fi / 5.0 * TAU + p.z * 0.02;
-      vec2  at = vec2(cos(a), sin(a)) * (rad - 0.7);
-      vec3  q  = p;
-      q.z      = repS(q.z - fi * 2.3, 11.5);
+    // The cell: a sector of the shaft, staggered down z sector by sector.
+    // Sector edges fall on the seam of the atan, so no body is cut by it.
+    float af  = a / TAU * 8.0;
+    float ka  = floor(af);
+    float zs  = p.z - ka * 1.7;
+    float kz  = floor(zs / HOST_CELL);
+    float h1  = hash21(vec2(ka, kz) + 61.0);
+    float edg = min((0.5 - abs(af - ka - 0.5)) * TAU / 8.0 * r, (0.5 - abs(zs / HOST_CELL - kz - 0.5)) * HOST_CELL);
+    // A neighbour's body is kept 0.15 inside its own cell and stands under
+    // 0.45 proud, so it is no nearer than either.
+    float nb  = max(edg + 0.12, h - 0.45);
+    if (h1 < 0.28) return min(d, nb);
 
-      vec3 base = vec3(at.x, at.y + 1.5, 0.0);
-      // torso · head · one reaching arm
-      float body = sdCapsule(q, base, base + vec3(-at.x, -at.y, 0.0) * 0.16 + vec3(0.0, 0.9, 0.0), 0.42);
-      float head = sdSphere(q - base - vec3(-at.x, -at.y, 0.0) * 0.2 - vec3(0.0, 1.35, 0.0), 0.30);
-      float arm  = sdCapsule(q, base + vec3(0.0, 0.7, 0.0),
-                             base + vec3(-at.x, -at.y, 0.0) * 0.75 + vec3(0.0, 0.4, 0.0), 0.13);
-      float fig  = smin(smin(body, head, 0.16), arm, 0.14);
-      d = smin(d, fig, 0.55);
-      if (fig < d + 0.4) { gMat = 3.0; gWet = 0.85; gGlow = 0.3 + 0.4 * uPulse.x; }
-    }
-    d -= rotDisp(p * 0.8, 0.22) * 0.7;
-    return d;
+    float h2  = hash21(vec2(kz, ka) + 13.0);
+    float h3  = fract(h1 * 37.7 + h2 * 11.3);
+    // Turned mostly round the shaft, either way about, and leaning down it.
+    float th  = (h2 < 0.5 ? 0.0 : PI) + (fract(h2 * 7.9) - 0.5) * 1.0;
+    vec2  c   = vec2(cos(th), sin(th));
+    vec2  l   = vec2((a - (ka + 0.5) * TAU / 8.0) * r - (h3 - 0.5) * 0.2,
+                     zs - (kz + 0.5) * HOST_CELL - (fract(h3 * 5.1) - 0.5) * 0.2);
+    vec3  q   = vec3(dot(l, c), dot(l, vec2(-c.y, c.x)), 0.0) / HOST_BODY;
+    // How far it has come out of the wall (measured off the wall's own
+    // swellings, or they bury it), and the legs going back in.
+    float em  = mix(0.3, 1.0, fract(h1 * 13.3));
+    q.z       = d / HOST_BODY - mix(-0.03, 0.12, em) + 0.16 * smoothstep(0.1, -1.3, q.x);
+    float bnd = length(q - vec3(-0.08, 0.0, 0.0)) - 1.6;
+    float fig = (bnd > 0.3 ? bnd : sdHostBody(q, fract(h3 * 3.7), fract(h3 * 9.1))) * HOST_BODY;
+    fig      -= rotDisp(p * 2.1, 0.22) * 0.05;          // the skin is not smooth either
+
+    // Under the wall's membrane where it meets the wall: gMat 1 is the body,
+    // up to 1.2 where the flesh has grown back over it.
+    float cover = smoothstep(0.1, -0.02, d - fig);
+    if (fig < d + 0.03) { gMat = 1.0 + 0.2 * cover; gWet = 0.5 + 0.4 * cover; gGlow = 0.12 + 0.25 * uPulse.x; }
+    d = smin(d, fig, 0.12);
+    return min(d, nb);
   }
 
   // 9 · THE HARVEST — fruiting bodies hung on cords.
@@ -392,29 +554,60 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
   }
 
   // 10 · MYCELIAL FALL — no floor, no walls: filament space.
-  float sdMycelialFall(vec3 p) {
-    float d = 1e4;
-    gMat = 4.0; gWet = 0.15; gGlow = 0.85;
+  //
+  // One family of hyphae: strands running down the axis the caller left out, on
+  // a lattice of pitch s across it. The lattice is bent before it is repeated,
+  // so no strand is straight and no two bend alike; 30 % of it never grew; each
+  // strand has its own gauge, a few are cords, and all of them swell where a
+  // packet of what the orchard feeds on is passing down them. A cell with no
+  // strand returns the bound to its neighbours' strands, not a large number,
+  // so the march neither oversteps nor crawls.
+  float sdHypha(vec2 uv, float along, vec2 s, float r0, float seed, out float pulse) {
+    uv += vec2(sin(along * 0.31 + uv.y * 0.7 + seed), cos(along * 0.27 + uv.x * 0.6 + seed * 1.7)) * 0.42
+        + vec2(cos(along * 0.93 + seed * 3.1), sin(along * 1.07 + uv.x * 1.3)) * 0.10;
+    vec2  id = floor(uv / s + 0.5);
+    vec2  q  = uv - id * s;
+    float h  = hash21(id + seed);
+    pulse    = 0.0;
+    if (h < 0.3) return min(s.x - abs(q.x), s.y - abs(q.y)) - r0 * 4.2;
+    float g  = fract(h * 7.13);
+    float ph = fract(along * 0.07 - iTime * (0.25 + 0.3 * g) + g * 5.0);
+    pulse    = smoothstep(0.10, 0.0, abs(ph - 0.5));
+    float r  = r0 * (g > 0.86 ? 2.4 : mix(0.45, 1.3, g))
+             * (1.0 + 0.22 * sin(along * 1.7 + h * 31.0) + 0.5 * pulse);
+    return length(q) - r;
+  }
 
-    // Three axis-aligned hyphal families, each on its own lattice.
-    vec3 a = p;
-    a.x = repS(a.x, 2.6); a.y = repS(a.y - 1.0, 2.6);
-    d = min(d, length(a.xy) - 0.045);
+  float sdMycelialFall(vec3 p) {
+    gMat = 4.0; gWet = 0.15;
+
+    // Three hyphal families, each on its own lattice and its own heading.
+    float pa, pb, pc;
+    float da = sdHypha(vec2(p.x, p.y - 1.0), p.z, vec2(2.6), 0.050, 1.3, pa);
 
     vec3 b = p;
     b.xz *= rot2(0.7);
-    b.x = repS(b.x, 3.1); b.z = repS(b.z, 3.1);
-    d = min(d, length(b.xz) - 0.038);
+    float db = sdHypha(b.xz, b.y, vec2(3.1), 0.042, 4.7, pb);
 
     vec3 c = p;
     c.xy *= rot2(-0.5);
-    c.y = repS(c.y, 2.2); c.z = repS(c.z, 4.4);
-    d = min(d, length(c.yz) - 0.05);
+    float dc = sdHypha(c.yz, c.x, vec2(2.2, 4.4), 0.055, 8.9, pc);
 
-    // Nodes where the families cross.
-    vec3 n = vec3(repS(p.x, 2.6), repS(p.y - 1.0, 2.2), repS(p.z, 4.4));
-    d = smin(d, length(n) - 0.16, 0.2);
-    return d;
+    // Where two meet they fuse rather than cross.
+    float d  = smin(da, smin(db, dc, 0.12), 0.12);
+    float pl = da < min(db, dc) ? pa : (db < dc ? pb : pc);
+    gGlow    = 0.22 + 0.78 * pl;
+
+    // Beads of exudate hung in the web, on under half the lattice.
+    vec3  ni = floor(vec3(p.x, p.y - 1.0, p.z) / vec3(2.6, 2.2, 4.4) + 0.5);
+    vec3  n  = vec3(p.x, p.y - 1.0, p.z) - ni * vec3(2.6, 2.2, 4.4);
+    float nh = hash31(ni + 3.7);
+    float nr = nh < 0.45 ? mix(0.07, 0.2, fract(nh * 9.7)) : -0.4;
+    n       -= (vec3(fract(nh * 5.3), fract(nh * 11.1), fract(nh * 17.9)) - 0.5) * 0.7;
+    n.y     *= 0.85;
+    float bead = length(n) - nr;
+    if (bead < d) { gMat = 3.0; gWet = 1.0; gGlow = 0.75; }
+    return smin(d, bead, 0.16);
   }
 
   // 11 · SEED VAULT — chambered spheres, each with something curled inside.

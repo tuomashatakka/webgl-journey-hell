@@ -21,7 +21,7 @@ import type { ClosedCurve, Frame, Vec3 } from '@wjh/geometry/curve'
 import { BAYS, Theme } from './stations'
 import type { BaySpan, Circuits } from './stations'
 import { TIE_PITCH } from './geometry/units'
-import { portalFor } from './geometry/profiles'
+import { HALL, portalFor } from './geometry/profiles'
 import type { SurfaceKey } from './geometry/surfaces'
 
 /** Floats per instance: (pos, sx), (fwd, sy), (up, sz), (s, bay, seed, tint). */
@@ -34,6 +34,9 @@ const SODIUM: [ number, number, number ]     = [ 1, 0.52, 0.16 ]
 const GREENISH: [ number, number, number ]   = [ 0.7, 1, 0.84 ]
 const COLD: [ number, number, number ]       = [ 0.52, 0.74, 1 ]
 const RED: [ number, number, number ]        = [ 1, 0.1, 0.06 ]
+
+/** THE CUT's counterfort pitch, metres of arc length. The shader's weep stains keep to it. */
+const BUTTRESS_PITCH = 6.5
 
 /** Where a row of cabinets stands off the track's centre line, metres. */
 const RACK_ROW = 5.3
@@ -246,17 +249,40 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
     }
 
     case Theme.CONCOURSE: {
+      const { left, right, well, floor, deck, depth } = HALL
+
+      const floorEnd =  s1 - HALL.floorEnd
+      // Shuttered shops under the galleries, a fascia lit over each shutter.
       for (let s = s0 + 3; s < s1 - 3; s += 5.6) {
-        d.put('shutter', s, 23.92, 1)
-        d.put('shopSign', s, 23.8, 1, { tint: Math.floor(R() * 8) })
-        d.put('shutter', s + 2.8, -11.92, 1)
-        d.put('shopSign', s + 2.8, -11.8, 1, { tint: Math.floor(R() * 8) })
+        d.put('shutter', s, right - 0.08, floor)
+        d.put('shopSign', s, right - 0.2, floor - 0.8, { tint: Math.floor(R() * 8) })
+        d.put('shutter', s + 2.8, left + 0.08, floor)
+        d.put('shopSign', s + 2.8, left + 0.2, floor - 0.8, { tint: Math.floor(R() * 8) })
       }
+      // Balustrades: along both galleries, and round the track well as far
+      // as the right floor goes, then across its end.
       for (let s = s0 + 1; s < s1; s += 2.1) {
-        d.put('railPost', s, 20.85, 5.6)
-        d.put('railTop', s, 20.85, 5.6)
-        d.put('railPost', s, -8.85, 5.6)
-        d.put('railTop', s, -8.85, 5.6)
+        for (const r of [ right - depth + 0.05, left + depth - 0.05 ]) {
+          d.put('railPost', s, r, deck)
+          d.put('railTop', s, r, deck)
+        }
+        for (const r of [ -well - 0.05, well + 0.05 ]) {
+          if (r > 0 && s > floorEnd - 1.2)
+            continue
+          d.put('railPost', s, r, floor)
+          d.put('railTop', s, r, floor)
+        }
+      }
+      for (let r = well + 1.1; r < right - 3; r += 2.1) {
+        d.put('railPost', floorEnd - 0.1, r, floor, { yaw: Math.PI / 2 })
+        d.put('railTop', floorEnd - 0.1, r, floor, { yaw: Math.PI / 2 })
+      }
+      // A rib every bay, a column under each gallery front on the rib's line,
+      // and the pendants on every other rib.
+      for (let s = s0 + 7; s < s1 - 2; s += 7.5) {
+        d.put('vaultRib', s, 0, 0)
+        for (const r of [ right - depth + 0.55, left + depth - 0.55 ])
+          d.put('hallColumn', s, r, 0)
       }
       for (let s = s0 + 7; s < s1; s += 15)
         for (const r of [ -1.5, 13.5 ]) {
@@ -273,8 +299,35 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
     }
 
     case Theme.CUT: {
-      for (let s = s0 + 40; s < s1 - 30; s += 86)
-        d.put('overbridge', s, 0, 0)
+      // Everything on the walls keeps to one 6.5 m grid in arc length, which
+      // the shader's weathering shares: counterforts on it, weep holes halfway
+      // between, and an overbridge over a counterfort's place instead of one.
+      const grid              = Math.ceil((s0 + 6) / BUTTRESS_PITCH) * BUTTRESS_PITCH
+      const bridges: number[] = []
+      for (let s = grid + 6 * BUTTRESS_PITCH; s < s1 - 30; s += 13 * BUTTRESS_PITCH)
+        bridges.push(s)
+
+      const walls = [[ 0, 0 ], [ 0, Math.PI ]]
+      for (let s = grid; s < s1 - 3; s += BUTTRESS_PITCH)
+        for (const [ r, yaw ] of walls) {
+          d.put('weepPipe', s + BUTTRESS_PITCH / 2, r, 0, { yaw })
+          if (bridges.some(b => Math.abs(b - s) < 5))
+            continue
+          d.put('buttress', s, r, 0, { yaw })
+          d.put('buttressCap', s, r, 0, { yaw })
+        }
+      for (const s of bridges) {
+        d.put('overbridgeGirder', s, 0, 0)
+        d.put('overbridgeDeck', s, 0, 0)
+        d.put('overbridgeRailing', s, 0, 0)
+        d.put('overbridgeBearing', s, 0, 0)
+      }
+      for (let s = s0 + 1; s < s1; s += 2) {
+        d.put('trough', s, -4.25, 0)
+        d.put('trough', s, 4.25, 0)
+      }
+      for (let s = s0 + 24; s < s1 - 10; s += 70)
+        d.put('locCase', s, Math.round((s - s0) / 70) % 2 ? 3.45 : -3.45, 0)
       for (let s = s0 + 1; s < s1; s += 1.6) {
         d.put('fencePost', s, -9.3, 0)
         d.put('fencePost', s, 9.3, 0)
@@ -283,6 +336,7 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
         d.put('signalPost', s, -3.6, -0.38)
         d.put('signalLens', s, -3.6, -0.38, { tint: 2 })
       }
+      d.put('portalStone', s1, 0, 0)
       break
     }
 
@@ -347,6 +401,9 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
           d.put('sleeperWood', s, r, -0.04)
           d.put('rail', s, r, -0.04, { seed: 0.5, sz: 1.4 })
         }
+      for (const r of sidings)
+        for (let s = s0 - 4; s < s1 + 4; s += 5.6)
+          d.put('sidingBed', s, r, 0, { seed: 0.5 })
       // Parked sets, two to four cars, on some of the sidings.
       for (const r of sidings) {
         let s = s0 + R() * 30
@@ -357,6 +414,7 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
               const sc = s + k * 18.4
               d.put('carriage', sc, r, -0.04, { seed: R(), tint: R() })
               d.put('bogie', sc, r, -0.04)
+              d.put('carriageFrame', sc, r, -0.04, { seed: 0.5 })
             }
           s += cars * 18.4 + 14 + R() * 26
         }
@@ -367,9 +425,11 @@ export function dressBay (c: Circuits, span: BaySpan, onAlt: boolean, seed: numb
           d.put('mast', s, r, -0.42)
           d.put('floodHead', s, r, -0.42, { seed: lamp.roll })
         }
+      // The running shed, bay by bay. Its windows die with the yard's lamps.
       for (let s = s0 + 20; s < s1 - 30; s += 20.4) {
-        d.put('shed', s, 46, -0.42, { sx: 26, sz: 20.4 })
-        d.put('shedRoof', s, 46, -0.42, { sx: 26, sz: 20.4 })
+        for (const unit of [ 'shed', 'shedPlinth', 'shedRoof', 'shedFrame' ])
+          d.put(unit, s, 46, -0.42, { seed: 0.5 })
+        d.put('shedGlass', s, 46, -0.42, { seed: R() })
       }
       break
     }
@@ -477,9 +537,14 @@ export function buildHeadwalls (c: Circuits): Headwall[] {
 
   // The concourse end wall carries both portals: daylight, and the chord.
   const chordHole = projectPortal(c, c.chordStartAltS, c.main.frameAtDistance(BAYS[3].u0 * L))
-  wall(2, 3, [ -12, -0.38, 24, 16.1 ], 'plaster', [ chordHole ])
+  wall(2, 3, [ HALL.left, -0.38, HALL.right, 16.1 ], 'tile', [ chordHole ])
 
-  wall(3, 4, [ -8.7, -0.38, 8.7, 11.7 ], 'panel')
+  // The concourse floors' start, seen past the tube's mouth: the well open.
+  const well = HALL.well
+  wall(2, 2, [ HALL.left, -0.38, HALL.right, HALL.floor ], 'concrete',
+       [[[ -well, -0.6 ], [ well, -0.6 ], [ well, HALL.floor + 0.2 ], [ -well, HALL.floor + 0.2 ]]])
+
+  wall(3, 4, [ -8.7, -0.38, 8.7, 11.7 ], 'brickCut')
   wall(4, 5, [ -10, -0.38, 22, 4.9 ], 'plasterDamp')
   wall(5, 6, [ -26, -18, 26, 13 ], 'concreteDim')
 

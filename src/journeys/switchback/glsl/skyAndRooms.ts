@@ -11,12 +11,33 @@ export const skyAndRoomsGlsl = `
     if (z < uSecA[1].x)      { A = uSecA[0]; B = uSecB[0]; C = uSecC[0]; }
     else if (z < uSecA[2].x) { A = uSecA[1]; B = uSecB[1]; C = uSecC[1]; }
     else                     { A = uSecA[2]; B = uSecB[2]; C = uSecC[2]; }
-    return Room(A.z, A.w, B.x, B.y, B.z, C.w, B.w, C.x, C.z);
+    return Room(A.z, A.w, B.x, B.y, B.z, C.w, B.w, C.x, C.z, A.x, A.y);
   }
 
-  /** The nearest lamp of the room a point is in, in track space. */
+  /**
+   * How far down the line a ray that hit nothing can be said to have got: the
+   * start of the first walled room ahead of the depth, if the depth is past it.
+   * A walled room is one with a bore (an open section's is 400); the shaft
+   * counts as open, since its sky is the abyss and that is what is out there.
+   */
+  float openReach(float z) {
+    if (z >= uSecA[1].x && uSecA[1].w < 100.0 && uSecA[1].z < T_OVERLOOK + 0.5)
+      return uSecA[1].x - 0.05;
+    if (z >= uSecA[2].x && uSecA[2].w < 100.0 && uSecA[2].z < T_OVERLOOK + 0.5)
+      return uSecA[2].x - 0.05;
+    return z;
+  }
+
+  /**
+   * The nearest lamp of the room a point is in, in track space. The platform's
+   * are battens, a line over each deck, so its nearest lamp is the nearest point
+   * on the nearer tube: the light is long, and so is its halo.
+   */
   vec3 lampPos(vec3 q, Room r) {
-    return vec3(0.0, r.lampY, q.z - latt(phaseAt(q.z), r.lamp));
+    float lz = latt(phaseAt(q.z), r.lamp);
+    if (r.type < T_DRIFT - 0.5)
+      return vec3(q.x < 0.0 ? -STATION_LAMP_X : STATION_LAMP_X, r.lampY - 0.05, q.z - lz + clamp(lz, -1.3, 1.3));
+    return vec3(0.0, r.lampY, q.z - lz);
   }
 
   /** The colour a room's lamps burn. */
@@ -77,6 +98,105 @@ export const skyAndRoomsGlsl = `
     return mix(vec3(0.66, 0.40, 0.50), vec3(0.34, 0.20, 0.27), decay * 0.7);
   }
 
+  // ---- the overlook's weather ----------------------------------------------
+  //
+  // Open sky with nothing near in it, so the sky is the room. A gradient on its
+  // own read as a lilac card with the parapet in front of it, and the cloud sea
+  // the room is named for sat below the parapet where the cart never looks.
+  // Three things make it weather: a deck of high cloud lit from underneath by a
+  // sun that is nearly down, a wall of cumulus standing on the horizon, and the
+  // sea itself in relief, its tops lit on the side that faces the sun.
+  //
+  // Directions are measured round the sun rather than along the track: the sun
+  // is fixed in the world, so a basis built on it is too, and the far cloud
+  // stays where it is while the railway turns under it. All of it is at
+  // infinity or as good as, so none of it needs the cart's position, only the
+  // wind (uCart.x, which is the distance ridden and so seeks exactly).
+
+  vec3 overlookWeather(vec3 rd, vec3 c, float h, float sunDot, float decay) {
+    vec3 up  = uUp.xyz;
+    vec3 fwd = normalize(uSun.xyz - up * dot(uSun.xyz, up));
+    vec3 sde = cross(up, fwd);
+    vec2 az  = vec2(dot(rd, sde), dot(rd, fwd));
+    vec2 azN = az / max(length(az), 1e-4);
+    float toSun = azN.y;                         // 1 under the sun, -1 behind you
+    float wind  = uCart.x * 0.0011;
+
+    vec3 sunCol  = mix(vec3(1.00, 0.66, 0.46), vec3(0.70, 0.46, 0.42), decay * 0.7);
+    vec3 shadeCl = mix(vec3(0.42, 0.30, 0.42), vec3(0.22, 0.15, 0.20), decay * 0.7);
+    vec3 litCl   = mix(vec3(1.00, 0.66, 0.52), vec3(0.62, 0.42, 0.42), decay * 0.7);
+    float sunSide = toSun * 0.5 + 0.5;
+
+    // Haze on the horizon, gold under the sun and lilac away from it. This is
+    // the air between the cart and the far cloud, and it is what sits them back.
+    float band = exp(-abs(h + 0.01) * 16.0);
+    vec3 haze  = mix(vec3(0.78, 0.52, 0.62), sunCol, sunSide * sunSide);
+    c = mix(c, haze, band * 0.55);
+
+    // The high deck: altocumulus in rolls across the wind, on a plane far up.
+    // Its perspective is the 1 / h, and it thins toward the zenith and goes to
+    // haze toward the horizon, where its cells would be finer than a pixel.
+    if (h > 0.02) {
+      vec2 uv = az / h * 1.7 + vec2(wind, wind * 0.4) * 4.0;
+      vec2 rl = vec2(uv.x * 0.55 + uv.y * 0.30, uv.y * 1.9 - uv.x * 0.45);
+      float d = fbm(rl + vnoise(rl * 0.23) * 2.2) * 0.75 + vnoise(rl * 0.17 + 3.1) * 0.35;
+      float cov = smoothstep(0.60, 0.72, d)
+                * smoothstep(0.10, 0.36, h) * smoothstep(0.95, 0.35, h);
+      // Away from the sun a cell takes the light on its underside and goes
+      // rose; toward it the cell is between you and the light, so it is dark
+      // and only its thin edges let the sun through, gold round each one.
+      float thin  = 1.0 - smoothstep(0.60, 0.76, d);
+      vec3 rose   = mix(vec3(0.74, 0.40, 0.56), vec3(0.34, 0.22, 0.30), decay * 0.7);
+      vec3 under  = mix(rose, shadeCl * 1.25, sunSide * sunSide * 0.85);
+      under += sunCol * thin * sunSide * sunSide * (0.35 + 0.9 * max(sunDot, 0.0));
+      c = mix(c, under, cov * 0.8);
+    }
+
+    // The cumulus wall: towers standing on the sea all round the horizon, their
+    // tops a fractal of the azimuth (read off the unit circle, so there is no
+    // seam behind the cart). A tower toward the sun is backlit, dark with a hot
+    // rim; one away from it takes the light on its face.
+    float hz   = -0.012;                          // where the sea meets the sky
+    float tops = hz + 0.11 * smoothstep(0.38, 0.80, fbm(azN * 2.4 + 7.3))
+                    + 0.026 * fbm(azN * 30.0) * smoothstep(0.30, 0.60, fbm(azN * 2.4 + 7.3));
+    if (h < tops && h > hz - 0.02) {
+      float lump = vnoise(vec2(azN.x * 60.0 + azN.y * 23.0, h * 90.0)) * 0.6
+                 + vnoise(vec2(azN.x * 170.0 - azN.y * 61.0, h * 260.0)) * 0.4;
+      float up01 = clamp((h - hz) / max(tops - hz, 1e-3), 0.0, 1.0);
+      float lit  = (1.0 - sunSide * 0.7) * (0.25 + 0.75 * up01) * (0.6 + 0.6 * lump);
+      vec3 tower = mix(shadeCl, litCl, clamp(lit, 0.0, 1.0));
+      float rim  = smoothstep(tops - 0.014, tops, h) * sunSide * sunSide;
+      float glow = max(sunDot, 0.0);
+      glow *= glow * glow;
+      tower += sunCol * (rim * 0.9 + glow * glow * (0.10 + 0.25 * up01));
+      // Distance: thirty kilometres of air in front of them.
+      tower = mix(tower, haze, 0.38 + 0.3 * (1.0 - up01));
+      c = mix(c, tower, smoothstep(tops, tops - 0.0025, h));
+    }
+
+    // The sea. A plane ninety metres down as before, but in relief: the field
+    // is read twice, the second time a step toward the sun, and the difference
+    // is which way each top faces. The far sea goes to the haze rather than to
+    // a texture finer than the pixels it lands on.
+    if (h < hz) {
+      vec3 hit = rd * (-90.0 / min(h, -0.012));
+      vec2 uv  = vec2(hit.x, hit.z) * 0.004 + vec2(0.0, uCart.x * 0.002);
+      vec2 sTo = normalize(vec2(uSun.x, uSun.z) + vec2(1e-4, 0.0)) * 0.06;
+      float w  = fbm(uv * 6.0) * 0.8;
+      float f  = fbm(uv * 3.0 + w);
+      float f2 = fbm((uv + sTo) * 3.0 + w);
+      float facing = clamp(0.55 + (f2 - f) * 9.0, 0.0, 1.0);
+      vec3 sea = mix(shadeCl * 1.2, litCl, facing * (0.55 + 0.45 * f));
+      sea += sunCol * facing * pow(max(sunDot, 0.0), 12.0) * 0.6;
+      sea  = mix(sea, vec3(0.40, 0.29, 0.35), decay * 0.55);
+      float far = smoothstep(hz - 0.26, hz - 0.004, h);
+      sea = mix(sea, haze, sqrt(far));
+      c = mix(c, sea, smoothstep(hz, hz - 0.012, h));
+    }
+
+    return c;
+  }
+
   // ---- sky -----------------------------------------------------------------
   //
   // There is no world position, so there is no world horizon either — only a
@@ -123,6 +243,10 @@ export const skyAndRoomsGlsl = `
     c += vec3(1.00, 0.82, 0.70) * pow(sd, 6.0) * 0.16;
     c += vec3(1.00, 0.86, 0.74) * pow(sd, 220.0) * 1.10;
     c += vec3(1.00, 0.96, 0.92) * smoothstep(0.9986, 0.9994, sunDot) * 6.0;
+
+    // The overlook is the one room that sees the weather whole. Every other
+    // room keeps the cloud sea below, which is all a doorway ever shows of it.
+    if (type > T_OVERLOOK - 0.5) return overlookWeather(rd, c, h, sunDot, decay);
 
     // The cloud sea. No world position to intersect a plane against, so it hangs
     // a fixed distance below the cart instead — as true as anything else in here,

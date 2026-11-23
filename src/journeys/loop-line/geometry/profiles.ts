@@ -1,5 +1,52 @@
-import { Theme } from '../stations'
+import { JUNCTION_LEAD, Theme } from '../stations'
 import { SurfaceKey } from './surfaces'
+
+/**
+ * THE CUT's section, metres off the centre line and up from the track: the
+ * walls, their counterforts and the overbridges' bearings all stand on it.
+ */
+export const CUT = {
+  top:         10.4,
+  copingBack:  8.75,
+  copingFront: 7.55,
+  soffit:      10.08,
+  plinth:      1.05,
+  plinthFace:  5.25,
+  drain:       -0.55,
+  drainLip:    4.85,
+  cess:        -0.3,
+  shoulder:    2.75,
+  crib:        1.95,
+  bed:         -0.12,
+
+  /** The face's distance off the centre line at the plinth, and its batter. */
+  foot:   5.45,
+  batter: 0.25,
+} as const
+
+/**
+ * THE CONCOURSE's section, metres off the centre line and up from the track:
+ * the walls, the vault (an ellipse springing at `spring`), the galleries and
+ * the floors. Its ribs, columns and balustrades all stand on it.
+ */
+export const HALL = {
+  left:   -12,
+  right:  24,
+  spring: 8.6,
+  rise:   7.4,
+
+  /** The track well's half width, and the concourse floor either side of it. */
+  well:  1.9,
+  floor: 1,
+
+  /** The gallery: its soffit, its deck, and how far it reaches out from the wall. */
+  gallery: 5,
+  deck:    5.6,
+  depth:   3.2,
+
+  /** Where the right floor stops, metres before the hall's end: short of the points. */
+  floorEnd: JUNCTION_LEAD + 6,
+} as const
 
 // --- profiles ----------------------------------------------------------------
 
@@ -15,6 +62,9 @@ export interface PP {
 export interface Profile {
   points: PP[];
   closed: boolean;
+
+  /** Stop the sweep this many metres before the bay's end. */
+  until?: number;
 }
 
 const pp = (r: number, u: number, s: SurfaceKey, ao = 1, smooth = false): PP =>
@@ -30,6 +80,9 @@ function arc (cr: number, cu: number, rr: number, ru: number, a0: number, a1: nu
   }
   return out
 }
+
+/** Where THE CUT's brick face stands at height `u`. */
+export const cutFace = (u: number): number => CUT.foot + (u - CUT.plinth) * CUT.batter
 
 /**
  * The cross-sections. +r is the curve's `right`, which on this circuit is the
@@ -81,52 +134,73 @@ export function profilesFor (theme: Theme): Profile[] {
     }
 
     case Theme.CONCOURSE: {
-      // A tall vaulted hall, wide to the right where the chord diverges. The
-      // track runs on the hall floor; walkways stand along both walls with a
-      // mezzanine gallery over them.
-      const L     = -12,
-        R         = 24,
-        spring    = 8.6
-      const vault = arc((L + R) / 2, spring, (R - L) / 2, 7.4, 0, Math.PI, 16, 'panel', 0.9)
+      // A tall vaulted hall in glazed tile, wide to the right where the chord
+      // diverges. The track runs in a ballasted well between two terrazzo
+      // concourse floors at platform height, under a mezzanine gallery along
+      // both walls. The right floor is its own section, stopped short of the
+      // points (HALL.floorEnd), so from there the well opens out to the right
+      // wall for the chord to swing across to its mouth.
+      const { left: L, right: R, spring, well, floor, gallery, deck, depth } = HALL
+
+      const vault =  arc((L + R) / 2, spring, (R - L) / 2, HALL.rise, 0, Math.PI, 16, 'tile', 0.9)
       return [{
         closed: true,
         points: [
-          pp(-9, -0.38, 'concreteDim', 0.7),
-          pp(21, -0.38, 'concrete', 0.55),
-          pp(21, 1, 'terrazzo'),
-          pp(R, 1, 'plaster', 0.6),
-          pp(R, 5, 'panelDark', 0.7),
-          pp(R - 3.2, 5, 'darkGrey'),
-          pp(R - 3.2, 5.6, 'terrazzo'),
-          pp(R, 5.6, 'plaster', 0.6),
+          pp(-well, -0.38, 'ballast', 0.6),
+          pp(R - 3, -0.38, 'concrete', 0.55),
+          pp(R - 3, floor, 'terrazzo'),
+          pp(R, floor, 'tile', 0.6),
+          pp(R, gallery, 'panelDark', 0.7),
+          pp(R - depth, gallery, 'darkGrey'),
+          pp(R - depth, deck, 'terrazzo'),
+          pp(R, deck, 'tile', 0.6),
           ...vault.slice(0, -1),
-          pp(L, spring, 'plaster'),
-          pp(L, 5.6, 'terrazzo', 0.6),
-          pp(L + 3.2, 5.6, 'darkGrey'),
-          pp(L + 3.2, 5, 'panelDark'),
-          pp(L, 5, 'plaster', 0.7),
-          pp(L, 1, 'terrazzo', 0.6),
-          pp(-9, 1, 'concrete'),
+          pp(L, spring, 'tile'),
+          pp(L, deck, 'terrazzo', 0.6),
+          pp(L + depth, deck, 'darkGrey'),
+          pp(L + depth, gallery, 'panelDark'),
+          pp(L, gallery, 'tile', 0.7),
+          pp(L, floor, 'terrazzo', 0.6),
+          pp(-well, floor, 'concrete'),
+        ],
+      }, {
+        // The right floor, open: the well's side, then the floor out to the
+        // walkway along the wall.
+        closed: false,
+        until:  HALL.floorEnd,
+        points: [
+          pp(well, -0.38, 'concrete', 0.55),
+          pp(well, floor, 'terrazzo'),
+          pp(R - 3, floor, 'terrazzo'),
         ],
       }]
     }
-    case Theme.CUT:
+    case Theme.CUT: {
       // An open trench under the day. Ten metres of retaining wall is what
       // makes it a cutting rather than a ditch: from a seat at two metres the
-      // world above is only ever a strip of sky.
-      return [{
-        closed: false,
-        points: [
-          pp(-60, 10.4, 'dirt'),
-          pp(-8.6, 10.4, 'coping'),
-          pp(-8, 10.1, 'panel', 0.9),
-          pp(-5, -0.38, 'ballast', 0.55),
-          pp(5, -0.38, 'panel', 0.55),
-          pp(8, 10.1, 'coping', 0.9),
-          pp(8.6, 10.4, 'dirt'),
-          pp(60, 10.4, 'dirt'),
-        ],
-      }]
+      // world above is only ever a strip of sky. Walked from the field on the
+      // left to the field on the right: a coping, a brick face battered back
+      // one in four, a concrete plinth, the drain at its foot, the cess, the
+      // ballast shoulder, and the bed filled to the top of the sleepers.
+      const left: PP[] = [
+        pp(-60, CUT.top, 'dirt'),
+        pp(-CUT.copingBack, CUT.top, 'coping'),
+        pp(-CUT.copingFront, CUT.top, 'coping', 0.95),
+        pp(-CUT.copingFront, CUT.soffit, 'coping', 0.9),
+        pp(-cutFace(CUT.soffit), CUT.soffit, 'brickCut', 0.85),
+        pp(-cutFace(CUT.plinth), CUT.plinth, 'concrete', 0.7),
+        pp(-CUT.plinthFace, CUT.plinth - 0.1, 'concrete', 0.65),
+        pp(-CUT.plinthFace, CUT.drain, 'concreteWet', 0.45),
+        pp(-CUT.drainLip, CUT.drain, 'concreteDim', 0.5),
+        pp(-CUT.drainLip, CUT.cess, 'ballastDark', 0.6),
+        pp(-CUT.shoulder, CUT.cess, 'ballast', 0.65),
+        pp(-CUT.crib, CUT.bed, 'ballast', 0.7),
+      ]
+      // The right is the left reflected, walked back to front.
+      const right = left.map((p, i) => pp(-p.r, p.u, left[Math.max(0, i - 1)].s, p.ao))
+      right.reverse()
+      return [{ closed: false, points: [ ...left, ...right ]}]
+    }
     case Theme.ANNEX:
       // A low, wide hall, the floor a single slab the water can lie on.
       return [{

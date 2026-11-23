@@ -534,9 +534,11 @@ export function buildProps (route: Route, idx: SpineIndex): PropSet[] {
 
   // Poles on the hill side, into the incline, and the wires between them.
   let poles = new Instances()
+  // Through the cutting and along the walls they stand on the land above.
   for (let s = county.s0 + 8; s < incline.s1 - 40; s += 42) {
     const hw = halfAt(pl, s)
-    beside(pl, s, -(hw + 4.6), p)
+    const c  = idx.cut?.(s)
+    beside(pl, s, -(c && c.h > 0.3 ? Math.max(hw + 4.6, c.top + 4) : hw + 4.6), p)
 
     const f = pl.frame
     poles.add(p[0], p[1] - 0.1, p[2], yawOf(f.forward.x, f.forward.z) + Math.PI / 2, 1, hash(s * 3), 0)

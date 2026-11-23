@@ -52,7 +52,7 @@ export const SECTIONS: Section[] = [
     grade:  [ -20 * D, -4 * D, 0, 16 * D ],
     lift:   [ 5.5, 3, 3.4 ], // brake · crawl · chain
     bore:   6,
-    ceilH:  4.6,
+    ceilH:  5.6,
     floorD: 0.45,
     lamp:   8,
     lampY:  4.36,

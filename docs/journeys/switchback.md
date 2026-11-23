@@ -13,7 +13,7 @@ along with the pointwise and windowed curvature bounds the bend fit can carry.
 | I · the boarding platform | 72 | fluorescent boarding station, wet tile, the brake and the first chain |
 | II · the chalk drift | 78 | hand-cut adit, timber sets, dust, the crest |
 | III · the scaffold void | 96 | steel lattice suspended in nothing, the big drop |
-| IV · the carpet concourse | 84 | mall interior at sunset, clerestory light |
+| IV · the carpet concourse | 84 | mall interior at sunset, clerestory light: a galleria with a gallery over shopfront arcades down both sides, a glazed band round each haunch of the vault, and the carpet |
 | V · the chapel of folds | 72 | folded stone with a nave cut through it, god-rays from lancets in the east wall, the second chain |
 | VI · the overlook | 90 | open sky over a cloud sea, drifting ash — and the seam |
 
@@ -86,6 +86,55 @@ sign. that is a roll stutter on every beat boundary and it is not the track. the
 bank therefore reads `min(speed, V_MAX)`; the *ride* still gets faster, the
 picture just stops pretending the banking does.
 
+## the station
+
+the boarding platform was a bore with two decks in it: the vault was struck
+from the track, so its haunches came down onto the decks with twenty
+centimetres to spare and the platforms ran off under the curve. it is a
+station hall now, and the route table keeps its numbers apart from the
+ceiling (`ceilH` 4.6 to 5.6).
+
+- **the hall** (`stationVault`): a segmental vault over the whole width, wall
+  to wall, `STATION_RISE` 2.4 m under the crown, struck from the table's bore
+  and ceiling (radius 8.7 m), so it springs at 3.2 m and both decks have
+  2.3 m of straight wall over them. `roomProfile` takes the room's type and
+  hands the platform to it, so the collars and the headland's portal follow
+  the hall.
+- **its far end**: the hall is the bigger room where it meets the drift, so
+  its air stops at its own end plane (`roomSlab`) and the drift's air reaching
+  back into it is the overlap. that end is a tiled wall with the drift's mouth
+  in it, framed by the drift's collar; the drift's own props are cut at its
+  front, so its crown lagging no longer hangs in the hall.
+- **the tile** (`stationShell`): glazed brick bond, 0.24 by 0.12 m, unrolled
+  round the vault's arc so the courses carry on over the springing; a
+  bottle-green dado from the deck to shoulder height under a black line, an
+  oxblood frieze between cream fillets at the springing, soot toward the
+  crown, and seepage running down from the vault in streaks that are darker,
+  browner and wet (roughness 0.12).
+- **the decks**: small grey tile with water standing in the low spots
+  (roughness 0.04, where the battens are seen), a stone coping with the yellow
+  line on it, the face down to the well in a dark course.
+- **the battens** (`STATION_LAMP_X` 3.4): a line over each deck, a 2.9 m
+  fitting a lamp pitch apart on two rods, an opal diffuser under a white
+  housing. `lampPos` hands the platform the nearest point on the nearer tube,
+  so the light, its specular and its halo are long; the shadow ray stops
+  0.2 m short of the fitting it starts in. the diffuser buzzes on the same
+  roll the lighting does.
+- **the walls** (`STATION_BAY` 8 m): a poster frame every bay with what is
+  left of the bill in it (torn back where it is damp), an enamel nameboard
+  between two in lettering nobody can read, and a bench under every other
+  nameboard.
+- **the brake and the chain**: brake shoes either side of the middle along the
+  first beat, worn bright on top; a chain in its trough from `STATION_CHAIN`
+  48 m to the end of the room and on over the drift's first beat
+  (`DRIFT_CHAIN` 26 m), which is where the table's lift runs. its links are
+  drawn in the cart's frame, because while it hauls the cart it moves with it.
+  added after the clearance, under the cart's floor.
+- **what it costs**: about the same as before, around 55 scene evaluations a
+  pixel; the walls and the battens are behind bounds, so a ray down the track
+  pays for the deck and two compares. the void, the concourse and the chapel
+  are byte-identical on the probe.
+
 ## the chapel
 
 the fold on its own is a solid with no way through it and no order in it. the
@@ -116,6 +165,139 @@ shaft of light cannot fail to have a window at the end of it.
 - deep in the nave's air (`naveAir < -1.1`) the map returns the cut as its bound
   and skips the fold. that is most of every ray that looks down the track, and
   it is why the room costs no more than the bare fold did.
+
+## the concourse
+
+the room the route table carves is a mall's section already: a barrel vault over
+the middle (radius 7.875 m sprung from 2.625 m, which is what `roomProfile`
+makes of the table's 11 m bore and 10.5 m ceiling; `MALL_R`, `MALL_ARCH_Y`) and
+a low aisle down either side. what it lacked was a building, and the building is
+authored into that section rather than changing it. as in the chapel, the
+glazing is one set of numbers read by everything that needs it.
+
+- **a bay is 5 m** (`MALL_BAY`, divides `PHASE_WRAP`; the mullions stand on a
+  quarter of it). a rib crosses the vault on every bay line, 0.30 m deep, with a
+  column under it and a shopfront between two of them.
+- **the gallery**: a slab off both springing lines, edge 6.3 m off the track
+  (`MALL_GAL_X`), floor at 3.375 m (`MALL_GAL_Y`), a 1.08 m glass balustrade on
+  the edge with its rail drawn by the shading, columns of 0.25 m radius under
+  it. the aisles under it are the arcades.
+- **the clerestory**: a band of glazing round each haunch between 24 and 60
+  degrees (`MALL_WIN_Y0` 3.203 and `MALL_WIN_Y1` 6.820 above the vault's
+  centre), three lights high (transoms at 36 and 48 degrees), a mullion every
+  1.25 m. the east panes show the sky the sun is leaving, horizon at the sill and
+  zenith at the head; the west panes are the sun in dust, hotter the nearer the
+  line of sight runs to it.
+- `MALL_SUN` (0.773, 0.503, 0.387) is a constant in the track's frame, not
+  `uSun`, for the chapel's reason: ahead, off to the right, thirty degrees up,
+  so the light comes down across the hall toward the cart.
+- **`mallSun`** carries a point back along `MALL_SUN` to the vault (a circle in
+  section, so one square root) and tests the glazing there. one field is the
+  pool on the far carpet and up the far arcade (`directLight`, 1.25 x the sun
+  term, shadow ray only inside the beam and stopped 2 m short of the glass) and
+  the beam in the air. under the far gallery only what clears the slab's edge
+  gets in.
+- **the beam** is accumulated in `naveShafts`, the chapel's loop: the two rooms
+  are neighbours, the chapel is always in the window from the concourse, and a
+  loop each paid for every sample's crossing into track space twice. the
+  concourse's samples read the band and the ribs' shadows only (its transoms
+  and mullions are below a step) and are brightest looking up the light.
+- **the arcades**: a shopfront to a bay on the back wall, by a roll per bay: 40 %
+  a roller shutter with a notice on it, 28 % dark glass with one taped inside,
+  32 % lit (`mallShopLit`: fewer by the lap, one in four of those flickering) in
+  tungsten, mint or pink. a sign box on every fascia in lettering nobody can
+  read (`mallGlyphs`). lay-in ceiling tiles with a downlight every 2.5 m, 8.7 m
+  off the track; terrazzo underfoot with a brass strip where the carpet stops.
+- **the upper shops** are drawn on the vault between the gallery and the sill
+  of the glazing, under a teal stripe at 5.42 m and a crimson one at 5.60 m.
+- **the crown** is plaster panels with the room's lamps let into it as
+  luminous panels, at the pitch and height the route table gives.
+- **the carpet** (`mallCarpet`): a 1.25 m repeat on a plum ground, a crimson
+  lozenge with a teal eye on the even squares, a mustard squiggle on the odd
+  ones, a teal pip on every corner; a dark border with a mustard pinstripe
+  beside the ballast and along the foot of the columns. the print goes to its
+  mean between 12 and 44 m; the borders run with the view and carry on.
+- **the hall floor**: 4.2 m off the track on both sides, a palm in a tub on the
+  tens (two rings of blades, seven arching and six hanging) and a bench on the
+  fives. a pair of stopped escalators every 40 m, 5.7 m off the track at thirty
+  degrees, each between two palms, left out where an end of the room would cut
+  one in half.
+- **the front**: a glazed lunette across the vault at the room's own front,
+  standing on the gallery, with a fan of bars every 15 degrees over a transom
+  that carries the name of the place. from the void it glows with the hall; the
+  way in is everything under it. the far end is the chapel's gable, which stands
+  half in this room and is the chapel's stone on both faces.
+- **the light**: the sun through the clerestory, the crown lamps, and an
+  ambient that is the two clerestories (lilac from the east, the sun's colour
+  from the west, by which way a surface faces) over the room's haze, falling by
+  80 % under the galleries, where the downlights and the lit shop windows take
+  over (each windowed to nothing at the edge of its own cell). the crown lamps
+  march no shadow ray: the one thing they are ever behind is a gallery, and that
+  shade is closed-form (`mallLampShade`).
+- **what it costs**: the props are three groups behind bounds (the walls, the
+  hall floor, the escalators), so a ray down the middle of the hall pays for one
+  square root; the shading takes one four-octave field and one grain per hit and
+  hands them down. counted with a `gEvals += 1.0` in `mapTrack`, a pixel in the
+  room takes about 54 scene evaluations against 63 for the bare vault it
+  replaced: the march is longer (41 steps against 35) and the two shadow rays it
+  no longer marches more than pay for it. every frame with no concourse in it is
+  byte-identical. the shader itself is larger, which a GPU that branches does
+  not pay for outside the room and a rasteriser that runs both sides of every
+  branch pays for everywhere (`gotchas.md`); it has not been timed on a phone.
+
+## the overlook
+
+open sky with nothing near in it, so the sky is the room, and the hill the
+line runs into at the end of it is the only solid thing in view.
+
+- **the weather** (`overlookWeather`, read only by rays that end in the
+  overlook, so every other room keeps the plain sunset and a doorway sees the
+  same cloud sea it always did). directions are measured round the sun's
+  azimuth, so the far cloud is fixed in the world while the railway turns, and
+  drift with the wind is `uCart.x`, the distance ridden, so it seeks exactly.
+  - a **high deck** of altocumulus in rolls on a plane at 1 / h, faded to haze
+    under 0.10 of elevation (its cells would be finer than a pixel) and thinned
+    toward the zenith. away from the sun a cell takes the light on its
+    underside and goes rose; toward it the cell is backlit, dark, with only its
+    thin edges letting the sun through.
+  - a **cumulus wall** on the horizon all the way round, its tops a fractal of
+    the azimuth read off the unit circle (no seam behind the cart), to 0.11 of
+    elevation over the sea's horizon at -0.012; backlit toward the sun with a
+    hot rim, lit on its face away from it, set back by haze.
+  - the **cloud sea** ninety metres down as before, but in relief: the field is
+    read a second time a step toward the sun and the difference is which way
+    each top faces. the far sea goes to the horizon haze, not to texture finer
+    than its pixels.
+- **the headland** (`headland`, `HEAD_TOP` 11 m, `HEAD_RISE` 0.45, `HEAD_FALL`
+  0.55, `HEAD_WALL` 9 m). a walled room is carved out of an unbounded solid,
+  which from the overlook was a tiled half-space filling the sky sixty metres
+  off, its courses let through the fog as terraces and rings. while the
+  overlook is in the window with a walled room after it, the rock past it is
+  cut down to a ridge on the line: a rounded crest 11 m over the portal,
+  climbing 0.45 m per metre into the hill and falling 0.55 per metre to both
+  sides into the cloud, with three octaves of relief between -3 and +4.9 m. it
+  is cut square across the track by an 18 x 9 m headwall of dressed stone
+  (0.55 m courses on a broken bond, a coping, rain streaks) round the collar;
+  outside that the face leans back. the hill is granite split along its
+  bedding with lichen and dry grass on the flats, lit by the overlook's sun
+  (with its shadow) and sky, never by the tunnel's lamps (`onHeadland`,
+  `headlandAlbedo`, `headlandLight`). it only ever takes solid away, outside the
+  bore and the collar, so it cannot reach the cart; every map call before the
+  overlook, in front of the headland or deep inside it skips the noise on a
+  bound.
+- **what it costs**: fewer scene evaluations, not more — about 46 a pixel on
+  the first lap's overlook against 58 before, because the march used to crawl
+  along false surfaces (below) that are gone. every other room is within a
+  couple of evaluations of what it was.
+- **a bound under the hit epsilon is a hit.** `roomProps` handed back its
+  z-slab, and `portalCollar` its end-plane distance, as a bound until they were
+  within 0.05 m; the march's cone epsilon reaches 0.15 m at `T_MAX`, more after
+  the bend's Lipschitz divisor, so every far ray stopped on the next room's end
+  plane, a wall across the whole sky. a solid half-space sat just behind it and
+  hid that until the headland took it away. both early-outs now wait until a
+  metre out.
+- on the fourth lap the fall follows the overlook and there is no headland:
+  the shaft's mouth stands in the weather as the seam.
 
 ## the fissures
 
@@ -179,6 +361,9 @@ bun test src/journeys/switchback/kinematics.test.mjs
 bun tools/journey.mjs probe switchback --from=0 --to=280 --step=20
 bun tools/journey.mjs scan switchback --from=200 --to=210 --step=0.25
 bun tools/journey.mjs hud switchback --from=0 --to=240 --step=60
+node tools/journey.mjs contact switchback --bare --at=0,2,5,9,12,15,17 --cols=4         # the station
+node tools/journey.mjs contact switchback --bare --from=40 --to=49.5 --step=0.5 --cols=5   # the concourse
+node tools/journey.mjs contact switchback --bare --at=98,126.4,141.3 --cols=3            # ...on laps 2 to 4
 ```
 
 acceptance gates:

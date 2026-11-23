@@ -188,13 +188,49 @@ faded to their average before they can alias.
   piston gallery and the gearworks; the ribs as riveted I-sections in oxide.
 - **the cage**: the floor bars, roof and side grating are bare steel (the posts
   stay in hazard paint) — the drop used to be watched through a yellow grid.
-- **the melt**: a dark slag crust that splits into plates along bright seams,
-  hottest at deep orange rather than white, read up the face of a tap channel
-  as well as across the pool. the tap channels warm the brick around them.
+- **the melt**: in the tap channels, a dark slag crust that splits into plates
+  along bright seams, hottest at deep orange rather than white, read up the
+  channel's face. the tap channels warm the brick around them. the pool under
+  the span is its own thing (the casting pit, below).
 - **occlusion**: two taps of the field along the normal after the hit
   (`occ`, floor 0.4), scaled back up by the decay's step factor so the lap does
   not darken with it. it darkens the ambient and, as contact shadow, the lamps'
   direct light down to 0.55. two `mapScene` calls per pixel.
+
+## the casting pit
+
+the cut in the furnace floor used to drop 30 m to a melt you never saw: the
+crossing was a plate over a dark brick well, and the only fire in the hall was
+the tap channels in the walls. the bath is now **`MELT_Y` = −2.6 m**, a man's
+height and a half under the plates, and it is the hall's light.
+
+- **the bath** (`shadeMelt`): the metal wells up along the middle of the pit and
+  rolls out to the walls (the pattern advects outward in |x|, offset per side),
+  so there is a bright split down the centre where the skin keeps tearing open,
+  rafts of dark slag (an fbm mask) drifting outward, broken into plates of every
+  size along the joints of a warped jittered grid (`plateEdge`, F2 − F1) with the
+  metal glowing in the joints and the broken edges glowing dull red, thin crust
+  glowing through itself, and a skull of frozen slag banked against the lining
+  where nothing moves — in the SDF as well, a rim up to 0.38 m standing out of
+  a bath that swells by ±8 cm. the open metal carries a skin streaked along the
+  flow. the hottest metal is (3.2, 0.92, 0.10), deep orange, and the joints fade
+  to their average once the footprint passes them.
+- **the lining** (`pitLining`): the hall's brick carried down to the bath,
+  incandescent where the metal licks it, a black tide of slag caked on 0.12 to
+  ~0.8 m above, and lit by the bath for the first few metres up (`exp(−h·0.35)`)
+  far more than anything up in the hall.
+- **the bath's light** (`furnaceLight`): falls off over 12 m above the bath
+  instead of 34, and by facing — strongest on what faces down at it (the plates'
+  undersides), weakest on what faces up.
+- **the fume**: gathered by the march like the steam (`fumeAt`): dense on the
+  metal, thinning out over a few metres (`exp(−h·1.1)`), rising in slow columns,
+  orange from underneath, never more than a 0.45 mix.
+- a ray that skims the bath can spend every step creeping along it; one that
+  runs out over the pit is put on the bath plane, so the far side of the pool is
+  never a hole.
+
+every other hall is byte-identical on the probe; only the frames that see the
+furnace floor change (mean luminance at the start of the crossing 25 → 46).
 
 ## the index channel
 
@@ -223,6 +259,66 @@ brake run (too narrow) or on the furnace floor (a hole). two flanged service
 pipes run under the ceiling on brackets, and about a third of the flanges leak:
 a jet of steam that slows, spreads and rises, gathered by the march like the
 leaks and lit by the hall.
+
+## the long run
+
+nearly empty and far too big: a crane hall with nothing left to lift
+(`mapLongRun`). it used to be a cold blue box lit by two wall lamps 10 m up,
+with hazard poles standing in the floor under the hoist beams; it read as a
+void, not as a building.
+
+- **the steelwork**: a stanchion stands proud of each wall at every 9 m station
+  (an I-section with its flanges along the wall, on a base plate), carrying a
+  plate girder runway (centre line `H − 1.66`) with the crane rail on top, its
+  head at `H − 1.10`. both walls are folded into one evaluation, and everything
+  lies within 0.79 m of the plate, so further out one bound answers for it. it
+  stands on the first three stations only and ends on a stanchion: the fourth
+  is in the funnel to the coolant tier, where the walls lean in and a stanchion
+  leans with them. green paint chipped back to the steel (material 11), the
+  rail bare.
+- **the bridges** are the hoist beams, lowering out of the roof onto the rails
+  at each station as before, chain and hook in bare steel now rather than
+  hazard paint; the poles to the floor are gone.
+- **the high-bays**: the hall's lamps hang one under each bridge
+  (`secLampSpacing` 9, `lampAt`), on the side away from its chain, so they come
+  down out of the roof with the bridge and strike as it lands. a spun reflector
+  open underneath with its gear box and drop rod; only the lens is lit. the
+  reflector throws the light down (`lampLight` scales it by 0.30 sideways up to
+  1 straight down), so the floor gets pools and the walls a scallop under each
+  lamp. the long run's mean luminance on the probe went from 25–34 to 42–53,
+  level with its neighbours; every other hall is byte-identical.
+
+## the gearworks
+
+the gear pairs that gave the hall its name used to sit 0.32 m deep in the wall
+plate with 0.12 m standing proud, flush and the same grey as the sheeting:
+nothing in the hall read as a gear. it was an empty corrugated corridor.
+
+now each 12 m station has a **gear train** out of each wall
+(`mapGearworks`, both walls folded into one evaluation, mirrored along the hall
+every other station):
+
+- **two 18-tooth wheels** side by side (pitch radius 1.62, module 0.18, so their
+  centres stand 3.24 apart at 2.3 m up) and a **10-tooth pinion** on the first,
+  60 degrees above the line, turning 1.8 times as fast. they really mesh: the
+  second wheel is half a tooth behind the first and the pinion a sixth of a
+  tooth on, and that holds at every angle because the phases at each contact
+  sum to a constant (`spurGear`, a tapered tooth in a folded sector).
+- the wheels are **spoked**: a painted ring, six arms tapering out from a hub,
+  bare machined teeth on the rim; the pinion has a plain web. each turns on a
+  shaft with an end cap out of a pillow block, on a **cast iron bedplate**, a 0.06 m plate
+  with a 0.12 m border, on the wall behind the train.
+- the plane of the train is 0.4–0.7 m out of the wall. it drives out 1.3 m as
+  the station deploys and spins up with it, as before.
+- a **guard rail** stands 1.95 m out from each wall — top and mid rails on
+  posts every 2.45 m in hazard paint — from 1.5 m inside the bulkhead to 26 m,
+  where the funnel to the brake run starts closing the walls in.
+- everything but the rail lies within 0.9 m of the wall, so further out the
+  rail alone is evaluated, and each wheel answers only its tip cylinder until a
+  ray is within 0.25 m of it.
+
+every other hall is byte-identical on the probe; only frames that see into the
+gearworks change.
 
 ## the drop, looking out
 
@@ -266,7 +362,8 @@ pay nothing for it:
   circle in y, so nothing pops when y wraps; that includes the rust and the
   flicker of the red from below, which were plain functions of y before.
 - there is no melt under the shaft on runs 1 to 3 (the pit has a floor); the
-  red from below is oblivion's.
+  red from below is oblivion's. the casting pit under the span is a different
+  pit.
 
 ## gates
 

@@ -460,7 +460,9 @@ async function cmdFps (page, journey, opts) {
   const ms = num(opts.ms, 2000)
   for (const t of String(opts.at ?? '0').split(',')
     .map(Number)) {
-    const dbg = await seek(page, journey, t, opts)
+    // loop=1: the bare harness draws a held frame once and then idles at the
+    // display's rate, which says nothing; with it the frame is drawn every tick.
+    const dbg = await seek(page, journey, t, opts, { loop: '1' })
     const fps = await page.evaluate(d => new Promise(res => {
       let n = 0
       const t0   = performance.now()

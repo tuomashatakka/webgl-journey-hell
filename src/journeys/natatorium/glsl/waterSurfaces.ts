@@ -285,6 +285,159 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     crackGlow = hair * lit * smoothstep(0.20, 0.62, dec);
   }
 
+  // Below the tile line. THE STAIR DOWN, THE DRAIN, THE CISTERN and THE RISER
+  // were never meant to be seen by the public, so nobody tiled them: they are
+  // the concrete the pool was poured against, struck from its formwork and left.
+  // They used to be shaded as the same white glaze as the swimming halls, which
+  // made the whole flooded third of the lap one more tiled room.
+  //
+  // Board-formed walls and soffit: 150 mm boards, each its own tone and grain,
+  // butted in staggered runs, the seam between two boards a fin of cement that
+  // leaked through it. A pour lift every 1.2 m with the bleed under it, form-tie
+  // holes on a 0.6 m grid inside each lift, efflorescence weeping out of both,
+  // and cracks that wander instead of following a lattice. The floor is a
+  // trowelled slab with saw cuts every three metres.
+  //
+  // The geometry still holes on tileBreak's lattice (tileBreak is told not to
+  // push anything proud here), so a missing "tile" is a square pocket where the
+  // face has spalled off the rebar. Same outs as tileSurface, and it sets
+  // crackGlow the same way, so shadeFace does not know which one it called.
+  const float BOARD  = 0.15;   // board width, walls and soffit
+  const float LIFT   = 1.20;   // pour lift height
+  const float TIE    = 0.60;   // form-tie spacing, both ways
+  const float SLAB   = 3.00;   // floor saw-cut spacing
+
+  void concreteSurface(vec3 p, vec3 n, float wy, float grime,
+                       out vec3 alb, out vec3 nOut, out float rough) {
+    float dec = decay();
+    float lf  = lodFade(0.012);
+    vec3  tu, tv; vec2 uv;
+    if (abs(n.y) > 0.7)      { uv = p.xz; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 0.0, 1.0); }
+    else if (abs(n.x) > 0.7) { uv = p.zy; tu = vec3(0.0, 0.0, 1.0); tv = vec3(0.0, 1.0, 0.0); }
+    else                     { uv = p.xy; tu = vec3(1.0, 0.0, 0.0); tv = vec3(0.0, 1.0, 0.0); }
+
+    // Cement, a little warm, mottled at two scales so no two square metres
+    // match. The low octave is what a pour looks like from across a room.
+    float mot = vnoise(uv * 0.55 + 17.0) * 0.6 + vnoise(uv * 2.3 + 3.1) * 0.4;
+    alb  = vec3(0.60, 0.59, 0.55) * (0.80 + 0.32 * mot);
+    vec3 nb   = vec3(0.0);
+    float line = 0.0;   // anything that collects dirt: seams, joints, ties
+
+    if (n.y > 0.7) {
+      // THE SLAB. Steel-trowelled, so the mottle is in arcs and the surface is
+      // smoother than the walls; saw-cut both ways, with the cut filled with silt.
+      float sw = abs(vnoise(uv * 1.6 + 8.0) - 0.5);
+      alb *= 0.94 + 0.10 * smoothstep(0.0, 0.18, sw) * (1.0 - lf);
+      vec2  sc = vec2(latt(uv.x, SLAB), latt(uv.y, SLAB));
+      float cx = 1.0 - smoothstep(0.004, mix(0.010, 0.030, lf), abs(sc.x));
+      float cz = 1.0 - smoothstep(0.004, mix(0.010, 0.030, lf), abs(sc.y));
+      line = max(cx, cz) * (1.0 - lf * 0.7);
+      nb   = (tu * sign(sc.x) * cx + tv * sign(sc.y) * cz) * 0.35;
+    }
+    else {
+      // THE FORMWORK. Walls take their boards horizontal and the soffit takes
+      // them along the room, so on both the seams run the way the eye travels.
+      // The along-board axis is uv.x on the walls and uv.y on the soffit.
+      bool  ceil = n.y < -0.7;
+      float a    = ceil ? uv.y : uv.x;
+      float c    = ceil ? uv.x : uv.y;
+      vec3  ta   = ceil ? tv : tu;
+      vec3  tc   = ceil ? tu : tv;
+
+      float row  = floor(c / BOARD);
+      float run  = 2.4 + 1.2 * hash11(row * 1.91);              // board lengths differ by course
+      float col  = floor(a / run + hash11(row * 7.3));          // and the butts are staggered
+      float bid  = hash21(vec2(row, col) + 4.4);
+      float fc   = fract(c / BOARD) - 0.5;
+      float fa   = fract(a / run + hash11(row * 7.3)) - 0.5;
+
+      // Each board printed its own tone and its own grain into the face. The
+      // grain is stretched along the board and offset per board, so the figure
+      // stops at every seam the way timber does.
+      float grain = vnoise(vec2(a * 1.3 + bid * 40.0, c * 26.0 + bid * 9.0));
+      alb *= mix(0.88 + 0.22 * bid, 1.0, lf);
+      alb *= mix(0.93 + 0.12 * grain, 1.0, lodFade(0.004));
+
+      // The seams: a raised fin along each course where the paste leaked
+      // between two boards, and a butt joint at the end of each board.
+      float sd   = (0.5 - abs(fc)) * BOARD;
+      float fin  = 1.0 - smoothstep(0.0, mix(0.005, 0.016, lf), sd);
+      float butt = 1.0 - smoothstep(0.0, mix(0.004, 0.014, lf), (0.5 - abs(fa)) * run);
+      line = max(fin * 0.55, butt * 0.45) * (1.0 - lf * 0.6);
+      nb = tc * sign(fc) * fin * 0.30 + ta * sign(fa) * butt * 0.25;
+
+      // Boards bow between their nails, so each face is very slightly dished.
+      nb += tc * fc * 0.08 * (1.0 - lodFade(BOARD * 0.5));
+
+      if (!ceil) {
+        // Pour lifts. The joint is a dark line with a lip, the paste that bled
+        // out of it runs down the face below, and the new pour is a shade off
+        // the old one.
+        float lk  = floor(c / LIFT);
+        float ly  = c - lk * LIFT;
+        float lj  = 1.0 - smoothstep(0.006, mix(0.012, 0.030, lf), min(ly, LIFT - ly));
+        alb *= 0.95 + 0.10 * hash11(lk * 3.3 + 1.0);
+        float bleed = smoothstep(0.55, 0.0, LIFT - ly)
+                    * smoothstep(0.35, 0.65, vnoise(vec2(a * 4.0, lk * 7.0)));
+        alb *= 1.0 - bleed * 0.16;
+        line = max(line, lj * (1.0 - lf * 0.5));
+        nb  += tc * (ly < LIFT * 0.5 ? -1.0 : 1.0) * lj * 0.4;
+
+        // Form ties: a plugged cone every 0.6 m, mid-lift, rust round the ones
+        // the plug fell out of and a white weep running down from them.
+        vec2  tg = vec2(latt(a + 0.3, TIE), latt(c - LIFT * 0.25, TIE));
+        vec2  tk = floor(vec2(a + 0.3, c - LIFT * 0.25) / TIE);
+        float tr = length(tg);
+        float th = hash21(tk + 2.2);
+        float tie  = (1.0 - smoothstep(0.016, 0.022, tr)) * (1.0 - lodFade(0.02));
+        float ring = smoothstep(0.06, 0.02, tr) * step(th, 0.25 + dec * 0.5) * (1.0 - lodFade(0.03));
+        alb = mix(alb, vec3(0.12, 0.11, 0.10), tie * (0.55 + 0.4 * step(th, 0.4)));
+        alb = mix(alb, alb * vec3(0.78, 0.52, 0.34), ring * 0.7);
+        nb += (tc * tg.y + ta * tg.x) / max(tr, 0.001) * tie * 0.5;
+
+        // Efflorescence: salts the water carried through the wall and left on
+        // its face. Under the lift joints and under the ties, drawn down the
+        // wall by the same seep that makes them, heavier as the flood ages.
+        float wv  = vnoise(vec2(a * 2.6, c * 0.35)) * vnoise(vec2(a * 9.0 + 5.0, c * 0.8));
+        float wl  = smoothstep(0.75, 0.05, ly) * smoothstep(0.10, 0.30, wv);
+        float wt  = smoothstep(0.035, 0.0, abs(tg.x + sin(tg.y * 9.0) * 0.01))
+                  * smoothstep(0.0, -0.40, tg.y) * step(th, 0.35 + dec * 0.4) * (1.0 - lodFade(0.03));
+        float eff = max(wl, wt) * (0.20 + 0.65 * dec) * smoothstep(wy - 0.05, wy + 0.25, p.y);
+        alb = mix(alb, vec3(0.78, 0.78, 0.74), eff * 0.55);
+      }
+    }
+
+    // Cracks, which in poured concrete go where the stress went: a wandering
+    // ridge of noise, not a lattice. The gradient of the ridge is taken from
+    // two more lookups so the crack catches the strip light along one lip.
+    float cn  = vnoise(uv * 0.9 + 31.0) + 0.35 * vnoise(uv * 3.1 + 7.0);
+    float cw  = (0.004 + 0.012 * dec) * (1.0 + lf * 2.0);
+    float hair = (1.0 - smoothstep(0.0, cw, abs(cn - 0.66)))
+               * smoothstep(0.30, 0.55, vnoise(uv * 0.35 + 50.0) + dec * 0.4)
+               * (1.0 - lodFade(0.004));
+    float cgx = vnoise((uv + vec2(0.02, 0.0)) * 0.9 + 31.0) - vnoise(uv * 0.9 + 31.0);
+    float cgy = vnoise((uv + vec2(0.0, 0.02)) * 0.9 + 31.0) - vnoise(uv * 0.9 + 31.0);
+    vec2  cg  = normalize(vec2(cgx, cgy) + 1e-5) * sign(cn - 0.66);
+
+    nOut = normalize(n + nb - (tu * cg.x + tv * cg.y) * hair * 0.35);
+
+    // Dirt in every line, mildew where it is damp, the cracks darkest of all.
+    alb *= 1.0 - line * 0.45;
+    alb  = mix(alb, vec3(0.24, 0.28, 0.21), line * grime * 0.5 * smoothstep(wy + 1.5, wy, p.y));
+    alb *= 1.0 - hair * 0.6;
+
+    // Concrete drinks water: dark well above the line, where tile only beaded
+    // it, and glossy only where it is actually running.
+    float wet  = exp(-max(p.y - wy, 0.0) * 1.4);
+    float seep = hair * (1.0 - abs(n.y)) * smoothstep(0.18, 0.45, dec);
+    alb  *= mix(1.0, 0.78, max(wet, seep));
+    rough = mix(0.82, 0.30, max(wet * 0.7, seep));
+    alb  *= 1.0 - 0.30 * smoothstep(0.04, 0.0, abs(p.y - wy)) * grime;
+
+    float lit = smoothstep(0.55, 0.95, fract(hash21(floor(uv * 1.7)) * 7.77));
+    crackGlow = hair * lit * smoothstep(0.20, 0.62, dec);
+  }
+
   // What the light coming out of a hole lands on: the wall around it.
   //
   // The emission inside a recess alone cannot read as a source, because a source
@@ -310,57 +463,6 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     return acc;
   }
 
-  // Anything that is not the building. The same if-chain shape as the fittings
-  // themselves, because it has to answer in the same order they were built in.
-  void propSurface(vec3 qs, float mat, float dec, out vec3 alb, out float rough) {
-    float n1 = hash21(floor(qs.xz * 7.0) + floor(qs.y * 7.0));
-    if (mat < 1.5) {
-      // Lane rope floats: red, white and blue in RUNS. The run is what makes a
-      // line of spheres read as a lane rope instead of as beads on a string.
-      float k = fract(floor(qs.z / 1.35) * 0.37 + floor(qs.x) * 0.11);
-      alb = k < 0.34 ? vec3(0.58, 0.09, 0.07)
-          : (k < 0.67 ? vec3(0.82, 0.83, 0.82) : vec3(0.09, 0.20, 0.52));
-      // Each float is moulded with ribs, and they are all slightly sun-bleached
-      // by a different amount.
-      float rib = 0.82 + 0.18 * abs(sin(qs.z * 52.0));
-      alb  *= rib * (0.80 + 0.35 * hash21(vec2(floor(qs.z / 0.36), 3.0)));
-      alb   = mix(alb, vec3(0.20, 0.26, 0.16), smoothstep(0.25, 0.85, dec) * 0.45);
-      rough = 0.30;
-    }
-    else if (mat < 2.5) {
-      // Galvanised steel, going over to rust as the laps pile up.
-      alb   = mix(vec3(0.42, 0.44, 0.46), vec3(0.36, 0.16, 0.07),
-                  smoothstep(0.08, 0.70, dec) * (0.35 + 0.65 * n1));
-      rough = 0.20;
-    }
-    else if (mat < 3.5) {
-      // Municipal enamel. There is precisely one colour this is ever painted.
-      alb   = vec3(0.29, 0.41, 0.35) * (0.78 + 0.42 * n1);
-      alb   = mix(alb, vec3(0.30, 0.14, 0.07), smoothstep(0.3, 0.9, dec) * n1 * 0.5);
-      rough = 0.28;
-    }
-    else if (mat < 4.5) {
-      // Green. Dark, matte, and the only hue in the building that is not either
-      // fluorescent white or rust. Kept genuinely dark: a lamp two metres away in
-      // a service corridor puts 2.4x on this, and anything brighter comes back as
-      // moulded plastic rather than as something growing.
-      alb   = vec3(0.045, 0.098, 0.042) * (0.55 + 0.95 * n1);
-      rough = 0.80;
-    }
-    else {
-      // Cast concrete: the lift joint every pour left, the grain of the
-      // shuttering boards it was poured against, and a dark wet foot where the
-      // silt has climbed it. Faded to its mean with distance like the grout.
-      float lf   = lodFade(0.03);
-      float lift = (1.0 - smoothstep(0.008, 0.022, abs(latt(qs.y, 1.2)))) * (1.0 - lf);
-      float grn  = vnoise(vec2((qs.x + qs.z) * 2.2, qs.y * 14.0));
-      alb   = vec3(0.40, 0.40, 0.38) * (0.85 + 0.30 * n1) * (0.90 + 0.18 * mix(grn, 0.5, lf));
-      alb  *= 1.0 - lift * 0.45;
-      alb   = mix(alb, vec3(0.20, 0.21, 0.17), smoothstep(0.9, 0.0, qs.y) * (0.35 + 0.4 * dec));
-      rough = 0.74;
-    }
-  }
-
   // Ceiling fluorescents. Emissive is a shading term on ceiling hits, not
   // geometry — keeping them out of the SDF saves their cost on every march step.
   float deadFrac(vec4 C) {
@@ -384,14 +486,16 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     float W   = B.y;
     float H   = B.z;
     float band = floor(p.z / sp);
+    float Wl   = W * lampRun(C);
+    float drop = lampRun(C) < 1.0 ? 0.50 : 0.12;
 
     for (int k = 0; k < 3; k++) {
       float bi = band - 1.0 + float(k);
       float on = lampAlive(bi, C);
       if (on < 0.01) continue;
 
-      vec3 a  = vec3(-W * 0.55, H - 0.12, (bi + 0.5) * sp);
-      vec3 ab = vec3(W * 1.10, 0.0, 0.0);
+      vec3 a  = vec3(-Wl * 0.55, H - drop, (bi + 0.5) * sp);
+      vec3 ab = vec3(Wl * 1.10, 0.0, 0.0);
       float u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0);
       vec3  lp = a + ab * u;
 
@@ -406,7 +510,7 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
       vec3  h    = normalize(ld - rd);
       float spec = pow(clamp(dot(n, h), 0.0, 1.0), mix(16.0, 220.0, 1.0 - rough));
 
-      acc += (alb * diff + spec * (1.0 - rough) * 0.5) * atten * vec3(0.95, 0.99, 1.0) * on * 2.4;
+      acc += (alb * diff + spec * (1.0 - rough) * 0.5) * atten * vec3(0.95, 0.99, 1.0) * lampWarm(C) * on * 2.4;
     }
     return acc;
   }
@@ -415,7 +519,7 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
   // term on ceiling hits, so it costs nothing on the other 95 march steps.
   float ceilPanel(vec3 p, vec4 B, vec4 C) {
     float sp   = max(C.w, 2.0);
-    float W    = B.y;
+    float W    = B.y * lampRun(C);
     float band = floor(p.z / sp);
     float lz   = p.z - (band + 0.5) * sp;
     float inZ  = 1.0 - smoothstep(0.20, 0.27, abs(lz));
@@ -429,7 +533,8 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
     float rib  = mix(0.80 + 0.20 * abs(sin(p.x * 70.0)), 0.90, lf);
     float tube = mix(0.78 + 0.32 * exp(-abs(abs(lz) - 0.09) * 40.0), 0.92, lf);
     float ends = 0.70 + 0.30 * smoothstep(W * 0.56, W * 0.38, abs(p.x));
-    return inZ * inX * lampAlive(band, C) * rib * tube * ends;
+    float up = lampRun(C) < 1.0 ? step(B.z - 1.0, p.y) : 1.0;   // not on a gallery's soffit
+    return inZ * inX * lampAlive(band, C) * rib * tube * ends * up;
   }
 
   // Suspended particulate. Nothing else says "this space is full of water"
@@ -537,7 +642,7 @@ export const waterSurfacesGlsl = `  // --- water -------------------------------
         vec3  v    = lp - o;
         float proj = clamp(dot(v, r), 0.0, tMax);
         float dist = length(v - r * proj);
-        acc += vec3(0.85, 0.92, 1.0) * on * 0.05 / (1.0 + dist * dist * 2.2);
+        acc += vec3(0.85, 0.92, 1.0) * lampWarm(C) * on * 0.05 / (1.0 + dist * dist * 2.2);
       }
     }
     return acc;

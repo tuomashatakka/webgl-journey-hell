@@ -1,19 +1,57 @@
 export const surfacesGlsl = `  // ---- surfaces ------------------------------------------------------------
 
+  // ---- the headland's stone -------------------------------------------------
+  //
+  // The outside of the hill the platform is cut into, which nothing but the
+  // overlook ever sees, so it is lit by the overlook's weather (headlandLight)
+  // and not by the tunnel's lamps. A shell hit is the headland's when the
+  // headland is in the window, the point is past the overlook and it is well
+  // outside the bore of the room it is in: the bore's own walls are tile.
+
+  bool onHeadland(vec3 q, Room r) {
+    if (gMat > M_SHELL + 0.5 || r.bore > 50.0) return false;
+    vec2 span = headlandSpan();
+    return span.x < 1e4 && q.z > span.y
+        && roomProfile(q, r.type, r.bore, r.ceilH, r.floorD) > 0.6;
+  }
+
   /**
-   * Grid lines on a plane, faded to their mean rather than to zero.
-   *
-   * Fourteen millimetres of grout at forty metres is a third of a pixel, and a
-   * third of a pixel of black sampled once per pixel is not a joint, it is moire.
-   * There is no mip chain here (nothing is textured) and ES 1.00 has no
-   * derivatives, so the footprint is estimated from distance and the line
-   * *widens* as it fades. Widening keeps the wall reading as tiled; fading stops
-   * it shimmering.
+   * Granite on the hill, split along its bedding, with lichen on the faces and
+   * dry grass where it is flat enough to hold soil; dressed stone on the
+   * headwall round the portal, in 0.55 m courses on a broken bond under a
+   * coping, streaked where the rain comes off the top.
    */
-  float tiling(vec2 uv, float cell, float t) {
-    float w = 0.02 + t * 0.0018;
-    vec2 g = abs(fract(uv / cell) - 0.5);
-    return smoothstep(0.5 - w, 0.5, max(g.x, g.y)) * smoothstep(48.0, 12.0, t);
+  vec3 headlandAlbedo(vec3 q, vec3 n, float t) {
+    float zp = phaseAt(q.z);
+    float far = smoothstep(14.0, 60.0, t);
+
+    if (n.z < -0.8 && abs(q.x) < HEAD_WALL + 0.3 && q.y < HEAD_WALL + 0.3) {
+      float row  = floor(q.y / 0.55);
+      float bx   = q.x / 1.1 + 0.5 * mod(row, 2.0) + 0.23 * hash21(vec2(row, 4.1));
+      float gx   = abs(fract(bx) - 0.5) * 1.1;
+      float gy   = abs(fract(q.y / 0.55) - 0.5) * 0.55;
+      float w    = 0.012 + t * 0.0012;
+      float joint = max(smoothstep(0.55 - w, 0.55, gx), smoothstep(0.275 - w, 0.275, gy)) * (1.0 - far);
+      float tone = hash21(vec2(floor(bx), row));
+      vec3 c = mix(vec3(0.44, 0.40, 0.36), vec3(0.58, 0.53, 0.46), tone);
+      c *= 0.86 + 0.28 * fbm(q.xy * 2.3);
+      c = mix(c, vec3(0.62, 0.58, 0.52), smoothstep(HEAD_WALL - 0.45, HEAD_WALL - 0.40, q.y));
+      float run = smoothstep(0.45, 0.80, fbm(vec2(q.x * 1.6, q.y * 0.12 + 3.0)));
+      c *= 1.0 - 0.38 * run * smoothstep(-2.0, HEAD_WALL, q.y);
+      return mix(c, vec3(0.17, 0.16, 0.15), joint * 0.8);
+    }
+
+    vec2 uv = abs(n.y) > 0.6 ? vec2(q.x, zp) : (abs(n.x) > 0.6 ? vec2(zp, q.y) : q.xy);
+    float tone = fbm(uv * 0.35);
+    vec3 c = mix(vec3(0.24, 0.22, 0.22), vec3(0.43, 0.39, 0.35), tone);
+    float bed = abs(fract(q.y * 0.42 + fbm(uv * 0.21) * 1.3) - 0.5);
+    c *= 1.0 - 0.45 * smoothstep(0.42, 0.49, bed) * (1.0 - far);
+    c *= 0.82 + 0.36 * fbm(uv * 3.1) * (1.0 - far * 0.7);
+    float lichen = smoothstep(0.58, 0.70, fbm(uv * 0.9 + 6.1));
+    c = mix(c, vec3(0.52, 0.53, 0.44), lichen * 0.55);
+    float level = smoothstep(0.55, 0.85, n.y);
+    vec3 grass = mix(vec3(0.33, 0.30, 0.17), vec3(0.22, 0.24, 0.13), fbm(uv * 1.7));
+    return mix(c, grass, level * smoothstep(0.35, 0.55, fbm(uv * 0.6 + 2.0)));
   }
 
   vec3 shellAlbedo(vec3 q, vec3 n, float type, float grime, float t) {
@@ -36,15 +74,7 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
       return c * (1.0 - grime * 0.4);
     }
 
-    if (type < T_DRIFT - 0.5) {
-      // THE BOARDING PLATFORM. Wet institutional tile, and a floor that is the
-      // same tile with the shine walked off it.
-      float grout = tiling(uvz, 0.15, t);
-      c = mix(vec3(0.80, 0.83, 0.79), vec3(0.30, 0.34, 0.33), grout);
-      c = mix(c, vec3(0.15, 0.18, 0.19), isFloor * 0.6);
-      c *= 1.0 - grime * 0.45 * smoothstep(0.35, 0.75, fbm(uvz * 1.4));
-    }
-    else if (type < T_SCAFFOLD - 0.5) {
+    if (type < T_SCAFFOLD - 0.5) {
       // THE CHALK DRIFT. Cut chalk: bone, with the pick marks still in it.
       float pick = fbm(uvz * vec2(9.0, 3.2)) * 0.6 + fbm(uvz * 24.0) * 0.4;
       c = mix(vec3(0.90, 0.87, 0.78), vec3(0.56, 0.52, 0.44), pick);
@@ -53,20 +83,6 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
     }
     else if (type < T_CONCOURSE - 0.5) {
       c = vec3(0.030, 0.028, 0.040);   // the void's far bound, never actually reached
-    }
-    else if (type < T_CHAPEL - 0.5) {
-      // THE CARPET CONCOURSE. The floor is the point: a mall carpet, a repeating
-      // geometric print in colours nobody has chosen since.
-      float a = sin(uvz.x * 5.1) * sin(uvz.y * 5.1);
-      float b = sin((uvz.x + uvz.y) * 3.3 + 1.2);
-      float pat = smoothstep(-0.1, 0.35, a * 0.6 + b * 0.4);
-      vec3 carpet = mix(vec3(0.20, 0.12, 0.30), vec3(0.62, 0.18, 0.32), pat);
-      carpet = mix(carpet, vec3(0.10, 0.42, 0.44), smoothstep(0.72, 0.95, pat));
-
-      vec3 wall = mix(vec3(0.72, 0.64, 0.62), vec3(0.36, 0.30, 0.33), tiling(uvz, 1.2, t));
-      c = mix(wall, carpet, isFloor);
-      c = mix(c, vec3(0.86, 0.82, 0.80), isCeil * 0.7);
-      c *= 1.0 - grime * 0.30;
     }
     else if (type < T_OVERLOOK - 0.5) {
       // THE CHAPEL OF FOLDS. Dressed stone, laid in courses with the joints
@@ -218,7 +234,12 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
     emit = vec3(0.0);
 
     if (mat < M_RAIL - 0.5) {
-      vec3 c = shellAlbedo(q, n, r.type, r.grime, t);
+      // THE CARPET CONCOURSE has a shell of its own, glass and lamps included:
+      // mallShell, in the concourse pass. Every other room is shellAlbedo.
+      vec3 c;
+      if (abs(r.type - T_CONCOURSE) < 0.5) c = mallShell(q, n, r, t, rough, emit);
+      else if (r.type < T_DRIFT - 0.5)     c = stationShell(q, n, r, t, rough);
+      else                                 c = shellAlbedo(q, n, r.type, r.grime, t);
 
       // The fissures are lit from *behind*, so they are emission and not a dark
       // line in the albedo. A crack you can see through is the whole point; one
@@ -281,28 +302,11 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
                (0.7 + 0.5 * fbm(vec2(q.x, phaseAt(q.z)) * 46.0));
       }
 
-      if (r.type < T_DRIFT - 0.5) {
-        if (toLamp < 0.70) {
-          emit = lampTint(r.type) * 4.0 * r.lit;
-          rough = 0.40;
-          return vec3(0.90, 0.94, 0.90);
-        }
-        // The deck. Small grey tiles, and the yellow line you are meant to stand
-        // behind, which nobody has stood behind for a while.
-        if (n.y > 0.6) {
-          float grout = tiling(vec2(q.x, phaseAt(q.z)), 0.30, t);
-          vec3 deck = mix(vec3(0.55, 0.56, 0.54), vec3(0.24, 0.26, 0.26), grout);
-          float edge = smoothstep(0.16, 0.06, abs(abs(q.x) - 1.85));
-          return mix(deck, vec3(0.72, 0.60, 0.16), edge * (1.0 - r.grime * 0.5));
-        }
-        if (abs(n.x) > 0.6) {
-          // The deck's face, in the darker course every station platform has,
-          // with the tiles laid the other way up.
-          float grout = tiling(vec2(phaseAt(q.z), q.y), 0.22, t);
-          return mix(vec3(0.30, 0.32, 0.31), vec3(0.13, 0.15, 0.15), grout);
-        }
-        return mix(vec3(0.62, 0.64, 0.62), vec3(0.28, 0.30, 0.29), r.grime * 0.6);
-      }
+      // The brake and the chain, between the rails.
+      if (abs(q.x) < 0.25 && q.y < 0.0 && q.y > -0.2 && r.type < T_SCAFFOLD - 0.5)
+        return liftWayAlbedo(q, n, t, rough);
+
+      if (r.type < T_DRIFT - 0.5) return stationProp(q, n, r, t, toLamp, rough, emit);
       if (r.type < T_SCAFFOLD - 0.5) {
         if (toLamp < 0.20) { emit = lampTint(r.type) * 5.0 * r.lit; return vec3(1.0, 0.92, 0.78); }
         return mix(vec3(0.32, 0.23, 0.14), vec3(0.17, 0.12, 0.08),
@@ -314,10 +318,13 @@ export const surfacesGlsl = `  // ---- surfaces --------------------------------
         return mix(vec3(0.36, 0.37, 0.40), vec3(0.40, 0.22, 0.13), rust * (0.4 + r.grime * 0.6));
       }
       if (r.type < T_CHAPEL - 0.5) {
-        // The clerestory. Where the sunset gets in, so it is a light, not a wall.
-        float mull = smoothstep(r.ceilH - 0.80, r.ceilH - 0.45, q.y);
-        emit = vec3(1.00, 0.66, 0.58) * mull * 4.2;
-        return mix(vec3(0.58, 0.54, 0.56), vec3(0.20, 0.20, 0.22), mull);
+        // The wall across the far end of the concourse is the chapel's gable,
+        // standing half in this room: it is the chapel's stone on both faces.
+        if (q.z > r.z1 - 0.47) {
+          rough = 0.78;
+          return shellAlbedo(q, n, T_CHAPEL, r.grime, t);
+        }
+        return mallProp(q, n, r, t, rough, emit);
       }
       if (r.type < T_OVERLOOK - 0.5) {
         // The votive: a brass bowl with a flame in it, on a chain.

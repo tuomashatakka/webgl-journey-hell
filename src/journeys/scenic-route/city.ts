@@ -1,17 +1,24 @@
 // THE SCENIC ROUTE — downtown.
 //
-// Towers are one unit box, instanced. Each instance carries where it stands,
-// how big it is, and how it bends: a direction in the plane, a curvature
-// coefficient and a twist. The vertex shader does the bending live so the lap
-// gain can grow it without touching a buffer — by the third lap the skyline
-// leans over the road like grass over a path.
+// Towers are one massing mesh, instanced. Each instance carries where it
+// stands, how big it is, how it bends (a direction in the plane, a curvature
+// coefficient and a twist) and how it is massed: a podium, a setback crown, a
+// parapet, a plant room on the roof and sometimes a mast. The vertex shader
+// does the bending live so the lap gain can grow it without touching a buffer
+// — by the third lap the skyline leans over the road like grass over a path.
+//
+// The mesh is not to scale. Every vertex names a level (ground, podium top,
+// setback, roof, parapet top, plant top, mast top) and an inset (none, podium,
+// crown, parapet, plant, mast) instead of a position, and the vertex shader
+// resolves both in metres from the instance, so a 1.1 m parapet is 1.1 m on a
+// 14 m block and on the 128 m core alike. A part an instance does not have
+// collapses to nothing (zero height or zero width) or sinks under the roof.
 //
 // Placement is a jittered grid over the plaza disc with the road corridor
 // carved out, a tall core inside the helix the road spirals around, and lower
 // blocks wherever the elevated road passes overhead.
 
-import { createMeshBuilder } from '@wjh/geometry/meshBuilder'
-import type { MeshBuilder } from '@wjh/geometry/meshBuilder'
+import { VERTEX_FLOATS } from '@wjh/geometry/meshBuilder'
 import { levelFrame } from '@wjh/geometry/sweep'
 import { newFrame } from '@wjh/geometry/curve'
 import { signedCurvature } from './course'
@@ -20,13 +27,26 @@ import { PLAZA, buildSpineIndex, nearestSpine, terrainHeight } from './geometry'
 import type { SpineIndex } from './geometry'
 
 
-const TOWER_FLOATS = 12
+const TOWER_FLOATS = 16
+
+/** Levels and insets the vertex shader resolves in metres (`towerVert`). */
+const LEVEL = { GROUND: 0, PODIUM: 1, SETBACK: 2, ROOF: 3, PARAPET: 4, PLANT: 5, MAST: 6 }
+const INSET = { NONE: 0, PODIUM: 1, CROWN: 2, PARAPET: 3, PLANT: 4, MAST: 5 }
+
+/** What a face is made of: facade, parapet, plant-room louvres, mast steel. */
+const PART = { WALL: 0, PARAPET: 1, PLANT: 2, MAST: 3 }
 
 /** The largest lap gain the bend is ever drawn with: `bendGainAt(3)`. */
 const BEND_GAIN_MAX = bendGainAt(3)
 
+interface TowerMesh {
+  vertices: Float32Array;
+  indices:  Uint32Array;
+}
+
 export interface TowerSet {
-  builder:   MeshBuilder;
+  vertices:  Float32Array;
+  indices:   Uint32Array;
   instances: Float32Array;
   count:     number;
 }
@@ -41,26 +61,98 @@ function hash (n: number): number {
   return x - Math.floor(x)
 }
 
-/** The unit tower: x,z in [-0.5, 0.5], y in [0, 1], uv per face with v up. */
-function unitBox (): MeshBuilder {
-  const b = createMeshBuilder()
-  type V3 = [ number, number, number ]
+/**
+ * The massing mesh. A vertex is (x sign, level, z sign) with the inset and the
+ * part in the shard slot; corners are ±0.5 and the shader scales each axis by
+ * its width less twice the inset. Sides run round the footprint in one
+ * direction, so a wall, a ring and a cap all wind outward or upward alike.
+ */
+function towerMesh (): TowerMesh {
+  const v: number[]   = []
+  const idx: number[] = []
+  const h             = 0.5
+  // Each side: start corner, end corner, outward normal.
+  const sides: [ number, number, number, number, number, number ][] = [
+    [ -h, h, h, h, 0, 1 ],
+    [ h, h, h, -h, 1, 0 ],
+    [ h, -h, -h, -h, 0, -1 ],
+    [ -h, -h, -h, h, -1, 0 ],
+  ]
 
-  const face = (p0: V3, p1: V3, p2: V3, p3: V3, n: V3) => {
-    const a = b.vertex(p0[0], p0[1], p0[2], n[0], n[1], n[2], 0, 0)
-    const c = b.vertex(p1[0], p1[1], p1[2], n[0], n[1], n[2], 1, 0)
-    const d = b.vertex(p2[0], p2[1], p2[2], n[0], n[1], n[2], 1, 1)
-    const e = b.vertex(p3[0], p3[1], p3[2], n[0], n[1], n[2], 0, 1)
-    b.face(a, c, d)
-    b.face(a, d, e)
+  const vert = (x: number, level: number, z: number, nx: number, ny: number, nz: number, u: number, inset: number, part: number) => {
+    v.push(x, level, z, nx, ny, nz, u, 0, inset, part, 0, 0)
+    return v.length / VERTEX_FLOATS - 1
   }
-  const h = 0.5
-  face([ -h, 0, h ], [ h, 0, h ], [ h, 1, h ], [ -h, 1, h ], [ 0, 0, 1 ])
-  face([ h, 0, -h ], [ -h, 0, -h ], [ -h, 1, -h ], [ h, 1, -h ], [ 0, 0, -1 ])
-  face([ h, 0, h ], [ h, 0, -h ], [ h, 1, -h ], [ h, 1, h ], [ 1, 0, 0 ])
-  face([ -h, 0, -h ], [ -h, 0, h ], [ -h, 1, h ], [ -h, 1, -h ], [ -1, 0, 0 ])
-  face([ -h, 1, h ], [ h, 1, h ], [ h, 1, -h ], [ -h, 1, -h ], [ 0, 1, 0 ])
-  return b
+  const quad = (a: number, b: number, c: number, d: number) => {
+    idx.push(a, b, c, a, c, d)
+  }
+
+  /** Four walls from level l0 up to l1 at an inset, facing out or (for a parapet's back) in. */
+  const walls = (l0: number, l1: number, inset: number, part: number, inward = false) => {
+    for (const [ x0, z0, x1, z1, nx, nz ] of sides) {
+      const [ ax, az, bx, bz ] = inward ? [ x1, z1, x0, z0 ] : [ x0, z0, x1, z1 ]
+      const sn                 = inward ? -1 : 1
+      quad(
+        vert(ax, l0, az, nx * sn, 0, nz * sn, 0, inset, part),
+        vert(bx, l0, bz, nx * sn, 0, nz * sn, 1, inset, part),
+        vert(bx, l1, bz, nx * sn, 0, nz * sn, 1, inset, part),
+        vert(ax, l1, az, nx * sn, 0, nz * sn, 0, inset, part),
+      )
+    }
+  }
+
+  /** A flat ring at one level between an outer and an inner inset. */
+  const ring = (level: number, outer: number, inner: number, part: number) => {
+    for (const [ x0, z0, x1, z1 ] of sides)
+      quad(
+        vert(x0, level, z0, 0, 1, 0, 0, outer, part),
+        vert(x1, level, z1, 0, 1, 0, 1, outer, part),
+        vert(x1, level, z1, 0, 1, 0, 1, inner, part),
+        vert(x0, level, z0, 0, 1, 0, 0, inner, part),
+      )
+  }
+
+  /** A flat cap at one level over an inset. */
+  const cap = (level: number, inset: number, part: number) => {
+    quad(
+      vert(-h, level, h, 0, 1, 0, 0, inset, part),
+      vert(h, level, h, 0, 1, 0, 1, inset, part),
+      vert(h, level, -h, 0, 1, 0, 1, inset, part),
+      vert(-h, level, -h, 0, 1, 0, 0, inset, part),
+    )
+  }
+
+  walls(LEVEL.GROUND, LEVEL.PODIUM, INSET.NONE, PART.WALL)
+  ring(LEVEL.PODIUM, INSET.NONE, INSET.PODIUM, PART.WALL)
+  walls(LEVEL.PODIUM, LEVEL.SETBACK, INSET.PODIUM, PART.WALL)
+  ring(LEVEL.SETBACK, INSET.PODIUM, INSET.CROWN, PART.WALL)
+  walls(LEVEL.SETBACK, LEVEL.PARAPET, INSET.CROWN, PART.WALL)
+  ring(LEVEL.PARAPET, INSET.CROWN, INSET.PARAPET, PART.PARAPET)
+  walls(LEVEL.ROOF, LEVEL.PARAPET, INSET.PARAPET, PART.PARAPET, true)
+  cap(LEVEL.ROOF, INSET.PARAPET, PART.WALL)
+  walls(LEVEL.ROOF, LEVEL.PLANT, INSET.PLANT, PART.PLANT)
+  cap(LEVEL.PLANT, INSET.PLANT, PART.PLANT)
+  walls(LEVEL.PLANT, LEVEL.MAST, INSET.MAST, PART.MAST)
+  cap(LEVEL.MAST, INSET.MAST, PART.MAST)
+  return { vertices: new Float32Array(v), indices: new Uint32Array(idx) }
+}
+
+/**
+ * How a tower is massed, in metres: podium height (0 for none), setback height
+ * (the roof's for none), the crown's inset, and the mast and plant room packed
+ * as mast + plant / 10 (whole metres of mast, 0 for none; plant under 4 m, 0
+ * for none). A tower held down under an overhead road keeps a bare roof.
+ */
+function massFor (w: number, d: number, h: number, seed: number, capped: boolean): number[] {
+  const m     = Math.min(w, d)
+  const podH  = h > 25 && hash(seed + 11) < 0.55 ? 4.5 + hash(seed + 12) * 3 : 0
+  const insA  = podH > 0 ? Math.min(1.6, 0.08 * m) : 0
+  const set   = h > 34 && hash(seed + 13) < 0.65
+  const setY  = set ? h * (0.6 + hash(seed + 14) * 0.25) : h
+  const insB  = insA + (set ? Math.min(0.22 * m, 2 + hash(seed + 15) * 2.5) : 0)
+  const plant = capped ? 0 : 2.6 + hash(seed + 16) * 1.2
+  const mast  = !capped && h > 60 && hash(seed + 17) < 0.4 ? Math.round(6 + hash(seed + 18) * 14) : 0
+  return [ podH, setY, insB, mast + plant / 10 ]
 }
 
 export function buildCity (route: Route, land: SpineIndex): TowerSet {
@@ -74,10 +166,10 @@ export function buildCity (route: Route, land: SpineIndex): TowerSet {
 
   const add = (
     x: number, z: number, w: number, d: number, h: number, yaw: number, seed: number,
-    dirX: number, dirZ: number, k: number, twist: number,
+    dirX: number, dirZ: number, k: number, twist: number, capped = false,
   ) => {
     const y = terrainHeight(land, x, z) - 0.4
-    data.push(x, y, z, yaw, w, h, d, seed, dirX, dirZ, k, twist)
+    data.push(x, y, z, yaw, w, h, d, seed, dirX, dirZ, k, twist, ...massFor(w, d, h, seed, capped))
   }
 
   /**
@@ -135,14 +227,14 @@ export function buildCity (route: Route, land: SpineIndex): TowerSet {
       // Taller toward the centre, and never up into an overhead road.
       const centre = 1 - Math.min(1, Math.hypot(x - PLAZA.x, z - PLAZA.z) / (PLAZA.r0 + 30))
       const base   = terrainHeight(land, x, z)
-      let h        = 22 + hash(seed + 7) * 40 + centre * 55
-      if (road.d < 26 + half)
-        h = Math.min(h, Math.max(14, road.y - base - 7))
-      add(x, z, w, d, h, (hash(seed + 8) - 0.5) * 0.5, seed, b.dx, b.dz, leanCap(b.k, h, road.d - clearance), b.twist)
+      const tall   = 22 + hash(seed + 7) * 40 + centre * 55
+      const capped = road.d < 26 + half
+      const h      = capped ? Math.min(tall, Math.max(14, road.y - base - 7)) : tall
+      add(x, z, w, d, h, (hash(seed + 8) - 0.5) * 0.5, seed, b.dx, b.dz, leanCap(b.k, h, road.d - clearance), b.twist, capped)
     }
 
   return {
-    builder:   unitBox(),
+    ...towerMesh(),
     instances: new Float32Array(data),
     count:     data.length / TOWER_FLOATS,
   }

@@ -322,7 +322,7 @@ Nothing reads a clock or `Math.random`. Every animated quantity is a function of
 ```
 course.ts            sections, control points, bank knots, speed table, exposure/palette per section; buildRoute(), spanAt()
 kinematics.ts        JourneySimulation — integrator, lapF, gearbox, pose, float; uniforms(), label(), marks(); lossLaps.scenicRoute
-geometry.ts          terrain, spine index, sea (the road sweep is in src/packages/geometry/sweep.ts); props.ts + props/ the instanced props; maw.ts, cockpit.ts, city.ts
+geometry.ts          terrain, spine index, sea (the road sweep is in src/packages/geometry/sweep.ts); props.ts + props/ the instanced props; maw.ts, cockpit.ts, city.ts, cutting.ts
 scene.ts             JourneyRenderer — programs, targets (msaa, scene, bloom, shadow), the frame order above
 shader/              GLSL ES 3.00, one module per pass group: chunks (noise, brdf, atmosphere, shadow, lighting), sky, world, maw, cockpit, post; the ES 1.00 hover preview is in post.ts
 audio.ts             engine, tyres, wind, radio, the fall, the gullet, the cave — driven by the frame's uniforms
@@ -412,6 +412,7 @@ plan above. The plan is kept as written; this is the record.
 | `geometry.ts` | height field, coastline, spine index with per-section lift, corridor pull, near/far terrain with a per-vertex carve value for the tube, sea quad and fine sea patch |
 | `props.ts` | instanced units and world-space strips: fence rails post to post, telegraph poles and wires, hay bales, the house on its plinth, lobed trees, turbines with rotors about the hub, piers, stalactites |
 | `city.ts` | downtown: unit-box towers with bend parameters per instance, `bendGainAt` |
+| `cutting.ts` | the incline's rock cutting and retaining walls: the face height table, the cross-section, `cutAt` for the land and the poles, `buildCutting` |
 | `fields.ts` | the valley's field layout and farmland mask, once for the CPU (hedgerow borders) and once as GLSL (`fieldsChunk`) from the same constants |
 | `maw.ts` | the head (closed-profile sweep along the gullet), hinged jaws with baked teeth, the tube (throat into cave) and its water strip |
 | `cockpit.ts` | the cabin in the car's frame: moulded dash, binnacle, centre stack, door cards, wheel with spokes; dial faces on a Canvas2D, needle meshes |
@@ -655,3 +656,86 @@ rules moved.
   ramps across the undertow, where none of the outdoor change is on screen;
   the lap seam scans clean (the worst step is the culvert's daylight, 2.4×).
 - The tower shaders moved to `shader/towers.ts`; `world.ts` was over the line limit.
+
+## Revision 7 — downtown is massed
+
+The towers were unit boxes: a flat lid, the window grid up to the edge, the
+same silhouette two hundred times, and masonry that read as whitewash.
+
+- **One massing mesh** (`towerMesh` in `city.ts`). Its vertices are not
+  positions: each names a level (ground, podium top, setback, roof, parapet
+  top, plant top, mast top) and an inset (none, podium, crown, parapet, plant,
+  mast), and `towerVert` resolves both in metres from the instance, so a
+  1.1 m parapet is 1.1 m on a 14 m block and on the 128 m core. Instances are
+  16 floats: the fourth vec4 (`iMass`, location 7) is podium height, setback
+  height, crown inset, and mast + plant / 10. A part a tower does not have
+  collapses to zero height or width, or sinks under the roof.
+- **The massing** (`massFor`): a podium of 4.5–7.5 m on 55 % of towers over
+  25 m, the shaft inset up to 1.6 m above it; a setback at 60–85 % of the
+  height on 65 % of towers over 34 m, the crown inset up to 22 % of the
+  narrow side; a parapet with a coping on every roof; a plant room of
+  2.6–3.8 m on every roof; a steel mast of 6–20 m on 40 % of towers over
+  60 m, with a red obstruction lamp that blinks from dusk. Insets only, never
+  outsets, so every clearance against the road is unchanged. A tower held
+  down under an overhead road keeps a bare roof.
+- **The facades.** Street level is the podium where there is one (shopfronts
+  the podium's height). No windows above the roof line; half the towers have
+  a louvred plant floor in their top four metres. Masonry is limestone,
+  brick, grey concrete or granite by seed, with rain streaks under the sills
+  and a damp foot, instead of one cream-to-grey range. Blinds are darker
+  (0.12, was 0.2: they read as white tiles), and each lit window at dusk has
+  its own brightness and is lit brighter at the ceiling than at the sill.
+- The bend, the lean caps, placement and every other section are unchanged:
+  the probe moves only on frames with towers in them.
+
+## Revision 8 — the incline is cut
+
+The lift hill climbed a smooth grass embankment the corridor pull laid under
+it, with a white verge and nothing else from the valley to the city: no rock
+cutting and no retaining walls, which the contract names. What changed
+(`cutting.ts`, `shader/cutting.ts`); nothing in the route, the speeds, the
+bank or the lap rules moved.
+
+- **One cross-section, swept** along the road on both sides (the left the
+  mirror of the right, walked the other way so both faces look at the road):
+  from under the verge, down a ditch 0.72 m deep, up the face, a lip over its
+  top and a 7 m tail lying on the land behind it. Sixteen points, rings every
+  metre, about 13.5k vertices, one draw and one shadow draw.
+- **The face height** is a table of knots in metres past the incline's start,
+  eased knot to knot: nothing before 10 m, 11 m by 48, 13.5 at 105, 10 at 165,
+  6.5 at 196, then 5.8, 4.6 and 3.2 down the walls to nothing at 432 m, where
+  the road comes out above the plaza on its piers. Where the height is zero the
+  lip and tail sink under the land, so the sweep's ends leave no sheet.
+- **Rock to 188 m, walls after.** The rock is battered back 1 in 4.5 and, where
+  it stands over 7–9.5 m, benched 1.8 m wide at 55 % of its height. The vertex
+  shader pushes the rock face in and out in blocks (two octaves of value noise,
+  about ±0.8 m, zero at the foot and the top edge) and the fragment shader
+  shades it per facet, as blasted rock breaks. Δ's stratified rock, beds
+  dipping along the road, presplit drill traces every 0.9 m surviving in runs,
+  seeps and iron stain, scree in the ditch, turf on the bench and the top, and
+  paler than the weathered hillside rock because it is fresh. The walls are
+  shuttered concrete, 1 in 25, in 7.5 m bays with joints, board marks, a row of
+  weep holes at 0.75 m with what they bleed, grime from the coping down, a damp
+  foot and a coping. The red under the road shows in the rock's joints and
+  between the wall's bays from the second lap; turf turns with the season.
+- **The bank rolls the foot only.** The cross-section is in the road's level
+  frame like the road; the vertex shader rolls each point by the bank weighted
+  `1 − smoothstep(0, 5, u)`, so the ditch follows the road's edge and the face
+  from five metres up stays where the land is. On the third lap's 57° the face
+  bends; it does not tip out of the ground.
+- **The land** (`terrainHeight`, through `SpineIndex.cut`): beside a face it
+  stands at the face's top, and the embankment's fall to the natural ground
+  starts 4.5 m past the top edge instead of 10 m from the spine (the early
+  return moved from 60 to 70 m). Between the faces it sinks 4 m under the road
+  and the ditch: by the second lap the bank tips the road's low edge more than
+  a metre under the level, and land held at the level came up through the lane.
+  It rises only from 0.5 m past the top edge, under the lip, because the 4 m
+  cells interpolate between their corners: a rise that began at the foot of a
+  vertical wall stood up in front of it as a grass ramp.
+- **The poles** stand on the land above the faces, 4 m past the top edge, where
+  the old offset put them inside the rock.
+- The probe moves only on frames that see the incline: the county road looking
+  up at it from 8 s, and the climb. Every frame from the crest on is
+  byte-identical. A 0.1 s scan over the crest into downtown, where the walls
+  end, peaks at 2.0× its own baseline: motion, not a pop.
+
