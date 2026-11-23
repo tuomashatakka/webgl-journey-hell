@@ -193,41 +193,109 @@ vec2 stormBridge (vec3 p) {
 }
 
 // III · THE TURBINE CANYON — rock and rotation.
+// The wind runs down the canyon, so the machines face up it, toward the
+// stair: a three-blade rotor on a nacelle on a tapered tower, standing on a
+// concrete pedestal, one on each side every 28 units. Penstocks lie along
+// the foot of both walls on anchor blocks, and a crane girder spans the
+// canyon between every other pair of turbines.
+const float TURB_X = 10.5;   // tower axis off the line
+const float TURB_Y = 7.6;    // hub over the rail
+const float TURB_R = 6.2;    // blade tip radius
+const float TURB_W = -1.6;   // rotor plane, in the cell (the cart comes from -z)
+
+// One blade, in the rotor's own frame: u along the span, v round the rotor,
+// w along the axis. A twisted elliptical section that narrows to the tip.
+float turbineBlade (float u, float v, float w) {
+  float k = saturate((u - 1.6) / (TURB_R - 1.6));
+  float chord = mix(0.62, 0.13, k) * min(1.0, 0.55 + (u - 0.9) * 0.6);
+  float thick = max(chord * 0.2, 0.26 * (1.0 - saturate((u - 0.9) / 0.9)));
+  vec2 vw = vec2(v, w);
+  vw *= rot(mix(0.5, 0.08, k));
+  float e = (length(vec2(vw.x / chord, vw.y / thick)) - 1.0) * min(chord, thick);
+  return max(e * 0.8, max(0.8 - u, u - TURB_R));
+}
+
 vec2 turbineCanyon (vec3 p) {
   float px = pathX(2.0, p.z);
   float py = pathY(2.0, p.z);
-  float zCell = mod(p.z + 14.0, 28.0) - 14.0;
   float dx = p.x - px;
-  // The canyon is wide enough for its machines: walls stand back at twelve
-  // metres, stratified and undercut, and the rotors stand free in front of
-  // them instead of buried in the rock.
+  float ax = abs(dx);
+  float hy = p.y - py;
+  float zCell = mod(p.z + 14.0, 28.0) - 14.0;
+  float cell = floor((p.z + 14.0) / 28.0) * 2.0 + step(0.0, dx);
+
+  // The canyon is wide enough for its machines: walls stand back at nineteen
+  // metres, stratified, with talus banked against their feet.
   float strata = sin(p.y * 1.6 + sin(p.z * 0.09) * 1.4) * 0.35 + sin(p.y * 4.1 + p.z * 0.3) * 0.08;
-  float walls = 12.5 - abs(dx) + strata + sin(p.z * 0.05) * 1.5;
-  walls = max(walls, p.y - py - 20.0 - sin(p.z * 0.031 + p.x * 0.02) * 4.0);
-  float talus = p.y - (py - 3.4 + max(0.0, abs(dx) - 9.5) * 0.65);
-  talus = max(talus, abs(dx) - 17.0);
-  float floorRock = p.y - py + 3.6 + sin(p.x * 0.3) * sin(p.z * 0.21) * 0.3;
-  vec3 rotorP = vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell);
-  rotorP.yz *= rot(animTime() * 0.32 + hash11(floor(p.z / 28.0)) * 6.28);
-  float housing = sdCylinderX(rotorP, 2.0, 3.5);
-  float hub = sdCylinderX(rotorP, 2.9, 0.65);
-  float blades = sdBox(rotorP, vec3(2.25, 0.16, 3.0));
-  rotorP.yz *= rot(2.0944);
-  blades = min(blades, sdBox(rotorP, vec3(2.25, 0.16, 3.0)));
-  rotorP.yz *= rot(2.0944);
-  blades = min(blades, sdBox(rotorP, vec3(2.25, 0.16, 3.0)));
-  float tail = sdBox(vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell + 3.4), vec3(1.1, 1.1, 2.6));
-  float penstock = sdCylinderZ(vec3(abs(dx) - 11.0, p.y - py + 1.2, zCell), 13.0, 1.6);
-  float gantry = sdBox(vec3(dx, p.y - py - 11.5, mod(p.z + 33.0, 66.0) - 33.0), vec3(12.5, 0.28, 0.9));
-  float gantryLeg = sdBox(vec3(abs(dx) - 11.6, p.y - py - 4.0, mod(p.z + 33.0, 66.0) - 33.0), vec3(0.2, 8.0, 0.6));
-  float trayY = p.y - py - 6.4 + cos((mod(p.z, 14.0) - 7.0) * 0.22) * 0.5;
-  float tray = sdBox(vec3(dx + 5.4, trayY, p.z), vec3(0.42, 0.1, 200.0));
+  float walls = 19.5 - ax + strata + sin(p.z * 0.05) * 1.5;
+  walls = max(walls, hy - 26.0 - sin(p.z * 0.031 + p.x * 0.02) * 4.0);
+  float talus = hy + 3.4 - max(0.0, ax - 16.0) * 0.6;
+  talus = max(talus, ax - 23.0);
+  float floorRock = hy + 3.6 + sin(p.x * 0.3) * sin(p.z * 0.21) * 0.3;
   float rock = min(min(walls, talus), floorRock);
-  float pedestal = sdBox(vec3(abs(dx) - 8.5, p.y - py + 1.0, zCell + 0.6), vec3(1.6, 2.4, 3.6));
-  float machine = min(min(housing, min(hub, blades)), min(tail, min(penstock, min(gantry, min(gantryLeg, min(tray, pedestal))))));
-  float lamp = sdCylinderX(vec3(abs(dx) - 8.5, p.y - py - 2.2, zCell), 3.05, 0.2);
-  if (lamp < min(rock, machine)) return vec2(lamp, M_EMISSIVE);
-  return rock < machine ? vec2(rock, M_ROCK) : vec2(machine, M_MACHINE);
+
+  // Penstocks along the foot of each wall, flanged every 7 units, on a
+  // concrete anchor block every 14.
+  vec2 pipeQ = vec2(ax - 15.5, hy + 1.4);
+  float pipe = length(pipeQ) - 1.4;
+  float flange = max(length(pipeQ) - 1.55, abs(mod(p.z + 3.5, 7.0) - 3.5) - 0.11);
+  float penstock = min(pipe, flange);
+  float anchor = sdBox(vec3(ax - 15.5, hy + 2.6, mod(p.z + 7.0, 14.0) - 7.0), vec3(1.75, 1.2, 0.7));
+
+  // The crane girder: a vierendeel box at twelve and a half units, wall to
+  // wall, halfway between two pairs of turbines every 56, with a hoist
+  // trolley on it.
+  float gz = mod(p.z + 14.0, 56.0) - 28.0;
+  float gy = hy - 12.5;
+  float web = sdBox(vec3(dx, gy, abs(gz) - 0.45), vec3(22.0, 0.65, 0.05));
+  web = max(web, -sdBox(vec3(mod(dx + 0.6, 1.2) - 0.6, gy, gz), vec3(0.42, 0.42, 1.0)));
+  float chords = sdBox(vec3(dx, abs(gy) - 0.62, gz), vec3(22.0, 0.08, 0.55));
+  float trolley = sdBox(vec3(dx - 3.2, gy + 0.95, gz), vec3(0.75, 0.3, 0.7));
+  float rope = length(vec2(dx - 3.2, gz)) - 0.03;
+  rope = max(rope, abs(gy + 3.6) - 2.4);
+  float hook = sdBox(vec3(dx - 3.2, gy + 6.15, gz), vec3(0.22, 0.32, 0.16));
+  float gantry = min(min(web, chords), min(trolley, min(rope, hook)));
+
+  float machine = min(penstock, gantry);
+  float concrete = anchor;
+
+  // The turbines, behind a bound: a ray down the canyon pays one box.
+  float lamp = 1e4;
+  float tb = max(max(abs(ax - TURB_X) - 7.0, abs(hy - 3.2) - 11.0), abs(zCell - 0.5) - 3.6);
+  if (tb < 1.0) {
+    // Mirrored by side for the distance, unmirrored for the spin, so every
+    // rotor turns the same way seen from the stair.
+    float side = dx < 0.0 ? -1.0 : 1.0;
+    float spin = animTime() * 0.9 + hash11(cell) * 6.28;
+    vec3 q = vec3((ax - TURB_X) * side, hy - TURB_Y, zCell - TURB_W);
+    float r = length(q.xy);
+    float a = atan(q.y, q.x) - spin;
+    a -= floor(a / 2.0944 + 0.5) * 2.0944;
+    float blade = turbineBlade(r * cos(a), r * sin(a), q.z);
+    // The spinner: an ogive nose on the hub, closed into the nacelle.
+    vec3 sq = vec3(q.xy, q.z - 0.15);
+    float spinner = (length(vec3(sq.xy, sq.z * (sq.z < 0.0 ? 0.62 : 1.0))) - 0.82) * 0.62;
+    spinner = max(spinner, q.z - 0.9);
+    // The nacelle: a rounded housing behind the rotor, a little above its axis.
+    float nacelle = sdBox(vec3(q.x, q.y - 0.1, q.z - 2.6), vec3(0.62, 0.72, 1.85)) - 0.3;
+    // The tower, tapering from its pedestal to the yaw bearing.
+    vec2 tq = vec2(ax - TURB_X, zCell - 1.0);
+    float tr = mix(0.66, 0.4, saturate((hy + 2.0) / (TURB_Y + 1.4)));
+    float tower = max((length(tq) - tr) * 0.98, max(hy - TURB_Y + 0.4, -2.0 - hy));
+    float pedestal = sdBox(vec3(tq.x, hy + 2.9, tq.y), vec3(1.5, 1.1, 1.5)) - 0.06;
+    float turbine = min(min(blade, spinner), min(nacelle, tower));
+    machine = min(machine, turbine);
+    concrete = min(concrete, pedestal);
+    // A red obstruction light on the nacelle's roof.
+    lamp = length(vec3(q.x, q.y - 1.1, q.z - 3.6)) - 0.13;
+  } else {
+    machine = min(machine, tb);
+  }
+
+  vec2 res = rock < machine ? vec2(rock, M_ROCK) : vec2(machine, M_MACHINE);
+  if (concrete < res.x) res = vec2(concrete, M_CONCRETE);
+  if (lamp < res.x) res = vec2(lamp, M_EMISSIVE);
+  return res;
 }
 
 // IV · CONVEYOR ESCARPMENT — extraction, warm and dusty.

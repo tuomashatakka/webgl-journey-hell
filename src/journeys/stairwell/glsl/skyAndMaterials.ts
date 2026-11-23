@@ -295,6 +295,8 @@ void main () {
       // The weather bridge's beacons, high on the pylons, burn red.
       vec3 bq = p - zoneOffset(zone);
       bool beacon = act > 0.5 && act < 1.5 && bq.y - pathY(1.0, bq.z) > 12.0;
+      // So do the turbines' obstruction lights, on the nacelles' roofs.
+      bool obstruction = act > 1.5 && act < 2.5 && bq.y - pathY(2.0, bq.z) > TURB_Y + 0.6;
       // The rift's slit is white at the core and cold toward its lips.
       bool riftCore = act > 4.5 && act < 5.5 && bq.y - pathY(5.0, bq.z) < 4.0 - RIFT_DEPTH;
       float lip = riftCore ? abs(bq.x - pathX(5.0, bq.z) - riftX(bq.z)) : 0.0;
@@ -302,6 +304,7 @@ void main () {
           : riftCore ? mix(vec3(2.4, 3.4, 4.0), vec3(0.15, 0.7, 2.2), smoothstep(0.0, 0.9, lip)) *
                        riftPower() * (0.85 + 0.15 * sin(gTime * 3.1 + bq.z * 0.7))
           : beacon ? vec3(4.0, 0.6, 0.2) * (0.6 + 0.4 * sin(animTime() * 2.1 + floor(bq.z / 22.0)))
+          : obstruction ? vec3(4.0, 0.35, 0.12) * step(0.55, fract(animTime() * 0.5))
                    : vec3(0.06, 0.42, 0.9) * (1.0 + sin(gTime * 4.0 + p.z + gZ0) * 0.25);
     } else {
       Surface s;

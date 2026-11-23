@@ -215,10 +215,37 @@ vec3 rockDetail (inout Surface s, vec3 tp, vec3 n, float act, float fp) {
   return vec3(0.12, 0.5, 1.0) * glow * (0.75 + 0.25 * sin(gTime * 1.7 + tp.z * 0.3)) * (1.0 - uPurgatory);
 }
 
-// Machine detail by act: the turbines' housings have riveted panel rings,
-// the conveyor's machinery is hazard-banded, the cooling field's pipes are
-// lagged in clad sections with strap bands.
+// Machine detail by act: the turbines are white with smooth blades, the
+// penstocks a dark green and the crane girder signal yellow; the conveyor's
+// machinery is hazard-banded; the cooling field's pipes are lagged in clad
+// sections with strap bands.
 void machineDetail (inout Surface s, vec3 tp, vec3 n, float act, float fp) {
+  if (act > 1.5 && act < 2.5) {
+    float dx = tp.x - pathX(2.0, tp.z);
+    float hy = tp.y - pathY(2.0, tp.z);
+    float zc = mod(tp.z + 14.0, 28.0) - 14.0;
+    if (hy > 5.0 && abs(mod(tp.z + 14.0, 56.0) - 28.0) < 1.0) {
+      steelDetail(s, tp, n, fp, vec3(0.72, 0.55, 0.12), 0.9, 0.45, 1.0);
+    } else if (hy > 0.3 || abs(abs(dx) - TURB_X) < 1.6) {
+      // Gelcoat and paint, not chipped steel: an even off-white, glossier on
+      // the rotor's slab (the blades and the spinner, which carry no seams),
+      // panel seams on the nacelle and the tower, and grime run down them.
+      vec2 uv; vec3 tu, tv;
+      faceFrame(n, tp, uv, tu, tv);
+      float rotor = step(abs(zc - TURB_W + 0.4), 1.0);
+      float vertical = smoothstep(0.3, 0.7, 1.0 - abs(n.y));
+      s.albedo = vec3(0.8, 0.81, 0.78) * (0.93 + 0.07 * vnoise(uv * 0.8));
+      s.metal = 0.0;
+      s.rough = mix(0.45, 0.3, rotor);
+      float seam = max(groove(uv.x, 2.2, 0.008, fp), groove(uv.y, 1.6, 0.008, fp)) * (1.0 - rotor);
+      s.albedo *= 1.0 - seam * 0.35;
+      s.ao *= 1.0 - seam * 0.3;
+      s.albedo *= 1.0 - streaks(uv + 3.7, 0.5) * vertical * 0.22;
+    } else {
+      steelDetail(s, tp, n, fp, vec3(0.1, 0.16, 0.13), 0.9, 0.6, 1.0);
+    }
+    return;
+  }
   if (act > 3.5 && act < 4.5) {
     // Aluminium lagging: a seam and two straps every metre along the pipe.
     float strap = groove(tp.z, 1.2, 0.02, fp);
