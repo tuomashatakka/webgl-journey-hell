@@ -10,6 +10,7 @@ import foundryPoster from '../../assets/posters/foundry.jpg'
 import hollowOrchardPoster from '../../assets/posters/hollow-orchard.jpg'
 import loopLinePoster from '../../assets/posters/loop-line.jpg'
 import scenicRoutePoster from '../../assets/posters/scenic-route.jpg'
+import stillwaterPoster from '../../assets/posters/stillwater-service.jpg'
 import { foundryPreviewFrag } from './foundry/shader'
 import { hollowOrchardPreviewFrag } from './hollow-orchard/shader'
 import { loopLinePreviewFrag } from './loop-line/shader/post'
@@ -17,6 +18,7 @@ import { natatoriumPreviewFrag } from './natatorium/shader'
 import { scenicRoutePreviewFrag } from './scenic-route/shader/post'
 import { skybridgesPreviewFrag } from './skybridges/shader'
 import { stairwellPreviewFrag } from './stairwell/shaders'
+import { stillwaterPreview } from './stillwater-service/preview'
 import { switchbackPreviewFrag } from './switchback/shader'
 
 // Liminal hover preview: a lightweight stand-in for the real (1100-line) fsScene —
@@ -146,6 +148,17 @@ export const JOURNEYS: Journey[] = [
     gradient:      [ '#f2c27a', '#061a26' ],
     poster:        staticUrl(scenicRoutePoster),
     previewShader: scenicRoutePreviewFrag,
+    status:        'live',
+  },
+  {
+    slug:          'stillwater-service',
+    title:         'THE STILLWATER SERVICE',
+    tagline:       'follow the lane stripe all the way out',
+    tags:          [ 'poolrooms', 'backrooms', 'ocean' ],
+    accent:        '#86d5c3',
+    gradient:      [ '#9ed9c4', '#142e3b' ],
+    poster:        staticUrl(stillwaterPoster),
+    previewShader: stillwaterPreview,
     status:        'live',
   },
 ]
