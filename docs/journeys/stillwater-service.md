@@ -1,108 +1,124 @@
 # the stillwater service
 
-A first-person recording of a municipal swimming pool that shares a service
-route with an office maze and a structure in the open sea. Follow the navy
-lane stripe: first on tile, then on carpet, a lift cage, a walkway, and finally
-a baggage belt. The route returns to the lesson pool twice. On the third
-iteration, the service door closes and the recording loses signal.
+A municipal water slide that was built out over a sea with no shore. One
+fibreglass flume, running water in it, threads six rooms of a service
+building whose pieces stand on piles in open water. Between the rooms the
+flume runs outside, on trestles, over a flat grey sea that fades into haze in
+every direction: no horizon, no coast, no sky that is not also the sea. You
+ride it, seated in the water, three times. Each time round the building is
+less sure of its own shape. On the third arrival at the top of the lift the
+flume stops, the rooms dissolve, and only the sea is left.
+
+## The common theme
+
+Every act is the same three things in a different proportion: **the flume**
+under you, **a room** built for something else, and **the sea** that every
+room is open to. Every room has at least one side that gives onto the haze,
+and the sea's colour is the fog's colour, so whichever way the rider looks the
+world ends the same way: it fades out, evenly, at the same distance. The water
+in the flume is the same water as the pool, the flood in the annex, the swell
+under the trestles and the sea over the drowned lounge. Nothing in the
+journey is dry.
 
 ## Experience contract
 
-The camera moves on authored rails. Use the existing transport to pause, seek,
-change speed and jump between laps. Pointer, touch and keyboard look stay
-available throughout. The route plays at walking speed where the viewer is on
-foot, then changes its motion for the lift, submerged hall and baggage belt.
+The camera rides one continuous closed route: a single spline with no cuts,
+no shutters and no fades. A lap is 144 s and the route is the same every lap;
+the act boundaries are places on it. The rider sits in the water at the
+bottom of the trough (eye 0.78 m above the flume floor), banks up the outer
+wall on bends at the angle the speed and curvature give, and looks a little
+ahead along the route. Pointer, touch and keyboard look change gaze only.
 
-All times are journey-clock seconds at 1×. Act starts repeat at +144 s and
-+288 s. Lap 2 starts at 2:24, lap 3 at 4:48, and the last door closes at 7:12.
+All times are journey-clock seconds at 1×. Lap 2 starts at 2:24, lap 3 at
+4:48; the ride stops at 7:12.
 
-| act | lap time | space and motion | handoff |
-| --- | ---: | --- | --- |
-| I. the lesson pool | 0–24 s | Walk beside a broad, shallow turquoise teaching pool with white ceramic ribs, high milk-glass skylights, black lane targets and empty observation windows. Turn to see the lane stripes continue over the waterline. Bare footsteps, long tile echoes. | A low tiled door leads under a changing bench into carpet. |
-| II. the annex | 24–45 s | Take two tight right-angle turns through a low, amber-carpeted office maze. Repeating acoustic panels and square columns make distance hard to judge. One room contains a carpeted pool outline with lane markings. Dry fluorescent buzz and soft footfalls. | A closing freight gate fills the frame. |
-| III. the service lift | 45–63 s | Ride down inside a stationary-feeling cage while shaft walls, floor slits, conduit and counterweights rise past it. The last landing overshoots, then eases back into register. Steel rattle and a falling motor tone. | An opaque landing shutter rises onto the sea. |
-| IV. the breakwater | 63–97 s | Walk out onto a concrete walkway high above a dark, rough ocean. Cross two exposed bends, teeter near an unrailed edge and recover beside an intact post. White wave crests reveal the drop. Out at sea three colossal structures sit on the horizon. Wind, delayed surf and hollow metal underfoot. | An opaque sea-lock door closes on the horizon. |
-| V. the drowned lounge | 97–120 s | Pass through a completely submerged tiled seating hall. Glide above drowned benches and stepped bleachers, then drift up toward a rectangular ceiling exit. Suspended grit, narrow bands of caustic light and low-pass water pressure. | A surface hatch opens on a dry tiled counter. |
-| VI. lost property | 120–144 s | Ride the slow arc of an empty baggage carousel through a cold white sorting hall. Wire cages, numbered shelves and benches repeat in a wide curve. A single wet object circles past at belt speed. Gear ticks mark the arc. | A glazed inspection door passes across the lens. The first two openings return to the pool. The last door latches. |
+| act | lap time | where the flume runs | what is seen | motion |
+| --- | ---: | --- | --- | --- |
+| I. the lesson pool | 0–26 s | a tiled gutter channel let into the deck of a pool hall | a shallow teaching pool with lane ropes and a black lane line, white tile walls, a glazed roof; the east side is an open colonnade and the pool's north end is an infinity edge that spills into the sea | lazy, 1.5 m/s; a right-angle bend out through the colonnade |
+| II. the annex | 26–48 s | out over the sea in a steep drop, then a channel cut through the floor of a flooded open-plan office | carpet under standing water, cubicle partitions, square columns, a lay-in ceiling with lamp panels, a curtain wall of fogged glass on every side | two tight banked right angles, about 3 m/s |
+| III. the spiral | 48–68 s | a helix of two and a quarter turns round a shuttered-concrete core standing in the sea | the core's lit slots, the cantilever brackets, the turns of the flume above and below; the sea opening on every quarter | 5 m/s, banked hard on the outer wall |
+| IV. the breakwater | 68–100 s | a steel trestle 3.5 m above the sea beside a ruined concrete breakwater | tetrapods, broken sea, spray; three colossal silhouettes 1.4–3.2 km out (a split fork, a ring on legs, a stepped blade) that the haze never resolves | fast, an S of long bends |
+| V. the drowned lounge | 100–120 s | the flume closes into a clear acrylic tube and dives under the sea | a tiled spectators' lounge on the sea bed: benches, stepped bleachers, lane targets, a roof light the tube rises through; the underside of the sea, light shafts | dive, glide, climb back out |
+| VI. lost property | 120–144 s | a lazy channel round a baggage carousel in a white sorting hall at sea level, then a conveyor lift up through the roof | wire cages, numbered shelves, benches, a single wet tile riding the carousel; the open roller door onto the sea; the lift's gallery climbing back to the pool | slow, then the chain lift at 1.6 m/s |
 
-Every act has its own silhouette, dominant color, camera movement and sound.
-A shutter slides across the view over 0.72 s on either side of each act
-boundary. It moves down for the pool and lift, sideways for the two freight
-doors and the inspection door, and up for the submerged hatch. The cut
-falls on the fully obscured frame, with the room tone gliding across it.
+The lift lands in the lesson pool's south end at the lap seam, so lap 2 and
+lap 3 begin without a cut.
 
 ## Three iterations
 
+The route never changes; the world around it does. Distortion is a single
+journey-time amount `warp` that rises continuously (0 on lap 1, about 0.45 by
+the end of lap 2, 1 through lap 3, more in the ending), so there is no step at
+a lap seam. It bends everything except the metre of flume around the rider:
+
+* **twist**: the world rotates about the line of sight, more the further away
+  it is, so the route ahead corkscrews;
+* **curl**: distant geometry lifts as the square of its distance, so the sea
+  stops being a floor and becomes a bowl, then walls, then a sphere that the
+  rider is inside;
+* **breathing**: low-frequency waves travel through every wall and column;
+* **telescope**: depth along the line of sight stretches and shrinks with a
+  slow pulse, and the field of view dolly-zooms against it;
+* **image**: chromatic separation, a ghosted second image of the picture and
+  barrel distortion in the composite, all scaled by `warp`.
+
 | act | 1 · inspection | 2 · misregistration | 3 · after closing |
 | --- | --- | --- | --- |
-| lesson pool | bright skylights, still water and four clean lane stripes | the water rises to the first step, one lane light stays off | high water erases the aisle reflections, emergency lamps rake the ribs |
-| annex | lit grid and an empty carpeted pool outline | a wet carpet trail crosses the original lane stripe, alternate light banks dim | the floor markings climb the walls at the dead end, only low light remains |
-| service lift | one regular stop | the cage passes a landing twice before it aligns | only a shaft inspection strip is lit at the bottom, the final overshoot lasts longer |
-| breakwater | a rail ends before the first bend, cold blue-gray sea | more rail is gone, whitecaps pick out the first offshore structure | both bends are exposed, commanding swells cross in opposing directions and all three structures appear together |
-| drowned lounge | benches and lane targets are legible from surface light | suspended particles thicken, a deeper blue eats the far end | the exit rectangle and caustics pick out the last row of seats |
-| lost property | empty shelves and one glazed tile on the belt | wet traces collect under the carousel and its lights skip a bay | the tile completes its pass, the door closes and the tape loses signal |
+| lesson pool | still water, all lamps, clean lane line | the pool brims to the deck, one roof bay dark | the pool is over the deck, emergency red, the hall corkscrews ahead |
+| annex | dry carpet, lit grid | standing water across the carpet, alternate lamps out | water to the desks, only low red light, the floor curls up into the far windows |
+| spiral | grey core, every slot lit | half the slots dark | the turns above and below twist out of register with each other |
+| breakwater | moderate swell | heavier swell, spray over the trestle | swells over the trestle deck; the sea curls up on both sides into walls |
+| drowned lounge | clear, legible | murkier, the far end lost | almost black but for the roof light and the shafts |
+| lost property | lit hall, the tile rides the belt | a bank of lamps dead, wet traces | the hall telescopes; on the last lift the ride slows to a stop at the top |
 
-Variation is authored at each lap, with any global palette/level change hidden
-at the carousel door. Every lap completes the same six act identities in the
-same order. After 432 s the camera holds at the latched door, the transport
-keeps seeking/replaying, and the shared signal-loss sequence uses elapsed
-time since the latch. The hold remains part of lap 3, act VI.
+## The ending
 
-## The breakwater
+The lap 3 lift decelerates with continuous speed to a stop at the top
+(432 s). From 422 s the buildings, the trestles and then the flume itself
+dissolve, distance first, until by 444 s only the sea and the haze remain
+round the held camera, curled by the warp into every direction at once. The
+transport still seeks and replays; the shared signal loss counts from the stop.
 
-Use metres for the crossing. The walkway deck is 78 m above mean water,
-starts 1.85 m wide and narrows to 0.92 m at the exposed bend. Start with a
-central view along the deck. Over a 5 s reveal, drift toward the outer edge
-and let the camera bias down toward the ocean. At the closest point, the eye
-is 0.14 m inboard of the concrete lip. Across the two bends, approach, hesitate
-and recover in two distinct beats. Local act times 8–16 s stage the first
-edge approach, 20–27 s the second. Roll peaks below 7°, and the camera is
-always horizontally over the deck. The next post is the recovery point.
+## Construction (settled constants)
 
-- The ocean stays black-blue between crests. Broad crossing swells produce
-  moving silhouettes with peak crests 11–18 m above mean water across the
-  three laps. Foam clings to the moving peaks and is legible downward in a
-  tight crop. Wave displacement, shading and sound follow journey time.
-- Three separate silhouettes rise from the sea 1.4–3.2 km away: a split
-  concrete fork, a circular intake ring on legs and a stepped blade. Their
-  visible heights range from 250–510 m. The walkway points past them and
-  ends at a nearer sea-lock, so their scale stays unresolved. Atmospheric
-  haze and surf crossing their bases establish distance.
-- Keep the deck edge and at least one wave crest visible at the first
-  teeter in a portrait crop. The second recovery frames the structures
-  together on lap 3. Seek to 363.4 or 374.3 s for the exposed edges, or
-  379.5 s for all three silhouettes. Looking around changes gaze only.
-  Replay and seek resolve to the same pose and wave phase.
-
-## Implementation
-
-- Implement under `src/journeys/stillwater-service/`, using the existing
-  WebGL2 geometry renderer, shared GL/geometry helpers and journey shell.
-  Keep the authored timeline, camera and sound cues independent of the
-  renderer. Own act geometry in act-local coordinates and draw the current
-  act with a deterministic occlusion across transitions.
-- Use a single authored act table for the transport marks, HUD, renderer
-  selection and cue timing. Sample lap, act phase, camera pose and terminal
-  signal age from journey time. Keep procedural placement seeded and make
-  seeks independent of viewing history or GPU quality.
-- Use displaced mesh bands for the ocean with a coarse far band. The low
-  tier keeps the same deck, major swells and three silhouettes while
-  simplifying foam and small surface detail. Manage buffers and programs
-  through the renderer lifecycle.
-- Register the journey once in `definitions.ts`, add the route, channel
-  entry, lightweight GLSL ES 1.00 preview driven by `iTime`, and a static
-  poster. Build the synth score with the shared journey audio lifecycle.
-  Add the journey to the README index.
+* **Route**: a turtle path (straights, arcs, a helix) in metres, sampled every
+  2 m into a closed Catmull-Rom curve (`@wjh/geometry/curve`). Turns sum to
+  three full turns; the two free straights (the dive's level run, the lift) are
+  solved so the path closes exactly. Heights are eased per leg with
+  smootherstep, so grade is continuous everywhere and zero at every leg end.
+  Sea level is y = 0; the pool deck channel at y = 14, the annex at 11, the
+  helix from 11 to 3.5, the trestle at 3.5, the dive to -4.6, the sorting hall
+  at 0.6.
+* **Timing**: leg seconds are authored; s(t) is a monotone cubic (Fritsch–
+  Carlson) through the leg ends, periodic across the lap seam, so the rider's
+  speed is continuous. On lap 3 the last leg's end speed is zero.
+* **Flume**: radius 0.62 m, open 95° each side of the bottom (lip 0.67 m),
+  3 cm shell, a bolted flange every 2.4 m, swept with `@wjh/geometry/sweep`.
+  The lounge closes the profile to a full circle (the acrylic tube); the
+  pool's is tiled; the lift's floor is a cleated belt. The water ribbon is a
+  separate sweep tilted to the rider's bank at that s.
+* **Bank**: `-atan(v² κ / g)` with κ signed toward the frame's right,
+  windowed over ±3 m, clamped to ±70°.
+* **Surfaces**: Δ library materials throughout (subway tile, quarry tile,
+  terrazzo, shuttered and spalled concrete, weathered and corrugated steel,
+  timber, plaster, hazard plate) under GGX; gelcoat, carpet, ceiling tile and
+  glass are procedural. The sky and every reflection are Δ's fog morning.
+* **Light**: outside, a low hazy sun and the sky's irradiance; inside each
+  room, its own lamp grid evaluated as the four nearest point lights, with
+  per-lap failures. Fog is the horizon colour of the sky, so sea and sky are
+  the same colour where they meet.
+* **Sea**: a 224-cell grid (128 on the low tier) with cubic spacing to 6 km,
+  eight Gerstner swells plus fragment ripples, foam on crests, Fresnel sky
+  reflection; seen from below, a Snell window. Swell grows each lap.
+* **Frame**: HDR scene with MSAA by tier, a bloom pyramid, ACES, then the
+  warp's image effects; the shared CRT pass and signal loss follow.
 
 ## Verification
 
-- Run the repo checks, static build and GLSL compile checks for the journey
-  and the CRT previews. Capture a contact sheet of one moment per act on
-  all three laps, plus portrait and landscape plates at both teeters.
-- Probe immediately before and after each act and lap boundary, and before
-  and after 432 s. The transport must agree with the frame. Check the
-  two lap returns, terminal hold, pause, seek and repeatable fixed-time
-  camera/wave state. Review the doors frame by frame across the switches.
-- On a low tier, verify the deck edge, large waves and all three far
-  artifacts still read. Check the synthesized chapter cues, mute, pause
-  and seek through the shared transport.
+* `bun run check`, `bun run build`, `node tools/journey.mjs glsl
+  stillwater-service --bare`.
+* A contact sheet across each lap; `scan` across every act boundary and both
+  lap seams at a fine step: no boundary may stand out from the ride's own
+  motion, since there are no cuts.
+* The route's closure, grade and speed continuity are unit-tested
+  (`route.test.mjs`).
