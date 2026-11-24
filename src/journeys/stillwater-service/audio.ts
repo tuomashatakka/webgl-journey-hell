@@ -16,13 +16,13 @@ const SCORE = {
 } as const
 
 class StillwaterAudio extends JourneyAudio {
-  private room:      RoomReverb | null = null
-  private hum:       OscillatorNode | null = null
-  private humGain:   GainNode | null = null
-  private air:       BiquadFilterNode | null = null
-  private airGain:   GainNode | null = null
-  private rush:      BiquadFilterNode | null = null
-  private rushGain:  GainNode | null = null
+  private room:     RoomReverb | null = null
+  private hum:      OscillatorNode | null = null
+  private humGain:  GainNode | null = null
+  private air:      BiquadFilterNode | null = null
+  private airGain:  GainNode | null = null
+  private rush:     BiquadFilterNode | null = null
+  private rushGain: GainNode | null = null
   private previousS = -1
   private previousSection = -1
 
@@ -45,11 +45,11 @@ class StillwaterAudio extends JourneyAudio {
     this.hum.start()
 
     // The sea and the room's air, and the water running under the rider.
-    this.air                 = ctx.createBiquadFilter()
-    this.air.type            = 'bandpass'
-    this.air.Q.value         = 0.58
-    this.airGain             = ctx.createGain()
-    this.airGain.gain.value  = 0
+    this.air                = ctx.createBiquadFilter()
+    this.air.type           = 'bandpass'
+    this.air.Q.value        = 0.58
+    this.airGain            = ctx.createGain()
+    this.airGain.gain.value = 0
     this.air.connect(this.airGain).connect(dry)
     this.airGain.connect(this.room.wet)
     this.rush                = ctx.createBiquadFilter()
@@ -69,12 +69,12 @@ class StillwaterAudio extends JourneyAudio {
     if (!ctx || !dry || !room || this.isMuted || this.isPaused)
       return
 
-    const cue    = momentAt(time)
-    const patch  = SCORE[cue.id]
-    const now    = ctx.currentTime
+    const cue      = momentAt(time)
+    const patch    = SCORE[cue.id]
+    const now      = ctx.currentTime
     const { s, v } = getRoute().travel(cue.within, cue.lap)
-    const swell  = cue.id === 'breakwater' ? 0.69 + 0.31 * Math.sin(cue.local * 0.79 - 0.61) : 1
-    const signal = Math.exp(-cue.signalAge * 0.36)
+    const swell    = cue.id === 'breakwater' ? 0.69 + 0.31 * Math.sin(cue.local * 0.79 - 0.61) : 1
+    const signal   = Math.exp(-cue.signalAge * 0.36)
     if (cue.section !== this.previousSection)
       room.tune(patch.room, now, 0.6)
 

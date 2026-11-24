@@ -8,11 +8,13 @@ import type { ClosedCurve, Frame } from '@wjh/geometry/curve'
 import { levelFrame } from '@wjh/geometry/sweep'
 import { clamp, smootherstep, smoothstep } from '@wjh/math/scalar'
 import type { Act } from './timeline'
-import { ACTS, LAP_COUNT, LAP_SECONDS } from './timeline'
+import { LAP_COUNT, LAP_SECONDS } from './timeline'
 
 
 const DEG     = Math.PI / 180
+
 const GRAVITY = 9.81
+
 const SAMPLE  = 2
 
 /** Flume cross-section: radius, half-opening and shell, metres and radians. */
@@ -21,22 +23,11 @@ export const FLUME = { radius: 0.62, open: 95 * DEG, shell: 0.03, flange: 2.4 } 
 /** What the flume is made of along a stretch. */
 export const SECTION = { tiled: 0, fibreglass: 1, acrylic: 2, belt: 3 } as const
 
-const EYE       = 0.78
-const BANK_MAX  = 70 * DEG
+const EYE        = 0.78
+
+const BANK_MAX   = 70 * DEG
+
 const LOOK_AHEAD = 4.5
-
-type Section = typeof SECTION[keyof typeof SECTION]
-
-interface LegSpec {
-  act:      Act;
-  seconds:  number;
-  y:        number;
-  length?:  number;
-  turn?:    number;
-  radius?:  number;
-  section?: Section;
-  solve?:   'run' | 'lift';
-}
 
 /**
  * Turns are degrees, positive toward +x from +z. They sum to three full turns.
@@ -68,7 +59,26 @@ const LEGS: LegSpec[] = [
 
 const START = { x: 0, y: 14, z: 0, heading: 0 }
 
-export interface Leg {
+let cached: Route | null = null
+
+const frame: Frame = newFrame()
+
+const ahead: Frame = newFrame()
+
+type Section = typeof SECTION[keyof typeof SECTION]
+
+interface LegSpec {
+  act:      Act;
+  seconds:  number;
+  y:        number;
+  length?:  number;
+  turn?:    number;
+  radius?:  number;
+  section?: Section;
+  solve?:   'run' | 'lift';
+}
+
+interface Leg {
   act:     Act;
   seconds: number;
   section: Section;
@@ -98,14 +108,28 @@ interface Turtle {
   heading: number;
 }
 
+type TraceReturnType = { points: Turtle[]; starts: Turtle[]; end: Turtle }
+
+type HermiteReturnType = { s: number; v: number }
+
+export type Route = ReturnType<typeof buildRoute>
+
+export interface Pose {
+  eye:     [number, number, number];
+  forward: [number, number, number];
+  up:      [number, number, number];
+  speed:   number;
+  s:       number;
+}
+
 function legLength (spec: LegSpec): number {
   return spec.length ?? Math.abs(spec.turn ?? 0) * DEG * (spec.radius ?? 1)
 }
 
 /** Position along a leg at fraction u, from the turtle state at its start. */
 function walk (spec: LegSpec, from: Turtle, u: number, out: Turtle): Turtle {
-  const turn   = (spec.turn ?? 0) * DEG
-  out.y        = from.y + (spec.y - from.y) * smootherstep(0, 1, u)
+  const turn = (spec.turn ?? 0) * DEG
+  out.y      = from.y + (spec.y - from.y) * smootherstep(0, 1, u)
   if (!turn) {
     const d     = legLength(spec) * u
     out.x       = from.x + Math.sin(from.heading) * d
@@ -125,12 +149,13 @@ function walk (spec: LegSpec, from: Turtle, u: number, out: Turtle): Turtle {
   return out
 }
 
-function trace (specs: LegSpec[]): { points: Turtle[]; starts: Turtle[]; end: Turtle } {
+function trace (specs: LegSpec[]): TraceReturnType {
   const points: Turtle[] = []
   const starts: Turtle[] = []
   let at: Turtle         = { ...START }
   for (const spec of specs) {
     starts.push({ ...at })
+
     const n = Math.max(1, Math.round(legLength(spec) / SAMPLE))
     for (let i = 0; i < n; i++)
       points.push(walk(spec, at, i / n, { x: 0, y: 0, z: 0, heading: 0 }))
@@ -141,16 +166,16 @@ function trace (specs: LegSpec[]): { points: Turtle[]; starts: Turtle[]; end: Tu
 
 /** Lengthen the two free straights until the path ends where it began. */
 function solveLegs (): LegSpec[] {
-  const specs = LEGS.map(spec => ({ ...spec }))
+  const specs           = LEGS.map(spec => ({ ...spec }))
   const { starts, end } = trace(specs)
   for (const [ i, spec ] of specs.entries()) {
     if (!spec.solve)
       continue
 
-    const h      = starts[i].heading
-    const dx     = START.x - end.x
-    const dz     = START.z - end.z
-    const along  = spec.solve === 'run' ? Math.sin(h) * dx : Math.cos(h) * dz
+    const h     = starts[i].heading
+    const dx    = START.x - end.x
+    const dz    = START.z - end.z
+    const along = spec.solve === 'run' ? Math.sin(h) * dx : Math.cos(h) * dz
     spec.length = (spec.length ?? 0) + along
   }
   return specs
@@ -163,6 +188,7 @@ function nearestS (curve: ClosedCurve, p: Turtle, guess: number): number {
   const q   = { x: 0, y: 0, z: 0 }
   for (let s = guess - 6; s <= guess + 6; s += 0.02) {
     curve.pointAtDistance((s + curve.length) % curve.length, q)
+
     const d = (q.x - p.x) ** 2 + (q.y - p.y) ** 2 + (q.z - p.z) ** 2
     if (d < bestD) {
       bestD = d
@@ -176,7 +202,7 @@ function harmonic (a: number, b: number): number {
   return 2 / (1 / a + 1 / b)
 }
 
-function hermite (s0: number, s1: number, m0: number, m1: number, dt: number, u: number): { s: number; v: number } {
+function hermite (s0: number, s1: number, m0: number, m1: number, dt: number, u: number): HermiteReturnType {
   const u2 = u * u
   const u3 = u2 * u
   const s  = (2 * u3 - 3 * u2 + 1) * s0 + (u3 - 2 * u2 + u) * m0 * dt + (-2 * u3 + 3 * u2) * s1 + (u3 - u2) * m1 * dt
@@ -195,6 +221,7 @@ function buildRoute () {
     const from = starts[i]
     const s0   = i === 0 ? 0 : nearestS(curve, from, guess)
     guess      = s0 + legLength(spec)
+
     const turn = (spec.turn ?? 0) * DEG
     const side = Math.sign(turn)
     const r    = spec.radius ?? 0
@@ -220,17 +247,21 @@ function buildRoute () {
   const knotsT = [ 0 ]
   for (const leg of legs)
     knotsT.push(knotsT[knotsT.length - 1] + leg.seconds)
-  const knotsS = [ ...legs.map(leg => leg.s0), length ]
-  const slopes = legs.map((leg, i) => (knotsS[i + 1] - knotsS[i]) / leg.seconds)
+
+  const knotsS   = [ ...legs.map(leg => leg.s0), length ]
+  const slopes   = legs.map((leg, i) => (knotsS[i + 1] - knotsS[i]) / leg.seconds)
   const tangents = knotsS.map((_, i) => harmonic(slopes[(i - 1 + legs.length) % legs.length], slopes[i % legs.length]))
 
-  function travel (within: number, lap: number): { s: number; v: number; leg: number } {
+  type TravelReturnType = { s: number; v: number; leg: number }
+
+  function travel (within: number, lap: number): TravelReturnType {
     const t = clamp(within, 0, LAP_SECONDS)
     let k   = legs.length - 1
     while (knotsT[k] > t)
       k--
-    const dt   = knotsT[k + 1] - knotsT[k]
-    const last = k === legs.length - 1 && lap === LAP_COUNT - 1
+
+    const dt       = knotsT[k + 1] - knotsT[k]
+    const last     = k === legs.length - 1 && lap === LAP_COUNT - 1
     const { s, v } = hermite(knotsS[k], knotsS[k + 1], tangents[k], last ? 0 : tangents[k + 1], dt, (t - knotsT[k]) / dt)
     return { s, v, leg: k }
   }
@@ -239,7 +270,7 @@ function buildRoute () {
   const BANK_STEP = 0.25
   const speedByS  = new Float32Array(Math.ceil(length / BANK_STEP) + 1)
   for (let t = 0; t <= LAP_SECONDS; t += 0.01) {
-    const { s, v } = travel(t, 0)
+    const { s, v }                                                     = travel(t, 0)
     speedByS[Math.min(speedByS.length - 1, Math.round(s / BANK_STEP))] = v
   }
   for (let i = 1; i < speedByS.length; i++)
@@ -255,10 +286,12 @@ function buildRoute () {
     const s = i * BANK_STEP
     levelFrame(curve, (s - 0.5 + length) % length, frameA)
     levelFrame(curve, (s + 0.5) % length, frameB)
+
     const bend = (frameB.forward.x - frameA.forward.x) * frameA.right.x + (frameB.forward.z - frameA.forward.z) * frameA.right.z
     const v    = speedByS[i]
     raw[i]     = -Math.atan(v * v * bend / GRAVITY)
   }
+
   const bankByS = new Float32Array(raw.length)
   const W       = Math.round(3 / BANK_STEP)
   for (let i = 0; i < raw.length; i++) {
@@ -269,7 +302,7 @@ function buildRoute () {
   }
 
   function lookup (table: Float32Array, s: number): number {
-    const f = ((s % length) + length) % length / BANK_STEP
+    const f = (s % length + length) % length / BANK_STEP
     const i = Math.floor(f)
     const a = table[Math.min(i, table.length - 1)]
     const b = table[Math.min(i + 1, table.length - 1)]
@@ -277,7 +310,7 @@ function buildRoute () {
   }
 
   function legAt (s: number): Leg {
-    const w = ((s % length) + length) % length
+    const w = (s % length + length) % length
     return legs.find(leg => w < leg.s1) ?? legs[legs.length - 1]
   }
 
@@ -293,37 +326,22 @@ function buildRoute () {
   }
 }
 
-export type Route = ReturnType<typeof buildRoute>
-
-let cached: Route | null = null
-
 export function getRoute (): Route {
   cached ??= buildRoute()
   return cached
-}
-
-export interface Pose {
-  eye:     [number, number, number];
-  forward: [number, number, number];
-  up:      [number, number, number];
-  speed:   number;
-  s:       number;
 }
 
 export function createPose (): Pose {
   return { eye: [ 0, 0, 0 ], forward: [ 0, 0, 1 ], up: [ 0, 1, 0 ], speed: 0, s: 0 }
 }
 
-const frame: Frame = newFrame()
-const ahead: Frame = newFrame()
-
 /** Where the rider sits and looks at `within` seconds into `lap`. */
 export function setPose (
   pose: Pose, within: number, lap: number, time: number, warp: number, panX: number, panY: number,
 ): void {
-  const route     = getRoute()
-  const { s, v }  = route.travel(within, lap)
-  const bank      = route.bankAt(s)
+  const route    = getRoute()
+  const { s, v } = route.travel(within, lap)
+  const bank     = route.bankAt(s)
   levelFrame(route.curve, s % route.length, frame)
   route.curve.pointAtDistance((s + LOOK_AHEAD) % route.length, ahead.pos)
 
@@ -331,24 +349,24 @@ export function setPose (
   const cb = Math.cos(bank)
   const sb = Math.sin(bank)
   // The rider's own up: from the trough wall they sit on toward its axis.
-  const ux = frame.up.x * cb - frame.right.x * sb
-  const uy = frame.up.y * cb - frame.right.y * sb
-  const uz = frame.up.z * cb - frame.right.z * sb
+  const ux  = frame.up.x * cb - frame.right.x * sb
+  const uy  = frame.up.y * cb - frame.right.y * sb
+  const uz  = frame.up.z * cb - frame.right.z * sb
   const bob = 0.018 * Math.sin(time * 2.3) + 0.01 * Math.sin(time * 3.7 + 1)
   // Sat up where the channel is lazy, lying back where it is fast.
   const seatR = EYE + 0.3 * smoothstep(2.6, 1.6, route.speedAt(s)) + bob
   // Seat on the wall at the bank angle, eye along the rider's up.
-  const bx  = frame.pos.x + frame.up.x * r + (frame.right.x * sb - frame.up.x * cb) * r
-  const by  = frame.pos.y + frame.up.y * r + (frame.right.y * sb - frame.up.y * cb) * r
-  const bz  = frame.pos.z + frame.up.z * r + (frame.right.z * sb - frame.up.z * cb) * r
+  const bx    = frame.pos.x + frame.up.x * r + (frame.right.x * sb - frame.up.x * cb) * r
+  const by    = frame.pos.y + frame.up.y * r + (frame.right.y * sb - frame.up.y * cb) * r
+  const bz    = frame.pos.z + frame.up.z * r + (frame.right.z * sb - frame.up.z * cb) * r
   pose.eye[0] = bx + ux * seatR
   pose.eye[1] = by + uy * seatR
   pose.eye[2] = bz + uz * seatR
 
   // Look between the tangent and a point down the flume.
-  let fx    = ahead.pos.x - pose.eye[0]
-  let fy    = ahead.pos.y + EYE * 0.7 - pose.eye[1]
-  let fz    = ahead.pos.z - pose.eye[2]
+  let fx = ahead.pos.x - pose.eye[0]
+  let fy = ahead.pos.y + EYE * 0.7 - pose.eye[1]
+  let fz = ahead.pos.z - pose.eye[2]
   const fl  = Math.hypot(fx, fy, fz) || 1
   fx        = fx / fl * 0.6 + frame.forward.x * 0.4
   fy        = fy / fl * 0.6 + frame.forward.y * 0.4 - 0.08
@@ -358,9 +376,9 @@ export function setPose (
   const roll = warp * 0.42 * Math.sin(time * 0.21) * Math.sin(time * 0.057 + 0.4)
   const cr   = Math.cos(roll)
   const sr   = Math.sin(roll)
-  let upx    = ux * cr + (frame.right.x * cb + frame.up.x * sb) * sr
-  let upy    = uy * cr + (frame.right.y * cb + frame.up.y * sb) * sr
-  let upz    = uz * cr + (frame.right.z * cb + frame.up.z * sb) * sr
+  let upx = ux * cr + (frame.right.x * cb + frame.up.x * sb) * sr
+  let upy = uy * cr + (frame.right.y * cb + frame.up.y * sb) * sr
+  let upz = uz * cr + (frame.right.z * cb + frame.up.z * sb) * sr
 
   // Gaze: yaw about the rider's up, pitch about the resulting right.
   const yaw   = panX * 1.05
@@ -371,13 +389,14 @@ export function setPose (
   const rl    = Math.hypot(rx, ry, rz) || 1
   const cy    = Math.cos(yaw)
   const sy    = Math.sin(yaw)
-  let dx      = fx * cy + rx / rl * sy
-  let dy      = fy * cy + ry / rl * sy
-  let dz      = fz * cy + rz / rl * sy
+  let dx = fx * cy + rx / rl * sy
+  let dy = fy * cy + ry / rl * sy
+  let dz = fz * cy + rz / rl * sy
   const dl    = Math.hypot(dx, dy, dz) || 1
   dx /= dl
   dy /= dl
   dz /= dl
+
   const cp = Math.cos(pitch)
   const sp = Math.sin(pitch)
   const ox = dx * cp + upx * sp
@@ -396,6 +415,3 @@ export function setPose (
   pose.speed      = v
   pose.s          = s % route.length
 }
-
-/** The act each leg belongs to, in order, for the tests. */
-export const ACT_ORDER = ACTS.map(act => act.id)

@@ -14,18 +14,7 @@ import { MAT } from '@wjh/delta/manifest'
 /** Procedural kinds, mirrored as constants in the world shader. */
 export const KIND = { library: 0, lamp: 1, carpet: 2, glass: 3, ceiling: 4, paint: 5, rubber: 6, water: 7 } as const
 
-interface Material {
-  kind:   number;
-  layer?: number;
-  tint:   [number, number, number];
-  rough?: number;
-}
-
-function library (id: string, tint: [number, number, number] = [ 1, 1, 1 ], rough?: number): Material {
-  return { kind: KIND.library, layer: MAT[id], tint, rough }
-}
-
-export const MATERIALS = {
+const MATERIALS = {
   wallTile:   library('TILE', [ 0.92, 0.97, 0.95 ]),
   poolTile:   library('TILE', [ 0.42, 0.78, 0.8 ]),
   deck:       library('FLOOR', [ 0.86, 0.86, 0.82 ]),
@@ -58,10 +47,17 @@ export const MATERIALS = {
   floodWater: { kind: KIND.water, tint: [ 0.25, 0.22, 0.14 ]},
 } satisfies Record<string, Material>
 
+interface Material {
+  kind:   number;
+  layer?: number;
+  tint:   [number, number, number];
+  rough?: number;
+}
+
 export type MaterialKey = keyof typeof MATERIALS
 
 export interface Style {
-  mat:       MaterialKey;
+  mat: MaterialKey;
 
   /** Rides the carousel instead of standing still. */
   carried?:  boolean;
@@ -76,6 +72,12 @@ export interface Batch {
 }
 
 type V3 = [number, number, number]
+
+export type Stage = ReturnType<typeof createStage>
+
+function library (id: string, tint: [number, number, number] = [ 1, 1, 1 ], rough?: number): Material {
+  return { kind: KIND.library, layer: MAT[id], tint, rough }
+}
 
 export function createStage () {
   const groups = new Map<string, { geometry: MeshBuilder; style: Style }>()
@@ -123,5 +125,3 @@ export function createStage () {
     },
   }
 }
-
-export type Stage = ReturnType<typeof createStage>

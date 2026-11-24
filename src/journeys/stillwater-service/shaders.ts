@@ -8,10 +8,15 @@ import { ROOM_COUNT } from './rooms'
 import { KIND } from './stage'
 
 
-const f = (x: number) => x.toFixed(4)
+const kinds    = Object.entries(KIND).map(([ name, id ]) => `const int K_${name.toUpperCase()} = ${id};`)
+  .join('\n')
 
-const kinds    = Object.entries(KIND).map(([ name, id ]) => `const int K_${name.toUpperCase()} = ${id};`).join('\n')
-const sections = Object.entries(SECTION).map(([ name, id ]) => `const float S_${name.toUpperCase()} = ${id}.0;`).join('\n')
+const sections = Object.entries(SECTION).map(([ name, id ]) => `const float S_${name.toUpperCase()} = ${id}.0;`)
+  .join('\n')
+
+const RADIUS = FLUME.radius.toFixed(4)
+const INNER  = (FLUME.radius + FLUME.shell * 0.5).toFixed(4)
+const PITCH  = FLUME.flange.toFixed(4)
 
 const HEAD = /* glsl */`#version 300 es
 precision highp float;
@@ -328,6 +333,7 @@ ${MATERIAL_GLSL}
 ${SURFACE_GLSL}
 ${LIGHT}
 ${sections}
+
 const float S_FLANGE = 4.0;
 uniform int uPass;
 uniform float uBelt;
@@ -342,9 +348,9 @@ void main () {
   dissolve(p, vDist);
   float s = vRidge.x;
   float section = floor(vRidge.w + 0.5);
-  vec2 rad = vec2(vRidge.y, vRidge.z - ${f(FLUME.radius)});
+  vec2 rad = vec2(vRidge.y, vRidge.z - ${RADIUS});
   float angle = atan(rad.x, -rad.y);
-  bool inner = length(rad) < ${f(FLUME.radius + FLUME.shell * 0.5)};
+  bool inner = length(rad) < ${INNER};
   bool acrylic = section == S_ACRYLIC;
   if (uPass < 2 && (uPass == 0) == acrylic)
     discard;
@@ -379,7 +385,7 @@ void main () {
   m.height = 0.0;
   float alpha = 1.0;
   if (section == S_TILED) {
-    m = sampleMaterial(MAT_TILE, vec2(angle * ${f(FLUME.radius)}, s), N, p, V, 0);
+    m = sampleMaterial(MAT_TILE, vec2(angle * ${RADIUS}, s), N, p, V, 0);
     m.albedo *= inner ? vec3(0.45, 0.78, 0.8) : vec3(0.9, 0.95, 0.93);
   }
   else if (section == S_FLANGE) {
@@ -397,7 +403,7 @@ void main () {
     float fresnel = 0.05 + 0.95 * pow(1.0 - abs(dot(N, V)), 4.0);
     vec3 env = mix(skyAt(reflect(-V, N), 2.0) * 0.5, DEEP * 1.5, uUnder) * lapGrade();
     float scratch = noise2(vec2(angle * 80.0, s * 0.8)) * noise2(vec2(angle * 6.0, s * 9.0));
-    float ring = smoothstep(0.47, 0.49, abs(fract(s / ${f(FLUME.flange)}) - 0.5));
+    float ring = smoothstep(0.47, 0.49, abs(fract(s / ${PITCH}) - 0.5));
     vec3 c = env * fresnel + vec3(0.6, 0.8, 0.85) * scratch * 0.08 + vec3(0.7) * ring * 0.2;
     fragColor = vec4(fogged(c, p, vDist), clamp(0.03 + fresnel * 0.22 + scratch * 0.12 + ring * 0.5, 0.0, 0.7));
     return;
@@ -410,7 +416,7 @@ void main () {
     // Hand-laid gelcoat is never flat: a slow waviness breaks the highlight.
     vec2 wave = vec2(noise2(vec2(angle * 4.0, s * 0.9)), noise2(vec2(angle * 4.0 + 7.0, s * 0.9))) - 0.5;
     m.normal = normalize(N + vec3(wave.x, 0.0, wave.y) * 0.12);
-    float joint = smoothstep(0.488, 0.497, abs(fract(s / ${f(FLUME.flange)}) - 0.5));
+    float joint = smoothstep(0.488, 0.497, abs(fract(s / ${PITCH}) - 0.5));
     float wet = inner ? smoothstep(0.75, 0.2, abs(angle)) : 0.0;
     float scale = noise2(vec2(angle * 9.0, s * 0.7)) * noise2(vec2(angle * 2.0, s * 3.0));
     float scuff = smoothstep(0.55, 0.8, noise2(vec2(angle * 14.0, s * 2.3)));

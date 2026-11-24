@@ -74,6 +74,7 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
     all.forEach(p => p?.dispose())
     return null
   }
+
   const { world, flume, sea, sky, down, up, composite } = programs as Record<keyof typeof programs, GlProgram>
 
   const materials = createMaterialArrays(gl)
@@ -86,19 +87,20 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
   const stage = createStage()
   for (const build of [ buildPool, buildAnnex, buildSpiral, buildBreakwater, buildLounge, buildSorting, buildSupports ])
     build(stage)
-  const batches  = stage.upload(gl)
-  const opaque   = batches.filter(b => b.material.kind !== KIND.glass && b.material.kind !== KIND.water)
-  const clear    = batches.filter(b => !opaque.includes(b))
-  const trough   = buildFlume(gl)
-  const seas     = [ makeSea(gl, 128), makeSea(gl, 224) ]
 
-  const proj    = new Float32Array(16)
-  const view    = new Float32Array(16)
-  const vp      = new Float32Array(16)
-  const inverse = new Float32Array(16)
-  const pose    = createPose()
-  const look: [number, number, number] = [ 0, 0, 0 ]
-  const tile: [number, number, number] = [ 0, 0, 0 ]
+  const batches = stage.upload(gl)
+  const opaque  = batches.filter(b => b.material.kind !== KIND.glass && b.material.kind !== KIND.water)
+  const clear   = batches.filter(b => !opaque.includes(b))
+  const trough  = buildFlume(gl)
+  const seas    = [ makeSea(gl, 128), makeSea(gl, 224) ]
+
+  const proj                             = new Float32Array(16)
+  const view                             = new Float32Array(16)
+  const vp                               = new Float32Array(16)
+  const inverse                          = new Float32Array(16)
+  const pose                             = createPose()
+  const look: [number, number, number]   = [ 0, 0, 0 ]
+  const tile: [number, number, number]   = [ 0, 0, 0 ]
   const ORIGIN: [number, number, number] = [ 0, 0, 0 ]
 
   for (const p of [ world, flume, sea, sky ]) {
@@ -172,7 +174,7 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
   }
 
   return {
-    ready: () => materials.ready && skyMap.ready,
+    ready:    () => materials.ready && skyMap.ready,
     progress: () => (Number(materials.ready) + Number(skyMap.ready)) / 2,
 
     draw (frame) {
@@ -184,6 +186,7 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
       chain.resize(width, height, { msaa: quality.msaa, bloomLevels: Math.max(2, quality.bloomLevels) })
 
       setPose(pose, cue.within, cue.lap, time, cue.warp, frame.pointer?.x ?? 0, frame.pointer?.y ?? 0)
+
       const under = smoothstep(0.25, -0.5, pose.eye[1])
       look[0]     = pose.eye[0] + pose.forward[0]
       look[1]     = pose.eye[1] + pose.forward[1]

@@ -1,4 +1,5 @@
 import { lapLabel } from '@wjh/journey/label'
+
 import type { JourneyMarks } from '@wjh/journey/types'
 import { smoothstep } from '@wjh/math/scalar'
 
@@ -13,12 +14,15 @@ export const ACTS = [
 ] as const
 
 export const LAP_COUNT   = 3
+
 export const LAP_SECONDS = ACTS.reduce((t, act) => t + act.seconds, 0)
-export const END         = LAP_COUNT * LAP_SECONDS
+
+const END         = LAP_COUNT * LAP_SECONDS
 
 const STARTS = ACTS.map((_, i) => ACTS.slice(0, i).reduce((t, act) => t + act.seconds, 0))
 
 export type Act = typeof ACTS[number]['id']
+
 
 /**
  * How far the world has come apart: 0 through lap 1, rising across lap 2,
@@ -33,7 +37,7 @@ export function warpAt (time: number): number {
 }
 
 /** The ending: buildings, trestles and flume dissolve, distance first. */
-export function dissolveAt (time: number): number {
+function dissolveAt (time: number): number {
   return smoothstep(END - 10, END + 12, time)
 }
 
@@ -61,8 +65,6 @@ export function momentAt (time: number) {
     dissolve:  dissolveAt(time),
   }
 }
-
-export type Moment = ReturnType<typeof momentAt>
 
 export function stillwaterMarksAt (time: number): JourneyMarks {
   const cue = momentAt(time)

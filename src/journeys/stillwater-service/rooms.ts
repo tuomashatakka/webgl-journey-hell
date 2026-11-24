@@ -10,6 +10,17 @@ import { getRoute } from './route'
 import type { Stage, Style } from './stage'
 
 
+const SEABED = -8.4
+
+export const RIGS: Rig[] = [
+  { min: [ -15.2, 13.6, -4.2 ], max: [ 3.2, 21.2, 42 ], open: 0.55, lampY: 20, grid: [ -15, -4, 6, 6.5 ], color: [ 1, 0.86, 0.68 ], power: 34 },
+  { min: [ 20, 10.6, 32 ], max: [ 56, 13.75, 60 ], open: 0.2, lampY: 13.62, grid: [ 20, 32, 3, 3.5 ], color: [ 0.9, 0.97, 1 ], power: 3.6 },
+  { min: [ 14, SEABED, -66 ], max: [ 46, -1.2, -49 ], open: 0.75, lampY: -1.8, grid: [ 14, -66, 8, 8.5 ], color: [ 0.35, 0.9, 0.85 ], power: 6 },
+  { min: [ -18, 0.4, -64 ], max: [ 8, 7.2, -34 ], open: 0.32, lampY: 6.6, grid: [ -18, -64, 5.2, 6 ], color: [ 0.86, 0.95, 1 ], power: 24 },
+]
+
+export const ROOM_COUNT = RIGS.length
+
 type V3 = [number, number, number]
 
 interface Rig {
@@ -21,17 +32,6 @@ interface Rig {
   color: V3;
   power: number;
 }
-
-const SEABED = -8.4
-
-export const RIGS: Rig[] = [
-  { min: [ -15.2, 13.6, -4.2 ], max: [ 3.2, 21.2, 42 ], open: 0.55, lampY: 20, grid: [ -15, -4, 6, 6.5 ], color: [ 1, 0.86, 0.68 ], power: 34 },
-  { min: [ 20, 10.6, 32 ], max: [ 56, 13.75, 60 ], open: 0.2, lampY: 13.62, grid: [ 20, 32, 3, 3.5 ], color: [ 0.9, 0.97, 1 ], power: 3.6 },
-  { min: [ 14, SEABED, -66 ], max: [ 46, -1.2, -49 ], open: 0.75, lampY: -1.8, grid: [ 14, -66, 8, 8.5 ], color: [ 0.35, 0.9, 0.85 ], power: 6 },
-  { min: [ -18, 0.4, -64 ], max: [ 8, 7.2, -34 ], open: 0.32, lampY: 6.6, grid: [ -18, -64, 5.2, 6 ], color: [ 0.86, 0.95, 1 ], power: 24 },
-]
-
-export const ROOM_COUNT = RIGS.length
 
 /** The rigs as the four vec4 arrays the shaders take. */
 export function rigUniforms () {
@@ -125,7 +125,7 @@ export function buildPool (stage: Stage): void {
   span('poolTile', [ -13.3, deck - 1.45, 40 ], [ -1.7, water - 0.02, 40.3 ])
   span('poolTile', [ -13.3, deck - 2.4, 40.3 ], [ -1.7, deck - 1.9, 41.2 ])
   span('navy', [ -13, water - 0.03, 40.02 ], [ -1.7, water - 0.01, 40.32 ])
-  span({ mat: 'poolWater' }, [ -13.3, deck - 2.0, 40.32 ], [ -1.7, water - 0.02, 40.36 ])
+  span({ mat: 'poolWater' }, [ -13.3, deck - 2, 40.32 ], [ -1.7, water - 0.02, 40.36 ])
   span({ mat: 'poolWater', lastLap: 0 }, [ -13, water - 0.02, 2 ], [ -2, water, 40.3 ])
   span({ mat: 'poolWater', firstLap: 1, lastLap: 1 }, [ -13, deck - 0.04, 2 ], [ -2, deck - 0.02, 40.3 ])
   span({ mat: 'poolWater', firstLap: 2 }, [ -15.2, deck + 0.08, -4.2 ], [ 3.2, deck + 0.1, 42 ])
@@ -157,9 +157,9 @@ export function buildPool (stage: Stage): void {
     span('concrete', [ -15.2, deck, z - 0.25 ], [ -14.8, 21.2, z + 0.25 ])
     // Roof truss across the hall.
     span('galvanised', [ -15.2, 20.7, z - 0.08 ], [ 3.2, 21.2, z + 0.08 ])
-    span('galvanised', [ -15.2, 21.9, z - 0.06 ], [ 3.2, 22.0, z + 0.06 ])
+    span('galvanised', [ -15.2, 21.9, z - 0.06 ], [ 3.2, 22, z + 0.06 ])
     for (let x = -14; x < 3; x += 2.4)
-      bar('galvanised', [ x, 21.0, z ], [ x + 1.2, 21.95, z ], 0.03, 6)
+      bar('galvanised', [ x, 21, z ], [ x + 1.2, 21.95, z ], 0.03, 6)
   }
   span('concrete', [ -15.6, 21.2, -4.6 ], [ 3.2, 21.5, -4.2 ])
   span('concrete', [ 2.7, 21.2, -4.2 ], [ 3.2, 21.6, 42 ])
@@ -176,14 +176,14 @@ export function buildPool (stage: Stage): void {
   // A lifeguard chair on the east deck.
   for (const [ dx, dz ] of [[ -0.35, -0.3 ], [ 0.35, -0.3 ], [ -0.35, 0.3 ], [ 0.35, 0.3 ]])
     bar('white', [ 1.6 + dx, deck, 18 + dz ], [ 1.6 + dx * 0.6, deck + 1.9, 18 + dz * 0.6 ], 0.03, 6)
-  span('white', [ 1.2, deck + 1.85, 17.7 ], [ 2.0, deck + 1.92, 18.3 ])
-  span('white', [ 1.2, deck + 1.9, 18.25 ], [ 2.0, deck + 2.5, 18.3 ])
+  span('white', [ 1.2, deck + 1.85, 17.7 ], [ 2, deck + 1.92, 18.3 ])
+  span('white', [ 1.2, deck + 1.9, 18.25 ], [ 2, deck + 2.5, 18.3 ])
   span('concrete', [ -15.6, deck - 1.75, -4.6 ], [ 3.2, deck - 1.45, 42 ])
   piles(stage, -14, 2, -3, 40, deck - 1.75, 8.5)
 }
 
 export function buildAnnex (stage: Stage): void {
-  const { span, box } = stage
+  const { span, box }     = stage
   const [ x0, floor, z0 ] = RIGS[1].min
   const [ x1, , z1 ]      = RIGS[1].max
   const top               = floor + 0.35
@@ -204,6 +204,7 @@ export function buildAnnex (stage: Stage): void {
       span('galvanised', [ x - 0.05, top, z - 0.05 ], [ x + 0.05, 13.65, z + 0.05 ])
       if (i === n)
         continue
+
       const mx = ax + (bx - ax) * (i + 0.5) / n
       const mz = az + (bz - az) * (i + 0.5) / n
       const hx = ax === bx ? 0.03 : 0.75
@@ -229,7 +230,7 @@ export function buildAnnex (stage: Stage): void {
     for (let z = 34; z < z1 - 2; z += 3.2) {
       if (flumeDistance(x + 1.5, z + 1.4) < 3.2)
         continue
-      span('partition', [ x, top, z + 1.37 ], [ x + 3.0, top + 1.45, z + 1.43 ])
+      span('partition', [ x, top, z + 1.37 ], [ x + 3, top + 1.45, z + 1.43 ])
       span('partition', [ x + 1.47, top, z ], [ x + 1.53, top + 1.45, z + 2.8 ])
       for (const [ dx, dz ] of [[ 0, 0 ], [ 1.55, 0 ], [ 0, 1.45 ], [ 1.55, 1.45 ]]) {
         const cx = x + dx + 0.7
@@ -239,6 +240,7 @@ export function buildAnnex (stage: Stage): void {
         span('steel', [ cx + 0.56, top, cz - 0.3 ], [ cx + 0.6, top + 0.72, cz + 0.3 ])
         if (hash1(cx * 3.1 + cz) > 0.35)
           span('navy', [ cx - 0.25, top + 0.75, cz - 0.05 ], [ cx + 0.25, top + 1.05, cz - 0.03 ])
+
         const chair = hash1(cx + cz * 7.3) * 0.5
         span('rubber', [ cx - 0.24 + chair * 0.3, top + 0.42, cz + 0.5 ], [ cx + 0.24 + chair * 0.3, top + 0.48, cz + 0.95 ])
         span('rubber', [ cx - 0.22 + chair * 0.3, top + 0.48, cz + 0.92 ], [ cx + 0.22 + chair * 0.3, top + 0.95, cz + 0.97 ])
@@ -251,16 +253,16 @@ export function buildAnnex (stage: Stage): void {
 }
 
 export function buildSpiral (stage: Stage): void {
-  const route  = getRoute()
-  const helix  = route.legs.find(leg => leg.act === 'spiral')!
-  const cx     = helix.centerX
-  const cz     = helix.centerZ
-  const core   = 4.1
-  const sides  = 28
-  const mesh   = stage.geometry('shuttered')
+  const route = getRoute()
+  const helix = route.legs.find(leg => leg.act === 'spiral')!
+  const cx    = helix.centerX
+  const cz    = helix.centerZ
+  const core  = 4.1
+  const sides = 28
+  const mesh  = stage.geometry('shuttered')
   for (let i = 0; i < sides; i++) {
-    const a = i / sides * Math.PI * 2
-    const b = (i + 1) / sides * Math.PI * 2
+    const a      = i / sides * Math.PI * 2
+    const b      = (i + 1) / sides * Math.PI * 2
     const pa: V3 = [ cx + Math.sin(a) * core, 0, cz + Math.cos(a) * core ]
     const pb: V3 = [ cx + Math.sin(b) * core, 0, cz + Math.cos(b) * core ]
     mesh.quad([ pb[0], SEABED, pb[2] ], [ pb[0], 17.5, pb[2] ], [ pa[0], 17.5, pa[2] ], [ pa[0], SEABED, pa[2] ])
@@ -268,6 +270,7 @@ export function buildSpiral (stage: Stage): void {
       const y = 1 + level * 3.4
       if ((i + level * 3) % 4 !== 0)
         continue
+
       const m = (a + b) / 2
       stage.box({ mat: 'lamp', lastLap: level % 2 === 0 ? 2 : 0 },
                 [ cx + Math.sin(m) * (core + 0.01), y, cz + Math.cos(m) * (core + 0.01) ], [ 0.22, 1.3, 0.22 ])
@@ -323,6 +326,7 @@ export function buildBreakwater (stage: Stage): void {
   span('concrete', [ 290, -20, -1540 ], [ 450, 110, -1430 ])
   span('concrete', [ 300, 110, -1520 ], [ 350, 380, -1450 ])
   span('concrete', [ 395, 110, -1520 ], [ 440, 350, -1450 ])
+
   const ring: number[][] = []
   for (let i = 0; i <= 48; i++) {
     const a = i / 48 * Math.PI * 2
@@ -336,7 +340,7 @@ export function buildBreakwater (stage: Stage): void {
 }
 
 export function buildLounge (stage: Stage): void {
-  const { span, box } = stage
+  const { span, box }     = stage
   const [ x0, floor, z0 ] = RIGS[2].min
   const [ x1, roof, z1 ]  = RIGS[2].max
   span('terrazzo', [ x0, floor - 0.3, z0 ], [ x1, floor, z1 ])
@@ -375,6 +379,7 @@ export function buildLounge (stage: Stage): void {
     const z = -40 - hash1(i * 7.7) * 40
     if (x > x0 - 1 && x < x1 + 1 && z > z0 - 1 && z < z1 + 1)
       continue
+
     const r = 0.3 + hash1(i) * 0.9
     box('rock', [ x, SEABED + r * 0.4, z ], [ r * 1.6, r, r * 1.3 ])
   }
@@ -423,8 +428,8 @@ export function buildSorting (stage: Stage): void {
   const plates = stage.geometry('rubber')
   const plinth = stage.geometry('steel')
   for (let i = 0; i < 48; i++) {
-    const a = i / 48 * Math.PI * 2
-    const b = (i + 1) / 48 * Math.PI * 2
+    const a  = i / 48 * Math.PI * 2
+    const b  = (i + 1) / 48 * Math.PI * 2
     const at = (r: number, y: number, t: number): number[] => [ cx + Math.sin(t) * r, y, cz + Math.cos(t) * r ]
     plates.quad(at(3.6, top + 0.62, a), at(3.6, top + 0.62, b), at(2.5, top + 0.95, b), at(2.5, top + 0.95, a))
     plinth.quad(at(3.62, top, a), at(3.62, top + 0.62, a), at(3.62, top + 0.62, b), at(3.62, top, b))
