@@ -58,7 +58,6 @@ uniform float uTime;
 uniform float uLap;
 uniform float uWarp;
 uniform float uDissolve;
-uniform float uUnder;
 uniform sampler2D uSky;
 uniform float uSkyExposure;
 uniform float uSkyYaw;
@@ -108,10 +107,13 @@ vec3 fogged (vec3 color, vec3 p, float dist) {
   float density = 0.0034 * exp(-max(uEye.y, -5.0) / 60.0) * (1.0 + 0.35 * uLap);
   float fog = 1.0 - exp(-density * dist * max(column, 0.0));
   color = mix(color, hazeAt(d), clamp(fog, 0.0, 1.0));
-  if (uUnder > 0.0) {
-    float murk = 1.0 - exp(-dist * (0.075 + 0.05 * uLap));
-    color = mix(color, DEEP * (0.6 + 0.4 * exp(min(p.y, 0.0) * 0.12)) * lapGrade(), murk * uUnder);
-  }
+  // Murk only along the part of the sight line that is below the surface:
+  // continuous as the eye crosses sea level, and nothing inside the tube.
+  float lo = min(uEye.y, p.y);
+  float hi = max(uEye.y, p.y);
+  float wet = lo >= 0.0 ? 0.0 : hi <= 0.0 ? 1.0 : -lo / max(hi - lo, 1e-3);
+  float murk = 1.0 - exp(-dist * wet * (0.075 + 0.05 * uLap));
+  color = mix(color, DEEP * (0.6 + 0.4 * exp(min(p.y, 0.0) * 0.12)) * lapGrade(), murk);
   return color;
 }
 
@@ -401,7 +403,7 @@ void main () {
   }
   else if (acrylic) {
     float fresnel = 0.05 + 0.95 * pow(1.0 - abs(dot(N, V)), 4.0);
-    vec3 env = mix(skyAt(reflect(-V, N), 2.0) * 0.5, DEEP * 1.5, uUnder) * lapGrade();
+    vec3 env = mix(skyAt(reflect(-V, N), 2.0) * 0.5, DEEP * 1.5, smoothstep(0.4, -0.4, p.y)) * lapGrade();
     float scratch = noise2(vec2(angle * 80.0, s * 0.8)) * noise2(vec2(angle * 6.0, s * 9.0));
     float ring = smoothstep(0.47, 0.49, abs(fract(s / ${PITCH}) - 0.5));
     vec3 c = env * fresnel + vec3(0.6, 0.8, 0.85) * scratch * 0.08 + vec3(0.7) * ring * 0.2;
@@ -494,10 +496,20 @@ in vec3 vWorld;
 in vec3 vNormal;
 in float vDist;
 in float vCrest;
+uniform highp sampler2D uClear;
+uniform vec4 uClearMap;
 out vec4 fragColor;
 
 void main () {
   vec3 p = vWorld;
+  // Never inside the flume: the trough and the tube are always clear of the sea.
+  ivec2 cell = ivec2(floor((p.xz - uClearMap.xy) * uClearMap.z));
+  ivec2 size = textureSize(uClear, 0);
+  if (all(greaterThanEqual(cell, ivec2(0))) && all(lessThan(cell, size))) {
+    vec2 clear = texelFetch(uClear, cell, 0).rg;
+    if (p.y > clear.x && p.y < clear.y)
+      discard;
+  }
   vec3 V = normalize(uEye - p);
   float detail = 1.0 - smoothstep(30.0, 260.0, vDist);
   vec2 q = p.xz * 0.45;
@@ -505,11 +517,12 @@ void main () {
     noise2(q * 1.7 - uTime * 0.4) - noise2(q * 1.7 + vec2(0.0, 0.6) - uTime * 0.4));
   vec3 N = normalize(vNormal + vec3(ripple.x, 0.0, ripple.y) * 0.45 * detail);
   vec3 color;
-  if (uEye.y < p.y) {
+  if (!gl_FrontFacing && uEye.y < p.y) {
     // From below: the bright window overhead, mirror-dark outside it.
     float up = -V.y;
     float window = smoothstep(0.6, 0.72, up);
-    vec3 through = skyAt(refract(-V, -N, 1.33), 2.0) * 0.55;
+    vec3 bent = refract(-V, -N, 1.33);
+    vec3 through = dot(bent, bent) > 1e-4 ? skyAt(normalize(bent), 2.0) * 0.55 : DEEP;
     color = mix(DEEP * 1.6, through, window) * lapGrade();
   }
   else {
@@ -544,7 +557,9 @@ void main () {
   vec3 color = skyTexel(uSky, ray, uSkyYaw);
   color = skyRadiance(color, uSkyExposure) * lapGrade();
   color = mix(hazeAt(ray), color, smoothstep(-0.02, 0.22, ray.y));
-  color = mix(color, DEEP * (0.5 + 0.8 * smoothstep(-0.3, 0.8, ray.y)) * lapGrade(), uUnder);
+  // Under the surface only the gap at the horizon reaches the sky pass; it is
+  // water all the way out there.
+  color = mix(color, DEEP * 0.7 * lapGrade(), smoothstep(0.0, -0.6, uEye.y));
   fragColor = vec4(color, 1.0);
 }
 `
@@ -563,6 +578,10 @@ void main () {
   vec3 c = (texture(uSource, uv + vec2(-o.x, -o.y)).rgb + texture(uSource, uv + vec2(o.x, -o.y)).rgb
     + texture(uSource, uv + vec2(-o.x, o.y)).rgb + texture(uSource, uv + vec2(o.x, o.y)).rgb) * 0.25;
   if (uKnee > 0.0) {
+    // Nothing non-finite may enter the pyramid: one bad pixel blooms a disc.
+    if (any(isnan(c)) || any(isinf(c)))
+      c = vec3(0.0);
+    c = clamp(c, vec3(0.0), vec3(64.0));
     float b = max(c.r, max(c.g, c.b));
     c *= smoothstep(uKnee, uKnee * 2.5, b);
   }
@@ -596,12 +615,14 @@ uniform vec2 uResolution;
 uniform float uExposure;
 uniform float uWarp;
 uniform float uTime;
-uniform float uUnder;
 out vec4 fragColor;
 ${ACES}
 
 vec3 tap (vec2 uv) {
-  return texture(uScene, uv).rgb + texture(uBloom, uv).rgb * 0.22;
+  vec3 c = texture(uScene, uv).rgb;
+  if (any(isnan(c)) || any(isinf(c)))
+    c = vec3(0.0);
+  return clamp(c, vec3(0.0), vec3(64.0)) + texture(uBloom, uv).rgb * 0.22;
 }
 
 void main () {
@@ -615,7 +636,6 @@ void main () {
   vec2 ghost = vec2(sin(uTime * 0.23), cos(uTime * 0.17)) * 0.035 * w;
   color = mix(color, tap(bent + ghost) * vec3(0.9, 1.0, 1.08), clamp(w * 0.32, 0.0, 0.45));
   color *= uExposure;
-  color *= mix(vec3(1.0), vec3(0.7, 1.0, 1.05), uUnder);
   color = aces(color);
   color *= 1.0 - smoothstep(0.18, 0.62, r2) * (0.32 + 0.25 * w);
   float grain = fract(sin(dot(gl_FragCoord.xy + fract(uTime) * 91.7, vec2(12.9898, 78.233))) * 43758.5453);

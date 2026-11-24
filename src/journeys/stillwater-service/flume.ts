@@ -17,6 +17,12 @@ const FLANGE  = 4
 const SEABED  = -8.4
 const WATER_W = 0.55
 
+/** Plan cell of the clearance map, metres. */
+const CLEAR_CELL = 0.25
+
+/** Head room kept free of the sea above the flume floor, metres. */
+const CLEAR_HEAD = 2.3
+
 type V3 = [number, number, number]
 
 function arc (out: ProfilePoint[], radius: number, from: number, to: number): void {
@@ -201,4 +207,61 @@ export function buildSupports (stage: Stage): void {
     stage.bar('yellow', a, b, 0.025, 6)
     stage.bar('yellow', a, [ a[0], a[1] - 1, a[2] ], 0.02, 6)
   }
+}
+
+/**
+ * The volume the flume and its rider occupy, as a plan map: for each cell the
+ * lowest flume floor and the highest head room over it. The sea discards any
+ * fragment that falls inside, so no swell ever passes through the trough or the
+ * tube, at any lap or wave phase.
+ */
+export function buildClearance () {
+  const route  = getRoute()
+  const frame  = newFrame()
+  const reach  = FLUME.radius + FLUME.shell + 0.12
+  const bounds = { x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity }
+  const q      = { x: 0, y: 0, z: 0 }
+  for (let s = 0; s < route.length; s += 1) {
+    route.curve.pointAtDistance(s, q)
+    bounds.x0 = Math.min(bounds.x0, q.x - 2)
+    bounds.z0 = Math.min(bounds.z0, q.z - 2)
+    bounds.x1 = Math.max(bounds.x1, q.x + 2)
+    bounds.z1 = Math.max(bounds.z1, q.z + 2)
+  }
+
+  const width  = Math.ceil((bounds.x1 - bounds.x0) / CLEAR_CELL)
+  const height = Math.ceil((bounds.z1 - bounds.z0) / CLEAR_CELL)
+  const data   = new Float32Array(width * height * 2)
+  for (let i = 0; i < width * height; i++) {
+    data[i * 2]     = 1e4
+    data[i * 2 + 1] = -1e4
+  }
+
+  const span = Math.ceil(reach / CLEAR_CELL) + 1
+  for (let s = 0; s < route.length; s += CLEAR_CELL * 0.5) {
+    levelFrame(route.curve, s, frame)
+
+    const cx = Math.floor((frame.pos.x - bounds.x0) / CLEAR_CELL)
+    const cz = Math.floor((frame.pos.z - bounds.z0) / CLEAR_CELL)
+    for (let dz = -span; dz <= span; dz++)
+      for (let dx = -span; dx <= span; dx++) {
+        const ix = cx + dx
+        const iz = cz + dz
+        if (ix < 0 || iz < 0 || ix >= width || iz >= height)
+          continue
+
+        const px = bounds.x0 + (ix + 0.5) * CLEAR_CELL - frame.pos.x
+        const pz = bounds.z0 + (iz + 0.5) * CLEAR_CELL - frame.pos.z
+        // Distance across the flume only: along it the next sample covers.
+        const across = Math.abs(px * frame.right.x + pz * frame.right.z)
+        const along  = Math.abs(px * frame.forward.x + pz * frame.forward.z)
+        if (across > reach || along > CLEAR_CELL)
+          continue
+
+        const o     = (iz * width + ix) * 2
+        data[o]     = Math.min(data[o], frame.pos.y - 0.08)
+        data[o + 1] = Math.max(data[o + 1], frame.pos.y + CLEAR_HEAD)
+      }
+  }
+  return { data, width, height, x0: bounds.x0, z0: bounds.z0, cell: CLEAR_CELL }
 }

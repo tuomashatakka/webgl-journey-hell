@@ -20,9 +20,9 @@ import type { RenderTarget } from '@wjh/gl/targets'
 import type { JourneyRenderer } from '@wjh/journey/types'
 import { invert, lookAt, multiply, perspective } from '@wjh/math/mat4'
 import { mix, smoothstep } from '@wjh/math/scalar'
-import { buildFlume, buildSupports } from './flume'
+import { buildClearance, buildFlume, buildSupports } from './flume'
 import { buildAnnex, buildBreakwater, buildLounge, buildPool, buildSorting, buildSpiral, insideness, rigUniforms } from './rooms'
-import { createPose, setPose } from './route'
+import { createPose, getRoute, SECTION, setPose } from './route'
 import { compositeFrag, downFrag, flumeFrag, flumeVert, seaFrag, seaVert, skyFrag, upFrag, worldFrag, worldVert } from './shaders'
 import { createStage, KIND } from './stage'
 import type { Batch } from './stage'
@@ -94,6 +94,22 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
   const trough  = buildFlume(gl)
   const seas    = [ makeSea(gl, 128), makeSea(gl, 224) ]
 
+  // The flume's volume in plan, so the sea can keep out of it.
+  const clearance = buildClearance()
+  const keepOut   = gl.createTexture()
+  gl.bindTexture(gl.TEXTURE_2D, keepOut)
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RG32F, clearance.width, clearance.height, 0, gl.RG, gl.FLOAT, clearance.data)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+  sea.use()
+  sea.uniform1i('uClear', 4)
+  sea.uniform4f('uClearMap', clearance.x0, clearance.z0, 1 / clearance.cell, 0)
+
+  // Where the tube runs, so the exposure opens up gently on the way down.
+  const tubeLegs = getRoute().legs.filter(leg => leg.section === SECTION.acrylic)
+  const tubeFrom = tubeLegs[0].s0
+  const tubeTo   = tubeLegs[tubeLegs.length - 1].s1
+
   const proj                             = new Float32Array(16)
   const view                             = new Float32Array(16)
   const vp                               = new Float32Array(16)
@@ -115,7 +131,7 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
     p.uniform4fv('uRoomLamp', rigs.lamp)
   }
 
-  function common (p: GlProgram, cue: ReturnType<typeof momentAt>, time: number, under: number): void {
+  function common (p: GlProgram, cue: ReturnType<typeof momentAt>, time: number): void {
     p.use()
     p.uniformMatrix4fv('uViewProjection', vp)
     p.uniform3f('uEye', ...pose.eye)
@@ -124,7 +140,6 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
     p.uniform1f('uTime', time)
     p.uniform1f('uLap', cue.lap)
     p.uniform1f('uDissolve', cue.dissolve)
-    p.uniform1f('uUnder', under)
     p.uniform1f('uSkyExposure', skyMap.exposure)
     p.uniform1f('uSkyYaw', SKY_YAW)
     p.uniform3f('uSunDir', ...sun)
@@ -187,10 +202,10 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
 
       setPose(pose, cue.within, cue.lap, time, cue.warp, frame.pointer?.x ?? 0, frame.pointer?.y ?? 0)
 
-      const under = smoothstep(0.25, -0.5, pose.eye[1])
-      look[0]     = pose.eye[0] + pose.forward[0]
-      look[1]     = pose.eye[1] + pose.forward[1]
-      look[2]     = pose.eye[2] + pose.forward[2]
+      const tube = smoothstep(tubeFrom - 10, tubeFrom, pose.s) * (1 - smoothstep(tubeTo, tubeTo + 10, pose.s))
+      look[0]    = pose.eye[0] + pose.forward[0]
+      look[1]    = pose.eye[1] + pose.forward[1]
+      look[2]    = pose.eye[2] + pose.forward[2]
       perspective(proj, FOV * (1 - cue.warp * 0.16 * Math.sin(time * 0.19)), width / height, 0.05, 30000)
       lookAt(view, pose.eye, look, pose.up)
       multiply(vp, proj, view)
@@ -210,20 +225,22 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
       gl.disable(gl.BLEND)
 
       gl.disable(gl.DEPTH_TEST)
-      common(sky, cue, time, under)
+      common(sky, cue, time)
       sky.uniformMatrix4fv('uInverse', inverse)
       sky.uniform2f('uResolution', width, height)
       quad.draw()
 
       gl.enable(gl.DEPTH_TEST)
       gl.depthMask(true)
-      common(sea, cue, time, under)
+      common(sea, cue, time)
+      gl.activeTexture(gl.TEXTURE4)
+      gl.bindTexture(gl.TEXTURE_2D, keepOut)
       seas[quality.tier > 0 ? 1 : 0].draw(gl)
 
-      common(world, cue, time, under)
+      common(world, cue, time)
       drawBatches(opaque, cue.lap)
 
-      common(flume, cue, time, under)
+      common(flume, cue, time)
       flume.uniform1f('uBelt', 2.7)
       flume.uniform1i('uPass', 0)
       trough.shell.draw(gl)
@@ -236,7 +253,7 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
       trough.water.draw(gl)
       flume.uniform1i('uPass', 1)
       trough.shell.draw(gl)
-      common(world, cue, time, under)
+      common(world, cue, time)
       drawBatches(clear, cue.lap)
       gl.depthMask(true)
       gl.disable(gl.BLEND)
@@ -255,10 +272,9 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
       composite.uniform1i('uScene', 0)
       composite.uniform1i('uBloom', 1)
       composite.uniform2f('uResolution', width, height)
-      composite.uniform1f('uExposure', 0.85 * mix(1, 1.45, insideness(pose.eye)) * mix(1, 2, under))
+      composite.uniform1f('uExposure', 0.85 * mix(1, 1.45, insideness(pose.eye)) * mix(1, 1.7, tube))
       composite.uniform1f('uWarp', cue.warp)
       composite.uniform1f('uTime', time)
-      composite.uniform1f('uUnder', under)
       quad.draw()
     },
 
@@ -269,6 +285,7 @@ export function createStillwaterScene (gl: WebGL2RenderingContext): JourneyRende
       trough.flanges.dispose(gl)
       trough.water.dispose(gl)
       seas.forEach(m => m.dispose(gl))
+      gl.deleteTexture(keepOut)
       quad.dispose()
       chain.dispose()
       materials.dispose(gl)

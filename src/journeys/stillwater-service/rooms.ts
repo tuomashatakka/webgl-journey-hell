@@ -373,7 +373,7 @@ export function buildLounge (stage: Stage): void {
     span('laneLine', [ x - 0.6, roof - 1.2, z1 - 0.02 ], [ x + 0.6, roof - 0.96, z1 ])
   }
   lamps(stage, RIGS[2], [ 0.9, 0.08, 0.3 ], 'coldLamp')
-  span('sand', [ -200, SEABED - 0.4, -200 ], [ 200, SEABED - 0.05, 200 ])
+  span('sand', [ -6000, SEABED - 0.4, -6000 ], [ 6000, SEABED - 0.05, 6000 ])
   for (let i = 0; i < 40; i++) {
     const x = hash1(i * 3.1) * 80 - 20
     const z = -40 - hash1(i * 7.7) * 40

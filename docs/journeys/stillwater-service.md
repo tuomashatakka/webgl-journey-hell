@@ -113,6 +113,16 @@ transport still seeks and replays; the shared signal loss counts from the stop.
 * **Sea**: a 224-cell grid (128 on the low tier) with cubic spacing to 6 km,
   eight Gerstner swells plus fragment ripples, foam on crests, Fresnel sky
   reflection; seen from below, a Snell window. Swell grows each lap.
+  The sea never enters the flume: a plan map of the flume's volume (0.25 m
+  cells; for each, the lowest flume floor less 8 cm and the highest floor plus
+  2.3 m of head room, within 0.77 m of the axis) is baked once, and any sea
+  fragment inside it is discarded. Whatever the lap or the wave phase, no swell
+  passes through the trough, the tube or the rider's view of them.
+* **Underwater**: there is no global underwater state. Each fragment is murked
+  by the part of its sight line that lies below sea level, so crossing the
+  surface in the tube is continuous; the exposure opens by up to 1.7x over the
+  10 m before the tube and closes over the 10 m after it, by route position.
+  Non-finite values are dropped before the bloom.
 * **Frame**: HDR scene with MSAA by tier, a bloom pyramid, ACES, then the
   warp's image effects; the shared CRT pass and signal loss follow.
 
