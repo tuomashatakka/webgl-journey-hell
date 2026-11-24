@@ -778,5 +778,5 @@ nothing in the route, the speeds, the bank or the lap rules moved.
   rain streaks from the top edge. Rust from the second lap at the bolts, the
   splices and the post feet, across the face by the third. Panels still go
   missing by lap (`hash(panel) < (lapF − 0.7) · 0.22`); the posts stay.
-- About 7.2k beam vertices and 4k box vertices, one draw and one shadow draw,
+- About 6.5k swept beam vertices and 4k for the wrap and the boxes, one draw and one shadow draw,
   as before. Frames that do not see the coast road are unchanged.
