@@ -11,16 +11,18 @@ import switchback from './switchback/journey'
 import loopLine from './loop-line/journey'
 import stairwell from './stairwell/journey'
 import liminal from './liminal/journey'
+import stillwaterService from './stillwater-service/journey'
 
 
 export const JOURNEY_DEFINITIONS: Record<string, JourneyDefinition> = {
-  'foundry':        foundry,
-  'hollow-orchard': hollowOrchard,
-  'natatorium':     natatorium,
-  'scenic-route':   scenicRoute,
-  'skybridges':     skybridges,
-  'switchback':     switchback,
-  'loop-line':      loopLine,
-  'stairwell':      stairwell,
-  'liminal':        liminal,
+  'foundry':            foundry,
+  'hollow-orchard':     hollowOrchard,
+  'natatorium':         natatorium,
+  'scenic-route':       scenicRoute,
+  'skybridges':         skybridges,
+  'switchback':         switchback,
+  'loop-line':          loopLine,
+  'stairwell':          stairwell,
+  'liminal':            liminal,
+  'stillwater-service': stillwaterService,
 }
