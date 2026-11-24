@@ -13,6 +13,7 @@ import { buildProps } from '../props'
 import type { PropSet } from '../props'
 import { buildCity } from '../city'
 import { buildCutting, cutAt } from '../cutting'
+import { buildRail } from '../rail'
 import { STANDARD_LAYOUT, VERTEX_FLOATS } from '@wjh/geometry/meshBuilder'
 
 import { PORTAL_LIFT } from './shared'
@@ -116,19 +117,9 @@ export function buildWorld (gl: WebGL2RenderingContext, route: Route) {
   towerMesh.setInstances(gl, city.instances)
 
   // --- the coast guardrail -----------------------------------------------------
-  // A band on the sea side of section IV, swept like the road so the bank LUT
-  // rolls it with the surface it guards.
-  const railArrays = finishSweep(sweepProfile(route.curve, {
-    s0:      route.spans[3].s0 + 6,
-    s1:      route.spans[3].s1 - 4,
-    step:    2,
-    profile: (s: number): ProfilePoint[] => {
-      lookParamsAt(route, s, w, look)
-
-      const e = -(look.roadHalf + 0.6)
-      return [[ e, 0.78 ], [ e - 0.06, 0.6 ], [ e, 0.42 ]]
-    },
-  }))
+  // A W-beam on posts on the sea side of section IV, swept like the road so
+  // the bank LUT rolls it with the surface it guards (rail.ts).
+  const railArrays     = buildRail(route)
   const railMesh: Mesh = createMeshFromArrays(
     gl, railArrays.vertices, railArrays.indices, SWEEP_LAYOUT, SWEEP_FLOATS, 0,
   )

@@ -1,5 +1,6 @@
 import { brdfChunk, deltaChunk, lightingChunk, noiseChunk, shadowChunk, skyLookupChunk } from './chunks'
 import { CHAMBER } from '../maw'
+import { PANEL } from '../rail'
 
 /** Skin, flesh, teeth and the lights the fish carries, shared by every part of it. */
 const mawMaterialChunk = /* glsl */`
@@ -412,7 +413,11 @@ void main () {
 }
 `
 
-/** The coast guardrail: a galvanised band swept with the road, rolled by the same LUT. */
+/**
+ * The coast guardrail (rail.ts): a galvanised W-beam on posts, wrapped round
+ * the end of the road and torn open across it, rolled by the same LUT as the
+ * road. Weathered zinc is a dull grey, not a mirror: half metal, rough.
+ */
 export const railFrag = /* glsl */`#version 300 es
 precision highp float;
 in vec3 vWorld;
@@ -427,17 +432,63 @@ ${skyLookupChunk}
 ${shadowChunk}
 ${lightingChunk}
 void main () {
-  // Panels go missing by lap: a 4 m bay is gone once its hash falls under the
-  // lap's share, so the rail thins toward the end of the ride.
-  float bay = floor(vAux.x / 4.0);
-  if (hash12(vec2(bay, 3.0)) < clamp((uRide.y - 0.7) * 0.22, 0.0, 0.6)) discard;
-  vec3 n = normalize(vNormal);
+  float s = vAux.x;
+  float u = vAux.z;
+  // The swept beam's distance along its W, or the part: 2 a post, 3 a
+  // blockout, 4 plus the distance along the W for the wrap's beam. Everything
+  // but the swept beam is shaded from its own facets.
+  float part = vAux.w;
+  float beam = 1.0 - step(1.5, part) * (1.0 - step(3.5, part));
+  float flatShaded = step(1.5, part);
+  part = part - 4.0 * step(3.5, part);
+  float lapF = uRide.y;
+  // Panels go missing by lap: a panel is gone once its hash falls under the
+  // lap's share, so the rail thins toward the end of the ride. Posts stay.
+  float panel = floor(s / ${PANEL});
+  if (beam > 0.5 && hash12(vec2(panel, 3.0)) < clamp((lapF - 0.7) * 0.22, 0.0, 0.6)) discard;
+  vec3 n = flatShaded > 0.5 ? normalize(cross(dFdx(vWorld), dFdy(vWorld))) : normalize(vNormal);
   if (dot(n, uCamPos - vWorld) < 0.0) n = -n;
-  // Corrugation along the band, and a post every four metres darkening it.
-  float corr = 0.9 + 0.2 * sin(vAux.z * 12.0);
-  vec3 albedo = vec3(0.56, 0.57, 0.6) * corr * (0.85 + 0.3 * fbm3(vWorld * 1.7));
+
+  // Hot-dip zinc: a spangle of crystals a few centimetres across, dulled to a
+  // grey patina, with white rust blooming in patches.
+  vec2 st = beam > 0.5 ? vec2(s, part) : vec2(s + u, vWorld.y);
+  float spangle = hash12(floor(st * vec2(28.0, 34.0)));
+  float patina = fbm(st * vec2(0.6, 3.0) + 13.0);
+  vec3 albedo = vec3(0.36, 0.375, 0.385) * (0.88 + 0.14 * spangle) * (0.8 + 0.3 * patina);
+  float rough = 0.5 + 0.14 * spangle + 0.2 * patina;
+  albedo = mix(albedo, vec3(0.55, 0.55, 0.53), smoothstep(0.62, 0.75, patina) * 0.5);
+
+  // Splices: at every other post the next panel is lapped over this one for
+  // 0.3 m, its edge a line, eight bolts through both. A bolt through the
+  // valley into the blockout at every post.
+  float ps = mod(s + 0.15, ${PANEL});
+  float lap = beam * step(ps, 0.3);
+  float edge = beam * smoothstep(0.012, 0.0, abs(ps - 0.3));
+  vec2 q = vec2(mod(ps, 0.075) - 0.0375, abs(part - 0.225) - 0.04);
+  float bolts = lap * smoothstep(0.014, 0.009, length(q));
+  vec2 pb = vec2(mod(s + ${PANEL} * 0.25, ${PANEL} * 0.5) - ${PANEL} * 0.25, part - 0.225);
+  bolts = max(bolts, beam * smoothstep(0.024, 0.017, length(pb)));
+  albedo *= 1.0 - 0.18 * lap - 0.5 * edge - 0.45 * bolts;
+
+  // Road grime thrown up from the asphalt, heaviest low on the face and on
+  // the posts, and streaks run down from the top edge by the rain.
+  float grime = (1.0 - smoothstep(0.3, 0.75, u)) * (0.55 + 0.45 * fbm(vec2(s * 0.4, u * 2.0)));
+  float streak = smoothstep(0.55, 0.85, vnoise(vec2(s * 9.0, u * 0.6))) * smoothstep(0.42, 0.72, u) * beam;
+  albedo = mix(albedo, vec3(0.16, 0.14, 0.12), 0.55 * grime + 0.25 * streak);
+  rough = mix(rough, 0.85, grime);
+
+  // Rust by lap: in the rain it starts at the bolts, the splices and the
+  // post feet; by the third lap it has eaten across the face in patches.
+  float wear = clamp(lapF - 0.6, 0.0, 2.0);
+  float rustN = fbm(st * vec2(1.3, 6.0) + 41.0);
+  float rust = smoothstep(0.75 - 0.14 * wear, 0.85 - 0.14 * wear, rustN + 0.25 * (bolts + lap + (1.0 - beam) * (1.0 - smoothstep(-0.2, 0.3, u))));
+  rust *= clamp(wear, 0.0, 1.0);
+  albedo = mix(albedo, vec3(0.26, 0.1, 0.04) * (0.7 + 0.6 * vnoise(st * 40.0)), rust);
+  rough = mix(rough, 0.92, rust);
+  float metal = 0.5 * (1.0 - rust) * (1.0 - 0.6 * grime);
+
   float sh = shadowAt(vWorld, n, uSunDir);
-  vec3 col = lightSurface(vWorld, n, albedo, 0.38, 0.9, 1.0, sh);
+  vec3 col = lightSurface(vWorld, n, albedo, rough, metal, 1.0, sh);
   col = applyFog(col, vWorld);
   fragColor = vec4(col, 1.0);
 }
