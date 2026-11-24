@@ -22,6 +22,29 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
   // — max, because outside a box the distance is at least the largest of the
   // per-axis overshoots, which makes it both correct and the tightest of the
   // cheap options.
+  // THE LOCKER ROW's doors in cell kk of a bank, both tiers. A door is hinged
+  // on its cell's lower edge at the bank's face and swings out toward the
+  // cell's upper edge, so an open one never leaves its own cell along the
+  // bank; the caller asks for its own cell and the nearer neighbour, and
+  // that is every door the point can be nearest to. A shut door is the face.
+  float lockerDoors(float kk, float zr, float u, float y, float side, float n) {
+    if (abs(kk) > n) return 1e5;
+    vec2  r = vec2(u - LOCK_D, zr - kk * LOCK_P + LOCK_P * 0.5 - 0.01);
+    float d = 1e5;
+    for (int i = 0; i < 2; i++) {
+      float tier = float(i);
+      float a    = lockerSwing(kk, side, tier);
+      if (a > 0.0) {
+        vec2  dir = vec2(sin(a), cos(a));
+        float al  = dot(r, dir) - 0.185;
+        float ac  = r.x * dir.y - r.y * dir.x;
+        float ty  = tier < 0.5 ? 0.58 : 0.5 * (LOCK_SPLIT + 1.87);
+        d = min(d, sdBox(vec3(ac, y - ty, al), vec3(0.011, 0.41, 0.185)));
+      }
+    }
+    return d;
+  }
+
   float sectionProps(vec3 qs, vec4 B, vec4 C, vec4 D) {
     float W = B.y;
     float H = B.z;
@@ -150,14 +173,54 @@ export const fittingsGlsl = `  // --- the fittings -----------------------------
       PUT(sdCapsuleY(vec3(fp.x, qs.y - H * 0.31, fp.z - 4.2), H * 0.31, 0.16), MAT_METAL)
     }
     else if (t < 3.5) {
-      float bt = max(hx - 1.10, qs.y - 2.00);
+      float bt = max(hx - LOCK_REACH, qs.y - 2.16);
       if (bt > BOUND_SLACK) return min(d, bt);
 
-      // LOCKER — a run of lockers down both walls, with a bench under them.
-      PUT(sdRoundBox(vec3(abs(qs.x) - (W - 0.24), qs.y - 0.95, qs.z - B.w * 0.5),
-                     vec3(0.24, 0.95, B.w * 0.55), 0.03), MAT_PAINT)
-      PUT(sdRoundBox(vec3(abs(qs.x) - (W - 0.85), qs.y - 0.44, latt(qs.z, 5.0)),
-                     vec3(0.22, 0.05, 1.30), 0.03), MAT_PAINT)
+      // LOCKER — a bank of two-tier steel lockers down each wall, a whole
+      // number of doors centred on the room and ending clear of the doorways'
+      // erode, on a recessed kick plinth under a
+      // top sloped back to the wall so nothing can be left on it. Doors hang
+      // open here and there, more every lap, and each open one shows the
+      // empty locker behind it. A slatted bench on two steel frames stands in
+      // front of each bank every LOCK_BENCH.
+      float u  = hx;
+      float zr = qs.z - B.w * 0.5;
+      float lb = max(u - LOCK_D - LOCK_P, qs.y - 2.16);
+      if (lb < BOUND_SLACK) {
+        float n    = floor((B.w * 0.5 - 1.7) / LOCK_P - 0.5);
+        float side = sign(qs.x);
+        float k    = floor(zr / LOCK_P + 0.5);
+        float cz   = zr - k * LOCK_P;
+        float bank = max(max(abs(u - LOCK_D * 0.5) - LOCK_D * 0.5, abs(qs.y - 1.075) - 1.075),
+                         abs(zr) - (n + 0.5) * LOCK_P);
+        bank = max(bank, (qs.y - 2.15 + 0.56 * u) * 0.8725);
+        bank = max(bank, -max(LOCK_D - 0.05 - u, qs.y - 0.14));
+        if (abs(k) <= n) {
+          for (int i = 0; i < 2; i++) {
+            float tier = float(i);
+            if (lockerSwing(k, side, tier) > 0.0) {
+              float ty = tier < 0.5 ? 0.58 : 0.5 * (LOCK_SPLIT + 1.87);
+              bank = max(bank, -sdBox(vec3(u - 0.255, qs.y - ty, cz), vec3(0.235, 0.40, 0.18)));
+            }
+          }
+        }
+        PUT(bank, MAT_LOCKER)
+        PUT(min(lockerDoors(k, zr, u, qs.y, side, n),
+                lockerDoors(k + (cz > 0.0 ? 1.0 : -1.0), zr, u, qs.y, side, n)), MAT_LOCKER)
+      }
+      else d = min(d, lb);
+
+      float bu = u - 0.98;
+      float zb = latt(zr, LOCK_BENCH);
+      float bb = max(abs(bu) - 0.20, qs.y - 0.47);
+      if (bb < BOUND_SLACK) {
+        PUT(sdRoundBox(vec3(lattN(bu, 0.12, 1.0), qs.y - 0.43, zb), vec3(0.046, 0.016, 1.0), 0.008), MAT_WOOD)
+        float fr = sdBox(vec3(bu, qs.y - 0.205, abs(zb) - 0.80), vec3(0.16, 0.205, 0.018));
+        fr = max(fr, -sdBox(vec3(bu, qs.y - 0.20, 0.0), vec3(0.125, 0.165, 1.0)));
+        PUT(fr, MAT_METAL)
+        PUT(sdCapsuleZ(vec3(bu, qs.y - 0.10, zb), 0.80, 0.016), MAT_METAL)
+      }
+      else d = min(d, bb);
     }
     else if (t < 4.5) {
       float bt = hx - PLANT_REACH;

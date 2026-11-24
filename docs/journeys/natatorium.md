@@ -88,6 +88,32 @@ groined brick vaults, carried on the board-formed walls.
 * **floor**: a blanket of silt over the tile, rippled, drifted against the
   plinths, worn through to the tile in patches, thicker every lap.
 
+## the locker row
+
+THE LOCKER ROW (the one `TYPE_LOCKER` room, 4.8 m wide and 3.2 m high) is a
+changing room: a bank of two-tier steel lockers down each wall and a slatted
+bench in front of each. It stands mostly inside THE GRAND HALL's and THE PLANT
+ROOM's air, so what shows of it is the stretch neither of them reaches.
+
+* **banks**: `LOCK_D` 0.50 deep against each side wall, a whole number of
+  doors `LOCK_P` 0.40 wide centred on the room, ending 1.8 m short of both end
+  walls so the doorways' erode never rounds them off. A kick plinth 0.14 high
+  recessed 0.05, the carcass to 1.87 at the face, and a top sloped back to
+  2.15 at the wall. Bounded on `LOCK_REACH` 1.20 off the wall.
+* **doors**: two tiers split at `LOCK_SPLIT` 1.01. Each door is its own hash
+  (`lockerSwing`); `0.06 + 0.40 decay` of them hang open, 0.8 to 1.5 rad,
+  hinged on their cell's lower edge, so an open door never leaves its cell
+  and the map evaluates only this cell's doors and the nearer neighbour's. An
+  open door shows the empty locker behind it, carved out of the bank.
+* **benches**: on `LOCK_BENCH` 5 m centres, 2 m long, three slats 0.12 apart
+  with the seat at 0.45, on two hollow steel end frames and a stretcher rail.
+* **materials**: `MAT_LOCKER` stoved enamel, a column of two doors its own
+  colour (grey-green; 12 % repainted blue, 8 % ochre), on every shut door its
+  seams, louvres top and bottom, a cream number plate and a lock; rust out of
+  the seams and the louvres and up from the foot, scratches to the primer, a
+  flood line, and dark unpainted steel inside an open locker. `MAT_WOOD` teak
+  slats, greying with the laps and dark where waterlogged.
+
 ## the plant room
 
 THE PLANT ROOM (the one `TYPE_PLANT` room, 13 m wide and 5 m high) is the

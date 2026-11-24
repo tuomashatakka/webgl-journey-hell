@@ -97,7 +97,7 @@ export const propsGlsl = `  // --- the props -----------------------------------
       alb  = mix(alb, vec3(0.62, 0.62, 0.56), max(bloom, groin * 0.35) * 0.55);
       rough = mix(0.70, 0.45, mo);
     }
-    else {
+    else if (mat < 8.5) {
       // The plant room's sand filters: steel in a faded municipal blue-grey,
       // each vessel its own repaint, the plate seams welded round the shell,
       // rust weeping from the girth flange and the manway down the dished head
@@ -117,6 +117,72 @@ export const propsGlsl = `  // --- the props -----------------------------------
       alb  = mix(alb, vec3(0.58, 0.58, 0.52), (1.0 - smoothstep(0.0, 0.09, abs(qs.y - wy))) * 0.5);
       alb  = mix(alb, vec3(0.13, 0.14, 0.11), smoothstep(wy, wy - 0.6, qs.y) * (0.45 + 0.35 * dec));
       rough = mix(0.42, 0.70, smoothstep(0.2, 0.8, dec) * mot);
+    }
+    else if (mat < 9.5) {
+      // THE LOCKER ROW's lockers: stoved enamel on sheet steel, a column of
+      // two doors its own colour (mostly the municipal grey-green, a few
+      // repainted blue or ochre), each door with its louvres top and bottom,
+      // a number plate, a lock and the seams round it. Rust comes out of the
+      // seams and the louvres and climbs from the foot, the flood leaves its
+      // line, and an open locker is dark inside.
+      float u   = B.y - abs(qs.x);
+      float zr  = qs.z - B.w * 0.5;
+      float k   = floor(zr / LOCK_P + 0.5);
+      float cz  = zr - k * LOCK_P;
+      float ch  = hash21(vec2(k, sign(qs.x) * 3.0) + 9.1);
+      float lf  = lodFade(0.012);
+      float mot = vnoise(vec2(qs.z * 6.0, qs.y * 9.0) + ch * 17.0);
+      alb = ch < 0.12 ? vec3(0.17, 0.25, 0.37) : (ch < 0.20 ? vec3(0.47, 0.34, 0.14) : vec3(0.27, 0.37, 0.34));
+      alb *= (0.90 + 0.16 * fract(ch * 13.7)) * (0.92 + 0.12 * mot);
+      rough = 0.34;
+      float tier = qs.y < LOCK_SPLIT ? 0.0 : 1.0;
+      float ty   = qs.y - (tier < 0.5 ? 0.58 : 0.5 * (LOCK_SPLIT + 1.87));
+      float rust = 0.0;
+      if (abs(u - LOCK_D) < 0.006 && abs(ty) < 0.43) {
+        // The face of a shut door, in door coordinates: dz across from the
+        // hinge side, ty up from the door's middle.
+        float dz   = cz;
+        float seam = max(1.0 - smoothstep(0.003, 0.007, LOCK_P * 0.5 - abs(dz)),
+                         1.0 - smoothstep(0.003, 0.007, 0.43 - abs(ty)));
+        float lv   = step(abs(dz), 0.10) * step(0.24, abs(ty)) * step(abs(ty), 0.36)
+                   * (1.0 - smoothstep(0.004, 0.008, abs(latt(abs(ty), 0.03))));
+        float lock = 1.0 - smoothstep(0.014, 0.018, length(vec2(dz - 0.14, ty - 0.02)));
+        float key  = step(abs(dz - 0.14), 0.002) * step(abs(ty - 0.02), 0.008);
+        float pl   = step(abs(dz), 0.04) * step(abs(ty - 0.17), 0.018);
+        float dig  = pl * step(0.55, vnoise(vec2(dz * 160.0, ty * 60.0) + k * 3.0)) * step(abs(dz), 0.025);
+        alb  = mix(alb, vec3(0.03, 0.035, 0.035), mix(max(seam, lv), 0.06, lf));
+        alb  = mix(alb, vec3(0.56, 0.50, 0.34) * (1.0 - 0.8 * dig), pl * (1.0 - lf));
+        alb  = mix(alb, vec3(0.62, 0.63, 0.62) * (1.0 - key * 0.9), lock * (1.0 - lf));
+        rough = mix(rough, 0.18, lock);
+        rust = max(seam, lv) * smoothstep(0.3, 0.7, mot + dec * 0.6);
+      }
+      else if (u < LOCK_D - 0.012 && qs.y > 0.15 && qs.y < 1.86 && abs(zr) < B.w * 0.5 - 1.85) {
+        // Inside an open locker: unpainted, in the dark.
+        alb *= 0.32;
+        rough = 0.6;
+      }
+      // Dents and scratches through to the primer, more of them every lap.
+      float scr = smoothstep(0.78, 0.84, vnoise(vec2(qs.z * 40.0 + qs.y * 9.0, qs.y * 3.0) + ch * 5.0));
+      alb  = mix(alb, vec3(0.42, 0.40, 0.36), scr * (0.3 + 0.5 * dec) * (1.0 - lf));
+      rust = max(rust, smoothstep(0.35 + 0.9 * dec, 0.0, qs.y) * smoothstep(0.35, 0.65, mot));
+      rust = clamp(rust * (0.35 + 0.75 * dec), 0.0, 1.0);
+      alb  = mix(alb, vec3(0.30, 0.13, 0.05) * (0.8 + 0.4 * mot), rust);
+      rough = mix(rough, 0.80, rust);
+      float wy = uWave.x - B.x;
+      alb  = mix(alb, vec3(0.36, 0.36, 0.30), (1.0 - smoothstep(0.0, 0.05, abs(qs.y - wy - 0.03))) * 0.45);
+      alb  = mix(alb, alb * vec3(0.55, 0.62, 0.52), smoothstep(wy, wy - 0.4, qs.y) * (0.4 + 0.4 * dec));
+    }
+    else {
+      // The bench slats: teak gone grey on top where it dried and dark where
+      // it is waterlogged, the grain running down each slat.
+      float lf  = lodFade(0.01);
+      float sh  = hash21(vec2(floor((B.y - abs(qs.x) - 0.92) / 0.12), floor(qs.z / LOCK_BENCH)) + 3.3);
+      float grn = vnoise(vec2(qs.z * 2.4 + sh * 30.0, (qs.x + qs.y) * 70.0));
+      alb  = mix(vec3(0.33, 0.20, 0.11), vec3(0.42, 0.28, 0.16), sh) * (0.80 + 0.30 * mix(grn, 0.5, lf));
+      alb  = mix(alb, vec3(0.40, 0.38, 0.34), smoothstep(0.2, 0.9, dec) * 0.45);
+      float wy = uWave.x - B.x;
+      alb  = mix(alb, alb * vec3(0.45, 0.42, 0.38), smoothstep(wy + 0.06, wy - 0.06, qs.y));
+      rough = 0.66;
     }
   }
 `

@@ -97,12 +97,24 @@ export const foundationGlsl = `
   const float MAT_TILE  = 0.0;
   const float MAT_FLOAT = 1.0;   // lane rope floats
   const float MAT_METAL = 2.0;   // ladders, conduit, rails, valve wheels
-  const float MAT_PAINT = 3.0;   // lockers, benches, pump housings, the flume
+  const float MAT_PAINT = 3.0;   // planters, junction boxes, pump housings, the flume
   const float MAT_LEAF  = 4.0;   // everything green
   const float MAT_CONC  = 5.0;   // columns, pillars, the dive platform
   const float MAT_STONE = 6.0;   // the cistern's columns
   const float MAT_BRICK = 7.0;   // the cistern's vault
   const float MAT_VESSEL = 8.0;  // the plant room's sand filters
+  const float MAT_LOCKER = 9.0;  // the locker row's steel lockers
+  const float MAT_WOOD   = 10.0; // the locker row's bench slats
+
+  // THE LOCKER ROW (the one TYPE_LOCKER room): a bank of two-tier steel
+  // lockers down each wall, LOCK_D deep with a sloped top, doors LOCK_P wide,
+  // the tiers split at LOCK_SPLIT; a slatted bench in front of each bank every
+  // LOCK_BENCH along. Nothing reaches further in than LOCK_REACH.
+  const float LOCK_D     = 0.50;
+  const float LOCK_P     = 0.40;
+  const float LOCK_SPLIT = 1.01;
+  const float LOCK_BENCH = 5.0;
+  const float LOCK_REACH = 1.20;
 
   // THE PLANT ROOM (the one TYPE_PLANT room): a filter and a pump in every
   // PLANT_BAY down each side, on one line PLANT_OFF out of the wall, nothing
@@ -156,6 +168,15 @@ export const foundationGlsl = `
   // of lit holes. The coarse concrete patches and the missing courses are what
   // has to wait, and they are gated on their own thresholds further down.
   float decay() { return min(0.90, 0.10 + uWave.y * 0.32); }
+
+  // How far a locker door stands open, in radians from shut (0 when shut).
+  // Each door is its own hash; more of them hang open every lap. Kept between
+  // 0.8 and 1.5 so a door never swings back past its own cell, which is what
+  // lets the fittings evaluate only this cell and the next.
+  float lockerSwing(float k, float side, float tier) {
+    float h = hash21(vec2(k, side * 5.0 + tier) + 61.7);
+    return h < 0.06 + 0.40 * decay() ? 0.8 + 0.7 * fract(h * 37.3) : 0.0;
+  }
 
   // --- the tiles that have let go --------------------------------------------
   //
