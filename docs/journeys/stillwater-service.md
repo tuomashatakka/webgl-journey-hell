@@ -26,9 +26,10 @@ All times are journey-clock seconds at 1×. Act starts repeat at +144 s and
 | VI. lost property | 120–144 s | Ride the slow arc of an empty baggage carousel through a cold white sorting hall. Wire cages, numbered shelves and benches repeat in a wide curve. A single wet object circles past at belt speed. Gear ticks mark the arc. | A glazed inspection door passes across the lens. The first two openings return to the pool. The last door latches. |
 
 Every act has its own silhouette, dominant color, camera movement and sound.
-Door jambs, lift shutters and the hatch give each renderer switch a full-frame
-occlusion. The cut happens at the act boundary, with door motion and sound
-bridging it. Looking sideways may show the paired reveal, the jamb or the door.
+A shutter slides across the view over 0.72 s on either side of each act
+boundary. It moves down for the pool and lift, sideways for the two freight
+doors and the inspection door, and up for the submerged hatch. The cut
+falls on the fully obscured frame, with the room tone gliding across it.
 
 ## Three iterations
 
@@ -69,8 +70,9 @@ always horizontally over the deck. The next post is the recovery point.
   haze and surf crossing their bases establish distance.
 - Keep the deck edge and at least one wave crest visible at the first
   teeter in a portrait crop. The second recovery frames the structures
-  together on lap 3. Looking around changes gaze only. Replay and seek
-  resolve to the same pose and wave phase.
+  together on lap 3. Seek to 363.4 or 374.3 s for the exposed edges, or
+  379.5 s for all three silhouettes. Looking around changes gaze only.
+  Replay and seek resolve to the same pose and wave phase.
 
 ## Implementation
 
