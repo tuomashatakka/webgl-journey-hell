@@ -322,7 +322,7 @@ Nothing reads a clock or `Math.random`. Every animated quantity is a function of
 ```
 course.ts            sections, control points, bank knots, speed table, exposure/palette per section; buildRoute(), spanAt()
 kinematics.ts        JourneySimulation — integrator, lapF, gearbox, pose, float; uniforms(), label(), marks(); lossLaps.scenicRoute
-geometry.ts          terrain, spine index, sea (the road sweep is in src/packages/geometry/sweep.ts); props.ts + props/ the instanced props; maw.ts, cockpit.ts, city.ts, cutting.ts
+geometry.ts          terrain, spine index, sea (the road sweep is in src/packages/geometry/sweep.ts); props.ts + props/ the instanced props; maw.ts, cockpit.ts, city.ts, cutting.ts, rail.ts
 scene.ts             JourneyRenderer — programs, targets (msaa, scene, bloom, shadow), the frame order above
 shader/              GLSL ES 3.00, one module per pass group: chunks (noise, brdf, atmosphere, shadow, lighting), sky, world, maw, cockpit, post; the ES 1.00 hover preview is in post.ts
 audio.ts             engine, tyres, wind, radio, the fall, the gullet, the cave — driven by the frame's uniforms
@@ -413,6 +413,7 @@ plan above. The plan is kept as written; this is the record.
 | `props.ts` | instanced units and world-space strips: fence rails post to post, telegraph poles and wires, hay bales, the house on its plinth, lobed trees, turbines with rotors about the hub, piers, stalactites |
 | `city.ts` | downtown: unit-box towers with bend parameters per instance, `bendGainAt` |
 | `cutting.ts` | the incline's rock cutting and retaining walls: the face height table, the cross-section, `cutAt` for the land and the poles, `buildCutting` |
+| `rail.ts` | the coast road's guardrail: the W-beam swept on the sea side, posts and blockouts, the buried start, the wrap round the road's end torn open across it, `buildRail` |
 | `fields.ts` | the valley's field layout and farmland mask, once for the CPU (hedgerow borders) and once as GLSL (`fieldsChunk`) from the same constants |
 | `maw.ts` | the head (closed-profile sweep along the gullet), hinged jaws with baked teeth, the tube (throat into cave) and its water strip |
 | `cockpit.ts` | the cabin in the car's frame: moulded dash, binnacle, centre stack, door cards, wheel with spokes; dial faces on a Canvas2D, needle meshes |
@@ -739,3 +740,43 @@ bank or the lap rules moved.
   byte-identical. A 0.1 s scan over the crest into downtown, where the walls
   end, peaks at 2.0× its own baseline: motion, not a pop.
 
+## Revision 9 — the coast road's guardrail
+
+The guardrail the contract names was a three-point galvanised band 0.36 m
+tall on the *inland* side of the coast road, against the hill, polished to a
+mirror (metallic 0.9, roughness 0.38) so it read as a glowing ribbon of sky;
+the sea side had nothing between the asphalt and the drop, and nothing was
+bent open at the end. What changed (`rail.ts`, `railFrag` in `shader/maw.ts`);
+nothing in the route, the speeds, the bank or the lap rules moved.
+
+- **A W-beam on the sea side.** Nine points: flanges, two ridges 85 mm proud
+  and a valley, 0.31 m tall with its top 0.73 m over the road, its back plane
+  0.95 m past the road edge. Swept at 0.5 m like the road, so the bank LUT
+  rolls it with the surface it guards. 3.81 m panels counted from s = 0.
+- **Posts.** A steel post every half panel (1.905 m), 1.1 m of it in the
+  ground, standing off the beam behind a blockout. Boxes written in the sweep
+  layout (rolled by the same LUT); a sweep's normal cannot point along the
+  road, so the edge parameter marks them (2 a post, 3 a blockout) and
+  `railFrag` shades them from their facets (`dFdx`/`dFdy`).
+- **A buried end** at the start: over its first 12 m the beam flares 1.1 m off
+  the road and sinks 0.8 m into the ground.
+- **Bent open at the end.** Three metres short of the lip the beam turns round
+  the end of the road on a 4.2 m radius, runs across it 4.2 m ahead of the
+  rail's end and back up the inland side for 9 m to a buried end of its own.
+  Across the road a 5.4 m hole is torn through it where the car goes: over 5 m
+  either side of the hole the beam is pushed out over the edge by up to
+  2.4 m, laid over 0.95 rad about the post foot and dropped, the posts dragged
+  with it. The wrap is written in the frame at the rail's end, its arc lengths
+  counted *back* up the road from there, so the bank it rolls by is the road
+  end's (counting forward would read the fall's table, which grows to 70° on
+  the third lap). Its beam is flat shaded (edge parameter 4 plus the distance
+  along the W).
+- **The material.** Weathered hot-dip zinc, dull grey (albedo about 0.37,
+  metallic 0.5, roughness 0.5–0.85): a spangle of crystals, patina and white
+  rust, a splice at every other post (the lap, its edge, eight bolts), a bolt
+  through the valley at every post, road grime low on the face and the posts,
+  rain streaks from the top edge. Rust from the second lap at the bolts, the
+  splices and the post feet, across the face by the third. Panels still go
+  missing by lap (`hash(panel) < (lapF − 0.7) · 0.22`); the posts stay.
+- About 7.2k beam vertices and 4k box vertices, one draw and one shadow draw,
+  as before. Frames that do not see the coast road are unchanged.
