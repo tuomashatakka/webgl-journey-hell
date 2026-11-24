@@ -34,12 +34,12 @@ All times are journey-clock seconds at 1×. Lap 2 starts at 2:24, lap 3 at
 
 | act | lap time | where the flume runs | what is seen | motion |
 | --- | ---: | --- | --- | --- |
-| I. the lesson pool | 0–26 s | a tiled gutter channel let into the deck of a pool hall | a shallow teaching pool with lane ropes and a black lane line, white tile walls, a glazed roof; the east side is an open colonnade and the pool's north end is an infinity edge that spills into the sea | lazy, 1.5 m/s; a right-angle bend out through the colonnade |
+| I. the lesson pool | 0–26 s | a raised tiled channel along the deck of a pool hall | a shallow teaching pool with lane ropes and a black lane line, white tile walls, a glazed roof; the east side is an open colonnade and the pool's north end is an infinity edge that spills into the sea | lazy, 1.5 m/s; a right-angle bend out through the colonnade |
 | II. the annex | 26–48 s | out over the sea in a steep drop, then a channel cut through the floor of a flooded open-plan office | carpet under standing water, cubicle partitions, square columns, a lay-in ceiling with lamp panels, a curtain wall of fogged glass on every side | two tight banked right angles, about 3 m/s |
 | III. the spiral | 48–68 s | a helix of two and a quarter turns round a shuttered-concrete core standing in the sea | the core's lit slots, the cantilever brackets, the turns of the flume above and below; the sea opening on every quarter | 5 m/s, banked hard on the outer wall |
 | IV. the breakwater | 68–100 s | a steel trestle 3.5 m above the sea beside a ruined concrete breakwater | tetrapods, broken sea, spray; three colossal silhouettes 1.4–3.2 km out (a split fork, a ring on legs, a stepped blade) that the haze never resolves | fast, an S of long bends |
-| V. the drowned lounge | 100–120 s | the flume closes into a clear acrylic tube and dives under the sea | a tiled spectators' lounge on the sea bed: benches, stepped bleachers, lane targets, a roof light the tube rises through; the underside of the sea, light shafts | dive, glide, climb back out |
-| VI. lost property | 120–144 s | a lazy channel round a baggage carousel in a white sorting hall at sea level, then a conveyor lift up through the roof | wire cages, numbered shelves, benches, a single wet tile riding the carousel; the open roller door onto the sea; the lift's gallery climbing back to the pool | slow, then the chain lift at 1.6 m/s |
+| V. the drowned lounge | 100–120 s | the flume closes into a clear acrylic tube and dives under the sea | a tiled spectators' lounge on the sea bed: benches, stepped bleachers, lane targets, drowned lamps, an open roof light; the underside of the sea, caustics | dive, glide through, climb out of a sump in the next hall's floor |
+| VI. lost property | 120–144 s | a lazy channel round a baggage carousel in a white sorting hall at sea level, then a conveyor lift up through the roof | wire cages, numbered shelves, benches, a single wet tile riding the carousel; the open roller door onto the sea; the lift's gallery climbing back to the pool | slow, then the conveyor at about 2.7 m/s |
 
 The lift lands in the lesson pool's south end at the lap seam, so lap 2 and
 lap 3 begin without a cut.
@@ -47,9 +47,10 @@ lap 3 begin without a cut.
 ## Three iterations
 
 The route never changes; the world around it does. Distortion is a single
-journey-time amount `warp` that rises continuously (0 on lap 1, about 0.45 by
-the end of lap 2, 1 through lap 3, more in the ending), so there is no step at
-a lap seam. It bends everything except the metre of flume around the rider:
+journey-time amount `warp` that rises continuously (0 on lap 1, 0.62 from the
+middle of lap 2, 1.2 through lap 3, more in the ending, with a slow ±22 %
+pulse), so there is no step at a lap seam. It bends everything except the few metres of flume around the rider (it fades
+in from 2.5 m to 24 m):
 
 * **twist**: the world rotates about the line of sight, more the further away
   it is, so the route ahead corkscrews;
@@ -93,6 +94,8 @@ transport still seeks and replays; the shared signal loss counts from the stop.
   Carlson) through the leg ends, periodic across the lap seam, so the rider's
   speed is continuous. On lap 3 the last leg's end speed is zero.
 * **Flume**: radius 0.62 m, open 95° each side of the bottom (lip 0.67 m),
+  the rider's eye 0.78 m up, sitting up by 0.3 m where the speed is under
+  2.6 m/s,
   3 cm shell, a bolted flange every 2.4 m, swept with `@wjh/geometry/sweep`.
   The lounge closes the profile to a full circle (the acrylic tube); the
   pool's is tiled; the lift's floor is a cleated belt. The water ribbon is a

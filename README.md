@@ -35,7 +35,7 @@ bun run check               # tsc, eslint, knip, bun test: the gate for every co
 | `switchback` | a mine railway that tips over, then falls |
 | `loop-line` | a rasterized closed circuit, nine bays, lit by the asset library |
 | `scenic-route` | a rasterized coaster road with a cockpit and a mouth at the end |
-| `stillwater-service` | three laps through a poolroom, an office maze and a walkway high above a rough ocean |
+| `stillwater-service` | one water slide through six rooms standing in a sea that fades out in every direction, three laps, coming apart |
 
 `/` is the index (a CRT in a dark room: ◀ ▶ change the channel, MENU lists every journey, ENTER goes in), `/assets` is the Δ asset library, `/journeys/<slug>` is a journey.
 

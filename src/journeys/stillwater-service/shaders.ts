@@ -179,7 +179,7 @@ vec3 lit (Surface s, vec3 p, vec3 V, float occlusion) {
     return outdoor;
   float open = uRoomMin[room].w;
   vec3 inside = lampsAt(room, s, p, V) + outdoor * open;
-  inside += s.albedo * vec3(1.0, 0.08, 0.03) * 0.06 * step(1.5, uLap) * (0.6 + 0.4 * sin(uTime * 3.1));
+  inside += s.albedo * vec3(1.0, 0.08, 0.03) * 0.16 * step(1.5, uLap) * (0.7 + 0.3 * sin(uTime * 3.1));
   return inside;
 }
 
@@ -405,7 +405,8 @@ void main () {
     float scratch = noise2(vec2(angle * 80.0, s * 0.8)) * noise2(vec2(angle * 6.0, s * 9.0));
     float ring = smoothstep(0.47, 0.49, abs(fract(s / ${PITCH}) - 0.5));
     vec3 c = env * fresnel + vec3(0.6, 0.8, 0.85) * scratch * 0.08 + vec3(0.7) * ring * 0.2;
-    fragColor = vec4(fogged(c, p, vDist), clamp(0.03 + fresnel * 0.22 + scratch * 0.12 + ring * 0.5, 0.0, 0.7));
+    float near = smoothstep(0.7, 3.0, vDist);
+    fragColor = vec4(fogged(c, p, vDist), clamp(0.03 + (fresnel * 0.22 + scratch * 0.12) * near + ring * 0.5, 0.0, 0.7));
     return;
   }
   else {
