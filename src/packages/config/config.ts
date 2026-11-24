@@ -453,10 +453,11 @@ export const CONFIG = {
         { slug: 'natatorium', section: 'TILE CORRIDOR' },
         { slug: 'switchback', section: 'THE BOARDING PLATFORM' },
         { slug: 'loop-line', section: 'THE VIADUCT', t: 87 },
+        { slug: 'stillwater-service', section: 'THE BREAKWATER', t: 76 },
       ],
 
       /** Instants the bare harness shoots at, for the journeys it is used for. */
-      bare: { 'loop-line': 87, 'stairwell': 24, 'skybridges': 30, 'foundry': 140 },
+      bare: { 'loop-line': 87, 'stairwell': 24, 'skybridges': 30, 'foundry': 140, 'stillwater-service': 76 },
 
       /** Seeded into localStorage: cheap settings, because software GL runs at ~1 fps. */
       settings: {

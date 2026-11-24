@@ -153,8 +153,8 @@ export const JOURNEYS: Journey[] = [
   {
     slug:          'stillwater-service',
     title:         'THE STILLWATER SERVICE',
-    tagline:       'follow the lane stripe all the way out',
-    tags:          [ 'poolrooms', 'backrooms', 'ocean' ],
+    tagline:       'One water slide through six rooms standing in a sea that fades out in every direction. Each time round the building is less sure of its shape.',
+    tags:          [ 'geometry', 'rasterized', 'water slide', 'poolrooms', 'backrooms', 'sea', 'loop' ],
     accent:        '#86d5c3',
     gradient:      [ '#9ed9c4', '#142e3b' ],
     poster:        staticUrl(stillwaterPoster),
