@@ -30,8 +30,8 @@ export const marchGlsl = `    // Signed Distance Field Map
 
         float cX = getCamX(p.z);
         float cY = fY + getCamOffset(p.z);
-        // (on the walked stair and down the cave's chute the clearance tightens so the floor stands under the eye)
-        float dCamSafety = length(p.xy - vec2(cX, cY)) - (2.0 - 0.9 * labTight(currentZ) - 1.3 * caveTight(currentZ));
+        // (on the walked stair, down the cave's chute and over the hall's bridge the clearance tightens so the floor stands under the eye)
+        float dCamSafety = length(p.xy - vec2(cX, cY)) - (2.0 - 0.9 * labTight(currentZ) - 1.3 * caveTight(currentZ) - (sector < 666.0 ? 0.9 * hydTight(currentZ) : 0.0));
 
         vec2 res = vec2(1000.0, MAT_MATTE);
 
@@ -108,32 +108,10 @@ export const marchGlsl = `    // Signed Distance Field Map
         dBase = currentZ < 145.0 ? mix(dBase, dSec3, smoothstep_custom(115.0, 145.0, currentZ)) : dSec3;
         }
 
-        // --- SECTOR 4: COGS & PNEUMATICS (210 to 280; in from 200, gone by 290) ---
+        // --- SECTOR 4: THE IRON HYDRAULICS (210 to 280; in from 200, gone by 290) ---
         if (currentZ > 200.0 && currentZ < 290.0) {
-        vec3 q4 = p; q4.x -= cX; q4.y -= cY;
-        vec3 q4m = q4; q4m.xz = mod(q4m.xz + 10.0, 20.0) - 10.0;
-        
-        float vCols = max(abs(q4m.x) - 1.8, max(abs(q4m.y) - 50.0, abs(q4m.z) - 1.8));
-        float hB1 = max(abs(q4m.x) - 8.0, max(abs(q4m.y) - 0.3, abs(q4m.z + 8.0) - 0.3));
-        float hB2 = max(abs(q4m.x) - 8.0, max(abs(q4m.y) - 0.3, abs(q4m.z - 8.0) - 0.3));
-        float allCols = min(vCols, min(hB1, hB2));
-        
-        vec3 gA = q4m - vec3(0.0, 5.0, 0.0); gA.xy *= mat2(cos(iTime*1.2), -sin(iTime*1.2), sin(iTime*1.2), cos(iTime*1.2));
-        float dGa = max(length(gA.xy) - (2.6 + sin(atan(gA.y, gA.x) * 16.0) * 0.3), abs(q4m.z) - 0.5);
-        vec3 gB = q4m - vec3(-4.6, 5.0, 0.0); float tB = -iTime*1.95 + 0.1; gB.xy *= mat2(cos(tB), -sin(tB), sin(tB), cos(tB));
-        float dGb = max(length(gB.xy) - (1.6 + sin(atan(gB.y, gB.x) * 10.0) * 0.2), abs(q4m.z) - 0.4);
-        vec3 gC = q4m - vec3(4.6, 5.0, 0.0); gC.xy *= mat2(cos(tB), -sin(tB), sin(tB), cos(tB));
-        float dGc = max(length(gC.xy) - (1.6 + sin(atan(gC.y, gC.x) * 10.0) * 0.2), abs(q4m.z) - 0.4);
-        float gears = min(dGa, min(dGb, dGc));
-        
-        vec3 pA = q4m - vec3(sin(iTime*4.0)*3.5, -2.5, -2.0); float cA = max(abs(pA.x)-3.0, max(abs(pA.y)-0.4, abs(pA.z)-0.4));
-        vec3 sB_= q4m - vec3(-4.0, 0.0, 2.0); float csB = max(abs(sB_.x)-0.6, max(abs(sB_.y)-2.2, abs(sB_.z)-0.6));
-        vec3 rB_= q4m - vec3(-4.0, sin(iTime*3.0)*2.0, 2.0); float crB = max(abs(rB_.x)-0.35, max(abs(rB_.y)-2.0, abs(rB_.z)-0.35));
-        vec3 sC_= q4m - vec3(4.0, 0.0, 2.0); float csC = max(abs(sC_.x)-0.6, max(abs(sC_.y)-2.2, abs(sC_.z)-0.6));
-        vec3 rC_= q4m - vec3(4.0, cos(iTime*3.0)*2.0, 2.0); float crC = max(abs(rC_.x)-0.35, max(abs(rC_.y)-2.0, abs(rC_.z)-0.35));
-        float pneumatics = min(cA, min(min(csB, crB), min(csC, crC)));
-        
-        float dSec4 = min(p.y - (fY - 1.0), min(allCols, min(gears, pneumatics)) * 0.4);
+        float hPart;
+        float dSec4 = hydField(p, hPart) * 0.9;
         dBase = currentZ < 220.0 ? mix(dBase, dSec4, smoothstep_custom(200.0, 220.0, currentZ)) : dSec4;
         }
 

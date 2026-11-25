@@ -420,6 +420,8 @@ export const shadingGlsl = `    // Standard Normal Calculation
         if (lwc > 0.001) fogColor = mix(fogColor, labFog(rd, loop), lwc);
         float cvc = is666 ? 0.0 : caveWeight(camZ + 6.0);
         if (cvc > 0.001) fogColor = mix(fogColor, caveFog(rd, cw, loop), cvc);
+        float hyc = is666 ? 0.0 : hydWeight(camZ + 6.0);
+        if (hyc > 0.001) fogColor = mix(fogColor, hydFog(rd, loop), hyc);
         vec3 sunDir = normalize(vec3(0.3, 0.8, 0.1));
 
         if (t < MAX_DIST) {
@@ -535,6 +537,11 @@ export const shadingGlsl = `    // Standard Normal Calculation
 
                 col = albedo * (dif * 0.6 + 0.4) * ao;
                 if (matID == MAT_MATTE && hw > 0.001) col = mix(col, shadeHall(p, n, rd, ao, t), hw);
+                float hyw = (s_p == 666.0) ? 0.0 : hydWeight(p.z);
+                if ((matID == MAT_MATTE || matID == 0.0) && hyw > 0.001) {
+                    vec3 hyd = shadeHyd(p, n, rd, ao, t);
+                    col = mix(col, decayDecals(hyd, p, lZ_p, loop, decayFactor * hyw), hyw);
+                }
                 float lw = (s_p == 666.0) ? 0.0 : labWeight(p.z);
                 if (matID == MAT_MATTE && lw > 0.001) {
                     float sh = 1.0;
@@ -616,9 +623,11 @@ export const shadingGlsl = `    // Standard Normal Calculation
 
         if (lwc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.011 * t), lwc);
         if (cvc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.022 * t), cvc);
+        if (hyc > 0.001) fogFactor = mix(fogFactor, 1.0 - exp(-0.02 * t), hyc);
 
         col = mix(col, fogColor, fogFactor);
         col += vec3(1.3, 0.05, 0.01) * godRayAccum;
+        if (hyc > 0.001) col += hydGlow(ro, rd, min(t, MAX_DIST)) * hyc;
 
         // Apply accumulated atmospheric volumetric glows
         if (is666 && fallAmt > 0.5) {
