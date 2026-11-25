@@ -100,7 +100,7 @@ const PATH_A2 = 7
 // ---- the aisle ------------------------------------------------------------
 //
 // Turning is only half of it. Every stage that repeats a cell puts something at
-// the centre of that cell — a sapling in THE NURSERY, a stem in the CATHEDRAL,
+// the centre of that cell — a sapling in THE NURSERY, a trunk in TRANSITION,
 // a pod in the SEED VAULT — and the route walks straight down x = 0, which is
 // exactly where those centres are. So the camera has always been passing through
 // solid geometry several times a second.

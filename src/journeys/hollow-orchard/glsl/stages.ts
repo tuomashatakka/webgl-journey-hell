@@ -41,30 +41,87 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
     return d;
   }
 
-  // 2 · SPORE CATHEDRAL — caps as vaulting, stems as columns.
+  // 2 · SPORE CATHEDRAL — a nave of stems under funnel caps.
+  //
+  // One stem per NAVE_BAY, in two rows half a bay either side of the walked
+  // line, so the route runs down a nave between them rather than through the
+  // columns: on the axis the aisle bored every one into a waisted stump. Each
+  // stem holds up a funnel cap, a cap turned up into a vase, and its gills run
+  // out from the stem and up the underside as plates in the SDF, so every bay
+  // is a fan vault and the rims of the two rows nearly meet over the nave.
+  // Authored round the stem in polar coordinates, as THE BLOOM is. Every
+  // feature is kept inside its own bay, so one bay is all a point evaluates.
+  const float NAVE_BAY   = 11.0;   // metres between stems, down z and across
+  const float NAVE_GILLS = 40.0;   // long gills per cap, as many short between
+
   float sdSporeCathedral(vec3 p) {
     float d = p.y + fbm3(vec3(p.x, 0.0, p.z) * 0.4) * 0.25;
     gMat = 2.0; gWet = 0.2; gGlow = 0.0;
 
-    vec3 q    = p;
-    vec2 cell = floor((p.xz + 5.5) / 11.0);
-    q.x       = repS(q.x, 11.0);
-    q.z       = repS(q.z, 11.0);
-    float rnd = hash21(cell + 7.7);
+    vec2  cell = vec2(floor(p.x / NAVE_BAY), floor((p.z + 0.5 * NAVE_BAY) / NAVE_BAY));
+    vec3  q    = vec3(p.x - (cell.x + 0.5) * NAVE_BAY, p.y, repS(p.z, NAVE_BAY));
+    float rnd  = hash21(cell + 7.7);
+    float rn2  = hash21(cell + 19.3);
+    float rn3  = fract(rnd * 37.1 + rn2 * 5.3);
 
-    // Stem: a column that thickens into the floor and flares into the vault.
-    float stem = length(q.xz) - (0.55 + 0.22 * sin(q.y * 0.35) + q.y * 0.02);
-    stem       = max(stem, -p.y);
-    stem       = smin(stem, d + 0.6, 1.4);          // fuse the base into the ground
+    // The stem: jittered in its bay, wandering a little as it climbs.
+    vec2  jit = vec2(rn2 - 0.5, rn3 - 0.5) * vec2(0.6, 1.6);
+    vec2  o   = q.xz - jit - 0.15 * vec2(sin(p.y * 0.40 + rnd * 6.0), cos(p.y * 0.33 + rn2 * 6.0));
+    float r   = length(o);
+    float a   = atan(o.y, o.x);
 
-    float capH = mix(8.5, 11.5, rnd);
-    float cap  = sdCap(q - vec3(0.0, capH, 0.0), 6.4, 2.2);
-    float vault = smin(stem, cap, 1.1);
-    float lod   = lodAt(p);
-    if (lod > 0.02)
-      vault -= rotDisp(p * 0.5, 0.18) * 0.5 * lod;
+    float y0  = mix(6.5, 8.5, rnd);                    // where the funnel starts
+    float rise = mix(2.6, 3.4, rn2);                   // and how far it climbs to the rim
+    float R   = min(mix(4.6, 5.2, rn3), 5.3 - max(abs(jit.x), abs(jit.y)));
 
-    if (vault < d) { d = vault; gMat = 0.0; gWet = 0.3; gGlow = 0.35; }
+    // Thick at the foot, a bulb where it comes out of the ground, fluted
+    // along its length and flaring into the cap at the top.
+    float py  = max(p.y, 0.0);
+    float fl  = smoothstep(y0 - 2.5, y0 + 0.3, py);
+    float rs  = mix(0.42, 0.58, rn2) + 0.16 * (1.0 - smoothstep(0.0, y0, py)) + 0.45 * exp(-py * 1.6)
+              + 0.6 * fl * fl
+              + 0.035 * abs(sin(a * 8.0));
+    float stem = max((r - rs) * 0.8, p.y - y0 - 0.5);
+    stem       = smin(stem, d + 0.4, 1.0);             // rooted into the floor
+
+    // The ring: a ragged skirt torn off the cap when it opened, hanging, at
+    // its own height on each stem; a quarter of them have shed it.
+    float ya  = y0 * mix(0.48, 0.66, fract(rn3 * 13.1)) + (rnd > 0.75 ? 40.0 : 0.0);
+    vec2  sv  = vec2(r - 0.55, p.y - ya);
+    vec2  se  = vec2(0.65, -0.8 + 0.12 * sin(a * 6.0 + rnd * 9.0));
+    float skirt = length(sv - se * clamp(dot(sv, se) / dot(se, se), 0.0, 1.0)) - 0.035;
+    stem = smin(stem, skirt, 0.08);
+    if (stem < d) { d = stem; gMat = 0.2; gWet = 0.3; gGlow = 0.3; }
+
+    // The cap, from well below it only a bound: nothing of it hangs further
+    // than half a metre under y0.
+    float cap = y0 - 0.5 - p.y;
+    if (cap < 1.0) {
+      float s   = r / R;
+      float tk  = mix(0.32, 0.10, min(s, 1.0));
+      float fy  = y0 + rise * s * s - 0.45 * smoothstep(0.78, 1.0, s);  // the margin turns down
+      float sl  = 2.0 * rise * r / (R * R) + 0.6;
+      float Rm  = R * (1.0 + 0.035 * sin(a * 7.0 + rnd * 6.0));
+      float lip = smax((abs(p.y - fy - tk) - tk) / sqrt(1.0 + sl * sl), r - Rm, 0.1);
+
+      // Gills hung under it, measured down from the underside. They shrink
+      // away with distance rather than shimmer into a moire.
+      float hy  = fy - p.y;
+      float far = 1.0 - smoothstep(30.0, 50.0, length(p - gRo));
+      float gh  = 0.6 * smoothstep(0.08, 0.3, s) * smoothstep(1.0, 0.8, s) * far + 0.001;
+      float th  = 0.035 + 0.01 * r;
+      float g   = gillPlate(gillFamily(a, r, NAVE_GILLS, 0.0), hy, th, gh);
+      float g2  = gillPlate(gillFamily(a, r, NAVE_GILLS, 0.5), hy, th * 0.8, gh * 0.7);
+      g = min(g, max(g2, 0.45 * R - r));
+      g = max(g * 0.8, max(r - Rm, p.y - fy - tk));
+      cap = min(lip, g);
+      if (cap < d) {
+        gWet  = 0.3;
+        gMat  = g < lip ? 0.4 * clamp(hy / gh, 0.0, 1.0) : (p.y < fy + tk ? 0.0 : 0.2);
+        gGlow = 0.25;
+      }
+      d = smin(d, cap, 0.35);                         // the stem flares into it
+    }
     return d;
   }
 
@@ -366,20 +423,6 @@ export const stagesGlsl = `  // --- the twelve stages --------------------------
   const float BLOOM_FALL = 5.5;    // the e-folding radius of that fall
   const float BLOOM_GUL  = 5.0;    // the gullet: a last, steep drop at the throat
   const float BLOOM_GULW = 1.4;    // over this many metres
-
-  // Arc distance to the nearest of n planes through the axis, offset by off
-  // of a pitch. n is whole, so the family meets itself across the atan seam.
-  float gillFamily(float a, float r, float n, float off) {
-    float c = a * n / TAU + off;
-    return abs(c - floor(c + 0.5)) * TAU / n * r;
-  }
-
-  // One plate of a family, hy above the surface it grows from: th thick at
-  // its foot and a third of that at its free edge, gh tall.
-  float gillPlate(float across, float hy, float th, float gh) {
-    float u = clamp(hy / gh, 0.0, 1.0);
-    return max(across - th * (1.0 - 0.66 * u), hy - gh);
-  }
 
   // The plates of all three families: long from r0, the second from 6 out
   // and the third from 11, each rising out of the surface over its first

@@ -109,6 +109,26 @@ three ramps carry the arc, all continuous in distance walked, none table-driven.
   shading while the stage is on screen (`stageOn(5.)`): veins under the flesh,
   the key at 55 %, the lanterns' specular on the wet wall (`lanternGloss`),
   0.018 more fog so the bore closes into the dark where the march gives out.
+- **the spore cathedral** is a nave: one stem per `NAVE_BAY` (11) unit bay, in
+  two rows half a bay either side of the walked line (on the axis, the aisle
+  bored every stem into a waisted stump), jittered 0.3 across and 0.8 along
+  and wandering 0.15 as it climbs. a stem is 0.42 to 0.58 in radius, thicker
+  at the foot, with a bulb where it leaves the ground (0.45, e-folding 0.6),
+  eight flutes 0.035 deep and a flare into the cap over its last 2.5 units;
+  three in four carry a ragged skirt, the ring, 0.48 to 0.66 of the way up.
+  the cap is a funnel, turned up into a vase: its underside climbs from the
+  stem top (6.5 to 8.5 up) by 2.6 to 3.4 to a margin that turns down 0.45,
+  radius 4.6 to 5.2 and kept inside its bay, so the rims of the two rows
+  nearly meet over the nave. its gills are plates in the SDF (`gillFamily`,
+  shared with the bloom), `NAVE_GILLS` (40) long ones from the stem and as
+  many short ones from 0.45 of the radius out, 0.6 deep at most, hung from
+  the underside: every bay is a fan vault. they shrink away between 30 and
+  50 units out instead of shimmering into a moire. shading while the stage
+  is on screen (`stageOn(2.)`): the bloom's gill flesh (`gMat` 0 in the
+  trough, 0.2 on the stems and the cap's top, 0.4 at a gill's edge), and
+  neither the world-centred gill stripes nor the filament tracery. a ray
+  that runs out of steps within 0.25 of a surface is a hit there, so a ray
+  grazing the floor past a stem's foot no longer leaves a black notch.
 - **the marrow grove** is a stack of bones per 4.5 unit cell. a bone is 2.3 to
   3.3 long; the shaft (radius 0.17 to 0.24) swells by 0.09 into a pair of
   condyles at each joint, with the joint line cut 0.035 deep between them. a

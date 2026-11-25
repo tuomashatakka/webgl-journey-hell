@@ -71,6 +71,9 @@ const SCENE = `
     float host = stageOn(8.0);
     // THE BLOOM is the underside of a cap and the gills of a funnel.
     float gills = stageOn(7.0);
+    // SPORE CATHEDRAL is gill flesh too: stems, skirts, and the fan vault of
+    // gills under every funnel cap.
+    float nave  = stageOn(2.0);
 
     vec3 base;
     if (mat < 0.5) {                                                    // flesh / fungus
@@ -78,12 +81,12 @@ const SCENE = `
       // Gill flesh is a pale ochre, streaked down the plate, shadowed in the
       // trough between two gills (mat 0), dark at the free edge with the
       // spores it sheds (mat 0.4), and darker the deeper down the funnel.
-      if (gills > 0.0) {
+      if (gills + nave > 0.0) {
         float u = mat / 0.4;
         vec3 gc = vec3(0.66, 0.52, 0.34) * (0.82 + 0.3 * vnoise3(p * vec3(2.5, 9.0, 2.5)));
         gc     *= (0.5 + 0.5 * smoothstep(0.0, 0.3, u)) * (0.3 + 0.7 * smoothstep(-13.0, -3.0, p.y));
         gc      = mix(gc, vec3(0.26, 0.15, 0.08), smoothstep(0.8, 1.0, u) * 0.85);
-        base    = mix(base, gc, gills);
+        base    = mix(base, gc, gills + nave);
       }
     }
     else if (mat < 1.5) {                                               // bark / bone, marrow at 1.3
@@ -136,7 +139,7 @@ const SCENE = `
     base *= mix(1.0, 0.55 + mott * 0.9, 0.35 + 0.5 * uWalk.w);
     if (mat < 0.5) {
       float gill = 0.5 + 0.5 * sin(atan(p.z, p.x) * 36.0);
-      base *= mix(1.0, 0.72 + gill * 0.5, clamp(-n.y, 0.0, 1.0) * (1.0 - gills));
+      base *= mix(1.0, 0.72 + gill * 0.5, clamp(-n.y, 0.0, 1.0) * (1.0 - gills - nave));
       // Veins under the wall of the gut and of the host, dark and bruised.
       if (gut + host > 0.0) {
         float vein = ridge(p * vec3(0.6, 0.6, 0.3) + 7.0);
@@ -196,7 +199,7 @@ const SCENE = `
     // Thinned in the gut: over a whole wall of flesh it was a net, not a wall.
     // And gone from the gills, where it marbled every plate like lava.
     if (uHeavy > 0.5)
-      col += uTint * pow(ridge(p * 3.2 + vec3(0.0, 0.0, iTime * 0.06)), 6.0) * glow * 0.7 * (1.0 - 0.7 * gut) * (1.0 - gills);
+      col += uTint * pow(ridge(p * 3.2 + vec3(0.0, 0.0, iTime * 0.06)), 6.0) * glow * 0.7 * (1.0 - 0.7 * gut) * (1.0 - gills - nave);
 
     // The breach: scorched lips, red heat in the fissures, and the red light from
     // below catching whatever faces down toward it.
@@ -261,6 +264,11 @@ const SCENE = `
       // and the breach's writhing (riftWarp) inflates it again by its amplitude.
       t += d * 0.48 / (1.0 + 0.9 * uRift.y);
     }
+
+    // SPORE CATHEDRAL's floor runs out to the far plane between the stems, and
+    // a ray that grazes it past a stem's foot spends its steps there and
+    // misses: a black notch cut out of the floor. Close enough, it is the floor.
+    if (!hit && t < 120.0 && d < 0.25 && stageOn(2.0) > 0.0) hit = true;
 
     vec3 col = uBg;
     if (hit) {

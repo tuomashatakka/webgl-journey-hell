@@ -157,4 +157,19 @@ export const foundationGlsl = `
     return smax(dome, -hollow, 0.06 * r);
   }
 
+  // Gills as plates in the SDF (THE BLOOM, SPORE CATHEDRAL).
+  // Arc distance to the nearest of n planes through the axis, offset by off
+  // of a pitch. n is whole, so the family meets itself across the atan seam.
+  float gillFamily(float a, float r, float n, float off) {
+    float c = a * n / TAU + off;
+    return abs(c - floor(c + 0.5)) * TAU / n * r;
+  }
+
+  // One plate of a family, hy above the surface it grows from: th thick at
+  // its foot and a third of that at its free edge, gh tall.
+  float gillPlate(float across, float hy, float th, float gh) {
+    float u = clamp(hy / gh, 0.0, 1.0);
+    return max(across - th * (1.0 - 0.66 * u), hy - gh);
+  }
+
 `
