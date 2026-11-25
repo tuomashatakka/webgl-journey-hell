@@ -13,7 +13,7 @@ export const hydraulicsGlsl = `
     float hydWeight(float z) {
         if (z >= 2000.0) return 0.0;
         float lz = mod(z, 500.0);
-        return smoothstep_custom(198.0, 208.0, lz) * (1.0 - smoothstep_custom(288.0, 298.0, lz));
+        return smoothstep_custom(198.0, 208.0, lz) * (1.0 - smoothstep_custom(284.0, 294.0, lz));
     }
 
     // Where the camera's carve shrinks, so the deck stands under the eye.

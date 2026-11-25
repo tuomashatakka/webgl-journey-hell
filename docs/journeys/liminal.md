@@ -22,7 +22,7 @@ built from `glsl/` pieces in this order: `core` (uniforms, the segment table,
 the camera's path), `palette` (biome colours, the abyss palette, helpers),
 `setpieces` (sector 666), `labyrinth` (sector 5: its solid, its lamps
 and its shading), `cave` (sector 3: its solid, its lamp and its shading),
-`march` (the map), `shading` (normals, AO, the tiled
+`hydraulics` (sector 4: its solid, its lamps and its shading), `march` (the map), `shading` (normals, AO, the tiled
 halls, the camera and `main`).
 
 two builds: the full one (120 primary steps, 5 AO taps, two 40-step reflection
@@ -124,6 +124,53 @@ route, the camera and the speeds are as `kinematics.ts` has them.
   chute) is shaded as the rock it is short of. `caveWeight` (in over
   122..136, out over 204..216) mixes all of it with the old shading, so
   neither join has an edge.
+
+## the iron hydraulics
+
+sector 4 (loop-local z 210..280, `glsl/hydraulics.ts`) is a pumping hall
+the route crosses on an iron footbridge: the bridge is the route's own arch
+(7.5 m up and down again over 70 m) and its sway, as `kinematics.ts` has
+them; past the sector the deck runs on level at -125, into the labyrinth's
+first landing.
+
+* **the bridge.** a chequer-plate deck 2.6 m wide on the walked line, an
+  edge beam each side and a cross girder every 2.4 m under it; the parapet
+  is a Warren truss 1.1 m high (a round top chord, flat diagonals, a post
+  every 2.4 m). tie rods 1.5 m out from the line every 4.8 m go up into the
+  roof; every 9.6 m a bar between them carries an enamel lamp 3.25 m over
+  the deck. two flanged mains run under the deck.
+* **the clearance.** the camera's carve tightens from 2.0 to 1.1 m over
+  208..214 (`hydTight`) and opens again over 282..288, so the deck stands
+  under the eye.
+* **the hall.** pit floor at -134, an iron roof at -97 on transverse
+  trusses and girders over the columns. cast-iron columns at x = +-9 every
+  10 m (fluted, on a plinth, under a capital), each with an arc lamp on a
+  bracket facing the bridge. brick walls at x = +-16 (squeezed with the laps,
+  never under 11 m) in running bond with a glazed cream band at the bridge's
+  height, two flanged pipes along them, and between the columns a blind
+  arched window 3.2 m wide, grey light behind iron glazing bars.
+* **the machines.** in 20 m bays, mirrored bay to bay: a weighted
+  accumulator 6.5 m off the axis (a casing, a steel ram, a red crown of
+  ballast riding 3.5 m up and down, a guide frame to -102) and, across the
+  bridge, a flywheel engine 7 m off it (a 6.2 m red rim on eight spokes
+  turning across the hall's length, tapered pedestals, a crank, a rod and a
+  crosshead working a pump on the bridge side). each machine has a bounding
+  box, a point takes only its own bay, and nothing comes within 3.8 m of the
+  axis, so the deck (3.34 m at most, rods included) is always clear.
+* **light.** the lamps over the walk: 1.0/0.74/0.46, gain 10,
+  `1 / (d^2 + 1)`, thrown downward by the shade; they fail with the laps as
+  the halls' panels do. the arc lamps: gain 90, `1 / (d^2 + 4)`, the nearer
+  two each side. ambient 0.035..0.044. no shadow march; the AO darkens what
+  is tucked in. both kinds of lamp leave a halo in the haze (`hydGlow`).
+* **iron.** deck plate worn bright and glossy down the middle; the bridge
+  and columns green paint, rusting; machines black cast iron with an oil
+  sheen; rams and rods bright steel that sees the haze; mains, crowns and
+  rims red oxide; wet stone flags in the pit. the laps redden it all and the
+  lamps, and lay on the blood and cracks (`decayDecals`).
+* **haze.** density 0.02, dark and warm, a little brighter looking up.
+  `hydWeight` (in over 198..208, out over 284..294) mixes all of it with
+  the old shading, so neither join has an edge. the field is marched at 0.9
+  of its value (the gears and pneumatics it replaced needed 0.4).
 
 ## the stair labyrinth
 
