@@ -124,7 +124,7 @@ the laps, and the blast's shockfront finishes the job.
   graded, catching the sun.
 - **Shadows** are analytic: tower boxes along the sun's projection (a ray–box
   test per nearby tower), balustrades and handrails as lines projected on the
-  deck, the Crown's space frame as a grid. No shadow march.
+  deck, the Crown's space frame as its two chord grids and its diagonals. No shadow march.
 - **ACES** tone map; exposure per section.
 
 ---
@@ -267,7 +267,18 @@ the laps, and the blast's shockfront finishes the job.
 ### 9 · THE CROWN (z 480–540)
 - **Place:** the top of the city: a wide glass plaza (12 m) under a steel space
   frame, the rest of the towers far below. The plaza curves +120°.
-- **Light:** brilliant noon, sun 70°, the space frame's grid shadow on the glass;
+  - **The space frame** (z 496–524, `CROWN_TOP` 7 m over the deck) is a
+    double layer, square on offset square: top chords on a 2.4 m grid
+    (`CROWN_BAY`, x ±1.2, ±3.6, ±6.0) carrying the glass roof, bottom chords
+    1.4 m lower (`CROWN_DEPTH`) on the grid offset by half a bay and stopping
+    at the last nodes (x ±4.8, z ±12), every bottom node braced to the four
+    top nodes round it, a ball at every node. The cell round the nearest
+    bottom node holds all of its members, so the map pays for one cell.
+  - **Six tree columns** stand off the plaza's edges (x ±6.25, every 9.6 m)
+    on brackets: a trunk to 4.6 m, a capital, and three branches, to the two
+    top edge nodes beside it and to the bottom node inboard.
+- **Light:** brilliant noon, sun 70°, the space frame's shadow on the glass —
+  both chord grids and the diagonals, each where the sun puts it (`crownShade`);
   the light blooms towards white and fades to dawn across the lap seam.
 - **Breaks:** the plaza's panes craze outward from your path in every direction.
 - **Out:** down a last flight across the seam into the Dawn Approach.

@@ -389,18 +389,45 @@ export const structuresGlsl = /* glsl */`
   }
 
   // --- 9 the crown: a space frame over the plaza ---------------------------------
+  // A double-layer grid, square on offset square: top chords on a 2.4 m grid
+  // (x +-1.2, +-3.6, +-6.0) under the glass roof, bottom chords 1.4 m lower on
+  // the grid offset by half a bay, every bottom node braced up to the four top
+  // nodes round it, a ball at every node. Six tree columns stand off the
+  // plaza's edges (x +-6.25, every 9.6 m) and branch into the frame's edge.
+  #define CROWN_TOP 7.0
+  #define CROWN_DEPTH 1.4
+  #define CROWN_BAY 2.4
+
   float mapCrown(vec3 p) {
     float zl = mod(p.z, LOOP_Z);
     float bz = max(490.0 - zl, zl - 530.0);
     if (bz > 0.0) return bz + 6.0;
-    float top = deckTop(p.z);
-    float y = p.y - top - 7.0;
-    float slabR = sdBox(vec3(p.x, y, zl - 510.0), vec3(6.4, 0.2, 14.0));
-    vec2 g = abs(fract(vec2(p.x, zl) / 2.4) - 0.5) * 2.4;
-    float bars = max(min(g.x, g.y) - 0.06, slabR);
-    float cols = max(sdBox(vec3(abs(p.x) - 6.3, p.y - top - 3.5, (fract(zl / 4.8 + 0.5) - 0.5) * 4.8), vec3(0.12, 3.5, 0.12)), abs(zl - 510.0) - 14.0);
-    float glass = sdBox(vec3(p.x, y - 0.22, zl - 510.0), vec3(6.4, 0.015, 14.0));
-    float steel = min(bars, cols);
+    vec3 q = vec3(p.x, p.y - deckTop(p.z), zl - 510.0);
+    float bb = sdBox(q - vec3(0.0, 3.6, 0.0), vec3(6.8, 3.8, 14.2));
+    if (bb > 1.0) return bb;
+    float hb = CROWN_BAY * 0.5;
+    float glass = sdBox(q - vec3(0.0, CROWN_TOP + 0.08, 0.0), vec3(6.4, 0.015, 14.0));
+
+    // the frame, in the cell round the nearest bottom node (l from that node)
+    vec2 c = clamp(floor(q.xz / CROWN_BAY + 0.5), vec2(-2.0, -5.0), vec2(2.0, 5.0)) * CROWN_BAY;
+    vec3 l = vec3(q.x - c.x, q.y - CROWN_TOP + CROWN_DEPTH, q.z - c.y);
+    vec2 a = abs(l.xz);
+    vec2 lo = max(vec2(-hb), vec2(-4.8, -12.0) - c), hi = min(vec2(hb), vec2(4.8, 12.0) - c);
+    float bot = min(length(vec3(l.x - clamp(l.x, lo.x, hi.x), l.y, l.z)), length(vec3(l.x, l.y, l.z - clamp(l.z, lo.y, hi.y))));
+    float ty = l.y - CROWN_DEPTH;
+    float topc = min(length(vec3(a.x - hb, ty, max(abs(q.z) - 13.2, 0.0))), length(vec3(max(abs(q.x) - 6.0, 0.0), ty, a.y - hb)));
+    float frame = min(min(bot, topc) - 0.05, sdSeg(vec3(a.x, l.y, a.y), vec3(0.0), vec3(hb, CROWN_DEPTH, hb), 0.035));
+    frame = min(frame, min(length(l) - 0.09, length(vec3(a.x - hb, ty, a.y - hb)) - 0.075));
+
+    // the tree columns: a trunk to 4.6 m, a capital, branches to two top nodes and a bottom one
+    float cz = q.z - clamp(floor(q.z / 9.6 + 0.5), -1.0, 1.0) * 9.6;
+    vec3 k = vec3(abs(q.x), q.y, abs(cz));
+    vec3 cap = vec3(6.25, 4.6, 0.0);
+    float col = min(sdSeg(k, vec3(6.25, -0.2, 0.0), cap, 0.13), length(k - cap) - 0.17);
+    col = min(col, min(sdSeg(k, cap, vec3(6.0, CROWN_TOP, hb), 0.065), sdSeg(k, cap, vec3(4.8, CROWN_TOP - CROWN_DEPTH, 0.0), 0.065)));
+    col = min(col, sdBox(k - vec3(6.2, -0.22, 0.0), vec3(0.24, 0.14, 0.24)));
+
+    float steel = min(frame, col);
     if (glass < steel) { cMat = M_GLASS; cInfo = vec4(3.0, 0.0, 0.0, 0.0); return glass; }
     cMat = M_STEEL; cInfo = vec4(0.0);
     return steel;

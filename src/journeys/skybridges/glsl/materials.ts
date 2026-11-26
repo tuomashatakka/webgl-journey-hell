@@ -81,6 +81,30 @@ export const materialsGlsl = /* glsl */`
     return (tn > tf || tf < 0.0) ? 1.0 : 0.0;
   }
 
+  /**
+   * The space frame's shadow on the plaza (canonical p, sun sd): the glass, and
+   * each member where the sun puts it. Points are carried up the sun's ray to
+   * the bottom chords' plane, where a bottom node is itself and a top node lies
+   * half a bay off and shifted back by the frame's depth along the sun.
+   */
+  float crownShade(vec3 p, vec3 sd, float top) {
+    vec2 s = sd.xz / sd.y;
+    vec2 gt = vec2(p.x, mod(p.z, LOOP_Z) - 510.0) + s * (top + CROWN_TOP - p.y);
+    if (abs(gt.x) > 6.4 || abs(gt.y) > 14.0) return 1.0;
+    float hb = CROWN_BAY * 0.5;
+    vec2 gb = gt - s * CROWN_DEPTH;
+    vec2 ft = abs(fract(gt / CROWN_BAY) - 0.5) * CROWN_BAY;
+    vec2 fb = abs(fract(gb / CROWN_BAY + 0.5) - 0.5) * CROWN_BAY;
+    float chords = min(min(ft.x, ft.y), max(min(fb.x, fb.y), max(abs(gb.x) - 4.85, abs(gb.y) - 12.05))) - 0.05;
+    vec2 l = gb - clamp(floor(gb / CROWN_BAY + 0.5), vec2(-2.0, -5.0), vec2(2.0, 5.0)) * CROWN_BAY;
+    float diag = 1e3;
+    for (int i = 0; i < 4; i++) {
+      vec2 k = vec2(i < 2 ? hb : -hb, i == 0 || i == 2 ? hb : -hb) - s * CROWN_DEPTH;
+      diag = min(diag, length(l - k * clamp(dot(l, k) / dot(k, k), 0.0, 1.0)));
+    }
+    return mix(0.12, 0.82, smoothstep(-0.015, 0.015, min(chords, diag - 0.035)));
+  }
+
   /** The sun reaching render-space w: the towers and set pieces in its way, the handrails' and the space frame's shadows. */
   float sunlight(vec3 w) {
     if (gSunW.y < 0.02) return 0.0;
@@ -123,14 +147,7 @@ export const materialsGlsl = /* glsl */`
         if (abs(p.x - xs) < 0.035) lit *= 0.15;
         else if ((p.x - xr) * (p.x - xs) < 0.0) lit *= 0.86;
       }
-      if (zl > 494.0 && zl < 526.0) {
-        float t = (top + 7.0 - p.y) / sd.y;
-        vec2 g = vec2(p.x + sd.x * t, zl + sd.z * t);
-        if (abs(g.x) < 6.4 && abs(g.y - 510.0) < 14.0) {
-          vec2 gg = abs(fract(g / 2.4) - 0.5) * 2.4;
-          lit *= min(gg.x, gg.y) < 0.06 ? 0.1 : 0.82;
-        }
-      }
+      if (zl > 494.0 && zl < 526.0) lit *= crownShade(p, sd, top);
     }
     return lit;
   }
