@@ -18,11 +18,6 @@ export const propsGlsl = /* glsl */`
     return vec2(0.0);
   }
 
-  float sdCylZ(vec3 p, float r, float h) {
-    vec2 d = vec2(length(p.xy) - r, abs(p.z) - h);
-    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
-  }
-
   /** A 200 l drum: body, two rolling hoops, a lip at each end. */
   float drum(vec3 q) {
     float body = sdCylY(q, 0.29, 0.44);

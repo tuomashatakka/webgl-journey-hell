@@ -71,35 +71,84 @@ export const hallsGlsl = `  // ============================ GEOMETRY ===========
   }
 
   // --- hall 1: PISTON GALLERY ----------------------------------------------
-  // Slider-crank rams driven by the CPU's exact closed-form displacement, which
-  // telescope out of their wall boxes as you come into range.
+  // A crank press out of each wall at every 6 m station: a spoked flywheel and
+  // a crank disc on one shaft through a pedestal bearing, a connecting rod from
+  // the crank pin to a crosshead running in guides, and the ram out of the
+  // crosshead with a platen on its end. The rod really is the rod: the
+  // crosshead stands at the exact slider-crank displacement of the pin
+  // (pistonExtension in physics.ts, at this press's own radius and rod), so
+  // the pin, the rod and the crosshead stay joined at every angle. Each
+  // station runs 1.7 rad behind the last, so the gallery pulses as a wave, and
+  // the whole press drives out of the wall as you come into range.
   float mapPistons(vec3 p, float zc, float W, float H, out float mat) {
-    mat = 3.0;
+    mat = 11.0;
     float st = floor(zc / 6.0);
-    float lz = zc - (st + 0.5) * 6.0;
     float dep = deployStation((st + 0.5) * 6.0);
+    // Wall-local, both walls folded onto one: x out of the wall (the stowed
+    // press hides behind it), y from the shaft's height, z along the hall.
+    vec3 q = vec3(W - abs(p.x) + (1.0 - dep) * 2.0, p.y - 1.55, zc - (st + 0.5) * 6.0);
+    float bound = sdBox(q - vec3(0.98, -0.56, -0.20), vec3(0.98, 1.0, 0.50));
+    if (bound > 0.3) return bound;
 
-    // Normalise the mechanism's 1.28..2.52 m throw into the corridor's width,
-    // and phase-offset each station so the gallery pulses as a wave. The stroke
-    // itself only reaches full travel once the ram has driven out.
-    float ext = (0.55 + (uMech.y - 1.28) * 0.45 + 0.10 * sin(uMech.x + st * 1.7)) * dep;
+    // The press: crank radius CR, rod CL, shaft at x = 0.45.
+    const float CR = 0.26;
+    const float CL = 0.80;
+    float th = uMech.x + st * 1.7;
+    float sn = CR * sin(th);
+    float ext = CR * cos(th) + sqrt(CL * CL - sn * sn);
+    vec2 pin = vec2(0.45 + CR * cos(th), sn);
+    float xh = 0.45 + ext;   // the crosshead's centre
 
-    // Rams face each other across the corridor. Folding on |x| puts the sample
-    // in one wall's frame, so a single evaluation covers the pair: x is depth
-    // out of the wall, y is height, z is along the corridor.
-    vec3 lp = vec3(W - abs(p.x) - (1.0 - dep) * 1.25, p.y - 1.55, lz);
-    float body = sdCylX(lp - vec3(-0.30, 0.0, 0.0), 0.42, 0.55);
-    float rod = sdCylX(lp - vec3(-0.30 + ext * 0.5, 0.0, 0.0), 0.13, ext * 0.5 + 0.2);
-    float head = sdCylX(lp - vec3(-0.30 + ext + 0.10, 0.0, 0.0), 0.30, 0.09);
+    // The cast frame: a pedestal bearing on a sole plate, a web to the bed,
+    // the bed under the guides on a leg, and the guide posts and cheek.
+    float frame = min(sdBox(q - vec3(0.45, -0.80, -0.26), vec3(0.16, 0.75, 0.09)),
+                      sdBox(q - vec3(0.45, -1.52, -0.26), vec3(0.26, 0.03, 0.18)));
+    frame = min(frame, sdCylZ(q - vec3(0.45, 0.0, -0.26), 0.11, 0.09));
+    frame = min(frame, sdBox(q - vec3(0.45, -0.55, -0.10), vec3(0.12, 0.10, 0.14)));
+    frame = min(frame, sdBox(q - vec3(0.96, -0.55, 0.04), vec3(0.66, 0.10, 0.07)));
+    frame = min(frame, sdBox(q - vec3(1.55, -1.05, 0.04), vec3(0.07, 0.45, 0.07)));
+    frame = min(frame, sdBox(vec3(abs(q.x - 1.25) - 0.37, q.y + 0.30, q.z - 0.04), vec3(0.03, 0.15, 0.05)));
+    frame = min(frame, sdBox(q - vec3(1.25, 0.0, 0.135), vec3(0.40, 0.17, 0.015)));
 
-    // Flywheel + crank pin, spun by the integrated angular velocity.
-    vec3 fp = lp - vec3(-0.40, 0.0, 1.85);
-    float wheel = sdTorusX(fp, 0.66 * dep, 0.10);
-    vec3 cp = fp;
-    cp.yz = rot(uMech.x) * cp.yz;
-    float pin = sdCylX(cp - vec3(0.0, 0.52 * dep, 0.0), 0.07, 0.16);
+    // The flywheel: a heavy rim on six tapered spokes and a hub, turning with
+    // the crank, outboard of the bearing.
+    vec3 f = q - vec3(0.45, 0.0, -0.50);
+    float r = length(f.xy);
+    float ang = atan(f.y, f.x) - th;
+    float sa = 2.0 * PI / 6.0;
+    float fa = (fract(ang / sa + 0.5) - 0.5) * sa;
+    float spoke = max(max(abs(r * sin(fa)) - mix(0.035, 0.022, r / 0.42), r - 0.40), abs(f.z) - 0.025);
+    float wheel = min(max(abs(r - 0.38) - 0.05, abs(f.z) - 0.06), spoke);
+    wheel = min(wheel, sdCylZ(f, 0.09, 0.08));
+    frame = min(frame, wheel);
 
-    return min(min(body, min(rod, head)), min(wheel, pin));
+    // The bright work: the shaft, the crank disc, the pin, the guide bars,
+    // the crosshead and the ram.
+    float shaft = sdCylZ(q - vec3(0.45, 0.0, -0.31), 0.06, 0.31);
+    float disc = sdCylZ(q - vec3(0.45, 0.0, -0.08), 0.32, 0.035);
+    float crankPin = sdCylZ(q - vec3(pin, -0.01), 0.045, 0.07);
+    float guides = sdBox(vec3(q.x - 1.25, abs(q.y) - 0.125, q.z - 0.04), vec3(0.40, 0.025, 0.08));
+    float head = sdBox(q - vec3(xh, 0.0, 0.04), vec3(0.09, 0.10, 0.08));
+    float ram = sdCylX(q - vec3(xh + 0.21, 0.0, 0.04), 0.05, 0.12);
+    float bright = min(min(shaft, disc), min(crankPin, min(guides, min(head, ram))));
+
+    // The connecting rod, in the plane in front of the disc: a bar from the
+    // pin to the crosshead with a boss at each end.
+    vec3 cq = q - vec3(0.0, 0.0, 0.04);
+    vec2 ab = vec2(xh, 0.0) - pin;
+    vec2 ap = cq.xy - pin;
+    float tt = clamp(dot(ap, ab) / dot(ab, ab), 0.0, 1.0);
+    float bar = max(length(ap - ab * tt) - 0.04, abs(cq.z) - 0.03);
+    float rod = min(bar, min(sdCylZ(cq - vec3(pin, 0.0), 0.08, 0.04), sdCylZ(cq - vec3(xh, 0.0, 0.0), 0.06, 0.045)));
+
+    // The platen, in hazard paint: what you do not want to be in front of.
+    float platen = sdBox(q - vec3(xh + 0.37, 0.0, 0.04), vec3(0.04, 0.24, 0.24));
+
+    float d = frame;
+    if (bright < d) { d = bright; mat = 3.0; }
+    if (rod < d) { d = rod; mat = 5.0; }
+    if (platen < d) { d = platen; mat = 1.0; }
+    return d;
   }
 
   // --- hall 2: THE LONG RUN ------------------------------------------------

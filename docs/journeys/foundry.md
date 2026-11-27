@@ -260,6 +260,35 @@ pipes run under the ceiling on brackets, and about a third of the flanges leak:
 a jet of steam that slows, spreads and rises, gathered by the march like the
 leaks and lit by the hall.
 
+## the piston gallery
+
+the rams used to be a black cylinder, a rod and a disc out of each wall, with
+a torus beside them standing for a flywheel that drove nothing: the gallery
+read as a row of dumbbells. now each 6 m station has a **crank press** out of
+each wall (`mapPistons`, both walls folded into one evaluation):
+
+- **the frame**, cast and painted (material 11): a pedestal bearing on a sole
+  plate, a web from it to a bed that runs out under the guides on a leg, guide
+  posts, and a cheek plate on the far side of the crosshead.
+- **the flywheel**: a heavy rim (radius 0.38) on six tapered spokes and a hub,
+  outboard of the bearing, on the same shaft as a **crank disc** inboard of it.
+- **the linkage**: a crank pin at radius `CR` = 0.26 on the disc, a
+  **connecting rod** `CL` = 0.80 from it to a **crosshead** running between two
+  guide bars, and the ram out of the crosshead with a **platen** in hazard
+  paint on its end. the crosshead stands at `CR cos θ + sqrt(CL² − CR² sin² θ)`
+  from the shaft — `pistonExtension` at this press's own radius and rod — so
+  the pin, the rod and the crosshead stay joined at every angle. θ is the
+  flywheel's integrated crank angle, 1.7 rad later at every station, so the
+  gallery pulses as a wave.
+- the platen's face stands 1.40–1.92 m out of the wall, so the walkway keeps
+  over a metre either side. the props lattice sits half a station off, and the
+  press stays inside |z| < 0.7 of its station, so nothing stands in its way.
+- the whole press drives 2 m out of the wall as the station deploys; one box
+  answers for it until a ray is within 0.3 m of it.
+
+every other hall is byte-identical on the probe; only the frames that see into
+the gallery change.
+
 ## the long run
 
 nearly empty and far too big: a crane hall with nothing left to lift

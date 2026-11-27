@@ -100,6 +100,10 @@ export const foundationGlsl = `
     vec2 d = vec2(length(p.yz) - r, abs(p.x) - h);
     return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
   }
+  float sdCylZ(vec3 p, float r, float h) {
+    vec2 d = vec2(length(p.xy) - r, abs(p.z) - h);
+    return min(max(d.x, d.y), 0.0) + length(max(d, 0.0));
+  }
   float sdTorusX(vec3 p, float R, float r) {
     vec2 q = vec2(length(p.yz) - R, p.x);
     return length(q) - r;
